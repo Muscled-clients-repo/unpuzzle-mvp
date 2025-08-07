@@ -48,6 +48,7 @@ export function AIChatSidebar({
     transcriptReferences,
     addChatMessage,
     removeTranscriptReference,
+    clearSelection, // Add this to clear video in/out points
   } = useAppStore()
   
   // Convert store messages to component format
@@ -133,6 +134,8 @@ export function AIChatSidebar({
     // Clear transcript reference from store if used
     if (transcriptReference) {
       removeTranscriptReference(transcriptReference.id)
+      // Clear video in/out points after sending the message with the reference
+      clearSelection()
     }
 
     // Simulate AI response (in production, this would be an API call)

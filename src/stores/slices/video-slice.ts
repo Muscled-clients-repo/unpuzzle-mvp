@@ -42,7 +42,7 @@ const initialVideoState: ExtendedVideoState = {
   isMuted: false,
   showControls: true,
   isSelectingRange: false,
-  showLiveTranscript: true,
+  showLiveTranscript: false,
   currentTranscriptText: "",
   selectedTranscriptText: "",
   selectedStartTime: null,

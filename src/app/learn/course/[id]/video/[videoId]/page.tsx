@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useParams } from "next/navigation"
+import { useAppStore } from "@/stores/app-store"
 import { VideoPlayer } from "@/components/video/video-player"
 import { AIChatSidebar } from "@/components/ai/ai-chat-sidebar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -105,23 +106,8 @@ export default function VideoPlayerPage() {
     }
   }, [isResizing])
 
-  // Listen for clip selection events from video player
-  useEffect(() => {
-    const handleClipSelected = (event: CustomEvent) => {
-      const clipData = event.detail
-      // Send to AI chat
-      const message = `I'd like to discuss this video clip from ${formatTime(clipData.inPoint)} to ${formatTime(clipData.outPoint)} (${formatTime(clipData.duration)} duration). Can you help me understand what's being explained in this section?`
-      
-      // Trigger AI chat with the message
-      const chatEvent = new CustomEvent('sendToAIChat', { detail: message })
-      window.dispatchEvent(chatEvent)
-    }
-
-    window.addEventListener('clipSelected', handleClipSelected as EventListener)
-    return () => {
-      window.removeEventListener('clipSelected', handleClipSelected as EventListener)
-    }
-  }, [])
+  // Access Zustand store for direct communication (no DOM events needed)
+  const { inPoint, outPoint } = useAppStore()
 
   const formatTime = (time: number) => {
     const minutes = Math.floor(time / 60)

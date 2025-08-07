@@ -4,6 +4,7 @@ import { useRef, useEffect } from "react"
 import { useAppStore } from "@/stores/app-store"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
+import styles from "./video-player.module.css"
 import {
   Play,
   Pause,
@@ -15,8 +16,6 @@ import {
   Settings,
   Subtitles,
   Scissors,
-  CornerDownLeft,
-  CornerDownRight,
   Send,
   X,
   FileText,
@@ -115,6 +114,7 @@ export function VideoPlayer({
     }
 
     const handleLoadedMetadata = () => {
+      console.log('Video metadata loaded, duration:', video.duration)
       setDuration(video.duration)
     }
 
@@ -124,11 +124,10 @@ export function VideoPlayer({
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Check if video player container is focused or if we're not in an input field
-      const isPlayerFocused = containerRef.current?.contains(document.activeElement)
+      // Don't handle keys if we're typing in an input field
       const isInInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)
       
-      if (!isPlayerFocused && isInInput) return
+      if (isInInput) return
 
       switch (e.key) {
         case ' ':
@@ -157,6 +156,11 @@ export function VideoPlayer({
         case 'O':
           e.preventDefault()
           setOutPointHandler()
+          break
+        case 'f':
+        case 'F':
+          e.preventDefault()
+          toggleFullscreen()
           break
       }
     }
@@ -275,7 +279,13 @@ export function VideoPlayer({
   const skip = (seconds: number) => {
     const video = videoRef.current
     if (!video) return
-    video.currentTime = Math.max(0, Math.min(video.currentTime + seconds, duration))
+    
+    // Use video.duration if store duration is not set yet
+    const videoDuration = duration || video.duration || 0
+    const newTime = Math.max(0, Math.min(video.currentTime + seconds, videoDuration))
+    
+    video.currentTime = newTime
+    setCurrentTime(newTime) // Update Zustand store as well
   }
 
   const toggleFullscreen = () => {
@@ -300,7 +310,7 @@ export function VideoPlayer({
   }
 
   const setInPointHandler = () => {
-    console.log('Setting in point at:', currentTime, 'duration:', duration)
+    console.log('Setting in point at:', currentTime, 'store duration:', duration, 'video duration:', videoRef.current?.duration)
     if (outPoint && currentTime > outPoint) {
       setInOutPoints(currentTime, currentTime)
     } else {
@@ -309,7 +319,7 @@ export function VideoPlayer({
   }
 
   const setOutPointHandler = () => {
-    console.log('Setting out point at:', currentTime, 'duration:', duration)
+    console.log('Setting out point at:', currentTime, 'store duration:', duration, 'video duration:', videoRef.current?.duration)
     if (inPoint !== null && currentTime > inPoint) {
       setInOutPoints(inPoint, currentTime)
     } else if (inPoint === null) {
@@ -345,8 +355,7 @@ export function VideoPlayer({
         videoId: videoUrl,
       })
       
-      // Clear selection after sending
-      clearSelectionHandler()
+      // Don't clear selection - let user decide when to clear
     }
   }
 
@@ -365,13 +374,17 @@ export function VideoPlayer({
   const handleTranscriptSelection = () => {
     const selection = window.getSelection()
     if (!selection || selection.rangeCount === 0) {
+      console.log('No selection range')
       return
     }
 
     const selectedText = selection.toString().trim()
     if (!selectedText) {
+      console.log('No selected text')
       return
     }
+    
+    console.log('Selected text:', selectedText)
 
     // Get transcript segments
     const transcriptSegments = [
@@ -398,38 +411,95 @@ export function VideoPlayer({
       { start: 100, end: 105, text: "That's how we learn and grow as developers!" }
     ]
 
-    // Create one continuous text to find selection position
-    const fullTranscript = transcriptSegments.map(s => s.text).join(' ')
-    
-    // Find selection start and end positions in the full text
-    const selectionStartIndex = fullTranscript.indexOf(selectedText)
-    const selectionEndIndex = selectionStartIndex + selectedText.length
+    // Try to find which segments contain the selection by checking partial matches
+    let startTime = null
+    let endTime = null
+    let foundStart = false
+    let foundEnd = false
 
-    if (selectionStartIndex === -1) return
-
-    // Calculate timestamps based on character positions
-    let currentIndex = 0
-    let startTime = 0
-    let endTime = 0
-
+    // First, try to find exact match in a single segment
     for (const segment of transcriptSegments) {
-      const segmentEndIndex = currentIndex + segment.text.length + 1 // +1 for space
-
-      // Find start time
-      if (selectionStartIndex >= currentIndex && selectionStartIndex < segmentEndIndex) {
-        const positionInSegment = selectionStartIndex - currentIndex
-        const segmentProgress = positionInSegment / segment.text.length
-        startTime = segment.start + (segmentProgress * (segment.end - segment.start))
+      if (segment.text.includes(selectedText)) {
+        // Selection is within a single segment
+        const index = segment.text.indexOf(selectedText)
+        const startProgress = index / segment.text.length
+        const endProgress = (index + selectedText.length) / segment.text.length
+        startTime = segment.start + (startProgress * (segment.end - segment.start))
+        endTime = segment.start + (endProgress * (segment.end - segment.start))
+        foundStart = true
+        foundEnd = true
+        break
       }
+    }
 
-      // Find end time
-      if (selectionEndIndex > currentIndex && selectionEndIndex <= segmentEndIndex) {
-        const positionInSegment = selectionEndIndex - currentIndex
-        const segmentProgress = Math.min(positionInSegment / segment.text.length, 1)
-        endTime = segment.start + (segmentProgress * (segment.end - segment.start))
+    // If not found in single segment, check for cross-segment selection
+    if (!foundStart || !foundEnd) {
+      // Split selected text into words to find partial matches
+      const selectedWords = selectedText.split(/\s+/)
+      // Take first word (or first few if available) and last word (or last few)
+      const firstWord = selectedWords[0]
+      const lastWord = selectedWords[selectedWords.length - 1]
+      const firstFewWords = selectedWords.slice(0, Math.min(2, selectedWords.length)).join(' ')
+      const lastFewWords = selectedWords.slice(-Math.min(2, selectedWords.length)).join(' ')
+
+      // Find start segment - try with first few words, then just first word
+      for (const segment of transcriptSegments) {
+        if (!foundStart) {
+          let index = segment.text.indexOf(firstFewWords)
+          if (index === -1) {
+            index = segment.text.indexOf(firstWord)
+          }
+          if (index !== -1) {
+            const progress = index / segment.text.length
+            startTime = segment.start + (progress * (segment.end - segment.start))
+            foundStart = true
+          }
+        }
+        if (!foundEnd) {
+          let index = segment.text.indexOf(lastFewWords)
+          if (index === -1) {
+            index = segment.text.indexOf(lastWord)
+          }
+          if (index !== -1) {
+            const endIndex = index + (segment.text.indexOf(lastFewWords) !== -1 ? lastFewWords.length : lastWord.length)
+            const progress = endIndex / segment.text.length
+            endTime = segment.start + (progress * (segment.end - segment.start))
+            foundEnd = true
+          }
+        }
+        if (foundStart && foundEnd) break
       }
+    }
 
-      currentIndex = segmentEndIndex
+    // If still not found, use a different approach - check by range selection
+    if (!foundStart || !foundEnd) {
+      const range = selection.getRangeAt(0)
+      const container = transcriptRef.current
+      if (container && container.contains(range.commonAncestorContainer)) {
+        // Find all transcript segments in DOM
+        const segments = container.querySelectorAll('p')
+        let firstSegmentIndex = -1
+        let lastSegmentIndex = -1
+        
+        segments.forEach((seg, index) => {
+          if (range.intersectsNode(seg)) {
+            if (firstSegmentIndex === -1) firstSegmentIndex = index
+            lastSegmentIndex = index
+          }
+        })
+        
+        if (firstSegmentIndex !== -1 && lastSegmentIndex !== -1) {
+          startTime = transcriptSegments[firstSegmentIndex]?.start || 0
+          endTime = transcriptSegments[lastSegmentIndex]?.end || transcriptSegments[lastSegmentIndex]?.start + 5
+          foundStart = true
+          foundEnd = true
+        }
+      }
+    }
+
+    if (!foundStart || !foundEnd || startTime === null || endTime === null) {
+      console.log('Could not determine time range for selection')
+      return
     }
 
     // Set in/out points on video seeker
@@ -440,6 +510,8 @@ export function VideoPlayer({
     setSelectedTimeRange(startTime, endTime)
     
     console.log(`Selected from ${startTime.toFixed(1)}s to ${endTime.toFixed(1)}s: "${selectedText}"`)
+    console.log('Setting selectedTranscriptText to:', selectedText)
+    console.log('Current selectedTranscriptText state:', selectedTranscriptText)
   }
 
   const throttledTranscriptSelection = () => {
@@ -464,8 +536,7 @@ export function VideoPlayer({
         videoId: videoUrl,
       })
       
-      // Clear selection after sending
-      clearTranscriptSelection()
+      // Don't clear selection - let user decide when to clear
     }
   }
 
@@ -501,7 +572,8 @@ export function VideoPlayer({
       <video
         ref={videoRef}
         src={videoUrl}
-        className="w-full h-full pointer-events-none"
+        className="w-full h-full pointer-events-none object-cover"
+        style={{ margin: 0, padding: 0 }}
       />
 
       <div
@@ -516,45 +588,55 @@ export function VideoPlayer({
           </div>
         )}
 
-        <div className="absolute bottom-0 left-0 right-0 p-4">
+        <div className="absolute bottom-0 left-0 right-0 px-4 pb-2 pt-4">
           <div className="mb-2 relative">
             {/* Show selection range on slider */}
-            {inPoint !== null && outPoint !== null && duration > 0 && (
+            {inPoint !== null && outPoint !== null && (duration > 0 || videoRef.current?.duration) && (
               <div
                 className="absolute top-1/2 -translate-y-1/2 h-3 bg-yellow-500/50 pointer-events-none z-[15] rounded"
                 style={{
-                  left: `${(inPoint / duration) * 100}%`,
-                  width: `${((outPoint - inPoint) / duration) * 100}%`
+                  left: `${(inPoint / (duration || videoRef.current?.duration || 1)) * 100}%`,
+                  width: `${((outPoint - inPoint) / (duration || videoRef.current?.duration || 1)) * 100}%`
                 }}
               />
             )}
             
             {/* In point marker - larger and more visible */}
-            {inPoint !== null && (
-              <div
-                className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-green-500 rounded-full pointer-events-none z-[20] ring-2 ring-white shadow-lg"
-                style={{ 
-                  left: duration > 0 ? `calc(${(inPoint / duration) * 100}% - 8px)` : '0%'
-                }}
-                title={`In: ${formatTime(inPoint)}`}
-              />
-            )}
+            {inPoint !== null && (() => {
+              const videoDuration = duration || videoRef.current?.duration || 1
+              const leftPosition = (inPoint / videoDuration) * 100
+              console.log('In marker - inPoint:', inPoint, 'duration:', videoDuration, 'left%:', leftPosition)
+              return (
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-green-500 rounded-full pointer-events-none z-[20] ring-1 ring-white shadow-lg"
+                  style={{ 
+                    left: `calc(${leftPosition}% - 5px)`
+                  }}
+                  title={`In: ${formatTime(inPoint)}`}
+                />
+              )
+            })()}
             
             {/* Out point marker - larger and more visible */}
-            {outPoint !== null && (
-              <div
-                className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-red-500 rounded-full pointer-events-none z-[20] ring-2 ring-white shadow-lg"
-                style={{ 
-                  left: duration > 0 ? `calc(${(outPoint / duration) * 100}% - 8px)` : '10%'
-                }}
-                title={`Out: ${formatTime(outPoint)}`}
-              />
-            )}
+            {outPoint !== null && (() => {
+              const videoDuration = duration || videoRef.current?.duration || 1
+              const leftPosition = (outPoint / videoDuration) * 100
+              console.log('Out marker - outPoint:', outPoint, 'duration:', videoDuration, 'left%:', leftPosition)
+              return (
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-red-500 rounded-full pointer-events-none z-[20] ring-1 ring-white shadow-lg"
+                  style={{ 
+                    left: `calc(${leftPosition}% - 5px)`
+                  }}
+                  title={`Out: ${formatTime(outPoint)}`}
+                />
+              )
+            })()}
             
             <Slider
               value={[currentTime]}
               min={0}
-              max={duration || 100}
+              max={duration || videoRef.current?.duration || 100}
               step={0.1}
               onValueChange={handleSeek}
               className="w-full relative z-0"
@@ -631,12 +713,15 @@ export function VideoPlayer({
                     size="sm"
                     onClick={setInPointHandler}
                     className={cn(
-                      "text-white hover:bg-white/20 px-2",
-                      inPoint !== null && "bg-green-500/30"
+                      "text-white hover:bg-white/20 px-2 h-8 font-bold",
+                      inPoint !== null && "bg-green-500/30 hover:bg-green-500/40"
                     )}
+                    title="Set In Point (I)"
                   >
-                    <CornerDownLeft className="h-4 w-4 mr-1" />
-                    {inPoint !== null ? formatTime(inPoint) : "In"}
+                    <span className="text-sm font-mono">I</span>
+                    {inPoint !== null && (
+                      <span className="ml-1 text-xs font-normal">{formatTime(inPoint)}</span>
+                    )}
                   </Button>
                   
                   <Button
@@ -644,42 +729,40 @@ export function VideoPlayer({
                     size="sm"
                     onClick={setOutPointHandler}
                     className={cn(
-                      "text-white hover:bg-white/20 px-2",
-                      outPoint !== null && "bg-red-500/30"
+                      "text-white hover:bg-white/20 px-2 h-8 font-bold",
+                      outPoint !== null && "bg-red-500/30 hover:bg-red-500/40"
                     )}
+                    title="Set Out Point (O)"
                   >
-                    <CornerDownRight className="h-4 w-4 mr-1" />
-                    {outPoint !== null ? formatTime(outPoint) : "Out"}
+                    <span className="text-sm font-mono">O</span>
+                    {outPoint !== null && (
+                      <span className="ml-1 text-xs font-normal">{formatTime(outPoint)}</span>
+                    )}
                   </Button>
                 </div>
                 
                 {inPoint !== null && outPoint !== null && (
                   <div className="flex items-center space-x-1 border-l border-white/20 pl-2">
-                    <span className="text-yellow-400 text-xs font-medium px-2">
-                      Range: {formatTime(outPoint - inPoint)}
-                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={sendToChat}
+                      className="text-green-400 hover:text-green-300 hover:bg-green-500/20 px-2 flex items-center gap-1"
+                      title="Send clip to AI Chat"
+                    >
+                      <Send className="h-3 w-3" />
+                      <span className="text-xs">Send to Chat</span>
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={sendToChat}
+                      onClick={clearSelection}
                       className="text-white hover:bg-white/20"
-                      title="Send clip to AI Chat"
+                      title="Clear Selection"
                     >
-                      <Send className="h-4 w-4" />
+                      <X className="h-4 w-4" />
                     </Button>
                   </div>
-                )}
-                
-                {(inPoint !== null || outPoint !== null) && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={clearSelection}
-                    className="text-white hover:bg-white/20"
-                    title="Clear Selection"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
                 )}
               </div>
 
@@ -754,29 +837,21 @@ export function VideoPlayer({
           >
             {/* Header */}
             <div className="flex items-center justify-between p-3 border-b border-white/20 flex-shrink-0">
-              <span className="text-xs text-gray-300 font-medium">Live Transcript</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-300 font-medium">Live Transcript</span>
+              </div>
               <div className="flex items-center gap-2">
                 {selectedTranscriptText && (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={sendSelectedTranscriptToChat}
-                      className="h-6 w-6 p-0 text-green-400 hover:text-green-300 hover:bg-green-500/20"
-                      title="Send Selection to Chat"
-                    >
-                      <Send className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={clearTranscriptSelection}
-                      className="h-6 w-6 p-0 text-gray-400 hover:text-white hover:bg-white/20"
-                      title="Clear Selection"
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={sendSelectedTranscriptToChat}
+                    className="h-7 px-2 text-green-400 hover:text-green-300 hover:bg-green-500/20 flex items-center gap-1"
+                    title="Send Selection to Chat"
+                  >
+                    <Send className="h-3 w-3" />
+                    <span className="text-xs">Send to Chat</span>
+                  </Button>
                 )}
                 <Button
                   variant="ghost"
@@ -793,15 +868,19 @@ export function VideoPlayer({
             {/* Scrollable Content */}
             <div 
               ref={transcriptRef}
-              className="flex-1 overflow-y-auto p-3 space-y-2 select-text"
-              onMouseUp={handleTranscriptSelection}
+              className={cn("flex-1 overflow-y-auto p-3 space-y-2 select-text", styles.transcriptContainer)}
+              onMouseUp={() => {
+                setTimeout(handleTranscriptSelection, 10) // Small delay to ensure selection is complete
+              }}
+              onTouchEnd={() => {
+                setTimeout(handleTranscriptSelection, 10) // For mobile devices
+              }}
               onMouseMove={(e) => {
                 // Update selection during drag if mouse is down
                 if (e.buttons === 1) { // Left mouse button is down
                   throttledTranscriptSelection()
                 }
               }}
-              onKeyUp={handleTranscriptSelection}
             >
               {[
                 { start: 0, end: 5, timestamp: "0:00", text: "Welcome to this comprehensive introduction to web development." },
@@ -846,34 +925,10 @@ export function VideoPlayer({
                       }
                     }}
                   >
-                    <div className="flex items-center justify-between mb-1">
+                    <div className="mb-1">
                       <span className="text-xs text-gray-400 font-mono">{segment.timestamp}</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          // Send individual segment to chat
-                          // Add transcript segment to chat via store
-                          addTranscriptReference({
-                            text: segment.text,
-                            startTime: segment.start,
-                            endTime: segment.end,
-                            videoId: videoUrl,
-                          })
-                        }}
-                        className={cn(
-                          "h-5 w-5 p-0 hover:bg-primary/20 transition-colors",
-                          isCurrentSegment 
-                            ? "text-white bg-primary/30 hover:bg-primary/40" 
-                            : "text-gray-500 hover:text-white"
-                        )}
-                        title="Add to Chat"
-                      >
-                        <Send className="h-2.5 w-2.5" />
-                      </Button>
                     </div>
-                    <p className="text-xs leading-relaxed text-white">
+                    <p className={cn("text-xs leading-relaxed text-white", styles.transcriptText)}>
                       {segment.text}
                     </p>
                   </div>
