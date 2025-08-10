@@ -1,14 +1,16 @@
 import { StateCreator } from 'zustand'
 import { UserState, UserActions, UserProfile, UserPreferences, CourseProgress } from '@/types/app-types'
+import { UI, VIDEO } from '@/config/constants'
 
 export interface UserSlice extends UserState, UserActions {}
 
 const initialUserPreferences: UserPreferences = {
   theme: 'light',
   autoPlay: false,
-  playbackRate: 1,
+  playbackRate: VIDEO.DEFAULT_PLAYBACK_RATE,
   volume: 1,
-  sidebarWidth: 400,
+  sidebarWidth: UI.SIDEBAR.DEFAULT_WIDTH,
+  showChatSidebar: true,
 }
 
 const initialUserState: UserState = {
@@ -49,6 +51,74 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
           ...progress,
         },
       },
+    })),
+
+  useAiInteraction: () => {
+    const state = get()
+    if (!state.profile?.subscription) return false
+    
+    const subscription = state.profile.subscription
+    const today = new Date().toDateString()
+    
+    // Reset daily counter if it's a new day
+    if (subscription.lastResetDate !== today && subscription.plan === 'basic') {
+      set((state) => ({
+        profile: state.profile ? {
+          ...state.profile,
+          subscription: {
+            ...state.profile.subscription!,
+            dailyAiInteractions: 0,
+            lastResetDate: today
+          }
+        } : null
+      }))
+    }
+    
+    // Check limits based on plan
+    if (subscription.plan === 'premium') {
+      // Premium has unlimited AI interactions
+      return true
+    } else if (subscription.plan === 'basic') {
+      const dailyUsed = subscription.dailyAiInteractions || 0
+      if (dailyUsed >= 3) {
+        return false // Daily limit exceeded
+      }
+      
+      // Increment counter
+      set((state) => ({
+        profile: state.profile ? {
+          ...state.profile,
+          subscription: {
+            ...state.profile.subscription!,
+            dailyAiInteractions: dailyUsed + 1
+          }
+        } : null
+      }))
+      
+      return true
+    }
+    
+    return false // Free or unknown plan
+  },
+
+  resetDailyAiInteractions: () =>
+    set((state) => ({
+      profile: state.profile ? {
+        ...state.profile,
+        subscription: state.profile.subscription ? {
+          ...state.profile.subscription,
+          dailyAiInteractions: 0,
+          lastResetDate: new Date().toDateString()
+        } : undefined
+      } : null
+    })),
+
+  updateSubscription: (subscription) =>
+    set((state) => ({
+      profile: state.profile ? {
+        ...state.profile,
+        subscription
+      } : null
     })),
 
   logout: () => set(initialUserState),

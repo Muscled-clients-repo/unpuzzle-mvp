@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
@@ -21,7 +20,6 @@ import {
   Award,
   Download,
   Share2,
-  Heart,
   CheckCircle2,
   Sparkles,
   Brain,
@@ -35,7 +33,6 @@ import { mockCourses, mockUsers } from "@/data/mock"
 export default function CoursePreviewPage() {
   const params = useParams()
   const courseId = params.id as string
-  const [isWishlisted, setIsWishlisted] = useState(false)
   
   const course = mockCourses.find(c => c.id === courseId)
   const instructor = mockUsers.instructors.find(i => i.courses.includes(courseId))
@@ -209,19 +206,8 @@ export default function CoursePreviewPage() {
 
                   <CardContent className="p-6">
                     <div className="mb-6">
-                      <div className="mb-2 flex items-center justify-between">
+                      <div className="mb-2">
                         <span className="text-3xl font-bold">${course.price}</span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setIsWishlisted(!isWishlisted)}
-                        >
-                          <Heart
-                            className={`h-5 w-5 ${
-                              isWishlisted ? "fill-red-500 text-red-500" : ""
-                            }`}
-                          />
-                        </Button>
                       </div>
                       <p className="text-sm text-muted-foreground">
                         30-day money-back guarantee

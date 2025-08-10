@@ -209,7 +209,7 @@ export default function AlternativeCoursePreview() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <CheckCircle2 className="h-5 w-5 text-green-500" />
-                      What You'll Learn
+                      What You&apos;ll Learn
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -444,7 +444,7 @@ export default function AlternativeCoursePreview() {
                         <h3 className="font-semibold text-lg mb-2">{feature.name}</h3>
                         <p className="text-muted-foreground mb-3">{feature.description}</p>
                         <div className="bg-white/50 dark:bg-gray-900/50 rounded-lg p-3 border">
-                          <p className="text-sm italic">"{feature.example}"</p>
+                          <p className="text-sm italic">&quot;{feature.example}&quot;</p>
                         </div>
                       </div>
                     </div>

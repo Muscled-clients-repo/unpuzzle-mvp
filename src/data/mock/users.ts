@@ -6,9 +6,11 @@ export interface User {
   role: "learner" | "instructor" | "admin"
   createdAt: Date
   subscription?: {
-    plan: "free" | "pro"
+    plan: "free" | "basic" | "premium"
     aiInteractionsUsed?: number
     aiInteractionsLimit?: number
+    dailyAiInteractions?: number
+    lastResetDate?: string
   }
 }
 
@@ -82,9 +84,9 @@ export const mockUsers: {
       role: "learner",
       createdAt: new Date("2024-01-15"),
       subscription: {
-        plan: "free",
-        aiInteractionsUsed: 7,
-        aiInteractionsLimit: 10,
+        plan: "basic",
+        dailyAiInteractions: 2,
+        lastResetDate: new Date().toDateString(),
       },
       enrolledCourses: ["course-1", "course-2"],
       completedCourses: [],

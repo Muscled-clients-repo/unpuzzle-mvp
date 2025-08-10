@@ -42,12 +42,12 @@ export function Header({ user }: HeaderProps) {
                 Browse Courses
               </Link>
               {user?.role === "learner" && (
-                <Link href="/learn" className="text-lg font-medium">
+                <Link href="/student" className="text-lg font-medium">
                   My Learning
                 </Link>
               )}
               {user?.role === "instructor" && (
-                <Link href="/teach" className="text-lg font-medium">
+                <Link href="/instructor" className="text-lg font-medium">
                   Instructor Dashboard
                 </Link>
               )}
@@ -75,7 +75,7 @@ export function Header({ user }: HeaderProps) {
           </Link>
           {user?.role === "learner" && (
             <Link
-              href="/learn"
+              href="/student"
               className="text-sm font-medium transition-colors hover:text-primary"
             >
               My Learning
@@ -83,7 +83,7 @@ export function Header({ user }: HeaderProps) {
           )}
           {user?.role === "instructor" && (
             <Link
-              href="/teach"
+              href="/instructor"
               className="text-sm font-medium transition-colors hover:text-primary"
             >
               Teach
@@ -145,7 +145,7 @@ export function Header({ user }: HeaderProps) {
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <Link href={user.role === "learner" ? "/learn/settings" : "/teach/settings"}>
+                    <Link href={user.role === "learner" ? "/learn/settings" : "/instructor/settings"}>
                       Settings
                     </Link>
                   </DropdownMenuItem>

@@ -6,7 +6,7 @@ import { AICourseCard } from "@/components/course/ai-course-card"
 import { MetricWidget } from "@/components/dashboard/metrics-widget"
 import { AgentCard } from "@/components/ai/agent-card"
 import { mockCourses } from "@/data/mock"
-import { ArrowRight, Sparkles, Brain, Target, TrendingUp } from "lucide-react"
+import { ArrowRight, Sparkles, Brain, Target, TrendingUp, Check, Star } from "lucide-react"
 
 export default function HomePage() {
   return (
@@ -132,35 +132,9 @@ export default function HomePage() {
               </p>
             </div>
             
-            {/* Three AI Course Card Variants */}
+            {/* Three AI Course Card Variants - All using third card design */}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {/* Version 1: High-performing Enrolled Student */}
-              <AICourseCard 
-                course={mockCourses[0]} 
-                variant="enrolled"
-                progress={75}
-                aiMetrics={{
-                  learnRate: 48,
-                  strugglingTopics: [],
-                  predictedCompletion: "1 week",
-                  aiInteractionsUsed: 8
-                }}
-              />
-              
-              {/* Version 2: Struggling Student */}
-              <AICourseCard 
-                course={mockCourses[1]} 
-                variant="enrolled"
-                progress={25}
-                aiMetrics={{
-                  learnRate: 18,
-                  strugglingTopics: ["Linear Regression", "NumPy Arrays"],
-                  predictedCompletion: "6 weeks",
-                  aiInteractionsUsed: 23
-                }}
-              />
-              
-              {/* Version 3: New Student Preview with AI Quiz */}
+              {/* Version 1: React Course */}
               <AICourseCard 
                 course={{
                   ...mockCourses[0],
@@ -171,6 +145,35 @@ export default function HomePage() {
                   rating: 4.9
                 }}
                 showAIQuiz={true}
+                showAITip={true}
+              />
+              
+              {/* Version 2: Data Science Course */}
+              <AICourseCard 
+                course={{
+                  ...mockCourses[1],
+                  title: "Data Science Fundamentals",
+                  description: "Learn data science with Python, AI-powered exercises, and personalized feedback.",
+                  price: 129,
+                  students: 3821,
+                  rating: 4.8
+                }}
+                showAIQuiz={true}
+                showAITip={true}
+              />
+              
+              {/* Version 3: JavaScript Course */}
+              <AICourseCard 
+                course={{
+                  ...mockCourses[0],
+                  title: "JavaScript Mastery",
+                  description: "From basics to advanced concepts with AI tutoring and adaptive learning paths.",
+                  price: 89,
+                  students: 7234,
+                  rating: 4.7
+                }}
+                showAIQuiz={true}
+                showAITip={true}
               />
             </div>
             
@@ -179,6 +182,137 @@ export default function HomePage() {
                 <Link href="/courses">
                   Explore All AI-Enhanced Courses
                   <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        {/* Pricing Section */}
+        <section className="py-16 bg-gradient-to-b from-muted/50 to-background">
+          <div className="container px-4">
+            <div className="text-center mb-12">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium mb-4">
+                <Star className="h-4 w-4" />
+                Founding Member Pricing - First 50 Students Only
+              </div>
+              <h2 className="text-3xl font-bold mb-4">Choose Your Learning Journey</h2>
+              <p className="text-muted-foreground max-w-2xl mx-auto">
+                Start with our course or get the full AI-enhanced experience with personal instructor feedback
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+              {/* Basic Tier */}
+              <div className="relative p-6 bg-background border rounded-2xl shadow-sm">
+                <div className="text-center mb-6">
+                  <h3 className="text-xl font-semibold mb-2">Course Access</h3>
+                  <div className="mb-4">
+                    <span className="text-4xl font-bold">$39</span>
+                    <span className="text-muted-foreground ml-2">/month</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">Cancel anytime, no commitment</p>
+                </div>
+                
+                <ul className="space-y-3 mb-6">
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span className="text-sm">Full video course access</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span className="text-sm">Read community discussions</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span className="text-sm">10 AI explanations per day</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span className="text-sm">View others' confusions & insights</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span className="text-sm">Basic progress tracking</span>
+                  </li>
+                </ul>
+
+                <Button className="w-full" variant="outline" asChild>
+                  <a href="https://buy.stripe.com/test_your_basic_link" target="_blank" rel="noopener noreferrer">
+                    Get Course Access
+                  </a>
+                </Button>
+              </div>
+
+              {/* Premium Tier */}
+              <div className="relative p-6 bg-primary/5 border-2 border-primary rounded-2xl shadow-sm">
+                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                  <span className="bg-primary text-primary-foreground px-3 py-1 rounded-full text-xs font-medium">
+                    MOST POPULAR
+                  </span>
+                </div>
+                
+                <div className="text-center mb-6">
+                  <h3 className="text-xl font-semibold mb-2">Full Learning Experience</h3>
+                  <div className="mb-4">
+                    <span className="text-4xl font-bold">$97</span>
+                    <span className="text-muted-foreground ml-2">/month</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">Everything you need to accelerate learning</p>
+                </div>
+                
+                <ul className="space-y-3 mb-6">
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span className="text-sm">Everything in Course Access</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span className="text-sm font-semibold">Unlimited AI explanations</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span className="text-sm">Post your confusions & reflections</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span className="text-sm font-semibold">Weekly instructor review of YOUR reflections</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span className="text-sm font-semibold">24hr response to confusions</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span className="text-sm">Performance metrics & leaderboards</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span className="text-sm">Verified completion certificate</span>
+                  </li>
+                </ul>
+
+                <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg">
+                  <p className="text-xs text-amber-800 dark:text-amber-200 font-medium">
+                    ⚡ First 50 members get lifetime 40% discount - Only {50 - 12} spots remaining
+                  </p>
+                </div>
+
+                <Button className="w-full" asChild>
+                  <a href="https://buy.stripe.com/test_your_premium_link" target="_blank" rel="noopener noreferrer">
+                    Get Full Experience
+                  </a>
+                </Button>
+              </div>
+            </div>
+
+            <div className="text-center mt-8">
+              <p className="text-sm text-muted-foreground mb-4">
+                🎁 <strong>Bonus:</strong> Try one complete lesson free before you buy
+              </p>
+              <Button variant="ghost" asChild>
+                <Link href="/preview">
+                  Watch Free Lesson <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
             </div>

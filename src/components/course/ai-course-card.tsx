@@ -32,6 +32,7 @@ interface AICourseCardProps {
     aiInteractionsUsed?: number
   }
   showAIQuiz?: boolean
+  showAITip?: boolean
 }
 
 export function AICourseCard({ 
@@ -39,7 +40,8 @@ export function AICourseCard({
   variant = "default", 
   progress,
   aiMetrics,
-  showAIQuiz = false
+  showAIQuiz = false,
+  showAITip = false
 }: AICourseCardProps) {
   const isEnrolled = variant === "enrolled"
   
@@ -160,6 +162,18 @@ export function AICourseCard({
         {/* AI Features Preview */}
         {!isEnrolled && (
           <div className="mt-3 space-y-2">
+            {/* AI Tip */}
+            {showAITip && (
+              <div className="rounded-lg bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-950/20 dark:to-red-950/20 p-2 text-xs mb-2">
+                <div className="flex items-center gap-2">
+                  <Activity className="h-3 w-3 text-orange-600 dark:text-orange-400" />
+                  <span className="font-medium text-orange-800 dark:text-orange-200">
+                    AI Tip: Schedule 30 min today to stay on track
+                  </span>
+                </div>
+              </div>
+            )}
+            
             <p className="text-[10px] text-muted-foreground font-medium">
               ⏰ AI Features triggered during video:
             </p>

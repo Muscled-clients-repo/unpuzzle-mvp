@@ -216,7 +216,7 @@ export default function AlternativeCoursePreview() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <CheckCircle2 className="h-5 w-5 text-green-500" />
-                      What You'll Learn
+                      What You&apos;ll Learn
                     </CardTitle>
                   </CardHeader>
                   <CardContent>

@@ -4,8 +4,16 @@ import { UserSlice, createUserSlice } from './slices/user-slice'
 import { CourseSlice, createCourseSlice } from './slices/course-slice'
 import { VideoSlice, createVideoSlice } from './slices/video-slice'
 import { AISlice, createAISlice } from './slices/ai-slice'
+import { UISlice, createUISlice } from './slices/ui-slice'
+import { CommunityState, createCommunitySlice } from './slices/community-slice'
+import { InstructorSlice, createInstructorSlice } from './slices/instructor-slice'
+import { ModeratorSlice, createModeratorSlice } from './slices/moderator-slice'
+import { CourseCreationSlice, createCourseCreationSlice } from './slices/course-creation-slice'
+import { LessonSlice, createLessonSlice } from './slices/lesson-slice'
+import { BlogSlice, createBlogSlice } from './slices/blog-slice'
+import { isDevelopment } from '@/config/env'
 
-export interface AppStore extends UserSlice, CourseSlice, VideoSlice, AISlice {}
+export interface AppStore extends UserSlice, CourseSlice, VideoSlice, AISlice, UISlice, CommunityState, InstructorSlice, ModeratorSlice, CourseCreationSlice, LessonSlice, BlogSlice {}
 
 export const useAppStore = create<AppStore>()(
   devtools(
@@ -15,11 +23,18 @@ export const useAppStore = create<AppStore>()(
         ...createCourseSlice(...args),
         ...createVideoSlice(...args),
         ...createAISlice(...args),
+        ...createUISlice(...args),
+        ...createCommunitySlice(...args),
+        ...createInstructorSlice(...args),
+        ...createModeratorSlice(...args),
+        ...createCourseCreationSlice(...args),
+        ...createLessonSlice(...args),
+        ...createBlogSlice(...args),
       })
     ),
     {
       name: 'unpuzzle-store',
-      enabled: process.env.NODE_ENV === 'development',
+      enabled: isDevelopment,
     }
   )
 )
@@ -53,7 +68,7 @@ export const subscribeToChat = (callback: (messages: any[]) => void) =>
 
 // Devtools helpers
 export const logStoreState = () => {
-  if (process.env.NODE_ENV === 'development') {
+  if (isDevelopment) {
     console.log('Current Store State:', useAppStore.getState())
   }
 }

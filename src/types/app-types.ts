@@ -43,6 +43,7 @@ export interface AIState {
   transcriptReferences: TranscriptReference[]
   isProcessing: boolean
   activeInteractions: number
+  error: string | null
   metrics: {
     totalInteractions: number
     hintsGenerated: number
@@ -63,11 +64,22 @@ export interface UserProfile {
   name: string
   email: string
   avatar?: string
-  role: 'learner' | 'instructor' | 'admin'
+  role: 'learner' | 'instructor' | 'admin' | 'moderator'
   subscription?: {
-    plan: 'free' | 'pro'
+    plan: 'free' | 'basic' | 'premium'
     aiInteractionsUsed?: number
     aiInteractionsLimit?: number
+    dailyAiInteractions?: number // daily counter for basic users
+    lastResetDate?: string // for daily limit reset
+  }
+  moderatorStats?: {
+    responsesProvided: number
+    helpfulVotes: number
+    endorsedByInstructor: number
+    specialization: string[] // e.g., ['React', 'CSS', 'JavaScript']
+    trustScore: number // 0-100
+    promotedAt: string
+    promotedBy: string
   }
 }
 
@@ -77,6 +89,7 @@ export interface UserPreferences {
   playbackRate: number
   volume: number
   sidebarWidth: number
+  showChatSidebar: boolean
 }
 
 export interface CourseProgress {
@@ -150,7 +163,7 @@ export interface VideoActions {
 }
 
 export interface AIActions {
-  addChatMessage: (message: string, context?: VideoContext) => void
+  addChatMessage: (message: string, context?: VideoContext, type?: 'user' | 'ai') => void
   addTranscriptReference: (ref: Omit<TranscriptReference, 'id' | 'timestamp'>) => void
   setIsProcessing: (isProcessing: boolean) => void
   incrementInteractions: () => void
@@ -162,6 +175,9 @@ export interface UserActions {
   setUser: (profile: UserProfile) => void
   updatePreferences: (preferences: Partial<UserPreferences>) => void
   updateProgress: (courseId: string, progress: Partial<CourseProgress>) => void
+  useAiInteraction: () => boolean // returns false if limit exceeded
+  resetDailyAiInteractions: () => void
+  updateSubscription: (subscription: UserProfile['subscription']) => void
   logout: () => void
 }
 

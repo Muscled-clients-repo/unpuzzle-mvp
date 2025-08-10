@@ -42,14 +42,14 @@ export function AIChatSidebar({
 }: AIChatSidebarProps) {
   const [input, setInput] = useState("")
   
-  // Get state and actions from Zustand store
-  const {
-    chatMessages,
-    transcriptReferences,
-    addChatMessage,
-    removeTranscriptReference,
-    clearSelection, // Add this to clear video in/out points
-  } = useAppStore()
+  // Use individual selectors for optimal performance
+  const chatMessages = useAppStore((state) => state.chatMessages)
+  const transcriptReferences = useAppStore((state) => state.transcriptReferences)
+  const addChatMessage = useAppStore((state) => state.addChatMessage)
+  const removeTranscriptReference = useAppStore((state) => state.removeTranscriptReference)
+  const clearSelection = useAppStore((state) => state.clearSelection)
+  const profile = useAppStore((state) => state.profile)
+  const useAiInteraction = useAppStore((state) => state.useAiInteraction)
   
   // Convert store messages to component format
   const messages: Message[] = chatMessages.map(msg => ({
@@ -64,12 +64,23 @@ export function AIChatSidebar({
     ? transcriptReferences[transcriptReferences.length - 1]
     : null
 
-  // Initialize with welcome message if no messages exist
+  // Don't show welcome message initially - just show the centered info
+  const [hasAiActivated, setHasAiActivated] = useState(false)
+  const [hasVideoStarted, setHasVideoStarted] = useState(false)
+  
+  // Track when AI actually activates
   useEffect(() => {
-    if (chatMessages.length === 0) {
-      addChatMessage("Hi! I'm your AI learning assistant. I can help you with hints, check your understanding, guide reflections, and suggest learning paths. You can also select video clips to discuss specific parts of the lesson. How can I help you today?")
+    if (chatMessages.length > 0) {
+      setHasAiActivated(true)
     }
-  }, [])
+  }, [chatMessages.length])
+  
+  // Track if video has started (currentTime > 0 means video has played)
+  useEffect(() => {
+    if (currentTime > 0 && !hasVideoStarted) {
+      setHasVideoStarted(true)
+    }
+  }, [currentTime])
   
   // Auto-generate AI response when transcript references are added
   useEffect(() => {
@@ -91,6 +102,25 @@ export function AIChatSidebar({
 
   const handleSendMessage = () => {
     if (!input.trim()) return
+
+    // Check if user can use AI interaction
+    const canUseAI = useAiInteraction()
+    if (!canUseAI) {
+      // Add system message about limit
+      const plan = profile?.subscription?.plan
+      const dailyUsed = profile?.subscription?.dailyAiInteractions || 0
+      
+      let limitMessage = ""
+      if (plan === 'basic') {
+        limitMessage = `🚫 Daily AI limit reached (${dailyUsed}/3). Upgrade to Premium for unlimited AI help!`
+      } else {
+        limitMessage = "🚫 Please upgrade to access AI features."
+      }
+      
+      addChatMessage(limitMessage, undefined, 'ai')
+      setInput("")
+      return
+    }
 
     // Include transcript reference if available
     const messageContent = transcriptReference 
@@ -214,6 +244,8 @@ export function AIChatSidebar({
               variant="outline"
               onClick={() => quickAction("Give me a hint")}
               className="text-xs"
+              disabled={!hasVideoStarted}
+              title={!hasVideoStarted ? "Start the video to activate AI agents" : "Get an AI hint"}
             >
               <Lightbulb className="mr-1 h-3 w-3" />
               Hint
@@ -223,6 +255,8 @@ export function AIChatSidebar({
               variant="outline"
               onClick={() => quickAction("Quiz me on this")}
               className="text-xs"
+              disabled={!hasVideoStarted}
+              title={!hasVideoStarted ? "Start the video to activate AI agents" : "Take a quick quiz"}
             >
               <CheckCircle2 className="mr-1 h-3 w-3" />
               Quiz
@@ -232,6 +266,8 @@ export function AIChatSidebar({
               variant="outline"
               onClick={() => quickAction("Help me reflect")}
               className="text-xs"
+              disabled={!hasVideoStarted}
+              title={!hasVideoStarted ? "Start the video to activate AI agents" : "Reflect on learning"}
             >
               <MessageSquare className="mr-1 h-3 w-3" />
               Reflect
@@ -241,6 +277,8 @@ export function AIChatSidebar({
               variant="outline"
               onClick={() => quickAction("Suggest learning path")}
               className="text-xs"
+              disabled={!hasVideoStarted}
+              title={!hasVideoStarted ? "Start the video to activate AI agents" : "Get learning path suggestions"}
             >
               <Route className="mr-1 h-3 w-3" />
               Path
@@ -251,7 +289,30 @@ export function AIChatSidebar({
       {/* Chat Messages - Scrollable */}
       <ScrollArea className="flex-1 min-h-0">
         <div className="space-y-4 p-4">
-          {messages.map((message) => (
+          {!hasAiActivated && messages.length === 0 ? (
+            // Centered message when no AI activity yet
+            <div className="flex h-full min-h-[400px] items-center justify-center">
+              <div className="text-center px-6">
+                <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Sparkles className="h-6 w-6 text-primary" />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {!hasVideoStarted 
+                    ? "Start the video to activate AI learning agents"
+                    : "AI agents activate automatically by observing your learning behavior"
+                  }
+                </p>
+                <p className="text-xs text-muted-foreground/70 mt-2">
+                  {!hasVideoStarted 
+                    ? "AI features will be available once you begin watching"
+                    : "Or use the buttons above to trigger them manually"
+                  }
+                </p>
+              </div>
+            </div>
+          ) : (
+            // Show messages when AI has activated
+            messages.map((message) => (
             <div
               key={message.id}
               className={cn(
@@ -288,7 +349,7 @@ export function AIChatSidebar({
                 </span>
               </div>
             </div>
-          ))}
+          )))}
         </div>
       </ScrollArea>
 
