@@ -1,7 +1,4 @@
 "use client"
-
-import { Header } from "@/components/layout/header"
-import { Sidebar } from "@/components/layout/sidebar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -69,13 +66,7 @@ export default function MyCoursesPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <Header user={{ name: learner.name, email: learner.email, role: learner.role }} />
-      
-      <div className="flex flex-1">
-        <Sidebar role="learner" />
-        
-        <main className="flex-1 p-6 md:ml-64">
+    <div className="flex-1 p-6">
           <div className="mb-8">
             <h1 className="text-3xl font-bold mb-2">My Courses</h1>
             <p className="text-muted-foreground">
@@ -330,8 +321,6 @@ export default function MyCoursesPage() {
               </CardContent>
             </Card>
           </div>
-        </main>
-      </div>
     </div>
   )
 }

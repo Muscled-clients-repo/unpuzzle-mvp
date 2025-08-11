@@ -1,121 +1,69 @@
-import { Header } from "@/components/layout/header"
-import { Sidebar } from "@/components/layout/sidebar"
+"use client"
+
+import { useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { mockUsers, mockCourses } from "@/data/mock"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { useAppStore } from "@/stores/app-store"
+import { mockUsers } from "@/data/mock"
 import { 
   MessageSquare, 
   Clock, 
   CheckCircle2, 
   Star, 
-  Play, 
   Calendar,
   User,
-  Lightbulb,
-  TrendingUp
+  Lightbulb
 } from "lucide-react"
-import Link from "next/link"
 
 export default function ReflectionsPage() {
   const learner = mockUsers.learners[0]
+  const { studentData, loadStudentData } = useAppStore()
+  const { reflections } = studentData
   
-  // Mock reflections data
-  const reflections = [
-    {
-      id: "reflection-1",
-      courseId: "course-1",
-      courseName: "Introduction to Web Development",
-      videoId: "video-1-5",
-      videoTitle: "Building Your First Website",
-      type: "text" as const,
-      prompt: "What was the most important thing you learned about HTML structure?",
-      content: "I learned how to structure a website properly using HTML5 semantic elements like <header>, <nav>, <main>, and <footer>. This not only makes the code more readable but also improves accessibility for screen readers. The key insight was understanding that HTML is about meaning, not appearance - that's what CSS is for.",
-      submittedAt: new Date("2024-02-05"),
-      feedback: {
-        from: "Sarah Chen",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah",
-        message: "Excellent reflection! You've grasped the fundamental concept perfectly. Try to also consider how semantic HTML helps with SEO - search engines use these elements to understand your content better.",
-        rating: 4,
-        givenAt: new Date("2024-02-06")
-      },
-      status: "reviewed"
-    },
-    {
-      id: "reflection-2",
-      courseId: "course-2", 
-      courseName: "Machine Learning Fundamentals",
-      videoId: "video-2-3",
-      videoTitle: "Linear Regression Deep Dive",
-      type: "text" as const,
-      prompt: "How would you explain linear regression to someone who's never heard of it?",
-      content: "Linear regression is like finding the best straight line through a cloud of data points. Imagine you're trying to predict house prices based on size - you'd draw a line that comes as close as possible to all the price/size points on a graph. The line helps you predict what a house might cost based on its size.",
-      submittedAt: new Date("2024-02-03"),
-      feedback: null,
-      status: "pending"
-    },
-    {
-      id: "reflection-3",
-      courseId: "course-1",
-      courseName: "Introduction to Web Development", 
-      videoId: "video-1-3",
-      videoTitle: "CSS Styling Basics",
-      type: "text" as const,
-      prompt: "What's the difference between Flexbox and Grid? When would you use each?",
-      content: "Flexbox is great for one-dimensional layouts (either row or column), like navigation bars or centering items. Grid is better for two-dimensional layouts where you need to control both rows and columns, like complex page layouts or card grids.",
-      submittedAt: new Date("2024-01-28"),
-      feedback: {
-        from: "Sarah Chen",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah",
-        message: "Good start! You understand the dimensional difference. Can you think of specific examples where Grid's two-dimensional control gives you advantages over Flexbox?",
-        rating: 3,
-        givenAt: new Date("2024-01-29")
-      },
-      status: "reviewed"
-    }
-  ]
+  useEffect(() => {
+    loadStudentData()
+  }, [loadStudentData])
 
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-US', { 
+  const formatDate = (date: Date | string | undefined) => {
+    if (!date) return 'Unknown date'
+    const dateObj = typeof date === 'string' ? new Date(date) : date
+    return dateObj.toLocaleDateString('en-US', { 
       month: 'short', 
       day: 'numeric',
       year: 'numeric'
     })
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "reviewed":
+  const getSentimentColor = (sentiment: string) => {
+    switch (sentiment) {
+      case "positive":
         return "bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-400"
-      case "pending":
+      case "confused":
         return "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-400"
+      case "neutral":
+        return "bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-400"
       default:
         return "bg-gray-100 dark:bg-gray-900/20 text-gray-800 dark:text-gray-400"
     }
   }
 
-  const reviewed = reflections.filter(r => r.status === "reviewed")
-  const pending = reflections.filter(r => r.status === "pending")
+  const reviewed = reflections.filter(r => r.aiResponse)
+  const pending = reflections.filter(r => !r.aiResponse)
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <Header user={{ name: learner.name, email: learner.email, role: learner.role }} />
-      
-      <div className="flex flex-1">
-        <Sidebar role="learner" />
-        
-        <main className="flex-1 p-6 md:ml-64">
+    <div className="flex-1 p-6">
           <div className="mb-8">
             <h1 className="text-3xl font-bold mb-2">My Reflections</h1>
             <p className="text-muted-foreground">
-              Deepen your understanding through guided reflection prompts
+              Deepen your understanding through guided reflection
             </p>
           </div>
 
           {/* Stats Cards */}
-          <div className="mb-8 grid gap-4 sm:grid-cols-4">
+          <div className="mb-8 grid gap-4 sm:grid-cols-3">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Total Reflections</CardTitle>
@@ -127,7 +75,7 @@ export default function ReflectionsPage() {
             
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Reviewed</CardTitle>
+                <CardTitle className="text-sm font-medium">With AI Insights</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-600">{reviewed.length}</div>
@@ -136,31 +84,19 @@ export default function ReflectionsPage() {
             
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Pending Review</CardTitle>
+                <CardTitle className="text-sm font-medium">Pending Insights</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-yellow-600">{pending.length}</div>
               </CardContent>
             </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Average Rating</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-1">
-                  <div className="text-2xl font-bold">3.5</div>
-                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                </div>
-              </CardContent>
-            </Card>
           </div>
 
           <Tabs defaultValue="all" className="w-full">
-            <TabsList>
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="all">All Reflections</TabsTrigger>
-              <TabsTrigger value="pending">Pending Review</TabsTrigger>
-              <TabsTrigger value="reviewed">Reviewed</TabsTrigger>
+              <TabsTrigger value="pending">Pending</TabsTrigger>
+              <TabsTrigger value="reviewed">With Insights</TabsTrigger>
             </TabsList>
 
             <TabsContent value="all" className="mt-6">
@@ -172,46 +108,22 @@ export default function ReflectionsPage() {
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <Badge variant="outline" className="text-xs">
-                              {reflection.courseName}
+                              {reflection.courseTitle}
                             </Badge>
-                            <Badge className={`text-xs ${getStatusColor(reflection.status)}`}>
-                              {reflection.status}
+                            <Badge className={`text-xs ${getSentimentColor(reflection.sentiment)}`}>
+                              {reflection.sentiment}
                             </Badge>
                           </div>
-                          <CardTitle className="text-lg">{reflection.videoTitle}</CardTitle>
+                          <CardTitle className="text-lg">Reflection on {reflection.courseTitle}</CardTitle>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Calendar className="h-4 w-4" />
-                            <span>Submitted {formatDate(reflection.submittedAt)}</span>
+                            <span>Submitted {formatDate(reflection.date)}</span>
                           </div>
                         </div>
-                        
-                        <Button
-                          asChild
-                          variant="outline"
-                          size="sm"
-                        >
-                          <Link href={`/learn/course/${reflection.courseId}/video/${reflection.videoId}`}>
-                            <Play className="mr-2 h-3 w-3" />
-                            Watch
-                          </Link>
-                        </Button>
                       </div>
                     </CardHeader>
 
                     <CardContent className="space-y-4">
-                      {/* Prompt */}
-                      <div className="rounded-lg bg-muted p-4">
-                        <div className="flex items-start gap-2">
-                          <Lightbulb className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5" />
-                          <div>
-                            <p className="font-medium text-sm">Reflection Prompt</p>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {reflection.prompt}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
                       {/* Student Response */}
                       <div className="rounded-lg border p-4">
                         <div className="flex items-start gap-3">
@@ -221,61 +133,41 @@ export default function ReflectionsPage() {
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex-1">
-                            <p className="font-medium text-sm mb-2">Your Response</p>
+                            <p className="font-medium text-sm mb-2">Your Reflection ({reflection.type})</p>
                             <p className="text-sm leading-relaxed">
                               {reflection.content}
                             </p>
+                            {reflection.tags && reflection.tags.length > 0 && (
+                              <div className="flex gap-2 mt-3">
+                                {reflection.tags.map(tag => (
+                                  <Badge key={tag} variant="secondary" className="text-xs">
+                                    {tag}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
 
-                      {/* Instructor Feedback */}
-                      {reflection.feedback ? (
-                        <div className="rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 p-4">
+                      {/* AI Response */}
+                      {reflection.aiResponse ? (
+                        <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 p-4">
                           <div className="flex items-start gap-3">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage src={reflection.feedback.avatar} />
-                              <AvatarFallback>
-                                {reflection.feedback.from.split(' ').map(n => n[0]).join('')}
-                              </AvatarFallback>
-                            </Avatar>
+                            <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                              <Lightbulb className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            </div>
                             <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                <p className="font-medium text-sm text-green-800 dark:text-green-200">
-                                  {reflection.feedback.from}
-                                </p>
-                                <div className="flex items-center gap-1">
-                                  {[1, 2, 3, 4, 5].map((star) => (
-                                    <Star
-                                      key={star}
-                                      className={`h-3 w-3 ${
-                                        star <= reflection.feedback!.rating
-                                          ? 'fill-yellow-400 text-yellow-400'
-                                          : 'text-gray-300 dark:text-gray-600'
-                                      }`}
-                                    />
-                                  ))}
-                                </div>
-                                <span className="text-xs text-muted-foreground">
-                                  {formatDate(reflection.feedback.givenAt)}
-                                </span>
-                              </div>
-                              <p className="text-sm text-green-700 dark:text-green-300">
-                                {reflection.feedback.message}
+                              <p className="font-medium text-sm text-blue-800 dark:text-blue-200 mb-2">
+                                AI Insight
+                              </p>
+                              <p className="text-sm text-blue-700 dark:text-blue-300 leading-relaxed">
+                                {reflection.aiResponse}
                               </p>
                             </div>
                           </div>
                         </div>
-                      ) : (
-                        <div className="rounded-lg bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 p-4">
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                            <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                              Waiting for instructor feedback
-                            </p>
-                          </div>
-                        </div>
-                      )}
+                      ) : null}
                     </CardContent>
                   </Card>
                 ))}
@@ -287,28 +179,54 @@ export default function ReflectionsPage() {
                 {pending.length > 0 ? (
                   pending.map((reflection) => (
                     <Card key={reflection.id}>
-                      <CardContent className="pt-6">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Badge variant="outline">{reflection.courseName}</Badge>
-                          <Badge className="bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-400">
-                            Pending Review
-                          </Badge>
+                      <CardHeader>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-xs">
+                              {reflection.courseTitle}
+                            </Badge>
+                            <Badge className={`text-xs ${getSentimentColor(reflection.sentiment)}`}>
+                              {reflection.sentiment}
+                            </Badge>
+                          </div>
+                          <CardTitle className="text-lg">Reflection on {reflection.courseTitle}</CardTitle>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Calendar className="h-4 w-4" />
+                            <span>Submitted {formatDate(reflection.date)}</span>
+                          </div>
                         </div>
-                        <h3 className="font-semibold mb-2">{reflection.videoTitle}</h3>
-                        <p className="text-sm text-muted-foreground mb-4">{reflection.prompt}</p>
-                        <p className="text-sm bg-muted p-3 rounded-lg">
-                          {reflection.content}
-                        </p>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="rounded-lg border p-4">
+                          <p className="text-sm leading-relaxed">{reflection.content}</p>
+                          {reflection.tags && reflection.tags.length > 0 && (
+                            <div className="flex gap-2 mt-3">
+                              {reflection.tags.map(tag => (
+                                <Badge key={tag} variant="secondary" className="text-xs">
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="mt-4 rounded-lg bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 p-4">
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                            <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                              AI insights will be available soon
+                            </p>
+                          </div>
+                        </div>
                       </CardContent>
                     </Card>
                   ))
                 ) : (
                   <Card>
-                    <CardContent className="flex flex-col items-center justify-center py-12">
-                      <CheckCircle2 className="h-12 w-12 text-muted-foreground mb-4" />
-                      <h3 className="text-lg font-semibold mb-2">All caught up!</h3>
+                    <CardContent className="pt-6 text-center">
+                      <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                      <p className="text-lg font-medium">All caught up!</p>
                       <p className="text-sm text-muted-foreground">
-                        No reflections pending review
+                        All your reflections have AI insights
                       </p>
                     </CardContent>
                   </Card>
@@ -318,48 +236,71 @@ export default function ReflectionsPage() {
 
             <TabsContent value="reviewed" className="mt-6">
               <div className="space-y-6">
-                {reviewed.map((reflection) => (
-                  <Card key={reflection.id}>
-                    <CardContent className="pt-6">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge variant="outline">{reflection.courseName}</Badge>
-                        <Badge className="bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-400">
-                          Reviewed
-                        </Badge>
-                      </div>
-                      <h3 className="font-semibold mb-2">{reflection.videoTitle}</h3>
-                      
-                      {reflection.feedback && (
-                        <div className="flex items-center gap-2 mb-4">
-                          <div className="flex items-center gap-1">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <Star
-                                key={star}
-                                className={`h-4 w-4 ${
-                                  star <= reflection.feedback!.rating
-                                    ? 'fill-yellow-400 text-yellow-400'
-                                    : 'text-gray-300 dark:text-gray-600'
-                                }`}
-                              />
-                            ))}
+                {reviewed.length > 0 ? (
+                  reviewed.map((reflection) => (
+                    <Card key={reflection.id}>
+                      <CardHeader>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-xs">
+                              {reflection.courseTitle}
+                            </Badge>
+                            <Badge className={`text-xs ${getSentimentColor(reflection.sentiment)}`}>
+                              {reflection.sentiment}
+                            </Badge>
                           </div>
-                          <span className="text-sm text-muted-foreground">
-                            by {reflection.feedback.from}
-                          </span>
+                          <CardTitle className="text-lg">Reflection on {reflection.courseTitle}</CardTitle>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Calendar className="h-4 w-4" />
+                            <span>Submitted {formatDate(reflection.date)}</span>
+                          </div>
                         </div>
-                      )}
-                      
-                      <p className="text-sm bg-green-50 dark:bg-green-950/20 p-3 rounded-lg">
-                        {reflection.feedback?.message}
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="rounded-lg border p-4">
+                          <p className="text-sm leading-relaxed">{reflection.content}</p>
+                          {reflection.tags && reflection.tags.length > 0 && (
+                            <div className="flex gap-2 mt-3">
+                              {reflection.tags.map(tag => (
+                                <Badge key={tag} variant="secondary" className="text-xs">
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 p-4">
+                          <div className="flex items-start gap-3">
+                            <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                              <Lightbulb className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-medium text-sm text-blue-800 dark:text-blue-200 mb-2">
+                                AI Insight
+                              </p>
+                              <p className="text-sm text-blue-700 dark:text-blue-300 leading-relaxed">
+                                {reflection.aiResponse}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                ) : (
+                  <Card>
+                    <CardContent className="pt-6 text-center">
+                      <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-lg font-medium">No AI insights yet</p>
+                      <p className="text-sm text-muted-foreground">
+                        Submit reflections to receive AI-powered insights
                       </p>
                     </CardContent>
                   </Card>
-                ))}
+                )}
               </div>
             </TabsContent>
           </Tabs>
-        </main>
-      </div>
     </div>
   )
 }

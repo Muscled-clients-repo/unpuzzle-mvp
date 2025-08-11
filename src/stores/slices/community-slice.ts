@@ -111,7 +111,6 @@ export interface Post {
     icon?: string
   }
   likedBy?: string[]
-  bookmarkedBy?: string[]
 }
 
 export interface Comment {
@@ -191,8 +190,6 @@ export interface CommunityState {
   unlikePost: (postId: string, userId: string) => void
   commentOnPost: (postId: string, comment: Omit<Comment, 'id' | 'postId' | 'timestamp' | 'likes'>) => void
   sharePost: (postId: string) => void
-  bookmarkPost: (postId: string, userId: string) => void
-  unbookmarkPost: (postId: string, userId: string) => void
   pinPost: (postId: string) => void
   unpinPost: (postId: string) => void
   
@@ -414,8 +411,7 @@ const mockPosts: Post[] = [
     shares: 45,
     timestamp: "2 hours ago",
     isPinned: true,
-    likedBy: [],
-    bookmarkedBy: []
+    likedBy: []
   },
   {
     id: "post-2",
@@ -443,8 +439,7 @@ const mockPosts: Post[] = [
       value: "Course Completed",
       icon: "🏆"
     },
-    likedBy: [],
-    bookmarkedBy: []
+    likedBy: []
   },
   {
     id: "post-3",
@@ -467,8 +462,7 @@ const mockPosts: Post[] = [
     comments: 31,
     shares: 8,
     timestamp: "6 hours ago",
-    likedBy: [],
-    bookmarkedBy: []
+    likedBy: []
   },
   {
     id: "post-4",
@@ -495,8 +489,7 @@ const mockPosts: Post[] = [
       value: "30 Day Streak",
       icon: "🔥"
     },
-    likedBy: [],
-    bookmarkedBy: []
+    likedBy: []
   },
   {
     id: "post-5",
@@ -514,8 +507,7 @@ const mockPosts: Post[] = [
     comments: 89,
     shares: 112,
     timestamp: "12 hours ago",
-    likedBy: [],
-    bookmarkedBy: []
+    likedBy: []
   }
 ]
 
@@ -695,8 +687,7 @@ export const createCommunitySlice: StateCreator<CommunityState> = (set, get) => 
       comments: 0,
       shares: 0,
       timestamp: 'just now',
-      likedBy: [],
-      bookmarkedBy: []
+      likedBy: []
     }
     return {
       posts: [newPost, ...state.posts],
@@ -782,31 +773,6 @@ export const createCommunitySlice: StateCreator<CommunityState> = (set, get) => 
     )
   })),
   
-  bookmarkPost: (postId, userId) => set((state) => ({
-    posts: state.posts.map(post =>
-      post.id === postId
-        ? { ...post, bookmarkedBy: [...(post.bookmarkedBy || []), userId] }
-        : post
-    ),
-    pinnedPosts: state.pinnedPosts.map(post =>
-      post.id === postId
-        ? { ...post, bookmarkedBy: [...(post.bookmarkedBy || []), userId] }
-        : post
-    )
-  })),
-  
-  unbookmarkPost: (postId, userId) => set((state) => ({
-    posts: state.posts.map(post =>
-      post.id === postId
-        ? { ...post, bookmarkedBy: (post.bookmarkedBy || []).filter(id => id !== userId) }
-        : post
-    ),
-    pinnedPosts: state.pinnedPosts.map(post =>
-      post.id === postId
-        ? { ...post, bookmarkedBy: (post.bookmarkedBy || []).filter(id => id !== userId) }
-        : post
-    )
-  })),
   
   pinPost: (postId) => set((state) => {
     const post = state.posts.find(p => p.id === postId)

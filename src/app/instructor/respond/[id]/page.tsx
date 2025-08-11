@@ -27,7 +27,7 @@ export default function RespondToConfusionPage() {
   const params = useParams()
   const router = useRouter()
   const confusionId = params.id as string
-  const { pendingConfusions, courseAnalytics, respondToConfusion, loadInstructorData } = useAppStore()
+  const { pendingConfusions, courseAnalytics, similarConfusions, respondToConfusion, loadInstructorData } = useAppStore()
   const [response, setResponse] = useState("")
   const [aiSuggestion, setAiSuggestion] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -60,8 +60,8 @@ export default function RespondToConfusionPage() {
     setResponse(aiSuggestion)
   }
 
-  // Mock similar confusions
-  const similarConfusions = [
+  // Use similarConfusions from store (extended for display)
+  const extendedSimilarConfusions = [
     { student: "John Doe", time: "3 days ago", message: "Why can't I just use a regular function instead of useCallback?", resolved: true },
     { student: "Jane Smith", time: "1 week ago", message: "What's the difference between useMemo and useCallback?", resolved: true },
     { student: "Bob Wilson", time: "2 weeks ago", message: "When should I use useCallback vs useEffect?", resolved: true }

@@ -5,7 +5,6 @@ export interface BlogUIState {
   selectedCategory: string
   searchQuery: string
   likedPosts: string[] // post IDs
-  bookmarkedPosts: string[] // post IDs
 }
 
 export interface BlogSlice extends BlogUIState {
@@ -13,7 +12,6 @@ export interface BlogSlice extends BlogUIState {
   setSelectedCategory: (category: string) => void
   setSearchQuery: (query: string) => void
   toggleLikePost: (postId: string) => void
-  toggleBookmarkPost: (postId: string) => void
   resetBlogFilters: () => void
 }
 
@@ -22,7 +20,6 @@ export const createBlogSlice: StateCreator<BlogSlice> = (set, get) => ({
   selectedCategory: 'all',
   searchQuery: '',
   likedPosts: [],
-  bookmarkedPosts: [],
 
   // UI Actions only
   setSelectedCategory: (category: string) => {
@@ -41,17 +38,6 @@ export const createBlogSlice: StateCreator<BlogSlice> = (set, get) => ({
       likedPosts: isLiked 
         ? likedPosts.filter(id => id !== postId)
         : [...likedPosts, postId]
-    })
-  },
-
-  toggleBookmarkPost: (postId: string) => {
-    const { bookmarkedPosts } = get()
-    const isBookmarked = bookmarkedPosts.includes(postId)
-    
-    set({
-      bookmarkedPosts: isBookmarked
-        ? bookmarkedPosts.filter(id => id !== postId)
-        : [...bookmarkedPosts, postId]
     })
   },
 

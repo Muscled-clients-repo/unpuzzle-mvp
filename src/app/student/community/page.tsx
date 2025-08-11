@@ -2,8 +2,6 @@
 
 import { useEffect, useState, useRef } from "react"
 import { useAppStore } from "@/stores/app-store"
-import { Header } from "@/components/layout/header"
-import { Sidebar } from "@/components/layout/sidebar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -27,7 +25,6 @@ import {
   Heart,
   MessageCircle,
   Share2,
-  Bookmark,
   MoreVertical,
   Send,
   Hash,
@@ -66,8 +63,6 @@ export default function CommunityPage() {
     unlikePost,
     commentOnPost,
     sharePost,
-    bookmarkPost,
-    unbookmarkPost,
     createPost,
     fetchCommunityData
   } = useAppStore()
@@ -121,13 +116,7 @@ export default function CommunityPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <Header user={{ name: learner.name, email: learner.email, role: learner.role }} />
-      
-      <div className="flex flex-1">
-        <Sidebar role="learner" />
-        
-        <main className="flex-1 p-6 md:ml-64">
+    <div className="flex-1 p-6">
           <div className="flex gap-6">
             {/* Main Content Area */}
             <div className="flex-1 max-w-4xl">
@@ -297,18 +286,6 @@ export default function CommunityPage() {
                                 <Share2 className="h-4 w-4" />
                                 <span className="text-xs">{post.shares}</span>
                               </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 ml-auto"
-                                onClick={() => 
-                                  post.bookmarkedBy?.includes(learner.id)
-                                    ? unbookmarkPost(post.id, learner.id)
-                                    : bookmarkPost(post.id, learner.id)
-                                }
-                              >
-                                <Bookmark className={`h-4 w-4 ${post.bookmarkedBy?.includes(learner.id) ? 'fill-current' : ''}`} />
-                              </Button>
                             </div>
                           </div>
                         </div>
@@ -420,18 +397,6 @@ export default function CommunityPage() {
                             <Button variant="ghost" size="sm" className="h-8 gap-1" onClick={() => sharePost(post.id)}>
                               <Share2 className="h-4 w-4" />
                               <span className="text-xs">{post.shares}</span>
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 ml-auto"
-                              onClick={() => 
-                                post.bookmarkedBy?.includes(learner.id)
-                                  ? unbookmarkPost(post.id, learner.id)
-                                  : bookmarkPost(post.id, learner.id)
-                              }
-                            >
-                              <Bookmark className={`h-4 w-4 ${post.bookmarkedBy?.includes(learner.id) ? 'fill-current' : ''}`} />
                             </Button>
                           </div>
                         </div>
@@ -1204,8 +1169,6 @@ export default function CommunityPage() {
               </Card>
             </div>
           </div>
-        </main>
-      </div>
     </div>
   )
 }

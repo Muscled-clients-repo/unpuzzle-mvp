@@ -1,10 +1,11 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
 import { useAppStore } from "@/stores/app-store"
 import { LoadingSpinner } from "@/components/common/LoadingSpinner"
+import { InstructorVideoView } from "@/components/video/views/InstructorVideoView"
 
 // Dynamically import the VideoPlayer component with loading fallback
 const VideoPlayer = dynamic(
@@ -66,7 +67,11 @@ import { Textarea } from "@/components/ui/textarea"
 
 export default function StandaloneLessonPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const lessonId = params.id as string
+  
+  // Check for instructor mode
+  const isInstructorMode = searchParams.get('instructor') === 'true'
   
   // Use Zustand store
   const { 
@@ -212,6 +217,11 @@ export default function StandaloneLessonPage() {
         </main>
       </div>
     )
+  }
+  
+  // Handle instructor mode
+  if (isInstructorMode) {
+    return <InstructorVideoView />
   }
 
   // Then show not found if lesson doesn't exist

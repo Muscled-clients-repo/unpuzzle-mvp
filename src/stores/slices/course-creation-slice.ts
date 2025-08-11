@@ -79,6 +79,9 @@ export interface CourseCreationSlice {
   // Navigation
   setCurrentStep: (step: CourseCreationData['currentStep']) => void
   resetCourseCreation: () => void
+  
+  // Edit mode
+  loadCourseForEdit: (courseId: string) => void
 }
 
 export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set, get) => ({
@@ -454,6 +457,46 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       courseCreation: null,
       uploadQueue: [],
       isAutoSaving: false,
+      currentStep: 'info'
+    })
+  },
+  
+  loadCourseForEdit: (courseId) => {
+    // Mock implementation - in production this would fetch from API
+    // For now, create sample course data based on courseId
+    const mockCourseData: CourseCreationData = {
+      title: `Course ${courseId}`,
+      description: `Description for course ${courseId}`,
+      category: 'web-development',
+      level: 'intermediate',
+      price: 99,
+      chapters: [
+        {
+          id: 'chapter-1',
+          title: 'Introduction',
+          description: 'Getting started with the course',
+          order: 0,
+          videos: [],
+          duration: '30 min'
+        },
+        {
+          id: 'chapter-2',
+          title: 'Core Concepts',
+          description: 'Understanding the fundamentals',
+          order: 1,
+          videos: [],
+          duration: '45 min'
+        }
+      ],
+      videos: [],
+      status: 'draft',
+      totalDuration: '1h 15min',
+      lastSaved: new Date(),
+      autoSaveEnabled: true
+    }
+    
+    set({
+      courseCreation: mockCourseData,
       currentStep: 'info'
     })
   }

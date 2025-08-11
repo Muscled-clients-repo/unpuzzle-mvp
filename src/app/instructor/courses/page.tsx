@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useAppStore } from "@/stores/app-store"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -38,56 +39,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-// Mock data for courses
-const mockCourses = [
-  {
-    id: '1',
-    title: 'React Masterclass',
-    thumbnail: '/api/placeholder/400/225',
-    status: 'published' as const,
-    students: 423,
-    completionRate: 67,
-    revenue: 25380,
-    lastUpdated: '2 days ago',
-    totalVideos: 48,
-    totalDuration: '12h 30m',
-    pendingConfusions: 3
-  },
-  {
-    id: '2',
-    title: 'Python for Data Science',
-    thumbnail: '/api/placeholder/400/225',
-    status: 'published' as const,
-    students: 312,
-    completionRate: 72,
-    revenue: 18720,
-    lastUpdated: '1 week ago',
-    totalVideos: 36,
-    totalDuration: '9h 15m',
-    pendingConfusions: 1
-  },
-  {
-    id: '3',
-    title: 'Advanced TypeScript',
-    thumbnail: '/api/placeholder/400/225',
-    status: 'draft' as const,
-    students: 0,
-    completionRate: 0,
-    revenue: 0,
-    lastUpdated: '3 hours ago',
-    totalVideos: 12,
-    totalDuration: '3h 45m',
-    pendingConfusions: 0
-  }
-]
-
 export default function TeachCoursesPage() {
   const router = useRouter()
+  const { courses, loadCourses } = useAppStore()
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [sortBy, setSortBy] = useState("lastUpdated")
+  
+  useEffect(() => {
+    loadCourses()
+  }, [loadCourses])
 
-  const filteredCourses = mockCourses.filter(course => {
+  const filteredCourses = courses.filter(course => {
     const matchesSearch = course.title.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesStatus = statusFilter === "all" || course.status === statusFilter
     return matchesSearch && matchesStatus
@@ -130,9 +93,9 @@ export default function TeachCoursesPage() {
             <Video className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockCourses.length}</div>
+            <div className="text-2xl font-bold">{courses.length}</div>
             <p className="text-xs text-muted-foreground">
-              {mockCourses.filter(c => c.status === 'published').length} published
+              {courses.filter(c => c.status === 'published').length} published
             </p>
           </CardContent>
         </Card>
@@ -144,7 +107,7 @@ export default function TeachCoursesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {mockCourses.reduce((acc, c) => acc + c.students, 0).toLocaleString()}
+              {courses.reduce((acc, c) => acc + c.students, 0).toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
               Across all courses
@@ -159,7 +122,7 @@ export default function TeachCoursesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${mockCourses.reduce((acc, c) => acc + c.revenue, 0).toLocaleString()}
+              ${courses.reduce((acc, c) => acc + c.revenue, 0).toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
               Lifetime earnings
@@ -175,8 +138,8 @@ export default function TeachCoursesPage() {
           <CardContent>
             <div className="text-2xl font-bold">
               {Math.round(
-                mockCourses.filter(c => c.status === 'published').reduce((acc, c) => acc + c.completionRate, 0) / 
-                mockCourses.filter(c => c.status === 'published').length
+                courses.filter(c => c.status === 'published').reduce((acc, c) => acc + c.completionRate, 0) / 
+                courses.filter(c => c.status === 'published').length
               )}%
             </div>
             <p className="text-xs text-muted-foreground">

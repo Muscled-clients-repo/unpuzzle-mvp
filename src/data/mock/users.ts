@@ -17,7 +17,6 @@ export interface User {
 export interface LearnerProfile extends User {
   enrolledCourses: string[]
   completedCourses: string[]
-  bookmarks: Bookmark[]
   reflections: Reflection[]
   metrics: LearningMetrics
 }
@@ -33,15 +32,6 @@ export interface InstructorProfile extends User {
     pending: number
     withdrawn: number
   }
-}
-
-export interface Bookmark {
-  id: string
-  courseId: string
-  videoId: string
-  timestamp: number
-  note?: string
-  createdAt: Date
 }
 
 export interface Reflection {
@@ -90,16 +80,6 @@ export const mockUsers: {
       },
       enrolledCourses: ["course-1", "course-2"],
       completedCourses: [],
-      bookmarks: [
-        {
-          id: "bookmark-1",
-          courseId: "course-1",
-          videoId: "video-1-2",
-          timestamp: 1200,
-          note: "Important concept about semantic HTML",
-          createdAt: new Date("2024-02-01"),
-        },
-      ],
       reflections: [
         {
           id: "reflection-1",

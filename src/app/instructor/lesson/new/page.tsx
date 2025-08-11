@@ -23,8 +23,6 @@ import {
   Lock,
   Eye,
   Sparkles,
-  MessageCircle,
-  MousePointer,
   AlertCircle,
   CheckCircle,
   X,
@@ -57,11 +55,6 @@ export default function CreateLessonPage() {
   const [uploadMethod, setUploadMethod] = useState<'upload' | 'youtube'>('upload')
   const [ctaText, setCtaText] = useState("")
   const [ctaLink, setCtaLink] = useState("")
-  const [aiFeatures, setAiFeatures] = useState({
-    transcript: true,
-    confusions: true,
-    segments: true
-  })
   const [visibility, setVisibility] = useState<'public' | 'unlisted'>('public')
   const [isPublishing, setIsPublishing] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
@@ -154,10 +147,7 @@ export default function CreateLessonPage() {
         tags,
         visibility,
         ctaText,
-        ctaLink,
-        transcriptEnabled: aiFeatures.transcript,
-        confusionsEnabled: aiFeatures.confusions,
-        segmentSelectionEnabled: aiFeatures.segments
+        ctaLink
       })
       setLessonId(id)
     } else {
@@ -167,10 +157,7 @@ export default function CreateLessonPage() {
         tags,
         visibility,
         ctaText,
-        ctaLink,
-        transcriptEnabled: aiFeatures.transcript,
-        confusionsEnabled: aiFeatures.confusions,
-        segmentSelectionEnabled: aiFeatures.segments
+        ctaLink
       })
     }
     router.push('/instructor/lessons')
@@ -431,71 +418,6 @@ export default function CreateLessonPage() {
 
         {/* Right: Settings */}
         <div className="space-y-6">
-          {/* AI Features */}
-          <Card>
-            <CardHeader>
-              <CardTitle>AI Features</CardTitle>
-              <CardDescription>
-                Choose which AI features to enable
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <MessageCircle className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">Transcript</p>
-                    <p className="text-xs text-muted-foreground">
-                      Auto-generate transcript
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={aiFeatures.transcript}
-                  onCheckedChange={(checked) => 
-                    setAiFeatures({ ...aiFeatures, transcript: checked })
-                  }
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <AlertCircle className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">Confusions</p>
-                    <p className="text-xs text-muted-foreground">
-                      Allow confusion tracking
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={aiFeatures.confusions}
-                  onCheckedChange={(checked) => 
-                    setAiFeatures({ ...aiFeatures, confusions: checked })
-                  }
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <MousePointer className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">Segment Selection</p>
-                    <p className="text-xs text-muted-foreground">
-                      Let users select video parts
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={aiFeatures.segments}
-                  onCheckedChange={(checked) => 
-                    setAiFeatures({ ...aiFeatures, segments: checked })
-                  }
-                />
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Visibility */}
           <Card>
             <CardHeader>

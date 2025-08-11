@@ -14,7 +14,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Share2,
-  Bookmark,
   ThumbsUp,
   Tag,
   Twitter,
@@ -32,13 +31,10 @@ interface BlogDetailClientProps {
 export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) {
   const { 
     likedPosts,
-    bookmarkedPosts,
-    toggleLikePost,
-    toggleBookmarkPost
+    toggleLikePost
   } = useAppStore()
   
   const isLiked = likedPosts.includes(post.id)
-  const isBookmarked = bookmarkedPosts.includes(post.id)
 
   const handleNewsletterSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -169,15 +165,6 @@ export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) 
               >
                 <ThumbsUp className={cn("h-4 w-4", isLiked && "fill-current")} />
                 <span className="ml-2">{isLiked ? "Liked" : "Like"}</span>
-              </Button>
-              
-              <Button
-                variant={isBookmarked ? "default" : "outline"}
-                size="sm"
-                onClick={() => toggleBookmarkPost(post.id)}
-              >
-                <Bookmark className={cn("h-4 w-4", isBookmarked && "fill-current")} />
-                <span className="ml-2">{isBookmarked ? "Saved" : "Save"}</span>
               </Button>
             </div>
             

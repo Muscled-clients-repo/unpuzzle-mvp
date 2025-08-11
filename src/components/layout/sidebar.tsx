@@ -8,7 +8,6 @@ import {
   BookOpen,
   Home,
   BarChart3,
-  Bookmark,
   MessageSquare,
   Settings,
   PlayCircle,
@@ -36,9 +35,7 @@ const learnerNavItems = [
   { href: "/student/courses", label: "My Courses", icon: BookOpen },
   { href: "/student/community", label: "Community", icon: UsersRound },
   { href: "/student/metrics", label: "Learning Metrics", icon: BarChart3 },
-  { href: "/student/bookmarks", label: "Bookmarks", icon: Bookmark },
   { href: "/student/reflections", label: "Reflections", icon: MessageSquare },
-  { href: "/student/settings", label: "Settings", icon: Settings },
 ]
 
 const instructorNavItems = [
@@ -47,8 +44,7 @@ const instructorNavItems = [
   { href: "/instructor/lessons", label: "My Lessons", icon: PlayCircle },
   { href: "/instructor/confusions", label: "Confusions", icon: MessageSquare },
   { href: "/instructor/students", label: "Students", icon: Users },
-  { href: "/instructor/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/instructor/earnings", label: "Earnings", icon: DollarSign },
+  { href: "/instructor/engagement", label: "Engagement", icon: TrendingUp },
 ]
 
 const moderatorNavItems = [
@@ -92,7 +88,7 @@ export function Sidebar({ role = "learner" }: SidebarProps) {
   const isInstructor = userRole === 'instructor'
 
   return (
-    <aside className="hidden md:flex w-64 flex-col border-r bg-background fixed left-0 top-16 bottom-0 z-30">
+    <aside className="hidden md:flex w-64 flex-col border-r bg-background fixed left-0 top-16 bottom-0 z-40">
       {/* Mode Indicator */}
       {(role === "instructor" || role === "moderator") && (
         <div className="border-b p-4">
@@ -219,21 +215,6 @@ export function Sidebar({ role = "learner" }: SidebarProps) {
                 </p>
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {role === "instructor" && (
-        <div className="border-t p-4">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Total Students</span>
-              <span className="font-medium">2,543</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">This Month</span>
-              <span className="font-medium text-green-600">+$3,240</span>
-            </div>
           </div>
         </div>
       )}

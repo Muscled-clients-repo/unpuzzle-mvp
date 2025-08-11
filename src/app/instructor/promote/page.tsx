@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useAppStore } from "@/stores/app-store"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -22,12 +22,16 @@ import {
 } from "lucide-react"
 
 export default function PromoteToModeratorPage() {
-  const { promoteToModerator } = useAppStore()
+  const { promoteToModerator, topLearners, allSpecializations, loadInstructorData } = useAppStore()
   const [selectedCandidate, setSelectedCandidate] = useState<string | null>(null)
   const [selectedSpecializations, setSelectedSpecializations] = useState<string[]>([])
+  
+  useEffect(() => {
+    loadInstructorData()
+  }, [loadInstructorData])
 
-  // Mock top learners data
-  const topLearners = [
+  // Extended top learners data (will be replaced by API)
+  const extendedTopLearners = [
     {
       id: '1',
       name: 'Sarah Chen',
@@ -92,7 +96,7 @@ export default function PromoteToModeratorPage() {
     }
   }
 
-  const allSpecializations = ['React', 'JavaScript', 'CSS', 'Python', 'Node.js', 'TypeScript', 'Data Science', 'Machine Learning']
+  // allSpecializations now comes from store
 
   return (
     <div className="container mx-auto p-6 space-y-6">

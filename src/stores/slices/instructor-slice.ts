@@ -77,10 +77,50 @@ export interface DateRange {
   preset: 'today' | 'yesterday' | '7days' | '30days' | '90days' | 'custom'
 }
 
+export interface InstructorCourse {
+  id: string
+  title: string
+  thumbnail: string
+  status: 'published' | 'draft' | 'under_review'
+  students: number
+  completionRate: number
+  revenue: number
+  lastUpdated: string
+  totalVideos: number
+  totalDuration: string
+  pendingConfusions: number
+}
+
+export interface TopLearner {
+  id: string
+  name: string
+  learnRate: number
+  responsesInCommunity: number
+  helpfulVotes: number
+  reflectionsEndorsed: number
+  coursesCompleted: number
+  avgScore: number
+  strengths: string[]
+  joinedDaysAgo: number
+  currentPlan: 'basic' | 'premium' | 'enterprise'
+}
+
+export interface SimilarConfusion {
+  id: string
+  studentName: string
+  timestamp: string
+  message: string
+  resolved: boolean
+}
+
 export interface InstructorSlice {
   instructorStats: InstructorStats | null
   courseAnalytics: CourseAnalytics[]
+  courses: InstructorCourse[]
   studentInsights: StudentInsight[]
+  topLearners: TopLearner[]
+  similarConfusions: SimilarConfusion[]
+  allSpecializations: string[]
   pendingConfusions: Array<{
     id: string
     courseId: string
@@ -98,6 +138,7 @@ export interface InstructorSlice {
   
   // Actions
   loadInstructorData: () => void
+  loadCourses: () => void
   respondToConfusion: (confusionId: string, response: string) => void
   markConfusionResolved: (confusionId: string) => void
   getConfusionHeatmap: (courseId: string) => Array<{time: string, count: number}>
@@ -111,7 +152,11 @@ export interface InstructorSlice {
 export const createInstructorSlice: StateCreator<InstructorSlice> = (set, get) => ({
   instructorStats: null,
   courseAnalytics: [],
+  courses: [],
   studentInsights: [],
+  topLearners: [],
+  similarConfusions: [],
+  allSpecializations: ['React', 'JavaScript', 'CSS', 'Python', 'Node.js', 'TypeScript', 'Data Science', 'Machine Learning'],
   pendingConfusions: [],
   selectedInstructorCourse: 'all',
   dateRange: {
@@ -280,6 +325,110 @@ export const createInstructorSlice: StateCreator<InstructorSlice> = (set, get) =
           videoTime: '1:02:15',
           message: "Context API vs Redux?",
           priority: 'medium'
+        }
+      ],
+      topLearners: [
+        {
+          id: '1',
+          name: 'Sarah Chen',
+          learnRate: 52,
+          responsesInCommunity: 147,
+          helpfulVotes: 892,
+          reflectionsEndorsed: 23,
+          coursesCompleted: 5,
+          avgScore: 94,
+          strengths: ['React', 'JavaScript', 'CSS'],
+          joinedDaysAgo: 120,
+          currentPlan: 'premium'
+        },
+        {
+          id: '2',
+          name: 'Mike Johnson',
+          learnRate: 48,
+          responsesInCommunity: 89,
+          helpfulVotes: 456,
+          reflectionsEndorsed: 15,
+          coursesCompleted: 3,
+          avgScore: 91,
+          strengths: ['Python', 'Data Science', 'Machine Learning'],
+          joinedDaysAgo: 90,
+          currentPlan: 'premium'
+        },
+        {
+          id: '3',
+          name: 'Emma Wilson',
+          learnRate: 45,
+          responsesInCommunity: 234,
+          helpfulVotes: 1023,
+          reflectionsEndorsed: 31,
+          coursesCompleted: 4,
+          avgScore: 88,
+          strengths: ['React', 'Node.js', 'TypeScript'],
+          joinedDaysAgo: 150,
+          currentPlan: 'basic'
+        }
+      ],
+      similarConfusions: [
+        {
+          id: '1',
+          studentName: 'Alex Kim',
+          timestamp: '3 days ago',
+          message: 'I also struggled with useCallback dependencies',
+          resolved: true
+        },
+        {
+          id: '2',
+          studentName: 'Lisa Wang',
+          timestamp: '1 week ago',
+          message: 'The dependency array concept was confusing initially',
+          resolved: true
+        }
+      ]
+    })
+  },
+
+  loadCourses: () => {
+    // Initialize with mock data (temporary until backend)
+    set({
+      courses: [
+        {
+          id: '1',
+          title: 'React Masterclass',
+          thumbnail: '/api/placeholder/400/225',
+          status: 'published',
+          students: 423,
+          completionRate: 67,
+          revenue: 25380,
+          lastUpdated: '2 days ago',
+          totalVideos: 48,
+          totalDuration: '12h 30m',
+          pendingConfusions: 3
+        },
+        {
+          id: '2',
+          title: 'Python for Data Science',
+          thumbnail: '/api/placeholder/400/225',
+          status: 'published',
+          students: 312,
+          completionRate: 72,
+          revenue: 18720,
+          lastUpdated: '1 week ago',
+          totalVideos: 36,
+          totalDuration: '9h 15m',
+          pendingConfusions: 1
+        },
+        {
+          id: '3',
+          title: 'Advanced TypeScript',
+          thumbnail: '/api/placeholder/400/225',
+          status: 'draft',
+          students: 0,
+          completionRate: 0,
+          revenue: 0,
+          lastUpdated: '3 hours ago',
+          totalVideos: 12,
+          totalDuration: '3h 45m',
+          pendingConfusions: 0
         }
       ]
     })

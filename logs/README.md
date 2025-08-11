@@ -18,4 +18,8 @@ If you are getting 80% plus on the quizzes that we give to you or the AI gives t
 
 2. The execution rate means if the AI or the instructor has given you quizzes along the videos that you're watching and you Refuse to take the quizzes your execution rate will go down if you do five out of ten quizzes your execution rate is 50% If you do seven out of the ten quizzes your execution rate is 70%
 
-3. Execution pace basically means how fast are you executing when you're given a quiz or asked by AI to provide a reflection in voice memo screen recording or
+3. Execution pace basically means how fast are you executing when you're given a quiz or asked by AI to provide a reflection in voice memo screen recording or screenshot. 
+
+
+I made a file called Commit-History.md and in this file update it with the commit id and commit msg and going forward do the same.
+

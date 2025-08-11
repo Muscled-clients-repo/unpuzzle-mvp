@@ -51,7 +51,6 @@ import {
   MessageSquare,
   Plus,
   PenTool,
-  Bookmark,
   MessageCircle,
   Lightbulb,
   AlertCircle
@@ -72,7 +71,7 @@ export default function ExperimentalVideoPlayerPage() {
   const updatePreferences = useAppStore((state) => state.updatePreferences)
   const [isResizing, setIsResizing] = useState(false)
   const [showPauseActions, setShowPauseActions] = useState(false)
-  const [annotationMode, setAnnotationMode] = useState<'note' | 'question' | 'bookmark' | null>(null)
+  const [annotationMode, setAnnotationMode] = useState<'note' | 'question' | null>(null)
   const sidebarRef = useRef<HTMLDivElement>(null)
   
   const course = mockCourses.find(c => c.id === courseId)
@@ -168,7 +167,7 @@ export default function ExperimentalVideoPlayerPage() {
     return `${minutes}:${seconds.toString().padStart(2, "0")}`
   }
 
-  const handleAnnotation = (type: 'note' | 'question' | 'bookmark') => {
+  const handleAnnotation = (type: 'note' | 'question') => {
     setAnnotationMode(type)
     console.log(`Starting ${type} annotation at ${formatTime(currentTime)}`)
     // Here you would open annotation UI
@@ -260,17 +259,6 @@ export default function ExperimentalVideoPlayerPage() {
                       </div>
                     </Button>
 
-                    <Button
-                      variant="outline"
-                      onClick={() => handleAnnotation('bookmark')}
-                      className="flex items-center gap-3 p-4 h-auto justify-start bg-green-50 border-green-200 hover:bg-green-100"
-                    >
-                      <Bookmark className="h-5 w-5 text-green-600" />
-                      <div className="text-left">
-                        <div className="font-medium text-gray-900">Bookmark</div>
-                        <div className="text-xs text-gray-600">Save this moment</div>
-                      </div>
-                    </Button>
                   </div>
 
                   <div className="flex gap-2">
