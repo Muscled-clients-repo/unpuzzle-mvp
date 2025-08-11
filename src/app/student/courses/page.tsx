@@ -181,7 +181,7 @@ export default function MyCoursesPage() {
 
                         {/* Action Button */}
                         <Button asChild className="w-full">
-                          <Link href={`/learn/course/${course.id}/video/${course.videos[progress.completedLessons]?.id || course.videos[0].id}`}>
+                          <Link href={`/student/course/${course.id}/video/${course.videos[progress.completedLessons]?.id || course.videos[0].id}`}>
                             <Play className="mr-2 h-4 w-4" />
                             Continue Learning
                           </Link>
@@ -236,7 +236,7 @@ export default function MyCoursesPage() {
                       </CardHeader>
                       <CardContent>
                         <Button asChild className="w-full">
-                          <Link href={`/learn/course/${course.id}/video/${course.videos[0].id}`}>
+                          <Link href={`/student/course/${course.id}/video/${course.videos[0].id}`}>
                             Continue Learning
                           </Link>
                         </Button>

@@ -3,12 +3,12 @@
 import { useRef, useEffect, useState } from "react"
 import { useAppStore } from "@/stores/app-store"
 import { cn } from "@/lib/utils"
-import { VideoEngine, VideoEngineRef } from "./components/VideoEngine"
-import { VideoControls } from "./components/VideoControls"
-import { VideoSeeker } from "./components/VideoSeeker"
-import { TranscriptPanel } from "./components/TranscriptPanel"
+import { VideoEngine, VideoEngineRef } from "../shared/VideoEngine"
+import { VideoControls } from "../shared/VideoControls"
+import { VideoSeeker } from "../shared/VideoSeeker"
+import { TranscriptPanel } from "../shared/TranscriptPanel"
 
-interface VideoPlayerRefactoredProps {
+interface StudentVideoPlayerProps {
   videoUrl: string
   title?: string
   transcript?: string
@@ -18,7 +18,7 @@ interface VideoPlayerRefactoredProps {
   onEnded?: () => void
 }
 
-export function VideoPlayerRefactored({
+export function StudentVideoPlayer({
   videoUrl,
   title,
   transcript,
@@ -26,8 +26,8 @@ export function VideoPlayerRefactored({
   onPause,
   onPlay,
   onEnded,
-}: VideoPlayerRefactoredProps) {
-  // console.log('📹 VideoPlayerRefactored rendering with:', { videoUrl, title })
+}: StudentVideoPlayerProps) {
+  // console.log('📹 StudentVideoPlayer rendering with:', { videoUrl, title })
   
   const containerRef = useRef<HTMLDivElement>(null)
   const videoEngineRef = useRef<VideoEngineRef>(null)

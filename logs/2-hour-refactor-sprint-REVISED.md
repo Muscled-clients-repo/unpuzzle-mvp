@@ -91,7 +91,7 @@ export interface User {
 }
 
 // ============= VIDEO TYPES =============
-// Base video type
+// Course videos (part of structured courses)
 export interface Video {
   id: string
   courseId: string
@@ -106,7 +106,7 @@ export interface Video {
   updatedAt: string
 }
 
-// Student-specific video data
+// Student-specific course video data
 export interface StudentVideoData extends Video {
   progress?: VideoProgress
   reflections?: Reflection[]
@@ -114,11 +114,54 @@ export interface StudentVideoData extends Video {
   aiContextEnabled: boolean
 }
 
-// Instructor-specific video data
+// Instructor-specific course video data
 export interface InstructorVideoData extends Video {
   studentActivity: StudentActivity[]
   confusionHotspots: ConfusionHotspot[]
   aggregateMetrics: VideoMetrics
+}
+
+// ============= PUBLIC LESSON TYPES =============
+// Public standalone lessons (anyone can view, students get AI features)
+export interface Lesson {
+  id: string
+  title: string
+  description: string
+  duration: number
+  videoUrl: string
+  thumbnailUrl?: string
+  transcript?: TranscriptEntry[]
+  instructor: Instructor
+  tags: string[]
+  difficulty: 'beginner' | 'intermediate' | 'advanced'
+  isFree: boolean
+  isPublished: boolean
+  viewCount: number
+  rating: number
+  // No courseId or order - it's standalone
+  createdAt: string
+  updatedAt: string
+}
+
+// Enhanced lesson data for logged-in students (AI features unlocked)
+export interface StudentLessonData extends Lesson {
+  progress?: VideoProgress
+  reflections?: Reflection[]
+  quizzes?: Quiz[]
+  aiContextEnabled: boolean  // Always true for students
+  hasAccess: boolean  // Based on subscription/payment for premium lessons
+}
+
+// Analytics data for lesson owner (instructor)
+export interface InstructorLessonData extends Lesson {
+  studentActivity: StudentActivity[]
+  confusionHotspots: ConfusionHotspot[]
+  aggregateMetrics: VideoMetrics
+  earnings?: {
+    totalRevenue: number
+    monthlyRevenue: number
+    viewsThisMonth: number
+  }
 }
 
 // ============= STUDENT FEATURES =============
@@ -143,6 +186,9 @@ export interface VideoSegment {
   outPoint: number
   transcript?: string
   purpose: 'ai-context' | 'quiz' | 'reflection'
+  // 'ai-context' = Student sends segment to AI for questions
+  // 'quiz' = Student wants to be tested on this segment  
+  // 'reflection' = AI agent selected this segment and prompted student for reflection
 }
 
 export interface Quiz {
@@ -166,6 +212,11 @@ export interface StudentActivity {
   content?: string
   needsResponse: boolean
 }
+// Activity types:
+// 'reflection' = Student submitted reflection (voice/loom/text) on AI-prompted segment
+// 'confusion' = Student marked confusion/stuck (HIGH priority for instructor)
+// 'quiz_attempt' = Student completed embedded quiz (review if failed)  
+// 'completion' = Student finished video (progress tracking)
 
 export interface ConfusionHotspot {
   timestamp: number
@@ -221,8 +272,14 @@ export interface AIMessage {
   content: string
   timestamp: string
   videoContext?: VideoSegment
-  intent?: 'conceptual' | 'quiz' | 'hint' | 'confusion'
+  intent?: 'conceptual' | 'quiz' | 'hint' | 'confusion' | 'reflection'
 }
+// Intent types:
+// 'conceptual' = Student asking for concept explanation
+// 'quiz' = Student wants to be tested on material
+// 'hint' = Student wants a clue, not full answer
+// 'confusion' = Student is stuck and needs clarification
+// 'reflection' = Student submitting their understanding for AI feedback
 
 export interface AIChat {
   id: string
@@ -244,6 +301,29 @@ export interface VideoProgress {
   completedAt?: string
   quizAttempts?: QuizAttempt[]
   reflectionCount: number
+}
+
+// ============= AI ENGAGEMENT METRICS =============
+export interface AIEngagementMetrics {
+  userId: string
+  executionRate: number  // % of AI prompts student acted on (vs skipped)
+  executionPace: number  // Average seconds to respond to AI prompts
+  totalPromptsShown: number
+  totalPromptsActedOn: number
+  avgResponseTime: number
+}
+
+export interface AIPrompt {
+  id: string
+  userId: string
+  videoId: string
+  type: 'reflection' | 'quiz'
+  videoSegment: VideoSegment
+  promptText: string
+  shownAt: string
+  respondedAt?: string
+  responseTimeSeconds?: number
+  action: 'completed' | 'skipped' | 'pending'
 }
 
 export interface QuizAttempt {

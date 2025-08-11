@@ -232,7 +232,7 @@ export function AICourseCard({
             )}
             
             <Button className="w-full group" asChild>
-              <Link href={`/learn/course/${course.id}/video/${course.videos[0]?.id}`}>
+              <Link href={`/student/course/${course.id}/video/${course.videos[0]?.id}`}>
                 Continue Learning
                 <ChevronRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
               </Link>

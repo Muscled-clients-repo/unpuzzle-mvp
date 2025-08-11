@@ -19,8 +19,8 @@ import { useAppStore } from "@/stores/app-store"
 
 // Dynamically import VideoPlayer
 const VideoPlayer = dynamic(
-  () => import("@/components/video/VideoPlayerRefactored").then(mod => ({ 
-    default: mod.VideoPlayerRefactored 
+  () => import("@/components/video/student/StudentVideoPlayer").then(mod => ({ 
+    default: mod.StudentVideoPlayer 
   })),
   { ssr: false }
 )

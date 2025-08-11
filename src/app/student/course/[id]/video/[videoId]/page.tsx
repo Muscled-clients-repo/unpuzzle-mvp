@@ -8,8 +8,8 @@ import { LoadingSpinner } from "@/components/common/LoadingSpinner"
 
 // Dynamically import the VideoPlayer component with loading fallback
 const VideoPlayer = dynamic(
-  () => import("@/components/video/VideoPlayerRefactored").then(mod => ({ 
-    default: mod.VideoPlayerRefactored 
+  () => import("@/components/video/student/StudentVideoPlayer").then(mod => ({ 
+    default: mod.StudentVideoPlayer 
   })),
   { 
     loading: () => (
@@ -183,48 +183,6 @@ export default function VideoPlayerPage() {
 
   return (
     <div className="flex h-screen flex-col">
-      {/* Course/Lesson Progress Bar */}
-      <div className="border-b bg-background flex-shrink-0">
-        <div className="container px-4 py-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button asChild variant="ghost" size="sm">
-                <Link href={isStandaloneLesson ? "/" : "/learn"}>
-                  <ChevronLeft className="mr-2 h-4 w-4" />
-                  {isStandaloneLesson ? "Back to Home" : "Back to Dashboard"}
-                </Link>
-              </Button>
-              <div>
-                <h2 className="font-semibold">
-                  {isStandaloneLesson ? "Standalone Lesson" : course?.title}
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  {isStandaloneLesson 
-                    ? standaloneLesson?.tags.join(", ") || "Free Lesson"
-                    : `Lesson ${currentVideoIndex + 1} of ${course?.videos.length}`}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              {!isStandaloneLesson && (
-                <>
-                  <div className="text-sm text-muted-foreground">
-                    Course Progress: {courseProgress}%
-                  </div>
-                  <Progress value={courseProgress} className="w-32" />
-                </>
-              )}
-              {isStandaloneLesson && standaloneLesson?.ctaText && (
-                <Button asChild>
-                  <Link href={standaloneLesson.ctaLink || "/courses"}>
-                    {standaloneLesson.ctaText}
-                  </Link>
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
 
       <div className="flex flex-1 min-h-0">
         {/* Main Content */}
@@ -269,7 +227,7 @@ export default function VideoPlayerPage() {
                     className="flex items-center gap-2"
                   >
                     {prevVideo ? (
-                      <Link href={`/learn/course/${courseId}/video/${prevVideo.id}`}>
+                      <Link href={`/student/course/${courseId}/video/${prevVideo.id}`}>
                         <ChevronLeft className="h-4 w-4" />
                         Previous Lesson
                       </Link>
@@ -297,7 +255,7 @@ export default function VideoPlayerPage() {
                     className="flex items-center gap-2"
                   >
                     {nextVideo ? (
-                      <Link href={`/learn/course/${courseId}/video/${nextVideo.id}`}>
+                      <Link href={`/student/course/${courseId}/video/${nextVideo.id}`}>
                         Next Lesson
                         <ChevronRight className="h-4 w-4" />
                       </Link>
@@ -367,7 +325,7 @@ export default function VideoPlayerPage() {
                       {course.videos.map((video, index) => (
                       <Link
                         key={video.id}
-                        href={`/learn/course/${courseId}/video/${video.id}`}
+                        href={`/student/course/${courseId}/video/${video.id}`}
                         className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
                           video.id === videoId 
                             ? 'bg-primary/10 border border-primary/20' 

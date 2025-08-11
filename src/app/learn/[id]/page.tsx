@@ -9,8 +9,8 @@ import { InstructorVideoView } from "@/components/video/views/InstructorVideoVie
 
 // Dynamically import the VideoPlayer component with loading fallback
 const VideoPlayer = dynamic(
-  () => import("@/components/video/VideoPlayerRefactored").then(mod => ({ 
-    default: mod.VideoPlayerRefactored 
+  () => import("@/components/video/student/StudentVideoPlayer").then(mod => ({ 
+    default: mod.StudentVideoPlayer 
   })),
   { 
     loading: () => (
