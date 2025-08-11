@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 import { 
   MessageSquare, AlertCircle, Send, Users,
   User, Brain, Target, Search,
-  Mic, Image, Video, Play, CheckCircle
+  Mic, Image, Video, Play, CheckCircle, ChevronRight
 } from "lucide-react"
 import { useAppStore } from "@/stores/app-store"
 
@@ -32,6 +32,8 @@ export function InstructorVideoView() {
   const lessonId = params.id as string
   const studentId = searchParams.get('student')
   const hotspotTimestamp = searchParams.get('hotspot')
+  const fromAnalytics = searchParams.get('from') === 'analytics'
+  const courseId = searchParams.get('courseId')
   
   // Store
   const { lessons, loadLessons } = useAppStore()
@@ -43,7 +45,9 @@ export function InstructorVideoView() {
   const [viewMode, setViewMode] = useState<'single-student' | 'all-students'>('single-student')
   const [studentSearchQuery, setStudentSearchQuery] = useState("")
   const [isStudentSearchFocused, setIsStudentSearchFocused] = useState(false)
-  const [selectedStudentId, setSelectedStudentId] = useState(studentId || 'sarah_chen')
+  const [selectedStudentId, setSelectedStudentId] = useState(
+    fromAnalytics ? 'all' : (studentId || 'sarah_chen')
+  )
   const [currentTime, setCurrentTime] = useState(0)
   
   // Load lessons
@@ -216,7 +220,27 @@ export function InstructorVideoView() {
     return journeys[studentId as keyof typeof journeys] || null
   }
   
-  const studentJourneyData = getStudentJourneyData(selectedStudentId)
+  const studentJourneyData = selectedStudentId === 'all' ? null : getStudentJourneyData(selectedStudentId)
+  
+  // Get all reflections when viewing all students
+  const getAllReflections = () => {
+    const allReflections = []
+    allStudents.forEach(student => {
+      const journey = getStudentJourneyData(student.id)
+      if (journey) {
+        journey.reflections.forEach(reflection => {
+          allReflections.push({
+            ...reflection,
+            studentName: student.name,
+            studentId: student.id
+          })
+        })
+      }
+    })
+    return allReflections.sort((a, b) => b.timeInSeconds - a.timeInSeconds)
+  }
+  
+  const allStudentReflections = selectedStudentId === 'all' ? getAllReflections() : []
   
   // Navigation functions
   const navigateToReflection = (index: number) => {
@@ -250,8 +274,12 @@ export function InstructorVideoView() {
           role: "instructor" 
         }}
         backButton={{
-          href: "/instructor/engagement",
-          label: "Back to Engagement"
+          href: fromAnalytics && courseId 
+            ? `/instructor/course/${courseId}/analytics` 
+            : "/instructor/engagement",
+          label: fromAnalytics 
+            ? "Back to Analytics" 
+            : "Back to Engagement"
         }}
       />
       
@@ -293,34 +321,126 @@ export function InstructorVideoView() {
             </div>
           </div>
           
-          {/* Video Context */}
+          {/* Video Info */}
           <div className="p-6 bg-background flex-1 overflow-y-auto">
             <div className="max-w-3xl">
-              <h2 className="text-xl font-semibold mb-4">Video Context at {studentJourneyData?.reflections[currentReflectionIndex]?.timestamp || '0:00'}</h2>
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="space-y-4">
-                    <div>
-                      <h3 className="font-medium mb-2">Transcript</h3>
-                      <p className="text-sm text-muted-foreground">
-                        "...useCallback is particularly useful when you need to prevent unnecessary re-renders 
-                        of child components that depend on callbacks..."
-                      </p>
-                    </div>
-                    <div>
-                      <h3 className="font-medium mb-2">Code on Screen</h3>
-                      <pre className="text-sm bg-muted p-3 rounded">
-{`const memoizedCallback = useCallback(
+              {/* Instructor and Video Info */}
+              <div className="mb-6">
+                <h1 className="text-2xl font-bold mb-3">{lesson.title}</h1>
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <User className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium">John Instructor</p>
+                    <p className="text-sm text-muted-foreground">Course Instructor</p>
+                  </div>
+                </div>
+              </div>
+              
+              {selectedStudentId !== 'all' && (
+                <>
+                  <h2 className="text-xl font-semibold mb-4">
+                    Video Context at {
+                      studentJourneyData?.reflections[currentReflectionIndex]?.timestamp || 
+                      (currentTime > 0 ? `${Math.floor(currentTime / 60)}:${(currentTime % 60).toString().padStart(2, '0')}` : '0:00')
+                    }
+                  </h2>
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="space-y-4">
+                        {/* Dynamic context based on current reflection */}
+                        {studentJourneyData?.reflections[currentReflectionIndex] ? (
+                          <>
+                            <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
+                              <div className="flex items-center gap-2 mb-2">
+                                <MessageSquare className="h-4 w-4 text-primary" />
+                                <span className="text-sm font-medium">Student Reflection</span>
+                              </div>
+                              <p className="text-sm">{studentJourneyData.reflections[currentReflectionIndex].content}</p>
+                            </div>
+                            
+                            <div>
+                              <h3 className="font-medium mb-2">Transcript at this moment</h3>
+                              <p className="text-sm text-muted-foreground">
+                                {currentReflectionIndex === 0 ? 
+                                  "Welcome to React Hooks! Today we'll explore the fundamental concepts that make React Hooks so powerful. Let's start with a roadmap of what we'll cover..." :
+                                currentReflectionIndex === 1 ?
+                                  "useCallback is particularly useful when you need to prevent unnecessary re-renders of child components that depend on callbacks. It's different from useMemo which memoizes values..." :
+                                currentReflectionIndex === 2 ?
+                                  "When using useEffect, always remember to clean up side effects. This prevents memory leaks and ensures your components behave correctly when unmounting..." :
+                                  "Custom hooks allow you to extract component logic into reusable functions. They're a powerful pattern for sharing stateful logic between components..."
+                                }
+                              </p>
+                            </div>
+                            
+                            <div>
+                              <h3 className="font-medium mb-2">Code on Screen</h3>
+                              <pre className="text-sm bg-muted p-3 rounded overflow-x-auto">
+{currentReflectionIndex === 0 ? 
+`// React Hooks Roadmap
+1. useState - State management
+2. useEffect - Side effects
+3. useCallback - Memoized callbacks
+4. useMemo - Memoized values
+5. Custom Hooks - Reusable logic` :
+currentReflectionIndex === 1 ?
+`const memoizedCallback = useCallback(
   () => {
     doSomething(a, b);
   },
+  [a, b]  // Dependencies
+);
+
+// vs useMemo
+const memoizedValue = useMemo(
+  () => computeExpensiveValue(a, b),
   [a, b]
-);`}
-                      </pre>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+);` :
+currentReflectionIndex === 2 ?
+`useEffect(() => {
+  const subscription = subscribeToSomething();
+  
+  // Cleanup function
+  return () => {
+    subscription.unsubscribe();
+  };
+}, [dependency]);` :
+`// Custom Hook Example
+function useCounter(initialValue = 0) {
+  const [count, setCount] = useState(initialValue);
+  
+  const increment = useCallback(() => {
+    setCount(c => c + 1);
+  }, []);
+  
+  return { count, increment };
+}`
+}
+                              </pre>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div>
+                              <h3 className="font-medium mb-2">Transcript</h3>
+                              <p className="text-sm text-muted-foreground">
+                                Navigate to a student reflection to see the video context at that timestamp
+                              </p>
+                            </div>
+                            <div>
+                              <h3 className="font-medium mb-2">Code on Screen</h3>
+                              <p className="text-sm text-muted-foreground">
+                                Select a reflection from the sidebar to view the code being discussed
+                              </p>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -329,37 +449,60 @@ export function InstructorVideoView() {
         <div className="w-[400px] border-l bg-background flex flex-col">
           {/* Student Selector */}
           <div className="p-4 border-b">
-            <div className="relative mb-3">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input
-                placeholder="Search students..."
-                value={studentSearchQuery}
-                onChange={(e) => setStudentSearchQuery(e.target.value)}
-                onFocus={() => setIsStudentSearchFocused(true)}
-                onBlur={() => setTimeout(() => setIsStudentSearchFocused(false), 200)}
-                className="pl-10"
-              />
+            <div className="flex gap-2 mb-3 relative">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  placeholder="Search students..."
+                  value={studentSearchQuery}
+                  onChange={(e) => setStudentSearchQuery(e.target.value)}
+                  onFocus={() => setIsStudentSearchFocused(true)}
+                  onBlur={() => setTimeout(() => setIsStudentSearchFocused(false), 200)}
+                  className="pl-10"
+                />
+                
+                {isStudentSearchFocused && filteredStudents.length > 0 && (
+                  <div className="absolute top-full mt-1 left-0 right-0 bg-background border rounded-md shadow-lg z-10">
+                    {filteredStudents.map(student => (
+                      <button
+                        key={student.id}
+                        className="w-full px-4 py-2 text-left hover:bg-muted transition-colors"
+                        onMouseDown={() => {
+                          setSelectedStudentId(student.id)
+                          setStudentSearchQuery("")
+                        }}
+                      >
+                        <p className="font-medium">{student.name}</p>
+                        <p className="text-sm text-muted-foreground">{student.email}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               
-              {isStudentSearchFocused && filteredStudents.length > 0 && (
-                <div className="absolute top-full mt-1 w-full bg-background border rounded-md shadow-lg z-10">
-                  {filteredStudents.map(student => (
-                    <button
-                      key={student.id}
-                      className="w-full px-4 py-2 text-left hover:bg-muted transition-colors"
-                      onMouseDown={() => {
-                        setSelectedStudentId(student.id)
-                        setStudentSearchQuery("")
-                      }}
-                    >
-                      <p className="font-medium">{student.name}</p>
-                      <p className="text-sm text-muted-foreground">{student.email}</p>
-                    </button>
-                  ))}
-                </div>
-              )}
+              <Button 
+                size="sm" 
+                variant={selectedStudentId === 'all' ? 'default' : 'outline'}
+                onClick={() => {
+                  setSelectedStudentId('all')
+                  setStudentSearchQuery("")
+                }}
+              >
+                View All
+              </Button>
             </div>
             
-            {studentJourneyData && (
+            {selectedStudentId === 'all' ? (
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">All Students</p>
+                  <p className="text-sm text-muted-foreground">{allStudents.length} students total</p>
+                </div>
+                <Badge variant="outline">
+                  View all activity
+                </Badge>
+              </div>
+            ) : studentJourneyData && (
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium">{studentJourneyData.student.name}</p>
@@ -373,7 +516,22 @@ export function InstructorVideoView() {
           </div>
           
           {/* Student Metrics */}
-          {studentJourneyData && (
+          {selectedStudentId === 'all' ? (
+            <div className="p-4 border-b grid grid-cols-3 gap-2 text-center">
+              <div>
+                <p className="text-2xl font-bold">42</p>
+                <p className="text-xs text-muted-foreground">avg min/hr</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold">89%</p>
+                <p className="text-xs text-muted-foreground">avg execution</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold">28s</p>
+                <p className="text-xs text-muted-foreground">avg pace</p>
+              </div>
+            </div>
+          ) : studentJourneyData && (
             <div className="p-4 border-b grid grid-cols-3 gap-2 text-center">
               <div>
                 <p className="text-2xl font-bold">{studentJourneyData.student.metrics.learnRate}</p>
@@ -394,20 +552,27 @@ export function InstructorVideoView() {
           <div className="flex-1 overflow-y-auto">
             <div className="p-4 space-y-3">
               <h3 className="font-medium text-sm text-muted-foreground mb-3">
-                Student Reflections & Confusions
+                {selectedStudentId === 'all' ? 'All Students\' Reflections & Confusions' : 'Student Reflections & Confusions'}
               </h3>
               
-              {studentJourneyData?.reflections.map((reflection) => (
+              {(selectedStudentId === 'all' ? allStudentReflections : studentJourneyData?.reflections || []).map((reflection, index) => (
                 <Card 
-                  key={reflection.id}
+                  key={selectedStudentId === 'all' ? `${reflection.studentId}-${reflection.id}` : reflection.id}
                   className={`cursor-pointer transition-all ${
-                    currentReflectionIndex === studentJourneyData.reflections.indexOf(reflection) 
+                    selectedStudentId !== 'all' && currentReflectionIndex === index
                       ? 'ring-2 ring-primary' 
                       : ''
                   }`}
-                  onClick={() => navigateToReflection(studentJourneyData.reflections.indexOf(reflection))}
+                  onClick={() => selectedStudentId !== 'all' && navigateToReflection(index)}
                 >
                   <CardContent className="pt-4 pb-3">
+                    {/* Show student name if in "all" view */}
+                    {selectedStudentId === 'all' && reflection.studentName && (
+                      <div className="text-xs font-medium text-muted-foreground mb-2">
+                        {reflection.studentName}
+                      </div>
+                    )}
+                    
                     {/* Header with timestamp and status */}
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">
@@ -536,7 +701,8 @@ export function InstructorVideoView() {
                 </Card>
               ))}
               
-              {(!studentJourneyData || studentJourneyData.reflections.length === 0) && (
+              {((selectedStudentId === 'all' && allStudentReflections.length === 0) || 
+                (selectedStudentId !== 'all' && (!studentJourneyData || studentJourneyData.reflections.length === 0))) && (
                 <div className="text-center py-8 text-muted-foreground">
                   <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
                   <p className="text-sm">No reflections yet</p>
