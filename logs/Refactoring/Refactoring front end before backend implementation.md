@@ -1,7 +1,7 @@
 # 2-Hour Frontend Refactoring Sprint (REVISED)
 ## Clean Architecture While Preserving Role-Specific Components
 
-## STATUS: Phase 1-2 COMPLETED ✅
+## STATUS: Phase 1-5 COMPLETED ✅
 
 ## IMPORTANT: Video Player Architecture
 
@@ -1006,5 +1006,172 @@ This approach:
 
 ---
 
-**Time to complete: 2 hours**
-**Result: Clean, role-aware architecture ready for backend integration**
+---
+
+## ✅ PHASE 5 COMPLETED (2025-08-12)
+
+### Phase 5a-5d: Component Migration to New Stores
+- **StudentVideoPlayer** migrated to use `student-video-slice`
+- **InstructorVideoView** migrated to use `instructor-video-slice` 
+- **Course pages** migrated to use `student-course-slice`
+- **Redux spam fixed** - setShowControls optimization
+- **Test pages created** for isolated component testing
+- **All migrations tested** and working properly
+
+### Key Achievements:
+- ✅ Role-specific store architecture implemented
+- ✅ Components using new stores while maintaining backward compatibility
+- ✅ Test infrastructure for safe migrations
+- ✅ Redux DevTools optimized (spam reduction)
+- ✅ Mock data properly transformed to domain types
+
+### Current State:
+- **Dual store approach** - Old and new stores coexist
+- **Backward compatibility** maintained
+- **Ready for Phase 6** - Feature flags implementation
+
+---
+
+## 📋 NEXT PHASES:
+
+### Phase 6: Feature Flags (PENDING)
+- Add feature toggle system
+- Enable/disable role-specific features
+- A/B testing capability
+- Safety switches for rollback
+
+### Phase 7: Store Cleanup (PENDING)
+- Remove old unused stores
+- Consolidate duplicate state
+- Final architecture cleanup
+
+---
+
+## 🔍 PHASE 6 PREP: Component Architecture Analysis (REVISED)
+
+### My Analysis Process:
+
+**First, I'll audit the current architecture** by going through our component tree and asking these key questions:
+
+**What gets used by BOTH students and instructors?**
+- Basic UI components like buttons, cards, modals
+- Layout components like headers, footers, navigation
+- Utility components for loading, errors, forms
+
+**What should NEVER have role-specific logic?**
+- Pure UI components that just display data
+- Form controls that don't care about user context
+- Basic video controls like play/pause/volume
+- Typography and styling components
+
+**What's currently shared but SHOULDN'T be?**
+- Components that have hidden role-based conditionals
+- Video players that try to serve both audiences
+- Navigation that shows different menus based on user type
+
+### The Assessment Strategy:
+
+**I'll categorize every component into four buckets:**
+
+1. **Pure Shared** - No role logic, truly reusable (Button, Card, Input)
+2. **Role-Specific** - Different for students vs instructors (VideoPlayer, Dashboard)
+3. **Falsely Shared** - Pretends to be shared but has hidden conditionals (Navigation with role checks)
+4. **Contextual** - Shared structure but different data (CourseCard that shows different actions)
+
+### Complete Component Analysis Results:
+
+#### ✅ **Category 1: Pure Shared** (No role logic - keep shared)
+```
+src/components/ui/* - All UI primitives (Button, Card, Input, etc.)
+src/components/common/* - LoadingSpinner, ErrorBoundary, etc.
+src/components/theme-*.tsx - Theme components
+src/components/providers/StoreProvider.tsx - State management wrapper
+src/components/video/shared/* - VideoControls, VideoEngine, etc.
+src/components/dashboard/metrics-widget.tsx - Pure data display
+```
+
+#### ⚠️ **Category 2: Role-Specific** (Correctly separated - keep separate)
+```
+src/components/video/student/* - StudentVideoPlayer, etc.
+src/components/video/views/InstructorVideoView.tsx
+src/components/instructor/* - All instructor-specific components
+src/components/layout/teach-sidebar.tsx
+src/components/layout/moderate-sidebar.tsx
+```
+
+#### 🚨 **Category 3: Falsely Shared** (Has hidden role conditionals - NEEDS SPLITTING)
+```
+src/components/layout/header.tsx - Role-based navigation & dropdowns
+src/components/layout/sidebar.tsx - Different content per role
+src/components/ai/ai-interactions-counter.tsx - Shows pricing/upgrade only to students
+src/components/lesson/CommentsSection.tsx - Role badges and different comment behaviors
+src/components/community/response-badge.tsx - Role-specific badge display logic
+```
+
+#### 🎯 **Category 4: Contextual** (Shared structure, different data/actions)
+```
+src/components/course/ai-course-card.tsx - Same structure, different actions
+src/components/ai/ai-chat-sidebar.tsx - Student-only feature, should be flagged
+src/components/lesson/RelatedLessonsCarousel.tsx - Different recommendations per role
+```
+
+### **🚨 CRITICAL: Hidden Role Conditionals Found**
+1. **`components/layout/header.tsx`** - Lines 82-87, 115-126, 129
+   - Instructor mode badge
+   - Role-based dropdown menu items  
+   - Different settings URLs by role
+
+2. **`components/layout/sidebar.tsx`** - Lines 73-77, 87-88, 141-156, 185-220
+   - Complete role-based navigation arrays
+   - Role switching UI for instructors/moderators
+   - AI interactions counter only for students
+   - Different badge counts per role
+
+3. **`components/ai/ai-interactions-counter.tsx`** - Lines 57-64
+   - Upgrade prompts only shown to non-premium users
+   - Student-only feature
+
+4. **`components/lesson/CommentsSection.tsx`** - Lines 199-204
+   - Role-specific badges in comments
+   - Different user capabilities
+
+5. **`components/community/response-badge.tsx`** - Lines 12-44
+   - Completely role-dependent rendering logic
+
+### Updated Recommended Phase 6 Actions:
+
+**Priority 1: Split Falsely Shared Components**
+- Create `StudentHeader.tsx` and `InstructorHeader.tsx` 
+- Create `StudentSidebar.tsx` and `InstructorSidebar.tsx`
+- Move `AIInteractionsCounter` to student-only components
+
+**Priority 2: Add Feature Flags**
+- All components in `instructor/*` folder
+- All components in `ai/*` folder (student-only)
+- Role-specific features in contextual components
+
+**Priority 3: Component Organization**
+```
+src/components/
+├── shared/         # Pure shared (no role logic)
+│   ├── ui/
+│   ├── common/
+│   └── theme/
+├── student/        # Student-specific
+│   ├── layout/     # StudentHeader, StudentSidebar
+│   ├── video/      # StudentVideoPlayer
+│   └── ai/         # AI features
+├── instructor/     # Instructor-specific  
+│   ├── layout/     # InstructorHeader, InstructorSidebar
+│   └── views/      # InstructorVideoView
+└── contextual/     # Shared structure, different behavior
+    ├── course/     # AICourseCard
+    └── lesson/     # CommentsSection
+```
+
+**ANALYSIS COMPLETE:** Found **8 components** requiring Phase 6 attention (5 additional from revised analysis)
+
+---
+
+**Total Time: 4+ hours** (Extended for thorough testing and optimization)  
+**Result: Production-ready role-aware architecture with safe migration strategy**

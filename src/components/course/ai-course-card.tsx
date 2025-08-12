@@ -20,10 +20,13 @@ import {
 } from "lucide-react"
 import { Course } from "@/data/mock"
 import { cn } from "@/lib/utils"
+import { FeatureGate } from "@/config/features"
+import { UserRole } from "@/types/domain"
 
 interface AICourseCardProps {
   course: Course
   variant?: "default" | "enrolled" | "instructor"
+  userRole: UserRole
   progress?: number
   aiMetrics?: {
     learnRate?: number
@@ -38,6 +41,7 @@ interface AICourseCardProps {
 export function AICourseCard({ 
   course, 
   variant = "default", 
+  userRole,
   progress,
   aiMetrics,
   showAIQuiz = false,
@@ -53,13 +57,15 @@ export function AICourseCard({
   
   return (
     <Card className="group relative overflow-hidden transition-all hover:shadow-xl">
-      {/* AI Match Score Badge */}
-      <div className="absolute right-3 top-3 z-10">
-        <Badge className="bg-gradient-to-r from-blue-600 to-purple-600 text-white border-0">
-          <Brain className="mr-1 h-3 w-3" />
-          {matchScore}% Match
-        </Badge>
-      </div>
+      {/* AI Match Score Badge - Only for students */}
+      <FeatureGate role={userRole} feature="aiHints">
+        <div className="absolute right-3 top-3 z-10">
+          <Badge className="bg-gradient-to-r from-blue-600 to-purple-600 text-white border-0">
+            <Brain className="mr-1 h-3 w-3" />
+            {matchScore}% Match
+          </Badge>
+        </div>
+      </FeatureGate>
 
       {/* Course Thumbnail with AI Overlay */}
       <div className="relative aspect-video bg-muted overflow-hidden">
@@ -93,9 +99,10 @@ export function AICourseCard({
           </p>
         </div>
 
-        {/* AI Learning Metrics for Enrolled */}
+        {/* AI Learning Metrics for Enrolled - Only for students with AI features */}
         {isEnrolled && aiMetrics && (
-          <div className="mt-3 grid grid-cols-3 gap-2">
+          <FeatureGate role={userRole} feature="aiChat">
+            <div className="mt-3 grid grid-cols-3 gap-2">
             <div className="rounded-lg bg-green-50 dark:bg-green-950/20 p-2 text-center">
               <TrendingUp className="mx-auto h-4 w-4 text-green-600 dark:text-green-400" />
               <p className="mt-1 text-xs font-medium text-green-700 dark:text-green-300">
@@ -118,6 +125,7 @@ export function AICourseCard({
               <p className="text-[10px] text-purple-600 dark:text-purple-400">Est. Time</p>
             </div>
           </div>
+          </FeatureGate>
         )}
 
         {/* AI-Powered Struggling Topics Alert */}
@@ -159,9 +167,10 @@ export function AICourseCard({
           </div>
         </div>
 
-        {/* AI Features Preview */}
+        {/* AI Features Preview - Only for students */}
         {!isEnrolled && (
-          <div className="mt-3 space-y-2">
+          <FeatureGate role={userRole} feature="aiChat">
+            <div className="mt-3 space-y-2">
             {/* AI Tip */}
             {showAITip && (
               <div className="rounded-lg bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-950/20 dark:to-red-950/20 p-2 text-xs mb-2">
@@ -196,6 +205,7 @@ export function AICourseCard({
               </Badge>
             </div>
           </div>
+          </FeatureGate>
         )}
 
         {/* Instructor */}

@@ -214,3 +214,5 @@
 **Files Changed in Latest Commit:** 9 files  
 **Additions:** +804 lines  
 **Deletions:** -11 lines
+
+NOTE: NEVER PUT CLAUDE IN COMMIT MESSAGES.

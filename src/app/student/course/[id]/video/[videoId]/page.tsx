@@ -23,7 +23,7 @@ const VideoPlayer = dynamic(
 
 // Dynamically import the AIChatSidebar component
 const AIChatSidebar = dynamic(
-  () => import("@/components/ai/ai-chat-sidebar").then(mod => ({
+  () => import("@/components/student/ai/ai-chat-sidebar").then(mod => ({
     default: mod.AIChatSidebar
   })),
   { 

@@ -11,6 +11,9 @@ export * from './env'
 // Application constants
 export * from './constants'
 
+// Feature flag system
+export * from './features'
+
 // Re-export commonly used values for convenience
 export { 
   isDevelopment, 
@@ -34,3 +37,12 @@ export {
   STORAGE_KEYS,
   INTERVALS
 } from './constants'
+
+export {
+  getFeatureFlags,
+  useFeatureFlags,
+  FeatureGate,
+  withFeatureFlag,
+  hasFeature,
+  debugFeatureFlags
+} from './features'
