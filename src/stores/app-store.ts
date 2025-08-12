@@ -1,8 +1,6 @@
 import { create } from 'zustand'
 import { devtools, subscribeWithSelector } from 'zustand/middleware'
 import { UserSlice, createUserSlice } from './slices/user-slice'
-import { CourseSlice, createCourseSlice } from './slices/course-slice'
-import { VideoSlice, createVideoSlice } from './slices/video-slice'
 import { AISlice, createAISlice } from './slices/ai-slice'
 import { UISlice, createUISlice } from './slices/ui-slice'
 import { CommunityState, createCommunitySlice } from './slices/community-slice'
@@ -18,11 +16,9 @@ import { StudentVideoSlice, createStudentVideoSlice } from './slices/student-vid
 import { InstructorVideoSlice, createInstructorVideoSlice } from './slices/instructor-video-slice'
 import { isDevelopment } from '@/config/env'
 
-// Note: Keeping old slices for backward compatibility during migration
+// Clean architecture with role-specific stores
 export interface AppStore extends 
   UserSlice, 
-  CourseSlice,  // OLD - to be deprecated
-  VideoSlice,   // OLD - to be deprecated
   AISlice, 
   UISlice, 
   CommunityState, 
@@ -42,8 +38,6 @@ export const useAppStore = create<AppStore>()(
     subscribeWithSelector(
       (...args) => ({
         ...createUserSlice(...args),
-        ...createCourseSlice(...args),  // OLD - keep for compatibility
-        ...createVideoSlice(...args),   // OLD - keep for compatibility
         ...createAISlice(...args),
         ...createUISlice(...args),
         ...createCommunitySlice(...args),
