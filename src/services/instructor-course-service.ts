@@ -13,8 +13,44 @@ import { mockCourses } from '@/data/mock/courses'
 export class InstructorCourseService {
   async getInstructorCourses(instructorId: string): Promise<ServiceResult<Course[]>> {
     if (useMockData) {
-      // Return all courses as if owned by instructor
-      return { data: mockCourses }
+      // Transform mock courses to match domain Course type
+      const transformedCourses: Course[] = mockCourses.map(course => ({
+        id: course.id,
+        title: course.title,
+        description: course.description,
+        thumbnailUrl: course.thumbnail,
+        instructor: {
+          id: instructorId,
+          name: course.instructor.name,
+          email: `${course.instructor.name.toLowerCase().replace(' ', '.')}@example.com`,
+          avatar: course.instructor.avatar
+        },
+        price: course.price,
+        duration: parseInt(course.duration) || 0,
+        difficulty: course.level,
+        tags: [course.category],
+        videos: course.videos.map(v => ({
+          id: v.id,
+          courseId: course.id,
+          title: v.title,
+          description: v.description,
+          duration: parseInt(v.duration) || 600,
+          order: parseInt(v.id),
+          videoUrl: v.videoUrl,
+          thumbnailUrl: v.thumbnailUrl,
+          transcript: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })),
+        enrollmentCount: course.students,
+        rating: course.rating,
+        isPublished: true,
+        isFree: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }))
+      
+      return { data: transformedCourses }
     }
 
     const response = await apiClient.get<Course[]>(`/api/instructor/courses`)
@@ -29,6 +65,7 @@ export class InstructorCourseService {
     avgProgress: number
     revenueTotal: number
     revenueThisMonth: number
+    totalStudents?: number
     studentEngagement: {
       active: number
       inactive: number
@@ -54,6 +91,7 @@ export class InstructorCourseService {
           avgProgress: 0.45,
           revenueTotal: 18420,
           revenueThisMonth: 3200,
+          totalStudents: 45,
           studentEngagement: {
             active: 156,
             inactive: 45,

@@ -12,10 +12,49 @@ import { mockCourses } from '@/data/mock/courses'
 
 export class StudentCourseService {
   async getEnrolledCourses(userId: string): Promise<ServiceResult<Course[]>> {
+    console.log('StudentCourseService.getEnrolledCourses called, useMockData:', useMockData)
     if (useMockData) {
-      // Return first 2 courses as enrolled for mock
+      console.log('Using mock data, mockCourses length:', mockCourses.length)
+      // Transform mock courses to match domain Course type
+      const transformedCourses: Course[] = mockCourses.slice(0, 2).map(course => ({
+        id: course.id,
+        title: course.title,
+        description: course.description,
+        thumbnailUrl: course.thumbnail,
+        instructor: {
+          id: `inst-${course.id}`,
+          name: course.instructor.name,
+          email: `${course.instructor.name.toLowerCase().replace(' ', '.')}@example.com`,
+          avatar: course.instructor.avatar
+        },
+        price: course.price,
+        duration: parseInt(course.duration) || 0,
+        difficulty: course.level,
+        tags: [course.category],
+        videos: course.videos.map(v => ({
+          id: v.id,
+          courseId: course.id,
+          title: v.title,
+          description: v.description,
+          duration: parseInt(v.duration) || 600,
+          order: parseInt(v.id),
+          videoUrl: v.videoUrl,
+          thumbnailUrl: v.thumbnailUrl,
+          transcript: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })),
+        enrollmentCount: course.students,
+        rating: course.rating,
+        isPublished: true,
+        isFree: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }))
+      
+      console.log('Transformed courses:', transformedCourses.length)
       return { 
-        data: mockCourses.slice(0, 2) 
+        data: transformedCourses
       }
     }
 
@@ -96,9 +135,45 @@ export class StudentCourseService {
 
   async getRecommendedCourses(userId: string): Promise<ServiceResult<Course[]>> {
     if (useMockData) {
-      // Return courses 3-5 as recommendations
+      // Transform mock courses to match domain Course type
+      const transformedCourses: Course[] = mockCourses.slice(2, 5).map(course => ({
+        id: course.id,
+        title: course.title,
+        description: course.description,
+        thumbnailUrl: course.thumbnail,
+        instructor: {
+          id: `inst-${course.id}`,
+          name: course.instructor.name,
+          email: `${course.instructor.name.toLowerCase().replace(' ', '.')}@example.com`,
+          avatar: course.instructor.avatar
+        },
+        price: course.price,
+        duration: parseInt(course.duration) || 0,
+        difficulty: course.level,
+        tags: [course.category],
+        videos: course.videos.map(v => ({
+          id: v.id,
+          courseId: course.id,
+          title: v.title,
+          description: v.description,
+          duration: parseInt(v.duration) || 600,
+          order: parseInt(v.id),
+          videoUrl: v.videoUrl,
+          thumbnailUrl: v.thumbnailUrl,
+          transcript: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })),
+        enrollmentCount: course.students,
+        rating: course.rating,
+        isPublished: true,
+        isFree: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }))
+      
       return { 
-        data: mockCourses.slice(2, 5) 
+        data: transformedCourses
       }
     }
 

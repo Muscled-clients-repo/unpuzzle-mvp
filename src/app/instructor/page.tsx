@@ -522,6 +522,23 @@ export default function InstructorDashboard() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Development Tools */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Development Tools</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-4">
+              <Button asChild variant="outline" size="sm">
+                <Link href="/test-stores">Test New Stores</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/student">Student Dashboard</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

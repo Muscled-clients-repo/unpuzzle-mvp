@@ -18,6 +18,7 @@ export interface StudentCourseActions {
   loadCourseProgress: (userId: string, courseId: string) => Promise<void>
   enrollInCourse: (userId: string, courseId: string) => Promise<void>
   setCurrentCourse: (course: Course | null) => void
+  calculateProgress: (courseId: string) => number
 }
 
 export interface StudentCourseSlice extends StudentCourseState, StudentCourseActions {}
@@ -38,10 +39,12 @@ export const createStudentCourseSlice: StateCreator<StudentCourseSlice> = (set) 
     set({ loading: true, error: null })
     
     const result = await studentCourseService.getEnrolledCourses(userId)
+    console.log('loadEnrolledCourses result:', result)
     
     if (result.error) {
       set({ loading: false, error: result.error })
     } else {
+      console.log('Setting enrolledCourses:', result.data?.length)
       set({ loading: false, enrolledCourses: result.data || [], error: null })
     }
   },
@@ -90,5 +93,10 @@ export const createStudentCourseSlice: StateCreator<StudentCourseSlice> = (set) 
 
   setCurrentCourse: (course: Course | null) => {
     set({ currentCourse: course })
+  },
+
+  calculateProgress: (courseId: string) => {
+    // Mock calculation - in reality would use actual progress data
+    return Math.floor(Math.random() * 100)
   },
 })

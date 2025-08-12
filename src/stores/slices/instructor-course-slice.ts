@@ -12,6 +12,7 @@ export interface InstructorCourseState {
     avgProgress: number
     revenueTotal: number
     revenueThisMonth: number
+    totalStudents?: number
     studentEngagement: {
       active: number
       inactive: number
