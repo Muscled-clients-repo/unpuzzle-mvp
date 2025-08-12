@@ -12,9 +12,7 @@ import { mockCourses } from '@/data/mock/courses'
 
 export class StudentCourseService {
   async getEnrolledCourses(userId: string): Promise<ServiceResult<Course[]>> {
-    console.log('StudentCourseService.getEnrolledCourses called, useMockData:', useMockData)
     if (useMockData) {
-      console.log('Using mock data, mockCourses length:', mockCourses.length)
       // Transform mock courses to match domain Course type
       const transformedCourses: Course[] = mockCourses.slice(0, 2).map(course => ({
         id: course.id,
@@ -52,7 +50,6 @@ export class StudentCourseService {
         updatedAt: new Date().toISOString()
       }))
       
-      console.log('Transformed courses:', transformedCourses.length)
       return { 
         data: transformedCourses
       }

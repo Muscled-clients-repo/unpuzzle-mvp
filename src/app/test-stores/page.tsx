@@ -27,7 +27,7 @@ export default function TestStoresPage() {
     
     // Instructor Course Slice
     instructorCourses,
-    courseAnalytics,
+    currentCourseAnalytics,
     loadInstructorCourses,
     loadCourseAnalytics,
     
@@ -147,8 +147,8 @@ export default function TestStoresPage() {
         await new Promise(resolve => setTimeout(resolve, 100))
         const analyticsState = useAppStore.getState()
         
-        if (analyticsState.courseAnalytics) {
-          results.push(`✅ Analytics loaded: ${analyticsState.courseAnalytics.totalStudents} students`)
+        if (analyticsState.currentCourseAnalytics) {
+          results.push(`✅ Analytics loaded: ${analyticsState.currentCourseAnalytics.totalStudents} students`)
         }
       } else {
         results.push('⚠️ No instructor courses loaded (mock data expected)')
@@ -285,6 +285,20 @@ export default function TestStoresPage() {
                 Selected Student: {selectedStudent}
               </div>
             )}
+            
+            <div className="mt-4 pt-4 border-t">
+              <p className="text-sm font-medium mb-2">Component Testing:</p>
+              <div className="flex gap-2">
+                <a 
+                  href="/test-instructor-video" 
+                  className="text-sm text-blue-600 hover:underline"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  🎬 Test InstructorVideoView ↗
+                </a>
+              </div>
+            </div>
           </CardContent>
         </Card>
         

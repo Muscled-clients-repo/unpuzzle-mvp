@@ -35,7 +35,7 @@ export function CourseSelector() {
             
             <div className="my-1 h-px bg-border" />
             
-            {courseAnalytics.map(course => (
+            {courseAnalytics?.map(course => (
               <SelectItem key={course.courseId} value={course.courseId}>
                 <div className="flex items-center justify-between w-full">
                   <span>{course.courseName}</span>

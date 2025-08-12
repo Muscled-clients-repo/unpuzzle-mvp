@@ -12,7 +12,6 @@ interface StudentVideoPlayerProps {
   videoUrl: string
   title?: string
   transcript?: string
-  videoId?: string // Optional: for loading student-specific data
   onTimeUpdate?: (time: number) => void
   onPause?: (time: number) => void
   onPlay?: () => void
@@ -23,7 +22,6 @@ export function StudentVideoPlayer({
   videoUrl,
   title,
   transcript,
-  videoId,
   onTimeUpdate,
   onPause,
   onPlay,
@@ -37,7 +35,6 @@ export function StudentVideoPlayer({
   const [videoDuration, setVideoDuration] = useState(0)
 
   // Get state and actions from Zustand store using individual selectors
-  // OLD: Generic video state (still needed for basic playback)
   const isPlaying = useAppStore((state) => state.isPlaying)
   const currentTime = useAppStore((state) => state.currentTime)
   const duration = useAppStore((state) => state.duration)
@@ -46,14 +43,9 @@ export function StudentVideoPlayer({
   const playbackRate = useAppStore((state) => state.playbackRate)
   const showControls = useAppStore((state) => state.showControls)
   const showLiveTranscript = useAppStore((state) => state.showLiveTranscript)
+  const inPoint = useAppStore((state) => state.inPoint)
+  const outPoint = useAppStore((state) => state.outPoint)
   
-  // NEW: Student-specific video state (for segments and reflections)
-  const inPoint = useAppStore((state) => state.inPoint) // From student-video-slice
-  const outPoint = useAppStore((state) => state.outPoint) // From student-video-slice
-  const selectedSegment = useAppStore((state) => state.selectedSegment)
-  const reflections = useAppStore((state) => state.reflections)
-  
-  // OLD: Generic video actions
   const setIsPlaying = useAppStore((state) => state.setIsPlaying)
   const setCurrentTime = useAppStore((state) => state.setCurrentTime)
   const setDuration = useAppStore((state) => state.setDuration)
@@ -62,20 +54,9 @@ export function StudentVideoPlayer({
   const setPlaybackRate = useAppStore((state) => state.setPlaybackRate)
   const setShowControls = useAppStore((state) => state.setShowControls)
   const setShowLiveTranscript = useAppStore((state) => state.setShowLiveTranscript)
-  
-  // NEW: Student-specific video actions
-  const loadStudentVideo = useAppStore((state) => state.loadStudentVideo)
-  const setVideoSegment = useAppStore((state) => state.setVideoSegment)
-  const clearVideoSegment = useAppStore((state) => state.clearVideoSegment)
-  const addReflection = useAppStore((state) => state.addReflection)
+  const setInOutPoints = useAppStore((state) => state.setInOutPoints)
+  const clearSelection = useAppStore((state) => state.clearSelection)
   const addTranscriptReference = useAppStore((state) => state.addTranscriptReference)
-
-  // Load student-specific video data when component mounts
-  useEffect(() => {
-    if (videoId) {
-      loadStudentVideo(videoId)
-    }
-  }, [videoId, loadStudentVideo])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -185,12 +166,12 @@ export function StudentVideoPlayer({
 
   const handleSetInPoint = () => {
     // Set in point at current time, keep out point as is or set to current time if not set
-    setVideoSegment(currentTime, outPoint !== null ? outPoint : currentTime)
+    setInOutPoints(currentTime, outPoint !== null ? outPoint : currentTime)
   }
 
   const handleSetOutPoint = () => {
     // Set out point at current time, keep in point as is or set to 0 if not set
-    setVideoSegment(inPoint !== null ? inPoint : 0, currentTime)
+    setInOutPoints(inPoint !== null ? inPoint : 0, currentTime)
   }
 
   const handleSendToChat = () => {
@@ -211,10 +192,7 @@ export function StudentVideoPlayer({
   }
 
   const handleMouseMove = () => {
-    // Only call setShowControls if controls are not already showing
-    if (!showControls) {
-      setShowControls(true)
-    }
+    setShowControls(true)
     if (controlsTimeoutRef.current) {
       clearTimeout(controlsTimeoutRef.current)
     }
@@ -238,8 +216,8 @@ export function StudentVideoPlayer({
       ref={containerRef}
       className="relative aspect-video bg-black rounded-lg overflow-hidden group focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-default"
       onMouseMove={handleMouseMove}
-      onMouseEnter={() => !showControls && setShowControls(true)}
-      onMouseLeave={() => isPlaying && showControls && setShowControls(false)}
+      onMouseEnter={() => setShowControls(true)}
+      onMouseLeave={() => isPlaying && setShowControls(false)}
       tabIndex={0}
       aria-label="Video player - Click to play/pause, use keyboard shortcuts for controls"
     >
@@ -304,7 +282,7 @@ export function StudentVideoPlayer({
             onSetInPoint={handleSetInPoint}
             onSetOutPoint={handleSetOutPoint}
             onSendToChat={handleSendToChat}
-            onClearSelection={clearVideoSegment}
+            onClearSelection={clearSelection}
           />
         </div>
       </div>

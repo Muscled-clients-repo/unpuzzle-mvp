@@ -1,6 +1,7 @@
 "use client"
 
 import { useParams } from "next/navigation"
+import { useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Header } from "@/components/layout/header"
@@ -29,13 +30,35 @@ import {
   Activity
 } from "lucide-react"
 import { mockCourses, mockUsers } from "@/data/mock"
+import { useAppStore } from "@/stores/app-store"
 
 export default function CoursePreviewPage() {
   const params = useParams()
   const courseId = params.id as string
   
-  const course = mockCourses.find(c => c.id === courseId)
+  // Use new student-course-slice for course data
+  const { 
+    enrolledCourses,
+    recommendedCourses,
+    loadRecommendedCourses,
+    loadEnrolledCourses,
+    enrollInCourse,
+    loading
+  } = useAppStore()
+  
+  // Load course data
+  useEffect(() => {
+    loadRecommendedCourses('guest') // Load courses that could be enrolled in
+    loadEnrolledCourses('guest') // Check if user is already enrolled
+  }, [loadRecommendedCourses, loadEnrolledCourses])
+  
+  // Try to find course in new store data first, fallback to mock data
+  const storeCourse = recommendedCourses.find(c => c.id === courseId) || enrolledCourses.find(c => c.id === courseId)
+  const course = storeCourse || mockCourses.find(c => c.id === courseId)
   const instructor = mockUsers.instructors.find(i => i.courses.includes(courseId))
+  
+  // Check enrollment status using new store
+  const isEnrolled = enrolledCourses.some(c => c.id === courseId)
   
   if (!course) {
     return (
@@ -101,12 +124,12 @@ export default function CoursePreviewPage() {
                     <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                     <span className="font-medium">{course.rating}</span>
                     <span className="text-muted-foreground">
-                      ({Math.floor(course.students * 0.8)} ratings)
+                      ({Math.floor((course.students || 0) * 0.8)} ratings)
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4" />
-                    <span>{course.students.toLocaleString()} students</span>
+                    <span>{(course.students || 0).toLocaleString()} students</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4" />
@@ -215,9 +238,23 @@ export default function CoursePreviewPage() {
                     </div>
 
                     <div className="space-y-3">
-                      <Button className="w-full" size="lg">
-                        Enroll Now
-                      </Button>
+                      {isEnrolled ? (
+                        <Button className="w-full" size="lg" asChild>
+                          <Link href={`/student/course/${courseId}`}>
+                            <CheckCircle2 className="mr-2 h-5 w-5" />
+                            Continue Learning
+                          </Link>
+                        </Button>
+                      ) : (
+                        <Button 
+                          className="w-full" 
+                          size="lg"
+                          onClick={() => enrollInCourse('guest', courseId)}
+                          disabled={loading}
+                        >
+                          {loading ? 'Enrolling...' : 'Enroll Now'}
+                        </Button>
+                      )}
                       <Button variant="outline" className="w-full">
                         <Sparkles className="mr-2 h-4 w-4" />
                         Try AI Features Free
@@ -233,7 +270,7 @@ export default function CoursePreviewPage() {
                         </div>
                         <div className="flex items-center gap-2">
                           <BookOpen className="h-4 w-4" />
-                          <span>{course.videos.length} lessons</span>
+                          <span>{(course.videos || []).length} lessons</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <Download className="h-4 w-4" />
@@ -279,12 +316,12 @@ export default function CoursePreviewPage() {
                   <CardHeader>
                     <CardTitle>Course Curriculum</CardTitle>
                     <CardDescription>
-                      {course.videos.length} lessons • {course.duration}
+                      {(course.videos || []).length} lessons • {course.duration}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
-                      {course.videos.map((video, index) => (
+                      {(course.videos || []).map((video, index) => (
                         <div key={video.id} className="flex items-center justify-between border-b pb-4">
                           <div className="flex items-start gap-3">
                             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-sm font-medium">
@@ -399,7 +436,7 @@ export default function CoursePreviewPage() {
                         <span className="text-2xl font-bold">{course.rating}</span>
                       </div>
                       <div className="text-muted-foreground">
-                        ({Math.floor(course.students * 0.8)} reviews)
+                        ({Math.floor((course.students || 0) * 0.8)} reviews)
                       </div>
                     </div>
                   </CardHeader>

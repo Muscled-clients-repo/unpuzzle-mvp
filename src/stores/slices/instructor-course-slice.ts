@@ -6,7 +6,7 @@ import { instructorCourseService } from '@/services/instructor-course-service'
 export interface InstructorCourseState {
   instructorCourses: Course[]
   currentCourse: Course | null
-  courseAnalytics: {
+  currentCourseAnalytics: {
     enrollments: number
     completionRate: number
     avgProgress: number
@@ -39,7 +39,7 @@ export interface InstructorCourseSlice extends InstructorCourseState, Instructor
 const initialState: InstructorCourseState = {
   instructorCourses: [],
   currentCourse: null,
-  courseAnalytics: null,
+  currentCourseAnalytics: null,
   loading: false,
   error: null,
 }
@@ -67,7 +67,7 @@ export const createInstructorCourseSlice: StateCreator<InstructorCourseSlice> = 
     if (result.error) {
       set({ loading: false, error: result.error })
     } else {
-      set({ loading: false, courseAnalytics: result.data || null, error: null })
+      set({ loading: false, currentCourseAnalytics: result.data || null, error: null })
     }
   },
 

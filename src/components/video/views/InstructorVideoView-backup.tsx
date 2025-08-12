@@ -35,26 +35,11 @@ export function InstructorVideoView() {
   const fromAnalytics = searchParams.get('from') === 'analytics'
   const courseId = searchParams.get('courseId')
   
-  // Store - OLD (for lessons data)
+  // Store
   const { lessons, loadLessons } = useAppStore()
   
-  // Store - NEW (instructor video features)
-  const {
-    currentVideoData,
-    selectedStudent, 
-    studentActivities,
-    currentReflectionIndex,
-    loadInstructorVideo,
-    selectStudent,
-    navigateToReflection: storeNavigateToReflection,
-    respondToReflection
-  } = useAppStore()
-  
-  // Store - OLD (for current time - still needed for video playback)
-  const currentTime = useAppStore((state) => state.currentTime)
-  const setCurrentTime = useAppStore((state) => state.setCurrentTime)
-  
   // State
+  const [currentReflectionIndex, setCurrentReflectionIndex] = useState(0)
   const [responseTexts, setResponseTexts] = useState<{[key: string]: string}>({})
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'single-student' | 'all-students'>('single-student')
@@ -63,6 +48,7 @@ export function InstructorVideoView() {
   const [selectedStudentId, setSelectedStudentId] = useState(
     fromAnalytics ? 'all' : (studentId || 'sarah_chen')
   )
+  const [currentTime, setCurrentTime] = useState(0)
   
   // Load lessons
   useEffect(() => {
@@ -70,36 +56,6 @@ export function InstructorVideoView() {
       loadLessons()
     }
   }, [lessons.length, loadLessons])
-  
-  // Load instructor video data
-  useEffect(() => {
-    if (lessonId) {
-      console.log('📹 Loading instructor video data for:', lessonId)
-      loadInstructorVideo(lessonId, selectedStudentId !== 'all' ? selectedStudentId : undefined)
-    }
-  }, [lessonId, selectedStudentId, loadInstructorVideo])
-  
-  // Debug current video data
-  useEffect(() => {
-    if (currentVideoData) {
-      console.log('🎬 Current video data loaded:', {
-        title: currentVideoData.title,
-        videoUrl: currentVideoData.videoUrl,
-        hasActivities: currentVideoData.studentActivity?.length || 0
-      })
-    }
-  }, [currentVideoData])
-  
-  // Debug student activities
-  useEffect(() => {
-    console.log('📊 Student activities:', studentActivities)
-    console.log('📊 Activities count:', studentActivities.length)
-  }, [studentActivities])
-  
-  // Update selected student in store when local state changes
-  useEffect(() => {
-    selectStudent(selectedStudentId)
-  }, [selectedStudentId, selectStudent])
   
   const lesson = lessons.find(l => l.id === lessonId) || {
     id: lessonId,
@@ -288,18 +244,10 @@ export function InstructorVideoView() {
   
   // Navigation functions
   const navigateToReflection = (index: number) => {
-    console.log('🧭 navigateToReflection called with index:', index)
-    console.log('🧭 studentJourneyData exists:', !!studentJourneyData)
-    console.log('🧭 reflections length:', studentJourneyData?.reflections?.length || 0)
-    
     if (studentJourneyData && studentJourneyData.reflections[index]) {
-      const reflection = studentJourneyData.reflections[index]
-      const time = reflection.timeInSeconds
-      console.log('🧭 Navigating to reflection:', reflection.content, 'at time:', time)
-      storeNavigateToReflection(index)
+      setCurrentReflectionIndex(index)
+      const time = studentJourneyData.reflections[index].timeInSeconds
       setCurrentTime(time)
-    } else {
-      console.log('❌ Navigation failed - no reflection at index:', index)
     }
   }
   
@@ -310,8 +258,8 @@ export function InstructorVideoView() {
   const submitResponse = (reflectionId: string) => {
     const responseText = responseTexts[reflectionId]
     if (responseText?.trim()) {
-      console.log('📝 Submitting response via store for', reflectionId, ':', responseText)
-      respondToReflection(reflectionId, responseText)
+      console.log('Submitting response for', reflectionId, ':', responseText)
+      // In real app, would save to backend
       setResponseTexts(prev => ({ ...prev, [reflectionId]: '' }))
       setReplyingTo(null)
     }
@@ -342,8 +290,8 @@ export function InstructorVideoView() {
           <div className="bg-black p-4">
             <div className="relative">
               <VideoPlayer
-                videoUrl={currentVideoData?.videoUrl || lesson.videoUrl || ''}
-                title={currentVideoData?.title || lesson.title}
+                videoUrl={lesson.videoUrl || ''}
+                title={lesson.title}
                 transcript={[]}
                 onTimeUpdate={handleTimeUpdate}
                 onPause={(time) => console.log('Paused at', time)}
@@ -351,6 +299,25 @@ export function InstructorVideoView() {
                 onEnded={() => console.log('Video ended')}
               />
               
+              {/* Timeline Markers */}
+              {studentJourneyData && (
+                <div className="absolute bottom-16 left-4 right-4 h-2 bg-white/20 rounded">
+                  {studentJourneyData.reflections.map((reflection, index) => (
+                    <div
+                      key={reflection.id}
+                      className="absolute top-0 w-2 h-2 rounded-full cursor-pointer"
+                      style={{
+                        left: `${(reflection.timeInSeconds / 2700) * 100}%`,
+                        backgroundColor: 
+                          reflection.type === 'confusion' ? '#fb923c' :
+                          reflection.sentiment === 'positive' ? '#22c55e' : '#3b82f6'
+                      }}
+                      onClick={() => navigateToReflection(index)}
+                      title={`${reflection.timestamp} - ${reflection.content.substring(0, 50)}...`}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           

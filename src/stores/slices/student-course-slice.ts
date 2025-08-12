@@ -39,12 +39,10 @@ export const createStudentCourseSlice: StateCreator<StudentCourseSlice> = (set) 
     set({ loading: true, error: null })
     
     const result = await studentCourseService.getEnrolledCourses(userId)
-    console.log('loadEnrolledCourses result:', result)
     
     if (result.error) {
       set({ loading: false, error: result.error })
     } else {
-      console.log('Setting enrolledCourses:', result.data?.length)
       set({ loading: false, enrolledCourses: result.data || [], error: null })
     }
   },

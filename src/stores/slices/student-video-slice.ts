@@ -41,6 +41,7 @@ export const createStudentVideoSlice: StateCreator<StudentVideoSlice> = (set, ge
   },
 
   setVideoSegment: (inPoint: number, outPoint: number) => {
+    console.log('🎯 setVideoSegment called:', { inPoint, outPoint })
     set({
       inPoint,
       outPoint,
@@ -54,6 +55,7 @@ export const createStudentVideoSlice: StateCreator<StudentVideoSlice> = (set, ge
   },
 
   clearVideoSegment: () => {
+    console.log('🧹 clearVideoSegment called')
     set({
       inPoint: null,
       outPoint: null,

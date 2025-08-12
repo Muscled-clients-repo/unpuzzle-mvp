@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
+import Link from "next/link"
 import { useAppStore } from "@/stores/app-store"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -529,9 +530,15 @@ export default function InstructorDashboard() {
             <CardTitle>Development Tools</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-4">
+            <div className="flex gap-4 flex-wrap">
               <Button asChild variant="outline" size="sm">
                 <Link href="/test-stores">Test New Stores</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/test-student-video">Test Migrated VideoPlayer</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/test-instructor-video">Test Migrated InstructorView</Link>
               </Button>
               <Button asChild variant="outline" size="sm">
                 <Link href="/student">Student Dashboard</Link>

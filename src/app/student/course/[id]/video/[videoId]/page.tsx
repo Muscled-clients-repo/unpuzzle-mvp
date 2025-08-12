@@ -56,17 +56,37 @@ export default function VideoPlayerPage() {
   const params = useParams()
   const courseId = params.id as string
   const videoId = params.videoId as string
-  // Use Zustand store for video and UI state
+  
+  // Use Zustand store for video and UI state  
   const currentTime = useAppStore((state) => state.currentTime)
   const showChatSidebar = useAppStore((state) => state.preferences.showChatSidebar)
   const sidebarWidth = useAppStore((state) => state.preferences.sidebarWidth)
   const updatePreferences = useAppStore((state) => state.updatePreferences)
+  
+  // NEW: Use student video slice for video data
+  const {
+    currentVideo: storeVideoData,
+    loadStudentVideo,
+    reflections,
+    addReflection
+  } = useAppStore()
+  
+  // OLD: Keep lessons for standalone mode
   const { lessons, loadLessons, trackView } = useAppStore()
+  
   const [isResizing, setIsResizing] = useState(false)
   const sidebarRef = useRef<HTMLDivElement>(null)
   
   // Check if this is a standalone lesson
   const isStandaloneLesson = courseId === 'lesson'
+  
+  // Load student video data for course videos
+  useEffect(() => {
+    if (!isStandaloneLesson) {
+      console.log('📹 Loading student video data for:', videoId)
+      loadStudentVideo(videoId)
+    }
+  }, [isStandaloneLesson, videoId, loadStudentVideo])
   
   // Load lessons if needed for standalone
   useEffect(() => {
@@ -85,7 +105,7 @@ export default function VideoPlayerPage() {
     }
   }, [isStandaloneLesson, videoId, lessons.length])
   
-  // Get video data based on context
+  // Get video data based on context - prioritize store data for course videos
   const course = !isStandaloneLesson ? mockCourses.find(c => c.id === courseId) : null
   const standaloneLesson = isStandaloneLesson ? lessons.find(l => l.id === videoId) : null
   
@@ -101,7 +121,7 @@ export default function VideoPlayerPage() {
           timestamps: []
         }
       : null
-    : course?.videos.find(v => v.id === videoId)
+    : storeVideoData || course?.videos.find(v => v.id === videoId) // Use store data first, fallback to mock
     
   const currentVideoIndex = !isStandaloneLesson ? (course?.videos.findIndex(v => v.id === videoId) ?? -1) : 0
 
@@ -193,6 +213,7 @@ export default function VideoPlayerPage() {
                 videoUrl={currentVideo.videoUrl}
                 title={currentVideo.title}
                 transcript={currentVideo.transcript}
+                videoId={videoId}
                 onTimeUpdate={handleTimeUpdate}
                 onPause={(time) => console.log('Paused at', time)}
                 onPlay={() => console.log('Playing')}
