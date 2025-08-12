@@ -32,7 +32,9 @@ export const VideoEngine = forwardRef<VideoEngineRef, VideoEngineProps>(
   ({ videoUrl, onTimeUpdate, onLoadedMetadata, onEnded, onPlay, onPause }, ref) => {
     const videoRef = useRef<HTMLVideoElement>(null)
     const youtubePlayerRef = useRef<any>(null)
+    const intervalRef = useRef<NodeJS.Timeout | null>(null)
     const [isYouTubeReady, setIsYouTubeReady] = useState(false)
+    const [isPlaying, setIsPlaying] = useState(false)
     
     // Check if it's a YouTube URL
     const isYouTube = videoUrl?.includes('youtube.com') || videoUrl?.includes('youtu.be')
@@ -89,24 +91,36 @@ export const VideoEngine = forwardRef<VideoEngineRef, VideoEngineProps>(
               },
               onStateChange: (event: any) => {
                 if (event.data === window.YT.PlayerState.PLAYING) {
+                  setIsPlaying(true)
+                  // Start time update interval when playing
+                  if (!intervalRef.current) {
+                    intervalRef.current = setInterval(() => {
+                      if (youtubePlayerRef.current && youtubePlayerRef.current.getCurrentTime) {
+                        onTimeUpdate?.(youtubePlayerRef.current.getCurrentTime())
+                      }
+                    }, 500)
+                  }
                   onPlay?.()
                 } else if (event.data === window.YT.PlayerState.PAUSED) {
+                  setIsPlaying(false)
+                  // Stop time update interval when paused
+                  if (intervalRef.current) {
+                    clearInterval(intervalRef.current)
+                    intervalRef.current = null
+                  }
                   onPause?.()
                 } else if (event.data === window.YT.PlayerState.ENDED) {
+                  setIsPlaying(false)
+                  // Stop time update interval when ended
+                  if (intervalRef.current) {
+                    clearInterval(intervalRef.current)
+                    intervalRef.current = null
+                  }
                   onEnded?.()
                 }
               }
             }
           })
-
-          // Set up time update interval (reduced frequency)
-          const interval = setInterval(() => {
-            if (youtubePlayerRef.current && youtubePlayerRef.current.getCurrentTime) {
-              onTimeUpdate?.(youtubePlayerRef.current.getCurrentTime())
-            }
-          }, 500) // Update every 500ms instead of 100ms
-
-          return () => clearInterval(interval)
         }
       }
 
@@ -118,6 +132,16 @@ export const VideoEngine = forwardRef<VideoEngineRef, VideoEngineProps>(
         window.onYouTubeIframeAPIReady = initPlayer
       }
     }, [isYouTube, youtubeId])
+
+    // Cleanup interval on unmount
+    useEffect(() => {
+      return () => {
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current)
+          intervalRef.current = null
+        }
+      }
+    }, [])
 
     useImperativeHandle(ref, () => ({
       play: () => {

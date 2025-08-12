@@ -6,6 +6,36 @@
 
 ---
 
+#### Commit: `243d31a`
+**Date:** 2025-08-12  
+**Message:** 1:44AM - Phase 3 of Refactoring front end before backend implementation completed
+
+**Details:**
+- **Service Layer Architecture:**
+  - Created role-specific service layers (student/instructor for video and course)
+  - Separated course services for better separation of concerns
+  - Created API client foundation with mock data support
+  
+- **Cleanup:**
+  - Deleted unused user-service.ts and video-service.ts
+  - Moved types from deleted services to domain.ts for repositories
+  - Updated repository imports to use domain types
+  
+- **Documentation:**
+  - Documented old services and repository pattern to be removed in Phase 4
+  - Added comprehensive documentation in logs folder
+  - Reorganized refactoring plan into dedicated folder
+
+- **Files Created:**
+  - `src/lib/api-client.ts`
+  - `src/services/student-video-service.ts`
+  - `src/services/instructor-video-service.ts`
+  - `src/services/student-course-service.ts`
+  - `src/services/instructor-course-service.ts`
+  - `src/services/role-services.ts`
+
+---
+
 #### Commit: `38dcdf2`
 **Date:** 2025-08-11  
 **Message:** refactor: organize video players by role and create domain types
@@ -125,13 +155,13 @@
 ## Branch Information
 
 **Main Branch:** `main`  
-**Current HEAD:** `38dcdf2`  
+**Current HEAD:** `243d31a`  
 **Remote:** `origin/main` (https://github.com/muscled-clients/unpuzzle-mvp.git)
 
 ## Stats Summary
 
-**Total Commits:** 6  
-**Latest Update:** 2025-08-11  
+**Total Commits:** 7  
+**Latest Update:** 2025-08-12  
 **Files Changed in Latest Commit:** 59 files  
 **Additions:** +7,692 lines  
 **Deletions:** -4,838 lines

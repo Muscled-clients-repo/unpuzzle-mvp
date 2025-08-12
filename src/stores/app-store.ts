@@ -11,17 +11,39 @@ import { ModeratorSlice, createModeratorSlice } from './slices/moderator-slice'
 import { CourseCreationSlice, createCourseCreationSlice } from './slices/course-creation-slice'
 import { LessonSlice, createLessonSlice } from './slices/lesson-slice'
 import { BlogSlice, createBlogSlice } from './slices/blog-slice'
+// New role-specific slices
+import { StudentCourseSlice, createStudentCourseSlice } from './slices/student-course-slice'
+import { InstructorCourseSlice, createInstructorCourseSlice } from './slices/instructor-course-slice'
+import { StudentVideoSlice, createStudentVideoSlice } from './slices/student-video-slice'
+import { InstructorVideoSlice, createInstructorVideoSlice } from './slices/instructor-video-slice'
 import { isDevelopment } from '@/config/env'
 
-export interface AppStore extends UserSlice, CourseSlice, VideoSlice, AISlice, UISlice, CommunityState, InstructorSlice, ModeratorSlice, CourseCreationSlice, LessonSlice, BlogSlice {}
+// Note: Keeping old slices for backward compatibility during migration
+export interface AppStore extends 
+  UserSlice, 
+  CourseSlice,  // OLD - to be deprecated
+  VideoSlice,   // OLD - to be deprecated
+  AISlice, 
+  UISlice, 
+  CommunityState, 
+  InstructorSlice, 
+  ModeratorSlice, 
+  CourseCreationSlice, 
+  LessonSlice, 
+  BlogSlice,
+  StudentCourseSlice,    // NEW - role-specific
+  InstructorCourseSlice, // NEW - role-specific
+  StudentVideoSlice,     // NEW - role-specific
+  InstructorVideoSlice   // NEW - role-specific
+{}
 
 export const useAppStore = create<AppStore>()(
   devtools(
     subscribeWithSelector(
       (...args) => ({
         ...createUserSlice(...args),
-        ...createCourseSlice(...args),
-        ...createVideoSlice(...args),
+        ...createCourseSlice(...args),  // OLD - keep for compatibility
+        ...createVideoSlice(...args),   // OLD - keep for compatibility
         ...createAISlice(...args),
         ...createUISlice(...args),
         ...createCommunitySlice(...args),
@@ -30,6 +52,11 @@ export const useAppStore = create<AppStore>()(
         ...createCourseCreationSlice(...args),
         ...createLessonSlice(...args),
         ...createBlogSlice(...args),
+        // New role-specific slices
+        ...createStudentCourseSlice(...args),
+        ...createInstructorCourseSlice(...args),
+        ...createStudentVideoSlice(...args),
+        ...createInstructorVideoSlice(...args),
       })
     ),
     {

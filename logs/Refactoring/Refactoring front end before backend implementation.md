@@ -542,6 +542,14 @@ export const instructorVideoService = new InstructorVideoService()
 
 ---
 
+## PHASE 4: SPLIT STORES BY ROLE (20 minutes) ✅ COMPLETED
+
+### Bug Fix During Phase 4:
+**Fixed VideoEngine continuous time updates** - The YouTube player was calling `setCurrentTime` every 500ms even when paused, causing unnecessary Redux updates. Fixed by:
+- Only running the interval when video is playing
+- Clearing interval when paused/ended
+- Properly managing interval lifecycle
+
 ## PHASE 4: SPLIT STORES BY ROLE (20 minutes)
 
 ### Step 4.0: Update Existing Store to Use New Services
