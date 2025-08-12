@@ -1,11 +1,14 @@
 "use client"
+import { useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
-import { mockCourses, mockUsers } from "@/data/mock"
+import { useAppStore } from "@/stores/app-store"
+import { LoadingSpinner } from "@/components/common"
+import { ErrorFallback } from "@/components/common"
 import { 
   BookOpen, 
   Clock, 
@@ -23,18 +26,35 @@ import {
 import Link from "next/link"
 
 export default function MyCoursesPage() {
-  const learner = mockUsers.learners[0]
-  const enrolledCourses = mockCourses.filter(course => 
-    learner.enrolledCourses.includes(course.id)
-  )
+  const {
+    enrolledCourses,
+    courseProgress,
+    loading,
+    error,
+    loadEnrolledCourses,
+    loadCourseProgress
+  } = useAppStore()
   
-  // Mock progress data
-  const courseProgress = {
+  const userId = 'user-1' // In production, get from auth context
+  
+  useEffect(() => {
+    loadEnrolledCourses(userId)
+  }, [userId, loadEnrolledCourses])
+  
+  useEffect(() => {
+    // Load progress for each enrolled course
+    enrolledCourses.forEach(course => {
+      loadCourseProgress(userId, course.id)
+    })
+  }, [enrolledCourses, userId, loadCourseProgress])
+  
+  // Mock progress data for now - will come from courseProgress once loaded
+  const mockProgressData = {
     "course-1": {
-      progress: 35,
-      lastAccessed: "2 hours ago",
-      completedLessons: 2,
-      totalLessons: 5,
+      progress: courseProgress?.percentComplete || 35,
+      lastAccessed: courseProgress?.lastAccessedAt ? "2 hours ago" : "2 hours ago",
+      completedLessons: courseProgress?.videosCompleted || 2,
+      totalLessons: courseProgress?.totalVideos || 5,
       currentLesson: "JavaScript Basics",
       estimatedTimeLeft: "3.5 hours",
       aiInteractionsUsed: 15,
@@ -64,6 +84,10 @@ export default function MyCoursesPage() {
       nextMilestone: "Final project"
     }
   }
+  
+  if (loading) return <LoadingSpinner />
+  
+  if (error) return <ErrorFallback error={error} />
 
   return (
     <div className="flex-1 p-6">
@@ -100,7 +124,17 @@ export default function MyCoursesPage() {
             <TabsContent value="all" className="mt-6">
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {enrolledCourses.map((course) => {
-                  const progress = courseProgress[course.id as keyof typeof courseProgress]
+                  const progress = mockProgressData[course.id as keyof typeof mockProgressData] || {
+                    progress: 0,
+                    lastAccessed: "Never",
+                    completedLessons: 0,
+                    totalLessons: course.videos?.length || 5,
+                    currentLesson: "Not started",
+                    estimatedTimeLeft: `${course.duration} hours`,
+                    aiInteractionsUsed: 0,
+                    strugglingTopics: [],
+                    nextMilestone: "Start course"
+                  }
                   
                   return (
                     <Card key={course.id} className="overflow-hidden hover:shadow-lg transition-shadow">
@@ -121,11 +155,11 @@ export default function MyCoursesPage() {
                           <div>
                             <CardTitle className="text-lg line-clamp-2">{course.title}</CardTitle>
                             <CardDescription className="mt-1">
-                              By {mockUsers.instructors.find(i => i.courses.includes(course.id))?.name}
+                              By {course.instructor?.name || "Instructor"}
                             </CardDescription>
                           </div>
                           <Badge variant="secondary" className="capitalize">
-                            {course.level}
+                            {course.difficulty}
                           </Badge>
                         </div>
                       </CardHeader>
@@ -181,7 +215,7 @@ export default function MyCoursesPage() {
 
                         {/* Action Button */}
                         <Button asChild className="w-full">
-                          <Link href={`/student/course/${course.id}/video/${course.videos[progress.completedLessons]?.id || course.videos[0].id}`}>
+                          <Link href={`/student/course/${course.id}/video/${course.videos?.[progress.completedLessons]?.id || course.videos?.[0]?.id || '1'}`}>
                             <Play className="mr-2 h-4 w-4" />
                             Continue Learning
                           </Link>
@@ -217,7 +251,17 @@ export default function MyCoursesPage() {
             <TabsContent value="in-progress" className="mt-6">
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {enrolledCourses.slice(0, 2).map((course) => {
-                  const progress = courseProgress[course.id as keyof typeof courseProgress]
+                  const progress = mockProgressData[course.id as keyof typeof mockProgressData] || {
+                    progress: 0,
+                    lastAccessed: "Never",
+                    completedLessons: 0,
+                    totalLessons: course.videos?.length || 5,
+                    currentLesson: "Not started",
+                    estimatedTimeLeft: `${course.duration} hours`,
+                    aiInteractionsUsed: 0,
+                    strugglingTopics: [],
+                    nextMilestone: "Start course"
+                  }
                   
                   return (
                     <Card key={course.id} className="overflow-hidden hover:shadow-lg transition-shadow">
@@ -236,7 +280,7 @@ export default function MyCoursesPage() {
                       </CardHeader>
                       <CardContent>
                         <Button asChild className="w-full">
-                          <Link href={`/student/course/${course.id}/video/${course.videos[0].id}`}>
+                          <Link href={`/student/course/${course.id}/video/${course.videos?.[0]?.id || '1'}`}>
                             Continue Learning
                           </Link>
                         </Button>
