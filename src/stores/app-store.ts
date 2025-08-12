@@ -2,8 +2,6 @@ import { create } from 'zustand'
 import { devtools, subscribeWithSelector } from 'zustand/middleware'
 import { UserSlice, createUserSlice } from './slices/user-slice'
 import { AISlice, createAISlice } from './slices/ai-slice'
-import { UISlice, createUISlice } from './slices/ui-slice'
-import { CommunityState, createCommunitySlice } from './slices/community-slice'
 import { InstructorSlice, createInstructorSlice } from './slices/instructor-slice'
 import { ModeratorSlice, createModeratorSlice } from './slices/moderator-slice'
 import { CourseCreationSlice, createCourseCreationSlice } from './slices/course-creation-slice'
@@ -20,8 +18,6 @@ import { isDevelopment } from '@/config/env'
 export interface AppStore extends 
   UserSlice, 
   AISlice, 
-  UISlice, 
-  CommunityState, 
   InstructorSlice, 
   ModeratorSlice, 
   CourseCreationSlice, 
@@ -39,8 +35,6 @@ export const useAppStore = create<AppStore>()(
       (...args) => ({
         ...createUserSlice(...args),
         ...createAISlice(...args),
-        ...createUISlice(...args),
-        ...createCommunitySlice(...args),
         ...createInstructorSlice(...args),
         ...createModeratorSlice(...args),
         ...createCourseCreationSlice(...args),

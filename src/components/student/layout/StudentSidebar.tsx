@@ -22,8 +22,6 @@ interface StudentSidebarProps {
 const studentNavItems = [
   { href: "/student", label: "Dashboard", icon: Home },
   { href: "/student/courses", label: "My Courses", icon: BookOpen },
-  { href: "/student/community", label: "Community", icon: UsersRound },
-  { href: "/student/metrics", label: "Learning Metrics", icon: BarChart3 },
   { href: "/student/reflections", label: "Reflections", icon: MessageSquare },
 ]
 
@@ -47,27 +45,6 @@ export function StudentSidebar({ className }: StudentSidebarProps) {
               (item.href !== "/student" && pathname.startsWith(item.href))
             
             // Feature gate certain navigation items
-            if (item.href === "/student/community") {
-              return (
-                <FeatureGate key={item.href} role="student" feature="communityAccess">
-                  <Link
-                    href={item.href}
-                    className={cn(
-                      "flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                      isActive
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Icon className="h-4 w-4" />
-                      {item.label}
-                    </div>
-                  </Link>
-                </FeatureGate>
-              )
-            }
-
             if (item.href === "/student/reflections") {
               return (
                 <FeatureGate key={item.href} role="student" feature="reflections">

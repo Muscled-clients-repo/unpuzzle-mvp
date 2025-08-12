@@ -114,14 +114,6 @@ export function StudentHeader({ user, backButton }: StudentHeaderProps) {
                     </Link>
                   </DropdownMenuItem>
                   
-                  <FeatureGate role="student" feature="communityAccess">
-                    <DropdownMenuItem asChild>
-                      <Link href="/student/community">
-                        <MessageCircle className="mr-2 h-4 w-4" />
-                        Community
-                      </Link>
-                    </DropdownMenuItem>
-                  </FeatureGate>
                   
                   <DropdownMenuItem asChild>
                     <Link href="/help">
