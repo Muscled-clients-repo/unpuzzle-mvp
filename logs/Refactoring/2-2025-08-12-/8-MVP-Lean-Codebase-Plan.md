@@ -10,29 +10,29 @@
 ```
 ✅ /                              - Homepage
 ✅ /courses                       - Browse courses
-✅ /course/[id]                   - Course details
-✅ /learn/[id]                    - Public video learning
+✅ /course/course-1               - Course details
+✅ /learn/lesson-1                - Public video learning
 ✅ /student                       - Student dashboard  
 ✅ /student/courses               - Student course list
-✅ /student/course/[id]/video/[videoId] - Main video player
+✅ /student/course/course-1/video/1 - Main video player
 ✅ /student/reflections           - Student notes
 ✅ /instructor                    - Instructor dashboard
 ✅ /instructor/courses            - Course management
-✅ /instructor/course/[id]/analytics - Course analytics
-✅ /instructor/course/[id]/edit   - Course editing
+✅ /instructor/course/1/analytics - Course analytics
+✅ /instructor/course/1/edit     - Course editing
 ✅ /instructor/course/new         - Course creation
 ✅ /instructor/lessons            - Lesson management
-✅ /instructor/lesson/[id]/edit   - Lesson editing
-✅ /instructor/lesson/[id]/analytics - Lesson analytics
+✅ /instructor/lesson/lesson-1/edit - Lesson editing
+✅ /instructor/lesson/lesson-1/analytics - Lesson analytics
 ✅ /instructor/lesson/new         - Lesson creation
 ✅ /instructor/students           - Student management  
 ✅ /instructor/engagement         - Engagement metrics
 ✅ /instructor/confusions         - Student questions
-✅ /instructor/respond/[id]       - Respond to students
+✅ /instructor/respond/sarah_chen - Respond to students
 ✅ /blog                          - Blog listing
-✅ /blog/[slug]                   - Blog articles
+✅ /blog/1                        - Blog articles
 ✅ /moderator                     - Moderator dashboard
-✅ /moderator/respond/[id]        - Moderator responses
+✅ /moderator/respond/r1          - Moderator responses
 ✅ /test-feature-flags            - Feature testing (KEEP as requested)
 ```
 

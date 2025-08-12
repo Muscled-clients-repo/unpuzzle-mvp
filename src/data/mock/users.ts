@@ -75,7 +75,7 @@ export const mockUsers: {
       createdAt: new Date("2024-01-15"),
       subscription: {
         plan: "basic",
-        dailyAiInteractions: 2,
+        dailyAiInteractions: 3,  // Hit daily limit!
         lastResetDate: new Date().toDateString(),
       },
       enrolledCourses: ["course-1", "course-2"],
@@ -86,12 +86,12 @@ export const mockUsers: {
           courseId: "course-1",
           videoId: "video-1-5",
           type: "text",
-          content: "I learned how to structure a website properly using HTML5 semantic elements.",
-          prompt: "What was the most important thing you learned about HTML structure?",
+          content: "Setting up my Upwork profile was nerve-wracking but exciting. I learned the importance of showcasing Shopify-specific skills.",
+          prompt: "What was the most challenging part about creating your Upwork profile?",
           submittedAt: new Date("2024-02-05"),
           feedback: {
             from: "Sarah Chen",
-            message: "Great reflection! Try to also consider how semantic HTML helps with SEO.",
+            message: "Great reflection! Remember to highlight your unique Shopify expertise to stand out.",
             rating: 4,
             givenAt: new Date("2024-02-06"),
           },

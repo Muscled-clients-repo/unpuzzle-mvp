@@ -47,7 +47,7 @@ export function AIChatSidebar({
   const transcriptReferences = useAppStore((state) => state.transcriptReferences)
   const addChatMessage = useAppStore((state) => state.addChatMessage)
   const removeTranscriptReference = useAppStore((state) => state.removeTranscriptReference)
-  const clearSelection = useAppStore((state) => state.clearSelection)
+  const clearVideoSegment = useAppStore((state) => state.clearVideoSegment)
   const profile = useAppStore((state) => state.profile)
   const useAiInteraction = useAppStore((state) => state.useAiInteraction)
   
@@ -165,7 +165,7 @@ export function AIChatSidebar({
     if (transcriptReference) {
       removeTranscriptReference(transcriptReference.id)
       // Clear video in/out points after sending the message with the reference
-      clearSelection()
+      clearVideoSegment()
     }
 
     // Simulate AI response (in production, this would be an API call)

@@ -186,16 +186,6 @@ export default function InstructorEngagementPage() {
                     </Badge>
                   )
                 })}
-                {selectedStudents.length < studentJourneys.length && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsSearchFocused(true)}
-                  >
-                    <Plus className="mr-1 h-3 w-3" />
-                    Add Student
-                  </Button>
-                )}
               </>
             )}
           </div>

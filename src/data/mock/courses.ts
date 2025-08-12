@@ -44,9 +44,9 @@ export interface QuizPoint {
 export const mockCourses: Course[] = [
   {
     id: "course-1",
-    title: "Introduction to Web Development",
+    title: "Shopify Freelancer on Upwork",
     description:
-      "Learn the fundamentals of web development including HTML, CSS, and JavaScript. Build real-world projects and master modern web technologies.",
+      "Master Shopify development and become a successful freelancer on Upwork. Learn to build custom themes, apps, and stores for clients worldwide.",
     instructor: {
       name: "Sarah Chen",
       avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah",
@@ -61,9 +61,9 @@ export const mockCourses: Course[] = [
     videos: [
       {
         id: "1",
-        title: "Welcome to Web Development",
+        title: "Getting Started on Upwork as Shopify Developer",
         duration: "15:30",
-        description: "Introduction to the course and what you'll learn",
+        description: "Introduction to freelancing on Upwork and Shopify opportunities",
         thumbnailUrl: "/video-thumbs/intro.jpg",
         videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
         transcript: `<p class="mb-4"><span class="text-muted-foreground text-xs">[00:00]</span> Welcome to this comprehensive introduction to web development. In this course, we're going to explore the fundamental technologies that power the modern web.</p>
@@ -88,9 +88,9 @@ export const mockCourses: Course[] = [
       },
       {
         id: "2",
-        title: "HTML Fundamentals",
+        title: "Setting Up Your Upwork Profile",
         duration: "45:00",
-        description: "Deep dive into HTML structure and semantic elements",
+        description: "Create a winning Upwork profile that attracts Shopify clients",
         thumbnailUrl: "/video-thumbs/html.jpg",
         videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
         timestamps: [
@@ -101,9 +101,9 @@ export const mockCourses: Course[] = [
       },
       {
         id: "3",
-        title: "CSS Styling Basics",
+        title: "Shopify Liquid Fundamentals",
         duration: "50:00",
-        description: "Learn CSS fundamentals and modern styling techniques",
+        description: "Master Shopify's templating language for custom themes",
         thumbnailUrl: "/video-thumbs/css.jpg",
         videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
         timestamps: [
@@ -114,9 +114,9 @@ export const mockCourses: Course[] = [
       },
       {
         id: "4",
-        title: "JavaScript Essentials",
+        title: "Building Custom Shopify Apps",
         duration: "60:00",
-        description: "Master JavaScript programming fundamentals",
+        description: "Develop Shopify apps that solve real client problems",
         thumbnailUrl: "/video-thumbs/js.jpg",
         videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
         timestamps: [
@@ -127,9 +127,9 @@ export const mockCourses: Course[] = [
       },
       {
         id: "5",
-        title: "Building Your First Website",
+        title: "Landing Your First Upwork Client",
         duration: "90:00",
-        description: "Hands-on project combining HTML, CSS, and JavaScript",
+        description: "Complete strategy for winning your first Shopify project",
         thumbnailUrl: "/video-thumbs/project.jpg",
         videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
         timestamps: [
@@ -143,9 +143,9 @@ export const mockCourses: Course[] = [
   },
   {
     id: "course-2",
-    title: "Machine Learning Fundamentals",
+    title: "Shopify Upwork Top Rated Plus",
     description:
-      "Master the basics of machine learning with Python. Learn algorithms, data preprocessing, and build predictive models from scratch.",
+      "Scale your Shopify freelance business to Top Rated Plus status. Advanced strategies for premium clients and higher rates.",
     instructor: {
       name: "Dr. James Miller",
       avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=James",
@@ -160,9 +160,9 @@ export const mockCourses: Course[] = [
     videos: [
       {
         id: "1",
-        title: "Introduction to Machine Learning",
+        title: "Path to Top Rated Plus Badge",
         duration: "25:00",
-        description: "Understanding ML concepts and applications",
+        description: "Requirements and strategies for Upwork's highest tier",
         thumbnailUrl: "/video-thumbs/ml-intro.jpg",
         videoUrl: "https://sample-video.mp4",
         timestamps: [
@@ -181,9 +181,9 @@ export const mockCourses: Course[] = [
       },
       {
         id: "2",
-        title: "Python for Data Science",
+        title: "Premium Shopify Services",
         duration: "40:00",
-        description: "Essential Python libraries for ML",
+        description: "High-value services that command premium rates",
         thumbnailUrl: "/video-thumbs/python-ds.jpg",
         videoUrl: "https://sample-video.mp4",
         timestamps: [
@@ -236,9 +236,9 @@ export const mockCourses: Course[] = [
   },
   {
     id: "course-3",
-    title: "Digital Marketing Mastery",
+    title: "Vibe Coding Course",
     description:
-      "Learn modern digital marketing strategies, SEO, social media marketing, and analytics to grow any business online.",
+      "Learn coding with good vibes and modern techniques. Build real projects while maintaining work-life balance and enjoying the process.",
     instructor: {
       name: "Emily Rodriguez",
       avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Emily",
@@ -253,9 +253,9 @@ export const mockCourses: Course[] = [
     videos: [
       {
         id: "1",
-        title: "Digital Marketing Overview",
+        title: "Coding with Good Vibes",
         duration: "20:00",
-        description: "Introduction to digital marketing channels and strategies",
+        description: "Setting up your mindset and environment for enjoyable coding",
         thumbnailUrl: "/video-thumbs/marketing-intro.jpg",
         videoUrl: "https://sample-video.mp4",
         timestamps: [
@@ -266,9 +266,9 @@ export const mockCourses: Course[] = [
       },
       {
         id: "2",
-        title: "SEO Fundamentals",
+        title: "JavaScript for Positive Minds",
         duration: "35:00",
-        description: "Search engine optimization basics and best practices",
+        description: "Learn JavaScript fundamentals while staying motivated",
         thumbnailUrl: "/video-thumbs/seo.jpg",
         videoUrl: "https://sample-video.mp4",
         timestamps: [
@@ -279,9 +279,9 @@ export const mockCourses: Course[] = [
       },
       {
         id: "3",
-        title: "Social Media Marketing",
+        title: "React with Good Energy",
         duration: "40:00",
-        description: "Building brand presence on social platforms",
+        description: "Building React apps with a positive, stress-free approach",
         thumbnailUrl: "/video-thumbs/social.jpg",
         videoUrl: "https://sample-video.mp4",
         timestamps: [
@@ -292,9 +292,9 @@ export const mockCourses: Course[] = [
       },
       {
         id: "4",
-        title: "Content Marketing",
+        title: "Full-Stack Zen",
         duration: "45:00",
-        description: "Creating valuable content that drives results",
+        description: "Complete web development while maintaining inner peace",
         thumbnailUrl: "/video-thumbs/content.jpg",
         videoUrl: "https://sample-video.mp4",
         timestamps: [
