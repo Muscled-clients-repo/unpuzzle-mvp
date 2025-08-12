@@ -18,15 +18,14 @@ import {
   Activity,
   Award
 } from "lucide-react"
-import { Course } from "@/data/mock"
+import { Course, UserRole } from "@/types/domain"
 import { cn } from "@/lib/utils"
 import { FeatureGate } from "@/config/features"
-import { UserRole } from "@/types/domain"
 
 interface AICourseCardProps {
   course: Course
   variant?: "default" | "enrolled" | "instructor"
-  userRole: UserRole
+  userRole?: UserRole
   progress?: number
   aiMetrics?: {
     learnRate?: number
@@ -58,20 +57,22 @@ export function AICourseCard({
   return (
     <Card className="group relative overflow-hidden transition-all hover:shadow-xl">
       {/* AI Match Score Badge - Only for students */}
-      <FeatureGate role={userRole} feature="aiHints">
-        <div className="absolute right-3 top-3 z-10">
-          <Badge className="bg-gradient-to-r from-blue-600 to-purple-600 text-white border-0">
-            <Brain className="mr-1 h-3 w-3" />
-            {matchScore}% Match
-          </Badge>
-        </div>
-      </FeatureGate>
+      {userRole && (
+        <FeatureGate role={userRole} feature="aiHints">
+          <div className="absolute right-3 top-3 z-10">
+            <Badge className="bg-gradient-to-r from-blue-600 to-purple-600 text-white border-0">
+              <Brain className="mr-1 h-3 w-3" />
+              {matchScore}% Match
+            </Badge>
+          </div>
+        </FeatureGate>
+      )}
 
       {/* Course Thumbnail with AI Overlay */}
       <div className="relative aspect-video bg-muted overflow-hidden">
-        {course.thumbnail ? (
+        {course.thumbnailUrl ? (
           <Image
-            src={course.thumbnail}
+            src={course.thumbnailUrl}
             alt={course.title}
             fill
             className="object-cover transition-transform group-hover:scale-105"
@@ -100,7 +101,7 @@ export function AICourseCard({
         </div>
 
         {/* AI Learning Metrics for Enrolled - Only for students with AI features */}
-        {isEnrolled && aiMetrics && (
+        {isEnrolled && aiMetrics && userRole && (
           <FeatureGate role={userRole} feature="aiChat">
             <div className="mt-3 grid grid-cols-3 gap-2">
             <div className="rounded-lg bg-green-50 dark:bg-green-950/20 p-2 text-center">
@@ -155,20 +156,20 @@ export function AICourseCard({
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
           <div className="flex items-center gap-1">
             <Users className="h-3 w-3" />
-            <span>{course.students.toLocaleString()}</span>
+            <span>{(course.enrollmentCount || 0).toLocaleString()}</span>
           </div>
           <div className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
-            <span>{course.duration}</span>
+            <span>{course.duration} hours</span>
           </div>
           <div className="flex items-center gap-1">
             <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-            <span>{course.rating}</span>
+            <span>{course.rating || 4.5}</span>
           </div>
         </div>
 
         {/* AI Features Preview - Only for students */}
-        {!isEnrolled && (
+        {!isEnrolled && userRole && (
           <FeatureGate role={userRole} feature="aiChat">
             <div className="mt-3 space-y-2">
             {/* AI Tip */}

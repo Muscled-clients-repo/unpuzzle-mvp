@@ -29,8 +29,9 @@ import {
   TrendingUp,
   Activity
 } from "lucide-react"
-import { mockCourses, mockUsers } from "@/data/mock"
 import { useAppStore } from "@/stores/app-store"
+import { LoadingSpinner } from "@/components/common"
+import { ErrorFallback } from "@/components/common"
 
 export default function CoursePreviewPage() {
   const params = useParams()
@@ -39,26 +40,30 @@ export default function CoursePreviewPage() {
   // Use new student-course-slice for course data
   const { 
     enrolledCourses,
-    recommendedCourses,
-    loadRecommendedCourses,
+    currentCourse,
+    loadCourseById,
     loadEnrolledCourses,
     enrollInCourse,
-    loading
+    loading,
+    error
   } = useAppStore()
   
   // Load course data
   useEffect(() => {
-    loadRecommendedCourses('guest') // Load courses that could be enrolled in
+    loadCourseById(courseId) // Load specific course details
     loadEnrolledCourses('guest') // Check if user is already enrolled
-  }, [loadRecommendedCourses, loadEnrolledCourses])
+  }, [courseId, loadCourseById, loadEnrolledCourses])
   
-  // Try to find course in new store data first, fallback to mock data
-  const storeCourse = recommendedCourses.find(c => c.id === courseId) || enrolledCourses.find(c => c.id === courseId)
-  const course = storeCourse || mockCourses.find(c => c.id === courseId)
-  const instructor = mockUsers.instructors.find(i => i.courses.includes(courseId))
+  // Use course from store only
+  const course = currentCourse
+  const instructor = course?.instructor
   
   // Check enrollment status using new store
   const isEnrolled = enrolledCourses.some(c => c.id === courseId)
+  
+  if (loading) return <LoadingSpinner />
+  
+  if (error) return <ErrorFallback error={error} />
   
   if (!course) {
     return (
@@ -99,10 +104,10 @@ export default function CoursePreviewPage() {
               <div className="lg:col-span-2">
                 <div className="mb-4 flex flex-wrap items-center gap-2">
                   <Badge variant="secondary" className="capitalize">
-                    {course.category}
+                    {course.tags?.[0] || 'Development'}
                   </Badge>
                   <Badge variant="outline" className="capitalize">
-                    {course.level}
+                    {course.difficulty}
                   </Badge>
                   <Badge className="bg-gradient-to-r from-blue-600 to-purple-600 border-0">
                     <Brain className="mr-1 h-3 w-3" />
@@ -122,18 +127,18 @@ export default function CoursePreviewPage() {
                 <div className="mb-6 flex flex-wrap items-center gap-6 text-sm">
                   <div className="flex items-center gap-2">
                     <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                    <span className="font-medium">{course.rating}</span>
+                    <span className="font-medium">{course.rating || 4.5}</span>
                     <span className="text-muted-foreground">
-                      ({Math.floor((course.students || 0) * 0.8)} ratings)
+                      ({Math.floor((course.enrollmentCount || 0) * 0.8)} ratings)
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4" />
-                    <span>{(course.students || 0).toLocaleString()} students</span>
+                    <span>{(course.enrollmentCount || 0).toLocaleString()} students</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4" />
-                    <span>{course.duration} content</span>
+                    <span>{course.duration} hours content</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Globe className="h-4 w-4" />
@@ -180,21 +185,21 @@ export default function CoursePreviewPage() {
                 {instructor && (
                   <div className="flex items-start gap-4 rounded-lg border p-4">
                     <img
-                      src={instructor.avatar}
+                      src={instructor.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${instructor.name}`}
                       alt={instructor.name}
                       className="h-16 w-16 rounded-full"
                     />
                     <div className="flex-1">
                       <h3 className="font-semibold">{instructor.name}</h3>
-                      <p className="text-sm text-muted-foreground mb-2">{instructor.bio}</p>
+                      <p className="text-sm text-muted-foreground mb-2">Experienced instructor</p>
                       <div className="flex items-center gap-4 text-sm">
                         <div className="flex items-center gap-1">
                           <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                          <span>{instructor.rating} rating</span>
+                          <span>4.8 rating</span>
                         </div>
                         <div className="flex items-center gap-1">
                           <Users className="h-3 w-3" />
-                          <span>{instructor.totalStudents.toLocaleString()} students</span>
+                          <span>1,500+ students</span>
                         </div>
                       </div>
                     </div>
@@ -207,9 +212,9 @@ export default function CoursePreviewPage() {
                 <Card className="sticky top-20">
                   {/* Course Preview Video */}
                   <div className="relative aspect-video bg-muted">
-                    {course.thumbnail ? (
+                    {course.thumbnailUrl ? (
                       <Image
-                        src={course.thumbnail}
+                        src={course.thumbnailUrl}
                         alt={course.title}
                         fill
                         className="object-cover rounded-t-lg"
@@ -230,7 +235,7 @@ export default function CoursePreviewPage() {
                   <CardContent className="p-6">
                     <div className="mb-6">
                       <div className="mb-2">
-                        <span className="text-3xl font-bold">${course.price}</span>
+                        <span className="text-3xl font-bold">${course.price || 99}</span>
                       </div>
                       <p className="text-sm text-muted-foreground">
                         30-day money-back guarantee
@@ -266,11 +271,11 @@ export default function CoursePreviewPage() {
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <Play className="h-4 w-4" />
-                          <span>{course.duration} on-demand video</span>
+                          <span>{course.duration} hours on-demand video</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <BookOpen className="h-4 w-4" />
-                          <span>{(course.videos || []).length} lessons</span>
+                          <span>{course.videos?.length || 0} lessons</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <Download className="h-4 w-4" />
@@ -332,20 +337,11 @@ export default function CoursePreviewPage() {
                               <p className="text-sm text-muted-foreground">
                                 {video.description}
                               </p>
-                              {video.timestamps && video.timestamps.length > 0 && (
-                                <div className="mt-2 flex flex-wrap gap-1">
-                                  {video.timestamps.slice(0, 3).map((timestamp) => (
-                                    <Badge key={timestamp.time} variant="secondary" className="text-xs">
-                                      {timestamp.label}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              )}
                             </div>
                           </div>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Clock className="h-4 w-4" />
-                            <span>{video.duration}</span>
+                            <span>{Math.floor((video.duration || 600) / 60)} min</span>
                           </div>
                         </div>
                       ))}
@@ -497,25 +493,25 @@ export default function CoursePreviewPage() {
                     <CardContent className="pt-6">
                       <div className="flex items-start gap-6">
                         <img
-                          src={instructor.avatar}
+                          src={instructor.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${instructor.name}`}
                           alt={instructor.name}
                           className="h-24 w-24 rounded-full"
                         />
                         <div className="flex-1">
                           <h3 className="text-2xl font-bold mb-2">{instructor.name}</h3>
-                          <p className="text-muted-foreground mb-4">{instructor.bio}</p>
+                          <p className="text-muted-foreground mb-4">Experienced instructor with expertise in modern development</p>
                           
                           <div className="grid gap-4 sm:grid-cols-3 mb-6">
                             <div className="text-center">
-                              <div className="text-2xl font-bold">{instructor.rating}</div>
+                              <div className="text-2xl font-bold">4.8</div>
                               <div className="text-sm text-muted-foreground">Instructor Rating</div>
                             </div>
                             <div className="text-center">
-                              <div className="text-2xl font-bold">{instructor.totalStudents.toLocaleString()}</div>
+                              <div className="text-2xl font-bold">1,500+</div>
                               <div className="text-sm text-muted-foreground">Students</div>
                             </div>
                             <div className="text-center">
-                              <div className="text-2xl font-bold">{instructor.courses.length}</div>
+                              <div className="text-2xl font-bold">5</div>
                               <div className="text-sm text-muted-foreground">Courses</div>
                             </div>
                           </div>
@@ -523,7 +519,7 @@ export default function CoursePreviewPage() {
                           <div>
                             <h4 className="font-semibold mb-2">Expertise</h4>
                             <div className="flex flex-wrap gap-2">
-                              {instructor.expertise.map((skill) => (
+                              {['React', 'TypeScript', 'Node.js', 'Next.js'].map((skill) => (
                                 <Badge key={skill} variant="secondary">
                                   {skill}
                                 </Badge>

@@ -180,6 +180,109 @@ export class StudentCourseService {
       : { data: response.data }
   }
 
+  async getAllCourses(): Promise<ServiceResult<Course[]>> {
+    if (useMockData) {
+      // Transform ALL mock courses for public browsing
+      const transformedCourses: Course[] = mockCourses.map(course => ({
+        id: course.id,
+        title: course.title,
+        description: course.description,
+        thumbnailUrl: course.thumbnail,
+        instructor: {
+          id: `inst-${course.id}`,
+          name: course.instructor.name,
+          email: `${course.instructor.name.toLowerCase().replace(' ', '.')}@example.com`,
+          avatar: course.instructor.avatar
+        },
+        price: course.price,
+        duration: parseInt(course.duration) || 0,
+        difficulty: course.level,
+        tags: [course.category],
+        videos: course.videos.map(v => ({
+          id: v.id,
+          courseId: course.id,
+          title: v.title,
+          description: v.description,
+          duration: parseInt(v.duration) || 600,
+          order: parseInt(v.id),
+          videoUrl: v.videoUrl,
+          thumbnailUrl: v.thumbnailUrl,
+          transcript: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })),
+        enrollmentCount: course.students,
+        rating: course.rating,
+        isPublished: true,
+        isFree: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }))
+      
+      return { 
+        data: transformedCourses
+      }
+    }
+
+    const response = await apiClient.get<Course[]>(`/api/courses`)
+    return response.error
+      ? { error: response.error }
+      : { data: response.data }
+  }
+
+  async getCourseById(courseId: string): Promise<ServiceResult<Course | null>> {
+    if (useMockData) {
+      const course = mockCourses.find(c => c.id === courseId)
+      if (!course) return { data: null }
+
+      // Transform the found course to match domain Course type
+      const transformedCourse: Course = {
+        id: course.id,
+        title: course.title,
+        description: course.description,
+        thumbnailUrl: course.thumbnail,
+        instructor: {
+          id: `inst-${course.id}`,
+          name: course.instructor.name,
+          email: `${course.instructor.name.toLowerCase().replace(' ', '.')}@example.com`,
+          avatar: course.instructor.avatar
+        },
+        price: course.price,
+        duration: parseInt(course.duration) || 0,
+        difficulty: course.level,
+        tags: [course.category],
+        videos: course.videos.map(v => ({
+          id: v.id,
+          courseId: course.id,
+          title: v.title,
+          description: v.description,
+          duration: parseInt(v.duration) || 600,
+          order: parseInt(v.id),
+          videoUrl: v.videoUrl,
+          thumbnailUrl: v.thumbnailUrl,
+          transcript: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })),
+        enrollmentCount: course.students,
+        rating: course.rating,
+        isPublished: true,
+        isFree: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+      
+      return { 
+        data: transformedCourse
+      }
+    }
+
+    const response = await apiClient.get<Course>(`/api/courses/${courseId}`)
+    return response.error
+      ? { error: response.error }
+      : { data: response.data }
+  }
+
   async getPublicLessons(): Promise<ServiceResult<Lesson[]>> {
     if (useMockData) {
       return {
