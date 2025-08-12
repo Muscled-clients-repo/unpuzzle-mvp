@@ -287,6 +287,78 @@ export interface TranscriptEntry {
   text: string
 }
 
+// ============= USER PREFERENCES & PROFILE =============
+// These were in user-service.ts, moved here for repositories
+export interface UserPreferences {
+  theme: 'light' | 'dark' | 'system'
+  language: string
+  notifications: {
+    email: boolean
+    push: boolean
+    inApp: boolean
+  }
+  privacy: {
+    showProfile: boolean
+    showProgress: boolean
+  }
+}
+
+export interface UserProfile {
+  bio?: string
+  location?: string
+  website?: string
+  social?: {
+    twitter?: string
+    linkedin?: string
+    github?: string
+  }
+  skills?: string[]
+  interests?: string[]
+}
+
+export interface UserLearningPath {
+  id: string
+  userId: string
+  name: string
+  description?: string
+  courses: string[]
+  targetCompletionDate?: string
+  progress: number
+  createdAt: string
+}
+
+export interface UserAchievement {
+  id: string
+  userId: string
+  type: string
+  name: string
+  description: string
+  earnedAt: string
+  metadata?: any
+}
+
+// ============= VIDEO METADATA =============
+// These were in video-service.ts, moved here for repositories
+export interface VideoMetadata {
+  id: string
+  title: string
+  description?: string
+  duration: number
+  tags?: string[]
+  difficulty?: 'beginner' | 'intermediate' | 'advanced'
+  language?: string
+  subtitles?: string[]
+}
+
+export interface TranscriptSegment {
+  id: string
+  videoId: string
+  startTime: number
+  endTime: number
+  text: string
+  speaker?: string
+}
+
 // ============= SERVICE RESPONSES =============
 export interface ServiceResult<T> {
   data?: T

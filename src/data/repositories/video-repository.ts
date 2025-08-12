@@ -1,5 +1,5 @@
 import { BaseRepository } from './base-repository'
-import type { VideoMetadata, TranscriptSegment, VideoProgress } from '@/services/video-service'
+import type { VideoMetadata, TranscriptSegment, VideoProgress } from '@/types/domain'
 
 export interface VideoRepositoryInterface {
   findById(videoId: string): Promise<VideoMetadata | null>

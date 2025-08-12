@@ -1,0 +1,289 @@
+// src/services/student-course-service.ts
+import { apiClient, useMockData } from '@/lib/api-client'
+import { 
+  Course, 
+  Video,
+  Lesson,
+  StudentLessonData,
+  ServiceResult,
+  CourseProgress
+} from '@/types/domain'
+import { mockCourses } from '@/data/mock/courses'
+
+export class StudentCourseService {
+  async getEnrolledCourses(userId: string): Promise<ServiceResult<Course[]>> {
+    if (useMockData) {
+      // Return first 2 courses as enrolled for mock
+      return { 
+        data: mockCourses.slice(0, 2) 
+      }
+    }
+
+    const response = await apiClient.get<Course[]>(`/api/student/courses`)
+    return response.error
+      ? { error: response.error }
+      : { data: response.data }
+  }
+
+  async getCourseProgress(
+    userId: string, 
+    courseId: string
+  ): Promise<ServiceResult<CourseProgress>> {
+    if (useMockData) {
+      return {
+        data: {
+          userId,
+          courseId,
+          videosCompleted: 2,
+          totalVideos: 5,
+          percentComplete: 40,
+          lastAccessedAt: new Date().toISOString()
+        }
+      }
+    }
+
+    const response = await apiClient.get<CourseProgress>(
+      `/api/student/courses/${courseId}/progress`
+    )
+    return response.error
+      ? { error: response.error }
+      : { data: response.data }
+  }
+
+  async getNextVideo(
+    courseId: string,
+    currentVideoId: string
+  ): Promise<ServiceResult<Video | null>> {
+    if (useMockData) {
+      const course = mockCourses.find(c => c.id === courseId)
+      if (!course) return { data: null }
+      
+      const currentIndex = course.videos.findIndex(v => v.id === currentVideoId)
+      const nextVideo = course.videos[currentIndex + 1]
+      
+      return { data: nextVideo || null }
+    }
+
+    const response = await apiClient.get<Video>(
+      `/api/student/courses/${courseId}/videos/${currentVideoId}/next`
+    )
+    return response.error
+      ? { error: response.error }
+      : { data: response.data }
+  }
+
+  async enrollInCourse(
+    userId: string,
+    courseId: string
+  ): Promise<ServiceResult<{ success: boolean; message: string }>> {
+    if (useMockData) {
+      return {
+        data: {
+          success: true,
+          message: 'Successfully enrolled in course'
+        }
+      }
+    }
+
+    const response = await apiClient.post(
+      `/api/student/courses/${courseId}/enroll`,
+      { userId }
+    )
+    return response.error
+      ? { error: response.error }
+      : { data: response.data }
+  }
+
+  async getRecommendedCourses(userId: string): Promise<ServiceResult<Course[]>> {
+    if (useMockData) {
+      // Return courses 3-5 as recommendations
+      return { 
+        data: mockCourses.slice(2, 5) 
+      }
+    }
+
+    const response = await apiClient.get<Course[]>(`/api/student/courses/recommended`)
+    return response.error
+      ? { error: response.error }
+      : { data: response.data }
+  }
+
+  async getPublicLessons(): Promise<ServiceResult<Lesson[]>> {
+    if (useMockData) {
+      return {
+        data: [
+          {
+            id: 'lesson-1',
+            title: 'Learn React In 30 Minutes',
+            description: 'A comprehensive introduction to React',
+            duration: 1800,
+            videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+            thumbnailUrl: 'https://img.youtube.com/vi/hQAHSlTtcmY/maxresdefault.jpg',
+            instructor: {
+              id: 'inst-1',
+              name: 'Sarah Chen',
+              email: 'sarah@example.com',
+              avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah'
+            },
+            tags: ['React', 'JavaScript', 'Frontend'],
+            difficulty: 'beginner',
+            isFree: true,
+            isPublished: true,
+            viewCount: 1543,
+            rating: 4.8,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          },
+          {
+            id: 'lesson-2',
+            title: 'CSS Grid in 20 Minutes',
+            description: 'Master CSS Grid layout quickly',
+            duration: 1200,
+            videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+            thumbnailUrl: 'https://img.youtube.com/vi/CSS-GRID/maxresdefault.jpg',
+            instructor: {
+              id: 'inst-2',
+              name: 'Alex Rivera',
+              email: 'alex@example.com',
+              avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alex'
+            },
+            tags: ['CSS', 'Web Design', 'Frontend'],
+            difficulty: 'intermediate',
+            isFree: true,
+            isPublished: true,
+            viewCount: 892,
+            rating: 4.6,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }
+        ]
+      }
+    }
+
+    const response = await apiClient.get<Lesson[]>('/api/lessons/public')
+    return response.error
+      ? { error: response.error }
+      : { data: response.data }
+  }
+
+  async getStudentLessonData(lessonId: string): Promise<ServiceResult<StudentLessonData>> {
+    if (useMockData) {
+      const baseLesson: Lesson = {
+        id: lessonId,
+        title: 'Learn React In 30 Minutes',
+        description: 'A comprehensive introduction to React',
+        duration: 1800,
+        videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+        thumbnailUrl: 'https://img.youtube.com/vi/hQAHSlTtcmY/maxresdefault.jpg',
+        instructor: {
+          id: 'inst-1',
+          name: 'Sarah Chen',
+          email: 'sarah@example.com',
+          avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah'
+        },
+        tags: ['React', 'JavaScript'],
+        difficulty: 'beginner',
+        isFree: true,
+        isPublished: true,
+        viewCount: 1543,
+        rating: 4.8,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+
+      const studentData: StudentLessonData = {
+        ...baseLesson,
+        aiContextEnabled: true,
+        hasAccess: true,
+        progress: {
+          userId: 'user-1',
+          videoId: lessonId,
+          watchedSeconds: 900,
+          totalSeconds: 1800,
+          percentComplete: 50,
+          lastWatchedAt: new Date().toISOString(),
+          reflectionCount: 3
+        },
+        reflections: [
+          {
+            id: 'ref-1',
+            userId: 'user-1',
+            videoId: lessonId,
+            content: 'Great explanation of React basics',
+            timestamp: 120,
+            timeInSeconds: 120,
+            type: 'text',
+            status: 'responded',
+            response: 'Glad you found it helpful!',
+            createdAt: new Date().toISOString()
+          }
+        ],
+        quizzes: [
+          {
+            id: 'quiz-1',
+            videoId: lessonId,
+            timestamp: 300,
+            question: 'What is JSX?',
+            options: [
+              'JavaScript XML',
+              'Java Syntax Extension',
+              'JSON XML',
+              'JavaScript Extension'
+            ],
+            correctAnswer: 0,
+            explanation: 'JSX stands for JavaScript XML',
+            difficulty: 'easy'
+          }
+        ]
+      }
+      
+      return { data: studentData }
+    }
+
+    const response = await apiClient.get<StudentLessonData>(`/api/student/lessons/${lessonId}`)
+    return response.error
+      ? { error: response.error }
+      : { data: response.data }
+  }
+
+  async markVideoComplete(
+    userId: string,
+    courseId: string,
+    videoId: string
+  ): Promise<ServiceResult<void>> {
+    if (useMockData) {
+      console.log('Marking video complete:', { userId, courseId, videoId })
+      return { data: undefined }
+    }
+
+    const response = await apiClient.post(
+      `/api/student/courses/${courseId}/videos/${videoId}/complete`,
+      { userId }
+    )
+    return response.error
+      ? { error: response.error }
+      : { data: undefined }
+  }
+
+  async getCertificate(
+    userId: string,
+    courseId: string
+  ): Promise<ServiceResult<{ certificateUrl: string }>> {
+    if (useMockData) {
+      return {
+        data: {
+          certificateUrl: `/certificates/${userId}-${courseId}.pdf`
+        }
+      }
+    }
+
+    const response = await apiClient.get(
+      `/api/student/courses/${courseId}/certificate`
+    )
+    return response.error
+      ? { error: response.error }
+      : { data: response.data }
+  }
+}
+
+export const studentCourseService = new StudentCourseService()

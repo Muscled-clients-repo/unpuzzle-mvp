@@ -1,6 +1,8 @@
 # 2-Hour Frontend Refactoring Sprint (REVISED)
 ## Clean Architecture While Preserving Role-Specific Components
 
+## STATUS: Phase 1-2 COMPLETED ✅
+
 ## IMPORTANT: Video Player Architecture
 
 ### ✅ KEEP BOTH Video Players - They Serve Different Purposes:
@@ -29,9 +31,9 @@ mv src/components/video/VideoPlayerRefactored.tsx src/components/video/StudentVi
 
 ---
 
-## PHASE 1: SMART CLEANUP (15 minutes)
+## PHASE 1: SMART CLEANUP (15 minutes) ✅ COMPLETED
 
-### Step 1.1: Remove ONLY True Duplicates
+### Step 1.1: Remove ONLY True Duplicates ✅
 ```bash
 # These ARE duplicates - remove them:
 rm src/app/course/[id]/alt/page.tsx  # Alternative layout
@@ -43,7 +45,7 @@ rm src/app/instructor/course/[id]/analytics/page-broken.tsx
 rm -rf src/data/repositories-disabled/
 ```
 
-### Step 1.2: Keep But Organize Video Components
+### Step 1.2: Keep But Organize Video Components ✅
 ```bash
 # Create better organization
 mkdir -p src/components/video/student
@@ -68,9 +70,9 @@ grep -r "VideoPlayerWithHooks" src/app src/components
 
 ---
 
-## PHASE 2: UNIFY TYPES (20 minutes)
+## PHASE 2: UNIFY TYPES (20 minutes) ✅ COMPLETED
 
-### Step 2.1: Create Domain Types with Role Awareness
+### Step 2.1: Create Domain Types with Role Awareness ✅
 Create `src/types/domain.ts`:
 
 ```typescript
@@ -351,10 +353,19 @@ export interface PaginatedResult<T> {
 
 ---
 
-## PHASE 3: ROLE-AWARE SERVICES (20 minutes)
+## PHASE 3: ROLE-AWARE SERVICES (20 minutes) ✅ COMPLETED
 
-### Step 3.1: Create Role-Specific Service Layer
-Create `src/services/student-video-service.ts`:
+### Step 3.1: Create Role-Specific Service Layer ✅
+**COMPLETED**: Created separate services for each role:
+- `src/services/student-video-service.ts` ✅
+- `src/services/instructor-video-service.ts` ✅  
+- `src/services/student-course-service.ts` ✅
+- `src/services/instructor-course-service.ts` ✅
+- `src/lib/api-client.ts` ✅
+
+**Note**: We separated course services (originally combined in role-aware-course-service.ts) for better separation of concerns.
+
+Original `src/services/student-video-service.ts`:
 
 ```typescript
 // src/services/student-video-service.ts
@@ -532,6 +543,40 @@ export const instructorVideoService = new InstructorVideoService()
 ---
 
 ## PHASE 4: SPLIT STORES BY ROLE (20 minutes)
+
+### Step 4.0: Update Existing Store to Use New Services
+**IMPORTANT**: The existing `course-slice.ts` currently uses the old `courseService` from `@/services/course-service.ts`. This needs to be updated to use the new role-specific services:
+
+```typescript
+// OLD: src/stores/slices/course-slice.ts
+import { courseService } from '@/services'  // Uses old generic service
+
+// NEW: Should import role-specific services
+import { studentCourseService } from '@/services/student-course-service'
+import { instructorCourseService } from '@/services/instructor-course-service'
+```
+
+**Files to update:**
+- `src/stores/slices/course-slice.ts` - Currently uses old courseService
+- `src/services/index.ts` - Remove export of old courseService
+- `src/services/course-service.ts` - DELETE after updating stores
+
+**Repository Pattern to Remove (old architecture):**
+- `src/data/repositories/` - Entire folder can be deleted
+  - Only used by old `course-service.ts`
+  - `user-repository.ts` and `video-repository.ts` not used anywhere else
+  - `course-repository.ts` only used by `course-service.ts`
+  - Types were moved to `/types/domain.ts` unnecessarily (can be removed if not needed)
+
+**Already cleaned up:**
+- ✅ DELETED `src/services/user-service.ts` - Was unused
+- ✅ DELETED `src/services/video-service.ts` - Was unused
+- ✅ MOVED types to `domain.ts` (for repositories - can be removed with repositories)
+
+**Note about AI Service:**
+- `src/services/ai-service.ts` - Keep as-is (AI is student-only feature)
+- Used by `ai-slice.ts` store
+- Consider renaming to `student-ai-service.ts` in future for consistency
 
 ### Step 4.1: Create Student-Specific Store Slice
 Create `src/stores/slices/student-video-slice.ts`:

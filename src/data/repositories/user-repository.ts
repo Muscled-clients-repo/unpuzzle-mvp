@@ -1,6 +1,6 @@
 import { mockUsers } from '@/data/mock'
 import { BaseRepository } from './base-repository'
-import type { User, UserPreferences, UserProfile, UserLearningPath, UserAchievement } from '@/services/user-service'
+import type { User, UserPreferences, UserProfile, UserLearningPath, UserAchievement } from '@/types/domain'
 
 export interface UserRepositoryInterface {
   findById(id: string): Promise<User | null>

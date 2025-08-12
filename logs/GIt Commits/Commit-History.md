@@ -6,6 +6,33 @@
 
 ---
 
+#### Commit: `38dcdf2`
+**Date:** 2025-08-11  
+**Message:** refactor: organize video players by role and create domain types
+
+**Details:**
+- **Video Component Reorganization:**
+  - Renamed VideoPlayerRefactored to StudentVideoPlayer for clarity
+  - Organized video components into student/shared folders
+  - Updated all imports to use new component paths
+  
+- **Domain Types Creation:**
+  - Created comprehensive domain types in src/types/domain.ts
+  - Single source of truth for all types across application
+  - Role-aware types (student, instructor, moderator, admin)
+  - Separate types for Videos (course) vs Lessons (standalone)
+  
+- **UI Fixes:**
+  - Fixed student video page UI (removed extra headers)
+  - Cleaned up navigation and progress bars
+  
+- **Routes Tested and Working:**
+  - Student: /student/course/course-1/video/1
+  - Instructor: /learn/lesson-1?instructor=true
+  - Standalone: /learn/lesson-1
+
+---
+
 #### Commit: `ec176ac`
 **Date:** 2025-08-11  
 **Message:** Frontend Complete With Instructor, Student and Video Page Updates
@@ -98,12 +125,12 @@
 ## Branch Information
 
 **Main Branch:** `main`  
-**Current HEAD:** `ec176ac`  
+**Current HEAD:** `38dcdf2`  
 **Remote:** `origin/main` (https://github.com/muscled-clients/unpuzzle-mvp.git)
 
 ## Stats Summary
 
-**Total Commits:** 5  
+**Total Commits:** 6  
 **Latest Update:** 2025-08-11  
 **Files Changed in Latest Commit:** 59 files  
 **Additions:** +7,692 lines  
