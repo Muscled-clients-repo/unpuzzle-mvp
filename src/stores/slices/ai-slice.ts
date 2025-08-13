@@ -1,7 +1,35 @@
 import { StateCreator } from 'zustand'
-import { AIState, AIActions, ChatMessage, TranscriptReference, VideoContext } from '@/types/app-types'
+import { AIMessage, TranscriptReference, VideoSegment } from '@/types/domain'
 import { aiService, type VideoContext as ServiceVideoContext, type TranscriptReference as ServiceTranscriptReference } from '@/services'
 import { validateChatMessage, defaultRateLimiter } from '@/utils/validation'
+
+// Local types for this slice
+interface AIState {
+  chatMessages: AIMessage[]
+  transcriptReferences: TranscriptReference[]
+  isProcessing: boolean
+  activeInteractions: number
+  error: string | null
+  metrics: {
+    totalInteractions: number
+    hintsGenerated: number
+    quizzesCompleted: number
+    reflectionsSubmitted: number
+  }
+}
+
+interface AIActions {
+  sendChatMessage: (content: string, context?: VideoSegment, transcriptRef?: TranscriptReference) => Promise<void>
+  loadChatHistory: (sessionId?: string) => Promise<void>
+  clearChatHistory: (sessionId?: string) => Promise<void>
+  addChatMessage: (content: string, context?: VideoSegment, type?: 'user' | 'ai') => void
+  addTranscriptReference: (ref: Omit<TranscriptReference, 'id' | 'timestamp'>) => void
+  setIsProcessing: (isProcessing: boolean) => void
+  incrementInteractions: () => void
+  clearChat: () => void
+  removeTranscriptReference: (id: string) => void
+  clearError: () => void
+}
 
 export interface AISlice extends AIState, AIActions {}
 
@@ -23,7 +51,7 @@ export const createAISlice: StateCreator<AISlice> = (set, get) => ({
   ...initialAIState,
 
   // Service-based actions
-  sendChatMessage: async (content: string, context?: VideoContext, transcriptRef?: TranscriptReference) => {
+  sendChatMessage: async (content: string, context?: VideoSegment, transcriptRef?: TranscriptReference) => {
     // Validate and sanitize input
     const validation = validateChatMessage(content)
     if (!validation.isValid) {
@@ -47,12 +75,12 @@ export const createAISlice: StateCreator<AISlice> = (set, get) => ({
     set({ isProcessing: true, error: null })
     
     // Add user message with sanitized content
-    const userMessage: ChatMessage = {
+    const userMessage: AIMessage = {
       id: `msg-${Date.now()}-${Math.random()}`,
       content: validation.sanitized,
-      timestamp: new Date(),
-      type: 'user',
-      context,
+      timestamp: new Date().toISOString(),
+      role: 'user',
+      videoContext: context,
     }
     
     set((state) => ({
@@ -66,8 +94,8 @@ export const createAISlice: StateCreator<AISlice> = (set, get) => ({
     try {
       // Convert to service types
       const serviceContext: ServiceVideoContext | undefined = context ? {
-        videoId: context.videoId || '',
-        timestamp: context.timestamp || 0,
+        videoId: context.videoId,
+        timestamp: context.inPoint || 0,
         transcript: context.transcript
       } : undefined
       
@@ -88,12 +116,12 @@ export const createAISlice: StateCreator<AISlice> = (set, get) => ({
       }
       
       if (result.data) {
-        const aiMessage: ChatMessage = {
+        const aiMessage: AIMessage = {
           id: result.data.id,
           content: result.data.content,
           timestamp: result.data.timestamp,
-          type: 'ai',
-          context
+          role: 'assistant',
+          videoContext: context
         }
         
         set((state) => ({
@@ -123,16 +151,16 @@ export const createAISlice: StateCreator<AISlice> = (set, get) => ({
       
       if (result.data) {
         // Convert service messages to store format
-        const messages: ChatMessage[] = result.data.map(msg => ({
+        const messages: AIMessage[] = result.data.map(msg => ({
           id: msg.id,
           content: msg.content,
           timestamp: msg.timestamp,
-          type: msg.role === 'assistant' ? 'ai' : 'user',
-          context: msg.metadata?.videoContext ? {
+          role: msg.role === 'assistant' ? 'assistant' : 'user',
+          videoContext: msg.metadata?.videoContext ? {
             videoId: msg.metadata.videoContext.videoId,
-            timestamp: msg.metadata.videoContext.timestamp,
-            duration: msg.metadata.videoContext.duration,
-            title: msg.metadata.videoContext.title
+            inPoint: msg.metadata.videoContext.timestamp || 0,
+            outPoint: (msg.metadata.videoContext.timestamp || 0) + (msg.metadata.videoContext.duration || 0),
+            purpose: 'ai-context' as const
           } : undefined
         }))
         
@@ -155,7 +183,7 @@ export const createAISlice: StateCreator<AISlice> = (set, get) => ({
   },
 
   // Legacy direct actions (kept for compatibility)
-  addChatMessage: (content: string, context?: VideoContext, type: 'user' | 'ai' = 'user') => {
+  addChatMessage: (content: string, context?: VideoSegment, type: 'user' | 'ai' = 'user') => {
     // Validate and sanitize input
     const validation = validateChatMessage(content)
     if (!validation.isValid) {
@@ -163,12 +191,12 @@ export const createAISlice: StateCreator<AISlice> = (set, get) => ({
       return
     }
     
-    const message: ChatMessage = {
+    const message: AIMessage = {
       id: `msg-${Date.now()}-${Math.random()}`,
       content: validation.sanitized,
-      timestamp: new Date(),
-      type,
-      context,
+      timestamp: new Date().toISOString(),
+      role: type === 'ai' ? 'assistant' : 'user',
+      videoContext: context,
     }
     
     set((state) => ({
@@ -184,7 +212,7 @@ export const createAISlice: StateCreator<AISlice> = (set, get) => ({
     const reference: TranscriptReference = {
       ...ref,
       id: `ref-${Date.now()}-${Math.random()}`,
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(),
     }
     
     set((state) => ({

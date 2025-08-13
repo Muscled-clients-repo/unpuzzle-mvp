@@ -1,6 +1,26 @@
 import { StateCreator } from 'zustand'
-import { UserState, UserActions, UserProfile, UserPreferences, CourseProgress } from '@/types/app-types'
+import { User, UIPreferences, CourseProgress } from '@/types/domain'
 import { UI, VIDEO } from '@/config/constants'
+
+// Local types for this slice
+interface UserState {
+  id: string | null
+  profile: User | null  // Changed from UserProfile to User
+  preferences: UIPreferences
+  progress: { [courseId: string]: CourseProgress }
+  dailyAiInteractions?: number  // UI-specific field
+  lastResetDate?: string  // UI-specific field
+}
+
+interface UserActions {
+  setUser: (profile: User) => void
+  updatePreferences: (preferences: Partial<UIPreferences>) => void
+  updateProgress: (courseId: string, progress: Partial<CourseProgress>) => void
+  useAiInteraction: () => boolean
+  resetDailyAiInteractions: () => void
+  updateSubscription: (subscription: User['subscription']) => void
+  logout: () => void
+}
 
 // Student-specific data structures
 export interface WeeklyData {
@@ -63,7 +83,7 @@ export interface UserSlice extends UserState, UserActions {
   addReflection: (reflection: Omit<Reflection, 'id'>) => void
 }
 
-const initialUserPreferences: UserPreferences = {
+const initialUserPreferences: UIPreferences = {
   theme: 'light',
   autoPlay: false,
   playbackRate: VIDEO.DEFAULT_PLAYBACK_RATE,
@@ -85,19 +105,21 @@ const initialUserState: UserState = {
   profile: null,
   preferences: initialUserPreferences,
   progress: {},
+  dailyAiInteractions: undefined,
+  lastResetDate: undefined
 }
 
 export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
   ...initialUserState,
   studentData: initialStudentData,
 
-  setUser: (profile: UserProfile) => 
+  setUser: (profile: User) => 
     set((state) => ({
       id: profile.id,
       profile,
     })),
 
-  updatePreferences: (preferences: Partial<UserPreferences>) =>
+  updatePreferences: (preferences: Partial<UIPreferences>) =>
     set((state) => ({
       preferences: {
         ...state.preferences,
@@ -112,10 +134,11 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
         [courseId]: {
           ...state.progress[courseId],
           courseId,
-          progress: 0,
-          currentTimestamp: 0,
-          completedVideos: [],
-          lastAccessed: new Date(),
+          userId: state.id || '',
+          videosCompleted: progress.videosCompleted || 0,
+          totalVideos: progress.totalVideos || 0,
+          percentComplete: progress.percentComplete || 0,
+          lastAccessedAt: new Date().toISOString(),
           ...progress,
         },
       },
@@ -129,39 +152,27 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
     const today = new Date().toDateString()
     
     // Reset daily counter if it's a new day
-    if (subscription.lastResetDate !== today && subscription.plan === 'basic') {
-      set((state) => ({
-        profile: state.profile ? {
-          ...state.profile,
-          subscription: {
-            ...state.profile.subscription!,
-            dailyAiInteractions: 0,
-            lastResetDate: today
-          }
-        } : null
-      }))
+    if (state.lastResetDate !== today && subscription.plan === 'basic') {
+      set({
+        dailyAiInteractions: 0,
+        lastResetDate: today
+      })
     }
     
     // Check limits based on plan
-    if (subscription.plan === 'premium') {
-      // Premium has unlimited AI interactions
+    if (subscription.plan === 'pro') {
+      // Pro has unlimited AI interactions
       return true
     } else if (subscription.plan === 'basic') {
-      const dailyUsed = subscription.dailyAiInteractions || 0
+      const dailyUsed = state.dailyAiInteractions || 0
       if (dailyUsed >= 3) {
         return false // Daily limit exceeded
       }
       
       // Increment counter
-      set((state) => ({
-        profile: state.profile ? {
-          ...state.profile,
-          subscription: {
-            ...state.profile.subscription!,
-            dailyAiInteractions: dailyUsed + 1
-          }
-        } : null
-      }))
+      set({
+        dailyAiInteractions: dailyUsed + 1
+      })
       
       return true
     }
@@ -170,16 +181,10 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
   },
 
   resetDailyAiInteractions: () =>
-    set((state) => ({
-      profile: state.profile ? {
-        ...state.profile,
-        subscription: state.profile.subscription ? {
-          ...state.profile.subscription,
-          dailyAiInteractions: 0,
-          lastResetDate: new Date().toDateString()
-        } : undefined
-      } : null
-    })),
+    set({
+      dailyAiInteractions: 0,
+      lastResetDate: new Date().toDateString()
+    }),
 
   updateSubscription: (subscription) =>
     set((state) => ({

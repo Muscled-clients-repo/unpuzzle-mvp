@@ -11,6 +11,15 @@ export interface User {
   avatar?: string
   role: UserRole
   subscription: Subscription
+  moderatorStats?: {
+    responsesProvided: number
+    helpfulVotes: number
+    endorsedByInstructor: number
+    specialization: string[]
+    trustScore: number
+    promotedAt: string
+    promotedBy: string
+  }
   createdAt: string
   updatedAt: string
 }
@@ -285,6 +294,26 @@ export interface TranscriptEntry {
   start: number
   end: number
   text: string
+}
+
+// ============= UI PREFERENCES =============
+export interface UIPreferences {
+  theme: 'light' | 'dark'
+  autoPlay: boolean
+  playbackRate: number
+  volume: number
+  sidebarWidth: number
+  showChatSidebar: boolean
+}
+
+// ============= TRANSCRIPT REFERENCE =============
+export interface TranscriptReference {
+  id: string
+  text: string
+  startTime: number
+  endTime: number
+  videoId: string
+  timestamp: string  // ISO string format
 }
 
 // ============= USER PREFERENCES & PROFILE =============

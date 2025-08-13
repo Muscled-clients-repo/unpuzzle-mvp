@@ -87,7 +87,7 @@ export default function StandaloneLessonPage() {
   const showChatSidebar = useAppStore((state) => state.preferences.showChatSidebar)
   const sidebarWidth = useAppStore((state) => state.preferences.sidebarWidth)
   const updatePreferences = useAppStore((state) => state.updatePreferences)
-  const fetchYouTubeTranscript = useAppStore((state) => state.fetchYouTubeTranscript)
+  // const fetchYouTubeTranscript = useAppStore((state) => state.fetchYouTubeTranscript)
   
   const [isResizing, setIsResizing] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
@@ -121,12 +121,13 @@ export default function StandaloneLessonPage() {
       trackView(lessonId)
       
       // Fetch YouTube transcript if it's a YouTube video
-      if (lesson.youtubeUrl) {
-        console.log('📺 Fetching transcript for YouTube video...')
-        fetchYouTubeTranscript(lesson.youtubeUrl)
-      } else {
-        console.log('❌ No YouTube URL found for this lesson')
-      }
+      // TODO: Implement fetchYouTubeTranscript in video-slice
+      // if (lesson.youtubeUrl) {
+      //   console.log('📺 Fetching transcript for YouTube video...')
+      //   fetchYouTubeTranscript(lesson.youtubeUrl)
+      // } else {
+      //   console.log('❌ No YouTube URL found for this lesson')
+      // }
     }
   }, [lessonId, lesson?.id, lesson?.youtubeUrl])
   
