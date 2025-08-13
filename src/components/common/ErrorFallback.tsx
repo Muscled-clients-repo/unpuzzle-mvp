@@ -16,10 +16,30 @@ import {
 } from 'lucide-react'
 import { useState, useCallback } from 'react'
 import type { ErrorFallbackProps } from './ErrorBoundary'
+import type { AppError } from '@/utils/error-handler'
 
-export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps) {
+export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps | { error: string | null, resetError?: () => void, context?: any }) {
   const [showDetails, setShowDetails] = useState(false)
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'success' | 'error'>('idle')
+  
+  // Handle string errors or null errors
+  const errorObj: AppError = typeof error === 'string' ? {
+    type: 'unknown',
+    message: error,
+    userMessage: error,
+    timestamp: new Date(),
+    recoverable: true,
+    details: {},
+    code: undefined
+  } : error || {
+    type: 'unknown',
+    message: 'An unexpected error occurred',
+    userMessage: 'An unexpected error occurred',
+    timestamp: new Date(),
+    recoverable: true,
+    details: {},
+    code: undefined
+  }
 
   const handleGoHome = () => {
     // Navigate to home page
@@ -57,12 +77,12 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
       }
     }
     
-    // Modern clipboard API with proper error handling
+    // Modern clipboard API with proper errorObj handling
     try {
       await navigator.clipboard.writeText(text)
       return true
     } catch (err) {
-      console.error('Failed to copy to clipboard:', err)
+      console.errorObj('Failed to copy to clipboard:', err)
       return false
     }
   }, [])
@@ -71,9 +91,9 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
     setCopyStatus('copying')
     
     const bugReport = {
-      error: error.message,
-      type: error.type,
-      timestamp: error.timestamp,
+      error: errorObj.message,
+      type: errorObj.type,
+      timestamp: errorObj.timestamp,
       context: context,
       userAgent: navigator.userAgent,
       url: window.location.href
@@ -90,7 +110,7 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
       // Reset status after 3 seconds
       setTimeout(() => setCopyStatus('idle'), 3000)
     } else {
-      setCopyStatus('error')
+      setCopyStatus('errorObj')
       // Show manual copy dialog as fallback
       const reportText = JSON.stringify(bugReport, null, 2)
       const modal = document.createElement('div')
@@ -99,7 +119,7 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
                     background: white; padding: 20px; border: 1px solid #ccc; 
                     border-radius: 8px; z-index: 9999; max-width: 500px;">
           <h3 style="margin-bottom: 10px;">Copy Error Report</h3>
-          <p style="margin-bottom: 10px;">Please manually copy the error report below:</p>
+          <p style="margin-bottom: 10px;">Please manually copy the errorObj report below:</p>
           <textarea style="width: 100%; height: 200px; font-family: monospace; font-size: 12px;" 
                     readonly>${reportText}</textarea>
           <button onclick="this.parentElement.remove()" 
@@ -111,7 +131,7 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
   }
 
   const getErrorIcon = () => {
-    switch (error.type) {
+    switch (errorObj.type) {
       case 'network':
         return '🌐'
       case 'authentication':
@@ -130,7 +150,7 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
   }
 
   const getErrorColor = () => {
-    switch (error.type) {
+    switch (errorObj.type) {
       case 'network':
         return 'bg-blue-50 border-blue-200'
       case 'authentication':
@@ -161,22 +181,22 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
           </CardTitle>
           
           <CardDescription className="text-lg">
-            {error.userMessage}
+            {errorObjObj.userMessage}
           </CardDescription>
 
           <div className="flex justify-center gap-2 mt-4">
             <Badge variant="outline" className="capitalize">
-              {error.type.replace('_', ' ')}
+              {errorObjObj.type.replace('_', ' ')}
             </Badge>
             
-            {error.recoverable && (
+            {errorObjObj.recoverable && (
               <Badge variant="secondary">
                 Recoverable
               </Badge>
             )}
             
             <Badge variant="outline">
-              {error.timestamp.toLocaleTimeString()}
+              {errorObjObj.timestamp.toLocaleTimeString()}
             </Badge>
           </div>
         </CardHeader>
@@ -188,12 +208,12 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
             <AlertTitle>What you can do:</AlertTitle>
             <AlertDescription>
               <ul className="list-disc list-inside mt-2 space-y-1">
-                {error.recoverable && (
+                {errorObj.recoverable && (
                   <li>Try refreshing the page or retrying the action</li>
                 )}
                 <li>Check your internet connection</li>
                 <li>Wait a few minutes and try again</li>
-                {!error.recoverable && (
+                {!errorObj.recoverable && (
                   <li>Contact support if the problem persists</li>
                 )}
               </ul>
@@ -202,7 +222,7 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
 
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-3 justify-center">
-            {error.recoverable && (
+            {errorObj.recoverable && (
               <Button onClick={resetError} className="flex items-center gap-2">
                 <RefreshCw className="h-4 w-4" />
                 Try Again
@@ -238,7 +258,7 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
                   Copied!
                 </>
               )}
-              {copyStatus === 'error' && (
+              {copyStatus === 'errorObj' && (
                 <>
                   <AlertCircle className="h-4 w-4 text-red-600" />
                   Copy Failed
@@ -271,21 +291,21 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
             {showDetails && (
               <div className="mt-4 p-4 bg-gray-100 rounded-lg text-sm font-mono space-y-2">
                 <div>
-                  <strong>Error Type:</strong> {error.type}
+                  <strong>Error Type:</strong> {errorObj.type}
                 </div>
                 
                 <div>
-                  <strong>Message:</strong> {error.message}
+                  <strong>Message:</strong> {errorObj.message}
                 </div>
                 
-                {error.code && (
+                {errorObj.code && (
                   <div>
-                    <strong>Code:</strong> {error.code}
+                    <strong>Code:</strong> {errorObj.code}
                   </div>
                 )}
                 
                 <div>
-                  <strong>Timestamp:</strong> {error.timestamp.toISOString()}
+                  <strong>Timestamp:</strong> {errorObj.timestamp.toISOString()}
                 </div>
                 
                 {context?.component && (
@@ -300,11 +320,11 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
                   </div>
                 )}
                 
-                {error.details && (
+                {errorObj.details && (
                   <div>
                     <strong>Details:</strong>
                     <pre className="mt-2 p-2 bg-white rounded text-xs overflow-auto max-h-32">
-                      {JSON.stringify(error.details, null, 2)}
+                      {JSON.stringify(errorObj.details, null, 2)}
                     </pre>
                   </div>
                 )}
@@ -317,14 +337,14 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
   )
 }
 
-// Specialized error fallbacks for different contexts
-export function VideoErrorFallback({ error, resetError }: ErrorFallbackProps) {
+// Specialized errorObj fallbacks for different contexts
+export function VideoErrorFallback({ errorObj, resetError }: ErrorFallbackProps) {
   return (
     <div className="aspect-video flex items-center justify-center bg-gray-100 rounded-lg">
       <div className="text-center p-6">
         <div className="text-4xl mb-4">📹</div>
         <h3 className="text-lg font-semibold mb-2">Video Error</h3>
-        <p className="text-gray-600 mb-4">{error.userMessage}</p>
+        <p className="text-gray-600 mb-4">{errorObj.userMessage}</p>
         <Button onClick={resetError} size="sm">
           <RefreshCw className="h-4 w-4 mr-2" />
           Retry Video
@@ -334,14 +354,14 @@ export function VideoErrorFallback({ error, resetError }: ErrorFallbackProps) {
   )
 }
 
-export function ChatErrorFallback({ error, resetError }: ErrorFallbackProps) {
+export function ChatErrorFallback({ errorObj, resetError }: ErrorFallbackProps) {
   return (
     <div className="p-4 border border-red-200 bg-red-50 rounded-lg">
       <div className="flex items-center gap-2 mb-2">
         <AlertCircle className="h-4 w-4 text-red-500" />
         <span className="font-medium text-red-800">Chat Error</span>
       </div>
-      <p className="text-red-700 text-sm mb-3">{error.userMessage}</p>
+      <p className="text-red-700 text-sm mb-3">{errorObj.userMessage}</p>
       <Button onClick={resetError} size="sm" variant="outline">
         <RefreshCw className="h-4 w-4 mr-2" />
         Retry

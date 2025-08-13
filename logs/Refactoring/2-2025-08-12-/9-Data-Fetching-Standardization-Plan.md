@@ -185,6 +185,14 @@ if (!data) return <div>No data found</div>
 
 ## 🔧 Implementation Steps
 
+### **IMPORTANT: Testing Protocol**
+**Before EVERY commit:**
+1. Save all changes
+2. Test the route in browser
+3. Check browser console for errors
+4. Ask user to verify it works
+5. Only commit after user confirmation
+
 ### **Day 1: Remove Direct Mock Data Access**
 
 #### **Task List - Phase 1A: Audit & Prepare (30 mins)**
@@ -203,7 +211,8 @@ if (!data) return <div>No data found</div>
 - [ ] Add loading state check
 - [ ] Add error state check
 - [ ] Test the page loads correctly
-- [ ] Commit this single file change
+- [ ] **ASK USER TO TEST BEFORE COMMITTING**
+- [ ] Commit this single file change only after user confirms it works
 
 #### **Task List - Phase 1C: Fix Course Detail Page (1.5 hours)**
 - [ ] Open `/src/app/course/[id]/page.tsx`
