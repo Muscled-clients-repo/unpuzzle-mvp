@@ -342,7 +342,7 @@ export function AIChatSidebar({
               >
                 <p className="text-sm whitespace-pre-line">{message.content}</p>
                 <span className="mt-1 block text-xs opacity-50">
-                  {message.timestamp.toLocaleTimeString([], {
+                  {new Date(message.timestamp).toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}

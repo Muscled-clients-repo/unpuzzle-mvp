@@ -15,6 +15,8 @@ export interface StudentCourseState {
 export interface StudentCourseActions {
   loadEnrolledCourses: (userId: string) => Promise<void>
   loadRecommendedCourses: (userId: string) => Promise<void>
+  loadAllCourses: () => Promise<void>
+  loadCourseById: (courseId: string) => Promise<void>
   loadCourseProgress: (userId: string, courseId: string) => Promise<void>
   enrollInCourse: (userId: string, courseId: string) => Promise<void>
   setCurrentCourse: (course: Course | null) => void
@@ -32,7 +34,7 @@ const initialState: StudentCourseState = {
   error: null,
 }
 
-export const createStudentCourseSlice: StateCreator<StudentCourseSlice> = (set) => ({
+export const createStudentCourseSlice: StateCreator<StudentCourseSlice> = (set, get) => ({
   ...initialState,
 
   loadEnrolledCourses: async (userId: string) => {
@@ -56,6 +58,30 @@ export const createStudentCourseSlice: StateCreator<StudentCourseSlice> = (set) 
       set({ loading: false, error: result.error })
     } else {
       set({ loading: false, recommendedCourses: result.data || [], error: null })
+    }
+  },
+
+  loadAllCourses: async () => {
+    set({ loading: true, error: null })
+    
+    const result = await studentCourseService.getAllCourses()
+    
+    if (result.error) {
+      set({ loading: false, error: result.error })
+    } else {
+      set({ loading: false, recommendedCourses: result.data || [], error: null })
+    }
+  },
+
+  loadCourseById: async (courseId: string) => {
+    set({ loading: true, error: null })
+    
+    const result = await studentCourseService.getCourseById(courseId)
+    
+    if (result.error) {
+      set({ loading: false, error: result.error })
+    } else {
+      set({ loading: false, currentCourse: result.data || null, error: null })
     }
   },
 

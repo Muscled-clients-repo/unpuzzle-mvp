@@ -4,7 +4,7 @@ import {
   Course, 
   Video,
   Lesson,
-  StudentLessonData,
+  // StudentLessonData,  // TODO: Currently unused - no UI calls this
   ServiceResult,
   CourseProgress
 } from '@/types/domain'
@@ -180,6 +180,109 @@ export class StudentCourseService {
       : { data: response.data }
   }
 
+  async getAllCourses(): Promise<ServiceResult<Course[]>> {
+    if (useMockData) {
+      // Transform ALL mock courses for public browsing
+      const transformedCourses: Course[] = mockCourses.map(course => ({
+        id: course.id,
+        title: course.title,
+        description: course.description,
+        thumbnailUrl: course.thumbnail,
+        instructor: {
+          id: `inst-${course.id}`,
+          name: course.instructor.name,
+          email: `${course.instructor.name.toLowerCase().replace(' ', '.')}@example.com`,
+          avatar: course.instructor.avatar
+        },
+        price: course.price,
+        duration: parseInt(course.duration) || 0,
+        difficulty: course.level,
+        tags: [course.category],
+        videos: course.videos.map(v => ({
+          id: v.id,
+          courseId: course.id,
+          title: v.title,
+          description: v.description,
+          duration: parseInt(v.duration) || 600,
+          order: parseInt(v.id),
+          videoUrl: v.videoUrl,
+          thumbnailUrl: v.thumbnailUrl,
+          transcript: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })),
+        enrollmentCount: course.students,
+        rating: course.rating,
+        isPublished: true,
+        isFree: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }))
+      
+      return { 
+        data: transformedCourses
+      }
+    }
+
+    const response = await apiClient.get<Course[]>(`/api/courses`)
+    return response.error
+      ? { error: response.error }
+      : { data: response.data }
+  }
+
+  async getCourseById(courseId: string): Promise<ServiceResult<Course | null>> {
+    if (useMockData) {
+      const course = mockCourses.find(c => c.id === courseId)
+      if (!course) return { data: null }
+
+      // Transform the found course to match domain Course type
+      const transformedCourse: Course = {
+        id: course.id,
+        title: course.title,
+        description: course.description,
+        thumbnailUrl: course.thumbnail,
+        instructor: {
+          id: `inst-${course.id}`,
+          name: course.instructor.name,
+          email: `${course.instructor.name.toLowerCase().replace(' ', '.')}@example.com`,
+          avatar: course.instructor.avatar
+        },
+        price: course.price,
+        duration: parseInt(course.duration) || 0,
+        difficulty: course.level,
+        tags: [course.category],
+        videos: course.videos.map(v => ({
+          id: v.id,
+          courseId: course.id,
+          title: v.title,
+          description: v.description,
+          duration: parseInt(v.duration) || 600,
+          order: parseInt(v.id),
+          videoUrl: v.videoUrl,
+          thumbnailUrl: v.thumbnailUrl,
+          transcript: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })),
+        enrollmentCount: course.students,
+        rating: course.rating,
+        isPublished: true,
+        isFree: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+      
+      return { 
+        data: transformedCourse
+      }
+    }
+
+    const response = await apiClient.get<Course>(`/api/courses/${courseId}`)
+    return response.error
+      ? { error: response.error }
+      : { data: response.data }
+  }
+
   async getPublicLessons(): Promise<ServiceResult<Lesson[]>> {
     if (useMockData) {
       return {
@@ -238,85 +341,86 @@ export class StudentCourseService {
       : { data: response.data }
   }
 
-  async getStudentLessonData(lessonId: string): Promise<ServiceResult<StudentLessonData>> {
-    if (useMockData) {
-      const baseLesson: Lesson = {
-        id: lessonId,
-        title: 'Learn React In 30 Minutes',
-        description: 'A comprehensive introduction to React',
-        duration: 1800,
-        videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-        thumbnailUrl: 'https://img.youtube.com/vi/hQAHSlTtcmY/maxresdefault.jpg',
-        instructor: {
-          id: 'inst-1',
-          name: 'Sarah Chen',
-          email: 'sarah@example.com',
-          avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah'
-        },
-        tags: ['React', 'JavaScript'],
-        difficulty: 'beginner',
-        isFree: true,
-        isPublished: true,
-        viewCount: 1543,
-        rating: 4.8,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }
+  // TODO: Method disabled - StudentLessonData type removed (no UI usage)
+  // async getStudentLessonData(lessonId: string): Promise<ServiceResult<StudentLessonData>> {
+  //   if (useMockData) {
+  //     const baseLesson: Lesson = {
+  //       id: lessonId,
+  //       title: 'Learn React In 30 Minutes',
+  //       description: 'A comprehensive introduction to React',
+  //       duration: 1800,
+  //       videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+  //       thumbnailUrl: 'https://img.youtube.com/vi/hQAHSlTtcmY/maxresdefault.jpg',
+  //       instructor: {
+  //         id: 'inst-1',
+  //         name: 'Sarah Chen',
+  //         email: 'sarah@example.com',
+  //         avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah'
+  //       },
+  //       tags: ['React', 'JavaScript'],
+  //       difficulty: 'beginner',
+  //       isFree: true,
+  //       isPublished: true,
+  //       viewCount: 1543,
+  //       rating: 4.8,
+  //       createdAt: new Date().toISOString(),
+  //       updatedAt: new Date().toISOString()
+  //     }
 
-      const studentData: StudentLessonData = {
-        ...baseLesson,
-        aiContextEnabled: true,
-        hasAccess: true,
-        progress: {
-          userId: 'user-1',
-          videoId: lessonId,
-          watchedSeconds: 900,
-          totalSeconds: 1800,
-          percentComplete: 50,
-          lastWatchedAt: new Date().toISOString(),
-          reflectionCount: 3
-        },
-        reflections: [
-          {
-            id: 'ref-1',
-            userId: 'user-1',
-            videoId: lessonId,
-            content: 'Great explanation of React basics',
-            timestamp: 120,
-            timeInSeconds: 120,
-            type: 'text',
-            status: 'responded',
-            response: 'Glad you found it helpful!',
-            createdAt: new Date().toISOString()
-          }
-        ],
-        quizzes: [
-          {
-            id: 'quiz-1',
-            videoId: lessonId,
-            timestamp: 300,
-            question: 'What is JSX?',
-            options: [
-              'JavaScript XML',
-              'Java Syntax Extension',
-              'JSON XML',
-              'JavaScript Extension'
-            ],
-            correctAnswer: 0,
-            explanation: 'JSX stands for JavaScript XML',
-            difficulty: 'easy'
-          }
-        ]
-      }
+  //     const studentData: StudentLessonData = {
+  //       ...baseLesson,
+  //       aiContextEnabled: true,
+  //       hasAccess: true,
+  //       progress: {
+  //         userId: 'user-1',
+  //         videoId: lessonId,
+  //         watchedSeconds: 900,
+  //         totalSeconds: 1800,
+  //         percentComplete: 50,
+  //         lastWatchedAt: new Date().toISOString(),
+  //         reflectionCount: 3
+  //       },
+  //       reflections: [
+  //         {
+  //           id: 'ref-1',
+  //           userId: 'user-1',
+  //           videoId: lessonId,
+  //           content: 'Great explanation of React basics',
+  //           timestamp: 120,
+  //           timeInSeconds: 120,
+  //           type: 'text',
+  //           status: 'responded',
+  //           response: 'Glad you found it helpful!',
+  //           createdAt: new Date().toISOString()
+  //         }
+  //       ],
+  //       quizzes: [
+  //         {
+  //           id: 'quiz-1',
+  //           videoId: lessonId,
+  //           timestamp: 300,
+  //           question: 'What is JSX?',
+  //           options: [
+  //             'JavaScript XML',
+  //             'Java Syntax Extension',
+  //             'JSON XML',
+  //             'JavaScript Extension'
+  //           ],
+  //           correctAnswer: 0,
+  //           explanation: 'JSX stands for JavaScript XML',
+  //           difficulty: 'easy'
+  //         }
+  //       ]
+  //     }
       
-      return { data: studentData }
-    }
+  //     return { data: studentData }
+  //   }
 
-    const response = await apiClient.get<StudentLessonData>(`/api/student/lessons/${lessonId}`)
-    return response.error
-      ? { error: response.error }
-      : { data: response.data }
-  }
+  //   const response = await apiClient.get<StudentLessonData>(`/api/student/lessons/${lessonId}`)
+  //   return response.error
+  //     ? { error: response.error }
+  //     : { data: response.data }
+  // }
 
   async markVideoComplete(
     userId: string,

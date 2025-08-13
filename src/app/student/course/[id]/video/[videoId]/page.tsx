@@ -39,7 +39,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { mockCourses, mockUsers } from "@/data/mock"
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -68,7 +67,9 @@ export default function VideoPlayerPage() {
     currentVideo: storeVideoData,
     loadStudentVideo,
     reflections,
-    addReflection
+    addReflection,
+    currentCourse,
+    loadCourseById
   } = useAppStore()
   
   // OLD: Keep lessons for standalone mode
@@ -84,9 +85,11 @@ export default function VideoPlayerPage() {
   useEffect(() => {
     if (!isStandaloneLesson) {
       console.log('📹 Loading student video data for:', videoId)
+      console.log('📚 Loading course data for:', courseId)
       loadStudentVideo(videoId)
+      loadCourseById(courseId) // Also load course data
     }
-  }, [isStandaloneLesson, videoId, loadStudentVideo])
+  }, [isStandaloneLesson, videoId, courseId, loadStudentVideo, loadCourseById])
   
   // Load lessons if needed for standalone
   useEffect(() => {
@@ -105,8 +108,8 @@ export default function VideoPlayerPage() {
     }
   }, [isStandaloneLesson, videoId, lessons.length])
   
-  // Get video data based on context - prioritize store data for course videos
-  const course = !isStandaloneLesson ? mockCourses.find(c => c.id === courseId) : null
+  // Get video data based on context - use store data for course videos
+  const course = !isStandaloneLesson ? currentCourse : null
   const standaloneLesson = isStandaloneLesson ? lessons.find(l => l.id === videoId) : null
   
   const currentVideo = isStandaloneLesson 
@@ -121,7 +124,7 @@ export default function VideoPlayerPage() {
           timestamps: []
         }
       : null
-    : storeVideoData || course?.videos.find(v => v.id === videoId) // Use store data first, fallback to mock
+    : storeVideoData || course?.videos?.find(v => v.id === videoId) // Use store video data or find in course videos
     
   const currentVideoIndex = !isStandaloneLesson ? (course?.videos.findIndex(v => v.id === videoId) ?? -1) : 0
 
@@ -289,48 +292,6 @@ export default function VideoPlayerPage() {
                   </Button>
                 </div>
               </div>
-
-              {/* Video Timestamps */}
-              {currentVideo.timestamps && currentVideo.timestamps.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <List className="h-5 w-5" />
-                      Chapter Overview
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {currentVideo.timestamps.map((timestamp) => (
-                        <div
-                          key={timestamp.time}
-                          className="flex items-center justify-between p-2 rounded-lg hover:bg-muted cursor-pointer"
-                          onClick={() => {
-                            // Would seek to timestamp in real implementation
-                            console.log('Seek to', timestamp.time)
-                          }}
-                        >
-                          <div className="flex items-center gap-3">
-                            <Badge 
-                              variant={
-                                timestamp.type === "chapter" ? "default" :
-                                timestamp.type === "concept" ? "secondary" : "outline"
-                              }
-                              className="text-xs"
-                            >
-                              {timestamp.type}
-                            </Badge>
-                            <span className="font-medium">{timestamp.label}</span>
-                          </div>
-                          <span className="text-sm text-muted-foreground">
-                            {Math.floor(timestamp.time / 60)}:{(timestamp.time % 60).toString().padStart(2, '0')}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
 
               {/* Course Playlist - Only show for course videos */}
               {!isStandaloneLesson && course && (

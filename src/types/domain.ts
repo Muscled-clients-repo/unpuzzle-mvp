@@ -11,6 +11,15 @@ export interface User {
   avatar?: string
   role: UserRole
   subscription: Subscription
+  moderatorStats?: {
+    responsesProvided: number
+    helpfulVotes: number
+    endorsedByInstructor: number
+    specialization: string[]
+    trustScore: number
+    promotedAt: string
+    promotedBy: string
+  }
   createdAt: string
   updatedAt: string
 }
@@ -80,26 +89,6 @@ export interface Lesson {
   updatedAt: string
 }
 
-// Enhanced lesson data for logged-in students (AI features unlocked)
-export interface StudentLessonData extends Lesson {
-  progress?: VideoProgress
-  reflections?: Reflection[]
-  quizzes?: Quiz[]
-  aiContextEnabled: boolean  // Always true for students
-  hasAccess: boolean  // Based on subscription/payment for premium lessons
-}
-
-// Analytics data for lesson owner (instructor)
-export interface InstructorLessonData extends Lesson {
-  studentActivity: StudentActivity[]
-  confusionHotspots: ConfusionHotspot[]
-  aggregateMetrics: VideoMetrics
-  earnings?: {
-    totalRevenue: number
-    monthlyRevenue: number
-    viewsThisMonth: number
-  }
-}
 
 // ============= STUDENT FEATURES =============
 export interface Reflection {
@@ -287,68 +276,33 @@ export interface TranscriptEntry {
   text: string
 }
 
+// ============= UI PREFERENCES =============
+export interface UIPreferences {
+  theme: 'light' | 'dark'
+  autoPlay: boolean
+  playbackRate: number
+  volume: number
+  sidebarWidth: number
+  showChatSidebar: boolean
+}
+
+// ============= TRANSCRIPT REFERENCE =============
+export interface TranscriptReference {
+  id: string
+  text: string
+  startTime: number
+  endTime: number
+  videoId: string
+  timestamp: string  // ISO string format
+}
+
 // ============= USER PREFERENCES & PROFILE =============
 // These were in user-service.ts, moved here for repositories
-export interface UserPreferences {
-  theme: 'light' | 'dark' | 'system'
-  language: string
-  notifications: {
-    email: boolean
-    push: boolean
-    inApp: boolean
-  }
-  privacy: {
-    showProfile: boolean
-    showProgress: boolean
-  }
-}
 
-export interface UserProfile {
-  bio?: string
-  location?: string
-  website?: string
-  social?: {
-    twitter?: string
-    linkedin?: string
-    github?: string
-  }
-  skills?: string[]
-  interests?: string[]
-}
 
-export interface UserLearningPath {
-  id: string
-  userId: string
-  name: string
-  description?: string
-  courses: string[]
-  targetCompletionDate?: string
-  progress: number
-  createdAt: string
-}
-
-export interface UserAchievement {
-  id: string
-  userId: string
-  type: string
-  name: string
-  description: string
-  earnedAt: string
-  metadata?: any
-}
 
 // ============= VIDEO METADATA =============
 // These were in video-service.ts, moved here for repositories
-export interface VideoMetadata {
-  id: string
-  title: string
-  description?: string
-  duration: number
-  tags?: string[]
-  difficulty?: 'beginner' | 'intermediate' | 'advanced'
-  language?: string
-  subtitles?: string[]
-}
 
 export interface TranscriptSegment {
   id: string
@@ -366,10 +320,26 @@ export interface ServiceResult<T> {
   loading?: boolean
 }
 
-export interface PaginatedResult<T> {
-  data: T[]
-  total: number
-  page: number
-  pageSize: number
-  hasMore: boolean
-}
+// ============= COMMENTED OUT TYPES (UNUSED) =============
+// TODO: Connect to UI - currently unused (only in service mock data)
+
+// Enhanced lesson data for logged-in students (AI features unlocked)
+// export interface StudentLessonData extends Lesson {
+//   progress?: VideoProgress
+//   reflections?: Reflection[]
+//   quizzes?: Quiz[]
+//   aiContextEnabled: boolean  // Always true for students
+//   hasAccess: boolean  // Based on subscription/payment for premium lessons
+// }
+
+// Analytics data for lesson owner (instructor)
+// export interface InstructorLessonData extends Lesson {
+//   studentActivity: StudentActivity[]
+//   confusionHotspots: ConfusionHotspot[]
+//   aggregateMetrics: VideoMetrics
+//   earnings?: {
+//     totalRevenue: number
+//     monthlyRevenue: number
+//     viewsThisMonth: number
+//   }
+// }

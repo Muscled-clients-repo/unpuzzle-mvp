@@ -4,7 +4,7 @@ import {
   Course, 
   Video,
   Lesson,
-  InstructorLessonData,
+  // InstructorLessonData,  // TODO: Currently unused - no UI calls this
   ServiceResult,
   StudentActivity
 } from '@/types/domain'
@@ -262,84 +262,85 @@ export class InstructorCourseService {
       : { data: undefined }
   }
 
-  async getInstructorLessonData(lessonId: string): Promise<ServiceResult<InstructorLessonData>> {
-    if (useMockData) {
-      const baseLesson: Lesson = {
-        id: lessonId,
-        title: 'Learn React In 30 Minutes',
-        description: 'A comprehensive introduction to React',
-        duration: 1800,
-        videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-        thumbnailUrl: 'https://img.youtube.com/vi/hQAHSlTtcmY/maxresdefault.jpg',
-        instructor: {
-          id: 'inst-1',
-          name: 'Sarah Chen',
-          email: 'sarah@example.com',
-          avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah'
-        },
-        tags: ['React', 'JavaScript'],
-        difficulty: 'beginner',
-        isFree: true,
-        isPublished: true,
-        viewCount: 1543,
-        rating: 4.8,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }
+  // TODO: Method disabled - InstructorLessonData type removed (no UI usage)
+  // async getInstructorLessonData(lessonId: string): Promise<ServiceResult<InstructorLessonData>> {
+  //   if (useMockData) {
+  //     const baseLesson: Lesson = {
+  //       id: lessonId,
+  //       title: 'Learn React In 30 Minutes',
+  //       description: 'A comprehensive introduction to React',
+  //       duration: 1800,
+  //       videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+  //       thumbnailUrl: 'https://img.youtube.com/vi/hQAHSlTtcmY/maxresdefault.jpg',
+  //       instructor: {
+  //         id: 'inst-1',
+  //         name: 'Sarah Chen',
+  //         email: 'sarah@example.com',
+  //         avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah'
+  //       },
+  //       tags: ['React', 'JavaScript'],
+  //       difficulty: 'beginner',
+  //       isFree: true,
+  //       isPublished: true,
+  //       viewCount: 1543,
+  //       rating: 4.8,
+  //       createdAt: new Date().toISOString(),
+  //       updatedAt: new Date().toISOString()
+  //     }
 
-      const instructorData: InstructorLessonData = {
-        ...baseLesson,
-        studentActivity: [
-          {
-            studentId: 'student-1',
-            studentName: 'John Doe',
-            videoId: lessonId,
-            timestamp: 120,
-            type: 'reflection',
-            content: 'Great explanation!',
-            needsResponse: true
-          },
-          {
-            studentId: 'student-2',
-            studentName: 'Jane Smith',
-            videoId: lessonId,
-            timestamp: 300,
-            type: 'confusion',
-            content: 'Lost at this point',
-            needsResponse: true
-          }
-        ],
-        confusionHotspots: [
-          {
-            timestamp: 300,
-            studentCount: 5,
-            topic: 'State management',
-            resolved: false
-          }
-        ],
-        aggregateMetrics: {
-          totalViews: 1543,
-          avgWatchTime: 1200,
-          completionRate: 0.67,
-          confusionPoints: [],
-          quizPassRate: 0.75,
-          reflectionCount: 89
-        },
-        earnings: {
-          totalRevenue: 4200,
-          monthlyRevenue: 650,
-          viewsThisMonth: 234
-        }
-      }
+  //     const instructorData: InstructorLessonData = {
+  //       ...baseLesson,
+  //       studentActivity: [
+  //         {
+  //           studentId: 'student-1',
+  //           studentName: 'John Doe',
+  //           videoId: lessonId,
+  //           timestamp: 120,
+  //           type: 'reflection',
+  //           content: 'Great explanation!',
+  //           needsResponse: true
+  //         },
+  //         {
+  //           studentId: 'student-2',
+  //           studentName: 'Jane Smith',
+  //           videoId: lessonId,
+  //           timestamp: 300,
+  //           type: 'confusion',
+  //           content: 'Lost at this point',
+  //           needsResponse: true
+  //         }
+  //       ],
+  //       confusionHotspots: [
+  //         {
+  //           timestamp: 300,
+  //           studentCount: 5,
+  //           topic: 'State management',
+  //           resolved: false
+  //         }
+  //       ],
+  //       aggregateMetrics: {
+  //         totalViews: 1543,
+  //         avgWatchTime: 1200,
+  //         completionRate: 0.67,
+  //         confusionPoints: [],
+  //         quizPassRate: 0.75,
+  //         reflectionCount: 89
+  //       },
+  //       earnings: {
+  //         totalRevenue: 4200,
+  //         monthlyRevenue: 650,
+  //         viewsThisMonth: 234
+  //       }
+  //     }
       
-      return { data: instructorData }
-    }
+  //     return { data: instructorData }
+  //   }
 
-    const response = await apiClient.get<InstructorLessonData>(`/api/instructor/lessons/${lessonId}`)
-    return response.error
-      ? { error: response.error }
-      : { data: response.data }
-  }
+  //   const response = await apiClient.get<InstructorLessonData>(`/api/instructor/lessons/${lessonId}`)
+  //   return response.error
+  //     ? { error: response.error }
+  //     : { data: response.data }
+  // }
 
   async getStudentSubmissions(
     courseId: string,
