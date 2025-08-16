@@ -41,9 +41,17 @@ export interface QuizState {
   isComplete: boolean
 }
 
+export interface ReflectionData {
+  type: 'voice' | 'screenshot' | 'loom'
+  content?: string  // URL or base64 data
+  duration?: number // For voice memos
+  transcript?: string // For voice transcription
+  videoTimestamp?: number // Video timestamp when reflection was made
+}
+
 export interface Message {
   id: string
-  type: 'system' | 'agent-prompt' | 'ai' | 'user' | 'quiz-question' | 'quiz-result'
+  type: 'system' | 'agent-prompt' | 'ai' | 'user' | 'quiz-question' | 'quiz-result' | 'reflection-options' | 'reflection-complete'
   agentType?: 'hint' | 'quiz' | 'reflect' | 'path'
   state: MessageState
   message: string
@@ -51,6 +59,7 @@ export interface Message {
   linkedMessageId?: string
   quizData?: QuizQuestion
   quizState?: QuizState
+  reflectionData?: ReflectionData
   actions?: {
     onAccept?: () => void
     onReject?: () => void
@@ -74,6 +83,6 @@ export interface SystemContext {
 }
 
 export interface Action {
-  type: 'AGENT_BUTTON_CLICKED' | 'VIDEO_MANUALLY_PAUSED' | 'VIDEO_PLAYED' | 'ACCEPT_AGENT' | 'REJECT_AGENT' | 'QUIZ_ANSWER_SELECTED'
+  type: 'AGENT_BUTTON_CLICKED' | 'VIDEO_MANUALLY_PAUSED' | 'VIDEO_PLAYED' | 'ACCEPT_AGENT' | 'REJECT_AGENT' | 'QUIZ_ANSWER_SELECTED' | 'REFLECTION_SUBMITTED' | 'REFLECTION_TYPE_CHOSEN' | 'REFLECTION_CANCELLED'
   payload: any
 }

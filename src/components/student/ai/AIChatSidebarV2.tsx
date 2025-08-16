@@ -1,33 +1,54 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Message, MessageState } from "@/lib/video-agent-system"
+import { Message, MessageState, ReflectionData } from "@/lib/video-agent-system"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Puzzle, Send, Sparkles, Bot, User, Pause, Lightbulb, CheckCircle2, MessageSquare, Route, Clock, Brain, Zap, Target } from "lucide-react"
+import { Puzzle, Send, Sparkles, Bot, User, Pause, Lightbulb, CheckCircle2, MessageSquare, Route, Clock, Brain, Zap, Target, Mic, Camera, Video, Upload, Square, Play, Trash2, MicOff, Activity } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { AIActivityLog } from "./AIActivityLog"
 
 interface AIChatSidebarV2Props {
   messages: Message[]
+  isVideoPlaying?: boolean
   onAgentRequest: (type: string) => void
   onAgentAccept: (id: string) => void
   onAgentReject: (id: string) => void
   onQuizAnswer?: (questionId: string, selectedAnswer: number) => void
+  onReflectionSubmit?: (type: string, data: any) => void
+  onReflectionTypeChosen?: (type: string) => void
+  onReflectionCancel?: () => void
 }
 
 export function AIChatSidebarV2({
   messages,
+  isVideoPlaying = false,
   onAgentRequest,
   onAgentAccept,
   onAgentReject,
-  onQuizAnswer
+  onQuizAnswer,
+  onReflectionSubmit,
+  onReflectionTypeChosen,
+  onReflectionCancel
 }: AIChatSidebarV2Props) {
   const [inputValue, setInputValue] = useState("")
   const [isTyping, setIsTyping] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
+  const [isPaused, setIsPaused] = useState(false)
+  const [recordingTime, setRecordingTime] = useState(0)
+  const [hasRecording, setHasRecording] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [playbackTime, setPlaybackTime] = useState(0)
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
+  const [loomUrl, setLoomUrl] = useState('')
+  const [showActivityLog, setShowActivityLog] = useState(false)
+  const [acceptedAgents, setAcceptedAgents] = useState<Set<string>>(new Set())
   const scrollRef = useRef<HTMLDivElement>(null)
+  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const playbackIntervalRef = useRef<NodeJS.Timeout | null>(null)
   
   // Add welcome message if no messages
   const displayMessages: Message[] = messages.length === 0 ? [{
@@ -39,6 +60,27 @@ export function AIChatSidebarV2({
   }] : messages
 
   // Scroll to bottom when messages change
+  // Clear accepted agents when reflection options appear (means they accepted)
+  useEffect(() => {
+    const hasReflectionOptions = messages.some(msg => msg.type === 'reflection-options')
+    if (hasReflectionOptions) {
+      setAcceptedAgents(new Set())
+    }
+  }, [messages])
+
+  // Pause recording when video plays
+  useEffect(() => {
+    if (isVideoPlaying && isRecording && !isPaused) {
+      // Video started playing while recording - pause the recording
+      console.log('[Sidebar] Video playing - pausing voice recording')
+      setIsPaused(true)
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current)
+        recordingIntervalRef.current = null
+      }
+    }
+  }, [isVideoPlaying, isRecording, isPaused])
+
   useEffect(() => {
     setTimeout(() => {
       scrollRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -69,6 +111,12 @@ export function AIChatSidebarV2({
     })
   }
 
+  const formatRecordingTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
   const getAgentIcon = (agentType?: string) => {
     switch (agentType) {
       case 'hint':
@@ -88,10 +136,10 @@ export function AIChatSidebarV2({
     switch (agentType) {
       case 'hint':
         return {
-          color: 'from-purple-500 to-yellow-500',
-          bgColor: 'bg-gradient-to-br from-purple-500/10 to-yellow-500/10',
-          borderColor: 'border-purple-500/20',
-          textColor: 'text-purple-700 dark:text-purple-300',
+          color: 'from-blue-500 to-cyan-500',
+          bgColor: 'bg-gradient-to-br from-blue-500/10 to-cyan-500/10',
+          borderColor: 'border-blue-500/20',
+          textColor: 'text-blue-700 dark:text-blue-300',
           icon: <Puzzle className="h-5 w-5" />,
           label: 'PuzzleHint',
           description: 'Get hints about key concepts'
@@ -108,10 +156,10 @@ export function AIChatSidebarV2({
         }
       case 'reflect':
         return {
-          color: 'from-blue-500 to-cyan-500',
-          bgColor: 'bg-gradient-to-br from-blue-500/10 to-cyan-500/10',
-          borderColor: 'border-blue-500/20',
-          textColor: 'text-blue-700 dark:text-blue-300',
+          color: 'from-purple-500 to-yellow-500',
+          bgColor: 'bg-gradient-to-br from-purple-500/10 to-yellow-500/10',
+          borderColor: 'border-purple-500/20',
+          textColor: 'text-purple-700 dark:text-purple-300',
           icon: <Target className="h-5 w-5" />,
           label: 'PuzzleReflect',
           description: 'Reflect on your learning'
@@ -140,20 +188,35 @@ export function AIChatSidebarV2({
   }
 
   const renderMessage = (msg: Message) => {
-    // System messages - Enhanced design
+    // System messages - Subtle, consistent design, left-aligned
     if (msg.type === 'system') {
-      return (
-        <div key={msg.id} className="flex justify-center my-4">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground bg-gradient-to-r from-secondary/50 to-secondary/30 px-4 py-2 rounded-full backdrop-blur-sm border border-border/50">
-            <Clock className="h-3 w-3" />
-            <span className="font-medium">{msg.message}</span>
+      // Check if this is a timestamp activity message (contains 📍)
+      const isActivityMessage = msg.message.includes('📍')
+      
+      if (isActivityMessage) {
+        // Activity messages - slightly more prominent but still subtle
+        return (
+          <div key={msg.id} className="flex justify-start my-3">
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground bg-secondary/60 px-4 py-2 rounded-full border border-border/50">
+              <span>{msg.message.replace('📍', '•')}</span>
+            </div>
           </div>
-        </div>
-      )
+        )
+      } else {
+        // Regular system messages (like "Paused at X:XX")
+        return (
+          <div key={msg.id} className="flex justify-start my-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-secondary/50 px-3 py-1.5 rounded-full backdrop-blur-sm border border-border/50">
+              <Clock className="h-3 w-3" />
+              <span className="font-medium">{msg.message}</span>
+            </div>
+          </div>
+        )
+      }
     }
 
-    // Agent prompt messages (unactivated) - Enhanced card design from 1 commit ago
-    if (msg.type === 'agent-prompt' && msg.state === MessageState.UNACTIVATED) {
+    // Agent prompt messages (unactivated with actions - not yet accepted/rejected) - Enhanced card design
+    if (msg.type === 'agent-prompt' && msg.state === MessageState.UNACTIVATED && !(msg as any).accepted) {
       const config = getAgentConfig(msg.agentType)
       return (
         <Card 
@@ -185,19 +248,27 @@ export function AIChatSidebarV2({
                 <div className="flex gap-3">
                   <Button
                     size="sm"
-                    onClick={() => onAgentAccept(msg.id)}
+                    onClick={() => {
+                      if (!acceptedAgents.has(msg.id)) {
+                        setAcceptedAgents(prev => new Set([...prev, msg.id]))
+                        onAgentAccept(msg.id)
+                      }
+                    }}
+                    disabled={acceptedAgents.has(msg.id)}
                     className={cn(
                       "bg-gradient-to-r text-white font-medium shadow-md hover:shadow-lg transition-all",
-                      config.color
+                      config.color,
+                      acceptedAgents.has(msg.id) && "opacity-50 cursor-not-allowed"
                     )}
                   >
                     <Zap className="mr-1 h-3 w-3" />
-                    Yes, let's go!
+                    {acceptedAgents.has(msg.id) ? "Loading..." : "Yes, let's go!"}
                   </Button>
                   <Button
                     size="sm"
                     variant="ghost"
                     onClick={() => onAgentReject(msg.id)}
+                    disabled={acceptedAgents.has(msg.id)}
                     className="hover:bg-secondary/50"
                   >
                     Not now
@@ -210,8 +281,8 @@ export function AIChatSidebarV2({
       )
     }
 
-    // Agent prompt messages (activated or rejected) - Enhanced style
-    if (msg.type === 'agent-prompt' && (msg.state === MessageState.ACTIVATED || msg.state === MessageState.REJECTED)) {
+    // Agent prompt messages (activated, rejected, or accepted but still unactivated for reflect) - Enhanced style
+    if (msg.type === 'agent-prompt' && (msg.state === MessageState.ACTIVATED || msg.state === MessageState.REJECTED || (msg.state === MessageState.UNACTIVATED && (msg as any).accepted))) {
       const config = getAgentConfig(msg.agentType)
       return (
         <div key={msg.id} className="mb-4">
@@ -246,8 +317,10 @@ export function AIChatSidebarV2({
       )
     }
 
-    // AI messages - Enhanced design
+    // AI messages - Enhanced design with reflection support
     if (msg.type === 'ai') {
+      const reflectionData = (msg as any).reflectionData
+      
       return (
         <div key={msg.id} className="mb-4">
           <div className="flex items-start gap-3">
@@ -265,6 +338,62 @@ export function AIChatSidebarV2({
               </div>
               <div className="bg-secondary/30 rounded-lg p-3 border border-border/50">
                 <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
+                
+                {/* Show voice memo player if this is a voice reflection */}
+                {reflectionData?.type === 'voice' && reflectionData.duration && (
+                  <div className="mt-3 bg-background/50 rounded-md p-2 border border-border/50">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="p-1.5 h-8 w-8 hover:bg-primary/10"
+                      >
+                        <Play className="h-4 w-4 text-primary/70" />
+                      </Button>
+                      <div className="flex-1">
+                        <div className="h-1 bg-secondary rounded-full overflow-hidden">
+                          <div className="h-full w-0 bg-primary/50" />
+                        </div>
+                        <div className="flex items-center justify-between mt-1">
+                          <span className="text-[10px] text-muted-foreground">0:00</span>
+                          <span className="text-[10px] font-medium text-muted-foreground">
+                            {formatRecordingTime(reflectionData.duration)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 px-2">
+                        <Mic className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">Voice Memo</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Show screenshot indicator if this is a screenshot reflection */}
+                {reflectionData?.type === 'screenshot' && (
+                  <div className="mt-3 bg-background/50 rounded-md p-2 border border-border/50">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded bg-secondary">
+                        <Camera className="h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
+                      <span className="text-xs text-muted-foreground">Screenshot attached</span>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Show loom link if this is a loom reflection */}
+                {reflectionData?.type === 'loom' && (
+                  <div className="mt-3 bg-background/50 rounded-md p-2 border border-border/50">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded bg-secondary">
+                        <Video className="h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
+                      <span className="text-xs text-muted-foreground truncate flex-1">
+                        Loom video linked
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -370,29 +499,386 @@ export function AIChatSidebarV2({
       )
     }
 
+    // Reflection options messages
+    if (msg.type === 'reflection-options') {
+      // Voice recording handlers
+      const startRecording = () => {
+        // Notify that voice memo was chosen
+        onReflectionTypeChosen?.('voice')
+        
+        setIsRecording(true)
+        setIsPaused(false)
+        setRecordingTime(0)
+        setHasRecording(false)
+        
+        // Start recording timer
+        recordingIntervalRef.current = setInterval(() => {
+          setRecordingTime(prev => prev + 1)
+        }, 1000)
+      }
+
+      const pauseRecording = () => {
+        setIsPaused(true)
+        if (recordingIntervalRef.current) {
+          clearInterval(recordingIntervalRef.current)
+        }
+      }
+
+      const resumeRecording = () => {
+        setIsPaused(false)
+        recordingIntervalRef.current = setInterval(() => {
+          setRecordingTime(prev => prev + 1)
+        }, 1000)
+      }
+
+      const stopRecording = () => {
+        setIsRecording(false)
+        setIsPaused(false)
+        setHasRecording(true)
+        
+        if (recordingIntervalRef.current) {
+          clearInterval(recordingIntervalRef.current)
+        }
+        
+        // Simulate creating audio blob
+        const mockBlob = new Blob(['mock-audio-data'], { type: 'audio/wav' })
+        setAudioBlob(mockBlob)
+      }
+
+      const deleteRecording = () => {
+        setHasRecording(false)
+        setRecordingTime(0)
+        setAudioBlob(null)
+        setIsPlaying(false)
+        setPlaybackTime(0)
+      }
+
+      const playRecording = () => {
+        setIsPlaying(true)
+        setPlaybackTime(0)
+        
+        playbackIntervalRef.current = setInterval(() => {
+          setPlaybackTime(prev => {
+            if (prev >= recordingTime) {
+              setIsPlaying(false)
+              if (playbackIntervalRef.current) {
+                clearInterval(playbackIntervalRef.current)
+              }
+              return 0
+            }
+            return prev + 1
+          })
+        }, 1000)
+      }
+
+      const pausePlayback = () => {
+        setIsPlaying(false)
+        if (playbackIntervalRef.current) {
+          clearInterval(playbackIntervalRef.current)
+        }
+      }
+
+      const sendRecording = () => {
+        if (hasRecording && audioBlob) {
+          onReflectionSubmit?.('voice', {
+            duration: recordingTime,
+            audioUrl: 'data:audio/wav;base64,mock-audio-data'
+          })
+          // Reset after sending
+          deleteRecording()
+        }
+      }
+
+      const handleScreenshotUpload = () => {
+        // Notify that screenshot was chosen
+        onReflectionTypeChosen?.('screenshot')
+        
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = 'image/*'
+        input.onchange = (e: any) => {
+          const file = e.target.files[0]
+          if (file) {
+            const reader = new FileReader()
+            reader.onload = (e) => {
+              onReflectionSubmit?.('screenshot', {
+                imageUrl: e.target?.result
+              })
+            }
+            reader.readAsDataURL(file)
+          }
+        }
+        input.click()
+      }
+
+      const handleLoomSubmit = () => {
+        if (loomUrl.trim()) {
+          onReflectionSubmit?.('loom', {
+            loomUrl: loomUrl.trim()
+          })
+        }
+      }
+
+      return (
+        <div key={msg.id} className="mb-3">
+          <div className="space-y-2">
+            {/* Voice Memo Option - Enhanced Messenger Style */}
+            <Card className="border-blue-200 dark:border-blue-800 overflow-hidden">
+              <div className="p-3">
+                {!isRecording && !hasRecording ? (
+                  // Initial state - Start recording
+                  <button
+                    onClick={startRecording}
+                    className="w-full flex items-center gap-3 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg p-2 transition-colors"
+                  >
+                    <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-950/30">
+                      <Mic className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div className="text-left flex-1">
+                      <p className="font-medium text-sm">Voice Memo</p>
+                      <p className="text-xs text-muted-foreground">Tap to record audio reflection</p>
+                    </div>
+                  </button>
+                ) : isRecording ? (
+                  // Recording state - minimalist
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 flex-1">
+                        <div className="p-2 rounded-lg bg-secondary">
+                          <Mic className={cn(
+                            "h-5 w-5 text-muted-foreground",
+                            !isPaused && "animate-pulse"
+                          )} />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">
+                              {isPaused ? 'Paused' : 'Recording'}
+                            </span>
+                            <span className="text-sm font-mono text-muted-foreground">{formatRecordingTime(recordingTime)}</span>
+                            {isPaused && isVideoPlaying && (
+                              <span className="text-xs text-amber-600 dark:text-amber-500">(Video playing)</span>
+                            )}
+                          </div>
+                          {/* Minimalist waveform */}
+                          <div className="flex items-center gap-0.5 h-4 mt-1">
+                            {[...Array(20)].map((_, i) => (
+                              <div
+                                key={i}
+                                className="w-0.5 bg-muted-foreground/30 rounded-full"
+                                style={{
+                                  height: `${20 + Math.random() * 60}%`,
+                                  animationDelay: `${i * 50}ms`,
+                                  animation: isPaused ? 'none' : 'pulse 1.5s ease-in-out infinite'
+                                }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Recording controls - minimalist */}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={stopRecording}
+                        className="flex-1"
+                      >
+                        <Square className="h-3 w-3 mr-1" />
+                        Stop
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={isPaused ? resumeRecording : pauseRecording}
+                        className="hover:bg-secondary"
+                      >
+                        {isPaused ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  // Has recording - Playback state - minimalist
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="p-2 hover:bg-secondary"
+                        onClick={isPlaying ? pausePlayback : playRecording}
+                      >
+                        {isPlaying ? (
+                          <Pause className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Play className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs text-muted-foreground">
+                            {formatRecordingTime(isPlaying ? playbackTime : 0)}
+                          </span>
+                          <span className="text-xs text-muted-foreground">/</span>
+                          <span className="text-xs text-muted-foreground">
+                            {formatRecordingTime(recordingTime)}
+                          </span>
+                        </div>
+                        {/* Progress bar - minimalist */}
+                        <div className="h-1 bg-secondary rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-muted-foreground/50 transition-all duration-300"
+                            style={{ 
+                              width: `${isPlaying ? (playbackTime / recordingTime) * 100 : 0}%` 
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="p-2 hover:bg-secondary"
+                        onClick={deleteRecording}
+                      >
+                        <Trash2 className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    </div>
+                    {/* Send button - minimalist */}
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="w-full"
+                      onClick={sendRecording}
+                    >
+                      <Send className="h-3 w-3 mr-2" />
+                      Send Voice Memo
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {/* Screenshot Upload Option */}
+            <Card className="p-3 hover:shadow-md transition-shadow cursor-pointer border-green-200 dark:border-green-800">
+              <button
+                onClick={handleScreenshotUpload}
+                className="w-full flex items-center gap-3"
+              >
+                <div className="p-2 rounded-lg bg-green-100 dark:bg-green-950/30">
+                  <Camera className="h-5 w-5 text-green-600" />
+                </div>
+                <div className="text-left flex-1">
+                  <p className="font-medium text-sm">Screenshot</p>
+                  <p className="text-xs text-muted-foreground">Upload a screenshot or diagram</p>
+                </div>
+              </button>
+            </Card>
+
+            {/* Loom Video Option */}
+            <Card className="p-3 border-purple-200 dark:border-purple-800">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-950/30">
+                  <Video className="h-5 w-5 text-purple-600" />
+                </div>
+                <div className="text-left flex-1">
+                  <p className="font-medium text-sm">Loom Video</p>
+                  <p className="text-xs text-muted-foreground">Share a Loom recording link</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Paste Loom URL..."
+                  value={loomUrl}
+                  onChange={(e) => {
+                    setLoomUrl(e.target.value)
+                    // Notify that loom was chosen when they start typing
+                    if (e.target.value && !loomUrl) {
+                      onReflectionTypeChosen?.('loom')
+                    }
+                  }}
+                  className="flex-1 text-xs h-8"
+                />
+                <Button
+                  size="sm"
+                  onClick={handleLoomSubmit}
+                  disabled={!loomUrl.trim()}
+                  className="h-8 px-3"
+                >
+                  <Upload className="h-3 w-3" />
+                </Button>
+              </div>
+            </Card>
+            
+            {/* Cancel button */}
+            {(isRecording || hasRecording || loomUrl) && (
+              <div className="mt-3">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    // Reset all states
+                    setIsRecording(false)
+                    setHasRecording(false)
+                    setRecordingTime(0)
+                    setAudioBlob(null)
+                    setLoomUrl('')
+                    setIsPaused(false)
+                    if (recordingIntervalRef.current) {
+                      clearInterval(recordingIntervalRef.current)
+                    }
+                    // Call cancel handler
+                    onReflectionCancel?.()
+                  }}
+                  className="w-full hover:bg-destructive/10 hover:text-destructive"
+                >
+                  Cancel Reflection
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )
+    }
+
+    // Reflection complete messages are now handled by AI messages with reflectionData
+    // This section can be removed as it's no longer used
+
     return null
   }
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-b from-background to-secondary/5">
+    <div className="relative flex flex-col h-full bg-gradient-to-b from-background to-secondary/5">
       {/* Header - Enhanced design */}
       <div className="border-b bg-background/95 backdrop-blur-sm p-4">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="p-2 rounded-lg bg-gradient-to-br from-primary to-primary/70 shadow-md">
-            <Bot className="h-5 w-5 text-primary-foreground" />
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-gradient-to-br from-primary to-primary/70 shadow-md">
+              <Bot className="h-5 w-5 text-primary-foreground" />
+            </div>
+            <div>
+              <h3 className="font-bold text-lg">AI Learning Assistant</h3>
+              <p className="text-xs text-muted-foreground">Powered by 4 specialized agents</p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-bold text-lg">AI Learning Assistant</h3>
-            <p className="text-xs text-muted-foreground">Powered by 4 specialized agents</p>
-          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setShowActivityLog(!showActivityLog)}
+            className={cn(
+              "p-2 hover:bg-secondary",
+              showActivityLog && "bg-secondary"
+            )}
+          >
+            <Activity className="h-4 w-4" />
+          </Button>
         </div>
         
         {/* Agent Buttons - Single row optimized */}
         <div className="flex gap-1 w-full">
           {[
-            { type: 'hint', icon: Puzzle, label: 'Hint', color: 'hover:bg-gradient-to-r hover:from-purple-500/10 hover:to-yellow-500/10 hover:border-purple-500/50' },
+            { type: 'hint', icon: Puzzle, label: 'Hint', color: 'hover:bg-gradient-to-r hover:from-blue-500/10 hover:to-cyan-500/10 hover:border-blue-500/50' },
             { type: 'quiz', icon: Brain, label: 'Quiz', color: 'hover:bg-gradient-to-r hover:from-green-500/10 hover:to-emerald-500/10 hover:border-green-500/50' },
-            { type: 'reflect', icon: Target, label: 'Reflect', color: 'hover:bg-gradient-to-r hover:from-blue-500/10 hover:to-cyan-500/10 hover:border-blue-500/50' },
+            { type: 'reflect', icon: Target, label: 'Reflect', color: 'hover:bg-gradient-to-r hover:from-purple-500/10 hover:to-yellow-500/10 hover:border-purple-500/50' },
             { type: 'path', icon: Route, label: 'Path', color: 'hover:bg-gradient-to-r hover:from-indigo-500/10 hover:to-purple-500/10 hover:border-indigo-500/50' }
           ].map(({ type, icon: Icon, label, color }) => (
             <Button
@@ -415,6 +901,7 @@ export function AIChatSidebarV2({
       {/* Messages - With gradient background */}
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-2">
+          {/* Chat Messages */}
           {displayMessages.map(renderMessage)}
           
           {isTyping && (
@@ -462,6 +949,15 @@ export function AIChatSidebarV2({
           Use agent buttons above for guided learning experiences
         </p>
       </div>
+      
+      {/* Activity Log Overlay - Renders outside the main flow */}
+      {showActivityLog && (
+        <AIActivityLog 
+          messages={messages} 
+          isOpen={true}
+          onToggle={() => setShowActivityLog(false)}
+        />
+      )}
     </div>
   )
 }

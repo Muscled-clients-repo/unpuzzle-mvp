@@ -184,6 +184,36 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
     })
   }
 
+  // Handle reflection submission
+  const handleReflectionSubmit = (type: string, data: any) => {
+    console.log('[V2] Reflection submitted:', { type, data })
+    
+    dispatch({
+      type: 'REFLECTION_SUBMITTED',
+      payload: { type, data }
+    })
+  }
+
+  // Handle reflection type chosen
+  const handleReflectionTypeChosen = (reflectionType: string) => {
+    console.log('[V2] Reflection type chosen:', reflectionType)
+    
+    dispatch({
+      type: 'REFLECTION_TYPE_CHOSEN',
+      payload: { reflectionType }
+    })
+  }
+
+  // Handle reflection cancel
+  const handleReflectionCancel = () => {
+    console.log('[V2] Reflection cancelled')
+    
+    dispatch({
+      type: 'REFLECTION_CANCELLED',
+      payload: {}
+    })
+  }
+
   return (
     <div className="flex h-full">
       {/* Main Content */}
@@ -315,10 +345,14 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
           >
             <AIChatSidebarV2
               messages={context.messages}
+              isVideoPlaying={context.videoState?.isPlaying || false}
               onAgentRequest={handleAgentRequest}
               onAgentAccept={(id) => dispatch({ type: 'ACCEPT_AGENT', payload: id })}
               onAgentReject={(id) => dispatch({ type: 'REJECT_AGENT', payload: id })}
               onQuizAnswer={handleQuizAnswer}
+              onReflectionSubmit={handleReflectionSubmit}
+              onReflectionTypeChosen={handleReflectionTypeChosen}
+              onReflectionCancel={handleReflectionCancel}
             />
           </div>
         </>
