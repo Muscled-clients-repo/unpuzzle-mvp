@@ -10,10 +10,10 @@ import { ChevronLeft, Share2, CheckCircle, ArrowRight } from "lucide-react"
 export default function VideoV2DemoPage() {
   const [copiedLink, setCopiedLink] = useState(false)
   
-  // Demo video data
+  // Demo video data - React Hooks Tutorial
   const demoVideo = {
-    videoUrl: "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-    title: "Introduction to React Hooks",
+    videoUrl: "https://www.youtube.com/watch?v=TNhaISOUy6Q",
+    title: "Introduction to React Hooks - useState, useEffect, and More",
     videoId: "demo-video-1"
   }
   

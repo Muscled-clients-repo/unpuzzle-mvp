@@ -125,12 +125,25 @@ export class VideoController {
       
       // Check all sources
       const refPaused = this.videoRef?.isPaused() ?? false
-      const domPaused = (document.querySelector('video') as HTMLVideoElement)?.paused ?? false
       const storePaused = !useAppStore.getState().isPlaying
       
-      // All must agree
-      if (refPaused && domPaused && storePaused) {
-        return true
+      // For YouTube videos, we might not have a DOM video element
+      const videoElement = document.querySelector('video') as HTMLVideoElement
+      const domPaused = videoElement ? videoElement.paused : true // If no video element (YouTube), assume paused is what we want
+      
+      // Check if YouTube iframe exists (indicates YouTube video)
+      const isYouTube = document.querySelector('#youtube-player') !== null
+      
+      if (isYouTube) {
+        // For YouTube, trust the ref and store state
+        if (refPaused && storePaused) {
+          return true
+        }
+      } else {
+        // For regular videos, all must agree
+        if (refPaused && domPaused && storePaused) {
+          return true
+        }
       }
     }
     return false

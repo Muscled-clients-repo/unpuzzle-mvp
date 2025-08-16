@@ -153,6 +153,8 @@ export class VideoAgentStateMachine {
     }
   }
   
+  private pausingForAgent = false  // Track if we're pausing for an agent
+  
   private async handleShowAgent(payload: any) {
     // Handle both old string format and new object format
     const agentType = typeof payload === 'string' ? payload : payload.agentType
@@ -173,11 +175,20 @@ export class VideoAgentStateMachine {
     // Flow 2: Pause video if playing (Issue #1 FIXED)
     if (this.context.videoState.isPlaying) {
       try {
+        this.pausingForAgent = true  // Mark that we're pausing for an agent
         await this.videoController.pauseVideo()
-        // Video controller already updates Zustand, no need to update here
+        // Also update our internal state to ensure consistency
+        this.context.videoState.isPlaying = false
+        // Allow a brief moment for the pause to settle
+        setTimeout(() => {
+          this.pausingForAgent = false
+        }, 500)
       } catch (error) {
         console.error('Failed to pause video:', error)
         // Still show agent even if pause fails - user experience is priority
+        // Force state to paused to prevent agent from disappearing
+        this.context.videoState.isPlaying = false
+        this.pausingForAgent = false
       }
     }
     
@@ -255,7 +266,13 @@ export class VideoAgentStateMachine {
   }
   
   private async handleVideoResume() {
-    console.log('[SM] Video resumed')
+    console.log('[SM] Video resumed, pausingForAgent:', this.pausingForAgent)
+    
+    // Don't clear messages if we just paused for an agent
+    if (this.pausingForAgent) {
+      console.log('[SM] Ignoring resume - we just paused for an agent')
+      return
+    }
     
     // Flow 5: Remove ONLY unactivated messages
     // Flow 5b: Keep activated/rejected messages

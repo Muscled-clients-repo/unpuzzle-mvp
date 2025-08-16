@@ -152,7 +152,8 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
     // Call original handler if provided
     props.onPlay?.()
     
-    // Dispatch play to state machine
+    // Always dispatch the play event - the state machine will handle it properly
+    // If it's a manual resume, the unactivated messages should be cleared
     dispatch({
       type: 'VIDEO_PLAYED',
       payload: {}
