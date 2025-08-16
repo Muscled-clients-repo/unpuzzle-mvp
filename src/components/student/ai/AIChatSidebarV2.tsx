@@ -1,388 +1,358 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { AIChatSidebar } from "./ai-chat-sidebar"
+import { Message, MessageState } from "@/lib/video-agent-system"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Puzzle, Send, Sparkles, Bot, User, Pause, Lightbulb, CheckCircle2, MessageSquare, Route } from "lucide-react"
+import { Puzzle, Send, Sparkles, Bot, User, Pause, Lightbulb, CheckCircle2, MessageSquare, Route, Clock, Brain, Zap, Target } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface AIChatSidebarV2Props {
-  courseId: string
-  videoId: string
-  currentTime: number
-  onAgentTrigger?: (type: "hint" | "check" | "reflect" | "path") => void
-  showPuzzleHint?: boolean
-  pausedTimestamp?: string
-  onHintResponse?: (accepted: boolean) => void
-}
-
-interface ChatMessage {
-  id: string
-  type: "user" | "ai" | "puzzle-hint" | "system"
-  message: string
-  timestamp: string
-  actions?: {
-    onAccept?: () => void
-    onReject?: () => void
-  }
+  messages: Message[]
+  onAgentRequest: (type: string) => void
+  onAgentAccept: (id: string) => void
+  onAgentReject: (id: string) => void
 }
 
 export function AIChatSidebarV2({
-  courseId,
-  videoId,
-  currentTime,
-  onAgentTrigger,
-  showPuzzleHint,
-  pausedTimestamp,
-  onHintResponse
+  messages,
+  onAgentRequest,
+  onAgentAccept,
+  onAgentReject
 }: AIChatSidebarV2Props) {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "1",
-      type: "ai",
-      message: "Welcome! This is Alam, I'll use my team of agents to accelerate your learning of this video.",
-      timestamp: "Just now"
-    }
-  ])
   const [inputValue, setInputValue] = useState("")
   const [isTyping, setIsTyping] = useState(false)
-  const [activePuzzleHintId, setActivePuzzleHintId] = useState<string | null>(null)
-  const [activeSystemMessageId, setActiveSystemMessageId] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const lastPauseTimeRef = useRef<string>("")
+  
+  // Add welcome message if no messages
+  const displayMessages: Message[] = messages.length === 0 ? [{
+    id: "welcome",
+    type: "ai" as const,
+    state: MessageState.PERMANENT,
+    message: "Welcome! This is Alam, I'll use my team of agents to accelerate your learning of this video.",
+    timestamp: Date.now()
+  }] : messages
 
-  // Add PuzzleHint message when video is paused
+  // Scroll to bottom when messages change
   useEffect(() => {
-    if (showPuzzleHint && pausedTimestamp && pausedTimestamp !== lastPauseTimeRef.current) {
-      lastPauseTimeRef.current = pausedTimestamp
-      
-      // First add system message showing pause
-      const systemMessageId = `system-${Date.now()}`
-      const systemMessage: ChatMessage = {
-        id: systemMessageId,
-        type: "system",
-        message: `Paused at ${pausedTimestamp}`,
-        timestamp: "Just now"
-      }
-      
-      // Then add PuzzleHint message
-      const puzzleHintId = `puzzle-${Date.now()}`
-      const puzzleHintMessage: ChatMessage = {
-        id: puzzleHintId,
-        type: "puzzle-hint",
-        message: `Do you want a hint about what's happening at this timestamp?`,
-        timestamp: "Just now",
-        actions: {
-          onAccept: () => handleAcceptHint(pausedTimestamp),
-          onReject: () => handleRejectHint()
-        }
-      }
-      
-      setMessages(prev => [...prev, systemMessage, puzzleHintMessage])
-      setActivePuzzleHintId(puzzleHintId)
-      setActiveSystemMessageId(systemMessageId)
-      
-      // Scroll to bottom
-      setTimeout(() => {
-        scrollRef.current?.scrollIntoView({ behavior: "smooth" })
-      }, 100)
-    } else if (!showPuzzleHint && activePuzzleHintId) {
-      // Video resumed without action - remove both the puzzle hint and system message
-      setMessages(prev => prev.filter(msg => 
-        msg.id !== activePuzzleHintId && msg.id !== activeSystemMessageId
-      ))
-      setActivePuzzleHintId(null)
-      setActiveSystemMessageId(null)
-    }
-  }, [showPuzzleHint, pausedTimestamp, activePuzzleHintId, activeSystemMessageId])
+    setTimeout(() => {
+      scrollRef.current?.scrollIntoView({ behavior: "smooth" })
+    }, 100)
+  }, [messages])
 
-  const handleAcceptHint = (timestamp: string) => {
-    // Mark that action was taken - both messages stay in chat
-    setActivePuzzleHintId(null)
-    setActiveSystemMessageId(null)
+  const handleSendMessage = () => {
+    if (!inputValue.trim()) return
     
-    // Add user message
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      type: "user",
-      message: `Give me a hint at ${timestamp}`,
-      timestamp: "Just now"
-    }
-    
-    setMessages(prev => [...prev, userMessage])
-    onHintResponse?.(true)
+    // In a real implementation, this would send to the AI backend
+    console.log("User message:", inputValue)
+    setInputValue("")
     
     // Show typing indicator
     setIsTyping(true)
     
     // Simulate AI response
     setTimeout(() => {
-      const aiResponse: ChatMessage = {
-        id: `ai-${Date.now()}`,
-        type: "ai",
-        message: `At ${timestamp}, the instructor is explaining a key concept. Pay attention to how they're setting up the state variable - this pattern will be used throughout the rest of the lesson. Notice the syntax they're using for the useState hook.`,
-        timestamp: "Just now"
-      }
-      
-      setMessages(prev => [...prev, aiResponse])
       setIsTyping(false)
-    }, 1500)
+      // Response would be handled by state machine in real implementation
+    }, 2000)
   }
 
-  const handleRejectHint = () => {
-    // Mark that action was taken - both messages stay in chat
-    setActivePuzzleHintId(null)
-    setActiveSystemMessageId(null)
-    onHintResponse?.(false)
-  }
-  
-  // Format seconds to timestamp (e.g., 80 -> "1:20")
-  const formatTimestamp = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60)
-    const secs = Math.floor(seconds % 60)
-    return `${mins}:${secs.toString().padStart(2, '0')}`
+  const formatTimestamp = (timestamp: number): string => {
+    return new Date(timestamp).toLocaleTimeString([], { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    })
   }
 
-  const handleSendMessage = () => {
-    if (!inputValue.trim()) return
-    
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      type: "user",
-      message: inputValue,
-      timestamp: "Just now"
+  const getAgentIcon = (agentType?: string) => {
+    switch (agentType) {
+      case 'hint':
+        return <Puzzle className="h-4 w-4" />
+      case 'quiz':
+        return <Brain className="h-4 w-4" />
+      case 'reflect':
+        return <Target className="h-4 w-4" />
+      case 'path':
+        return <Route className="h-4 w-4" />
+      default:
+        return <Bot className="h-4 w-4" />
     }
-    
-    setMessages(prev => [...prev, userMessage])
-    setInputValue("")
-    setIsTyping(true)
-    
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse: ChatMessage = {
-        id: `ai-${Date.now()}`,
-        type: "ai",
-        message: "I'll help you with that. Let me analyze the current section of the video...",
-        timestamp: "Just now"
-      }
-      
-      setMessages(prev => [...prev, aiResponse])
-      setIsTyping(false)
-    }, 1000)
   }
 
-  const handleQuickAction = (action: string) => {
-    // Add user message for the quick action
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      type: "user",
-      message: action,
-      timestamp: "Just now"
+  const getAgentConfig = (agentType?: string) => {
+    switch (agentType) {
+      case 'hint':
+        return {
+          color: 'from-purple-500 to-yellow-500',
+          bgColor: 'bg-gradient-to-br from-purple-500/10 to-yellow-500/10',
+          borderColor: 'border-purple-500/20',
+          textColor: 'text-purple-700 dark:text-purple-300',
+          icon: <Puzzle className="h-5 w-5" />,
+          label: 'PuzzleHint',
+          description: 'Get hints about key concepts'
+        }
+      case 'quiz':
+        return {
+          color: 'from-green-500 to-emerald-500',
+          bgColor: 'bg-gradient-to-br from-green-500/10 to-emerald-500/10',
+          borderColor: 'border-green-500/20',
+          textColor: 'text-green-700 dark:text-green-300',
+          icon: <Brain className="h-5 w-5" />,
+          label: 'QuizBot',
+          description: 'Test your understanding'
+        }
+      case 'reflect':
+        return {
+          color: 'from-blue-500 to-cyan-500',
+          bgColor: 'bg-gradient-to-br from-blue-500/10 to-cyan-500/10',
+          borderColor: 'border-blue-500/20',
+          textColor: 'text-blue-700 dark:text-blue-300',
+          icon: <Target className="h-5 w-5" />,
+          label: 'ReflectAI',
+          description: 'Reflect on your learning'
+        }
+      case 'path':
+        return {
+          color: 'from-indigo-500 to-purple-500',
+          bgColor: 'bg-gradient-to-br from-indigo-500/10 to-purple-500/10',
+          borderColor: 'border-indigo-500/20',
+          textColor: 'text-indigo-700 dark:text-indigo-300',
+          icon: <Route className="h-5 w-5" />,
+          label: 'PathFinder',
+          description: 'Get personalized learning paths'
+        }
+      default:
+        return {
+          color: 'from-gray-500 to-gray-600',
+          bgColor: 'bg-gray-500/10',
+          borderColor: 'border-gray-500/20',
+          textColor: 'text-gray-700 dark:text-gray-300',
+          icon: <Bot className="h-5 w-5" />,
+          label: 'AI Assistant',
+          description: 'General assistance'
+        }
     }
-    
-    setMessages(prev => [...prev, userMessage])
-    setIsTyping(true)
-    
-    // Generate appropriate AI response based on action
-    setTimeout(() => {
-      let aiResponse: ChatMessage
-      
-      if (action.includes("hint")) {
-        aiResponse = {
-          id: `ai-${Date.now()}`,
-          type: "ai",
-          message: "💡 Here's a hint: Focus on the relationship between state and props in this section. Notice how the data flows from parent to child components.",
-          timestamp: "Just now"
-        }
-      } else if (action.includes("quiz")) {
-        aiResponse = {
-          id: `ai-${Date.now()}`,
-          type: "ai",
-          message: "📝 Quiz Time!\n\nWhat is the primary purpose of the useState hook?\n\n1. To fetch data from an API\n2. To manage local component state\n3. To handle side effects\n4. To optimize performance\n\nType the number of your answer!",
-          timestamp: "Just now"
-        }
-      } else if (action.includes("reflect")) {
-        aiResponse = {
-          id: `ai-${Date.now()}`,
-          type: "ai",
-          message: "🤔 Let's reflect:\n\nHow does this concept connect to what you learned earlier?\n\nConsider:\n• What patterns do you notice?\n• How would you apply this in your own projects?\n• What questions do you still have?",
-          timestamp: "Just now"
-        }
-      } else {
-        aiResponse = {
-          id: `ai-${Date.now()}`,
-          type: "ai",
-          message: "🎯 Based on your progress, here's your personalized learning path:\n\n• Review React fundamentals (10 min)\n• Practice with hooks exercises (15 min)\n• Build a mini project (30 min)\n\nWould you like me to elaborate on any of these?",
-          timestamp: "Just now"
-        }
-      }
-      
-      setMessages(prev => [...prev, aiResponse])
-      setIsTyping(false)
-    }, 1000)
   }
 
-  return (
-    <div className="flex flex-col h-full">
-      {/* Chat Header */}
-      <div className="p-4 border-b">
-        <h3 className="font-semibold">AI Assistant</h3>
-      </div>
-
-      {/* Quick Action Agents */}
-      <div className="p-2 border-b bg-muted/30">
-        <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleQuickAction("Give me a hint")}
-            className="text-xs gap-1"
-          >
-            <Lightbulb className="h-3 w-3 text-yellow-500" />
-            Hint
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleQuickAction("Quiz me on this")}
-            className="text-xs gap-1"
-          >
-            <CheckCircle2 className="h-3 w-3 text-green-500" />
-            Quiz
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleQuickAction("Help me reflect")}
-            className="text-xs gap-1"
-          >
-            <MessageSquare className="h-3 w-3 text-blue-500" />
-            Reflect
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleQuickAction("Show learning path")}
-            className="text-xs gap-1"
-          >
-            <Route className="h-3 w-3 text-purple-500" />
-            Path
-          </Button>
+  const renderMessage = (msg: Message) => {
+    // System messages - Enhanced design
+    if (msg.type === 'system') {
+      return (
+        <div key={msg.id} className="flex justify-center my-4">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground bg-gradient-to-r from-secondary/50 to-secondary/30 px-4 py-2 rounded-full backdrop-blur-sm border border-border/50">
+            <Clock className="h-3 w-3" />
+            <span className="font-medium">{msg.message}</span>
+          </div>
         </div>
-      </div>
+      )
+    }
 
-      {/* Messages */}
-      <ScrollArea className="flex-1 p-4">
-        <div className="space-y-4">
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={cn(
-                "flex gap-3",
-                msg.type === "user" ? "justify-end" : 
-                msg.type === "system" ? "justify-center" : "justify-start"
-              )}
-            >
-              {msg.type !== "user" && msg.type !== "system" && (
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback>
-                    {msg.type === "puzzle-hint" ? (
-                      <Puzzle className="h-4 w-4 text-purple-600" />
-                    ) : (
-                      <Bot className="h-4 w-4" />
-                    )}
-                  </AvatarFallback>
-                </Avatar>
-              )}
-              
+    // Agent prompt messages (unactivated) - Enhanced card design
+    if (msg.type === 'agent-prompt' && msg.state === MessageState.UNACTIVATED) {
+      const config = getAgentConfig(msg.agentType)
+      return (
+        <Card 
+          key={msg.id}
+          className={cn(
+            "mb-4 border-2 overflow-hidden transition-all hover:shadow-lg",
+            config.borderColor,
+            config.bgColor
+          )}
+        >
+          <div className="p-5">
+            <div className="flex items-start gap-4">
               <div className={cn(
-                "max-w-[80%]",
-                msg.type === "user" ? "items-end" : "items-start"
+                "p-3 rounded-xl bg-gradient-to-br shadow-lg",
+                config.color
               )}>
-                {msg.type === "system" ? (
-                  // System message for pause events
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-full">
-                    <Pause className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-xs font-medium text-muted-foreground">
-                      {msg.message}
-                    </span>
-                  </div>
-                ) : msg.type === "puzzle-hint" ? (
-                  <Card className="p-3 border-purple-200 bg-purple-50 dark:bg-purple-950/20">
-                    <div className="space-y-3">
-                      <div className="flex items-start gap-2">
-                        <Sparkles className="h-4 w-4 text-purple-600 mt-0.5" />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-purple-900 dark:text-purple-100">
-                            PuzzleHint Agent
-                          </p>
-                          <p className="text-sm mt-1">{msg.message}</p>
-                        </div>
-                      </div>
-                      {msg.actions && (
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            className="flex-1 h-8 bg-purple-600 hover:bg-purple-700"
-                            onClick={msg.actions.onAccept}
-                          >
-                            Yes, give me a hint
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="flex-1 h-8"
-                            onClick={msg.actions.onReject}
-                          >
-                            No thanks
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </Card>
-                ) : (
-                  <div className={cn(
-                    "rounded-lg px-3 py-2",
-                    msg.type === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted"
-                  )}>
-                    <p className="text-sm">{msg.message}</p>
-                  </div>
-                )}
-                {msg.type !== "system" && (
-                  <span className="text-xs text-muted-foreground mt-1 block">
-                    {msg.timestamp}
+                <div className="text-white">
+                  {config.icon}
+                </div>
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={cn("font-bold text-sm", config.textColor)}>
+                    {config.label}
+                  </span>
+                  <Sparkles className="h-3 w-3 text-yellow-500 animate-pulse" />
+                </div>
+                <p className="font-medium text-foreground mb-4">{msg.message}</p>
+                <div className="flex gap-3">
+                  <Button
+                    size="sm"
+                    onClick={() => onAgentAccept(msg.id)}
+                    className={cn(
+                      "bg-gradient-to-r text-white font-medium shadow-md hover:shadow-lg transition-all",
+                      config.color
+                    )}
+                  >
+                    <Zap className="mr-1 h-3 w-3" />
+                    Yes, let's go!
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => onAgentReject(msg.id)}
+                    className="hover:bg-secondary/50"
+                  >
+                    Not now
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )
+    }
+
+    // Agent prompt messages (activated or rejected) - Enhanced style
+    if (msg.type === 'agent-prompt' && (msg.state === MessageState.ACTIVATED || msg.state === MessageState.REJECTED)) {
+      const config = getAgentConfig(msg.agentType)
+      return (
+        <div key={msg.id} className="mb-4">
+          <div className={cn(
+            "flex items-start gap-3 p-3 rounded-lg",
+            msg.state === MessageState.REJECTED ? "opacity-60" : "",
+            config.bgColor
+          )}>
+            <Avatar className="h-10 w-10 border-2 border-background shadow-md">
+              <AvatarFallback className={cn("bg-gradient-to-br text-white", config.color)}>
+                {getAgentIcon(msg.agentType)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className={cn("text-sm font-bold", config.textColor)}>
+                  {config.label}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {formatTimestamp(msg.timestamp)}
+                </span>
+                {msg.state === MessageState.REJECTED && (
+                  <span className="text-xs bg-secondary/50 px-2 py-0.5 rounded-full text-muted-foreground">
+                    Declined
                   </span>
                 )}
               </div>
-              
-              {msg.type === "user" && (
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback>
-                    <User className="h-4 w-4" />
-                  </AvatarFallback>
-                </Avatar>
-              )}
+              <p className="text-sm text-foreground/90">{msg.message}</p>
             </div>
+          </div>
+        </div>
+      )
+    }
+
+    // AI messages - Enhanced design
+    if (msg.type === 'ai') {
+      return (
+        <div key={msg.id} className="mb-4">
+          <div className="flex items-start gap-3">
+            <Avatar className="h-10 w-10 border-2 border-primary/20 shadow-md">
+              <AvatarFallback className="bg-gradient-to-br from-primary to-primary/70">
+                <Bot className="h-5 w-5 text-primary-foreground" />
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm font-bold text-primary">AI Assistant</span>
+                <span className="text-xs text-muted-foreground">
+                  {formatTimestamp(msg.timestamp)}
+                </span>
+              </div>
+              <div className="bg-secondary/30 rounded-lg p-3 border border-border/50">
+                <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    // User messages - Enhanced style
+    if (msg.type === 'user') {
+      return (
+        <div key={msg.id} className="mb-4 flex items-start gap-3 justify-end">
+          <div className="flex-1 max-w-[80%]">
+            <div className="flex items-center gap-2 mb-1 justify-end">
+              <span className="text-xs text-muted-foreground">
+                {formatTimestamp(msg.timestamp)}
+              </span>
+              <span className="text-sm font-medium">You</span>
+            </div>
+            <div className="bg-gradient-to-br from-primary/20 to-primary/10 rounded-lg p-3 border border-primary/20">
+              <p className="text-sm">{msg.message}</p>
+            </div>
+          </div>
+          <Avatar className="h-10 w-10 border-2 border-background shadow-md">
+            <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600">
+              <User className="h-5 w-5 text-white" />
+            </AvatarFallback>
+          </Avatar>
+        </div>
+      )
+    }
+
+    return null
+  }
+
+  return (
+    <div className="flex flex-col h-full bg-gradient-to-b from-background to-secondary/5">
+      {/* Header - Enhanced design */}
+      <div className="border-b bg-background/95 backdrop-blur-sm p-4">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 rounded-lg bg-gradient-to-br from-primary to-primary/70 shadow-md">
+            <Bot className="h-5 w-5 text-primary-foreground" />
+          </div>
+          <div>
+            <h3 className="font-bold text-lg">AI Learning Assistant</h3>
+            <p className="text-xs text-muted-foreground">Powered by 4 specialized agents</p>
+          </div>
+        </div>
+        
+        {/* Agent Buttons - Enhanced grid */}
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { type: 'hint', icon: Puzzle, label: 'Hint', color: 'hover:bg-gradient-to-r hover:from-purple-500/10 hover:to-yellow-500/10 hover:border-purple-500/50' },
+            { type: 'quiz', icon: Brain, label: 'Quiz', color: 'hover:bg-gradient-to-r hover:from-green-500/10 hover:to-emerald-500/10 hover:border-green-500/50' },
+            { type: 'reflect', icon: Target, label: 'Reflect', color: 'hover:bg-gradient-to-r hover:from-blue-500/10 hover:to-cyan-500/10 hover:border-blue-500/50' },
+            { type: 'path', icon: Route, label: 'Path', color: 'hover:bg-gradient-to-r hover:from-indigo-500/10 hover:to-purple-500/10 hover:border-indigo-500/50' }
+          ].map(({ type, icon: Icon, label, color }) => (
+            <Button
+              key={type}
+              size="sm"
+              variant="outline"
+              className={cn(
+                "justify-start transition-all border-2",
+                color
+              )}
+              onClick={() => onAgentRequest(type)}
+            >
+              <Icon className="mr-2 h-4 w-4" />
+              <span className="font-medium">{label}</span>
+            </Button>
           ))}
+        </div>
+      </div>
+
+      {/* Messages - With gradient background */}
+      <ScrollArea className="flex-1 p-4">
+        <div className="space-y-2">
+          {displayMessages.map(renderMessage)}
           
           {isTyping && (
-            <div className="flex gap-3">
-              <Avatar className="h-8 w-8">
-                <AvatarFallback>
-                  <Bot className="h-4 w-4" />
+            <div className="flex items-start gap-3">
+              <Avatar className="h-10 w-10 border-2 border-primary/20 shadow-md">
+                <AvatarFallback className="bg-gradient-to-br from-primary to-primary/70">
+                  <Bot className="h-5 w-5 text-primary-foreground" />
                 </AvatarFallback>
               </Avatar>
-              <div className="bg-muted rounded-lg px-3 py-2">
+              <div className="bg-secondary/30 rounded-lg px-4 py-3 border border-border/50">
                 <div className="flex gap-1">
-                  <span className="w-2 h-2 bg-foreground/60 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                  <span className="w-2 h-2 bg-foreground/60 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                  <span className="w-2 h-2 bg-foreground/60 rounded-full animate-bounce"></span>
+                  <span className="inline-block w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></span>
+                  <span className="inline-block w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></span>
+                  <span className="inline-block w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></span>
                 </div>
               </div>
             </div>
@@ -392,20 +362,29 @@ export function AIChatSidebarV2({
         </div>
       </ScrollArea>
 
-      {/* Input */}
-      <div className="p-4 border-t">
-        <div className="flex gap-2">
+      {/* Input - Enhanced design */}
+      <div className="border-t bg-background/95 backdrop-blur-sm p-4">
+        <div className="flex gap-2 mb-2">
           <Input
-            placeholder="Ask about any timestamp..."
+            placeholder="Ask about the video content..."
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
-            className="flex-1"
+            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+            className="flex-1 border-2 focus:border-primary/50 transition-colors"
           />
-          <Button size="icon" onClick={handleSendMessage}>
+          <Button
+            size="icon"
+            onClick={handleSendMessage}
+            disabled={!inputValue.trim()}
+            className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-md"
+          >
             <Send className="h-4 w-4" />
           </Button>
         </div>
+        <p className="text-xs text-muted-foreground flex items-center gap-1">
+          <Sparkles className="h-3 w-3" />
+          Use agent buttons above for guided learning experiences
+        </p>
       </div>
     </div>
   )

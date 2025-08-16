@@ -1,8 +1,9 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { StudentVideoPlayer } from "./StudentVideoPlayer"
+import { StudentVideoPlayer, StudentVideoPlayerRef } from "./StudentVideoPlayer"
 import { useAppStore } from "@/stores/app-store"
+import { useVideoAgentSystem } from "@/lib/video-agent-system"
 import dynamic from "next/dynamic"
 import { LoadingSpinner } from "@/components/common/LoadingSpinner"
 import { Button } from "@/components/ui/button"
@@ -37,6 +38,12 @@ interface StudentVideoPlayerV2Props {
 }
 
 export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
+  // Video player ref for imperative control
+  const videoPlayerRef = useRef<StudentVideoPlayerRef>(null)
+  
+  // State machine for agent system
+  const { context, dispatch, setVideoRef } = useVideoAgentSystem()
+  
   // State for sidebar
   const currentTime = useAppStore((state) => state.currentTime)
   const showChatSidebar = useAppStore((state) => state.preferences.showChatSidebar)
@@ -48,13 +55,13 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   
   // V2-specific state for enhanced interactions
   const [highlightedSegment, setHighlightedSegment] = useState<number | null>(null)
-  const [sidebarMessage, setSidebarMessage] = useState<string>("")
-  const [videoAction, setVideoAction] = useState<"play" | "pause" | "seek" | null>(null)
   
-  // PuzzleHint agent state
-  const [showPuzzleHint, setShowPuzzleHint] = useState(false)
-  const [pausedTimestamp, setPausedTimestamp] = useState<string>("")
-  const [pausedSeconds, setPausedSeconds] = useState<number>(0)
+  // Connect video ref to state machine
+  useEffect(() => {
+    if (videoPlayerRef.current) {
+      setVideoRef(videoPlayerRef.current)
+    }
+  }, [])
   
   // Handle resize
   const handleMouseMove = (e: MouseEvent) => {
@@ -95,9 +102,7 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
     setIsResizing(true)
   }
   
-  const handleAgentTrigger = (type: "hint" | "check" | "reflect" | "path") => {
-    console.log(`AI Agent triggered: ${type} at ${currentTime}s`)
-  }
+  // REMOVED OLD handleAgentTrigger - no longer needed
   
   // V2-specific: Enhanced interactions between sidebar and video
   const handleSegmentClick = (segmentTime: number, segmentIndex: number) => {
@@ -128,41 +133,40 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
     }
   }
   
-  // Format seconds to timestamp (e.g., 80 -> "1:20")
-  const formatTimestamp = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60)
-    const secs = Math.floor(seconds % 60)
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
+  // REMOVED formatTimestamp - handled by state machine
   
-  // V2-specific: Enhanced pause handler that shows PuzzleHint
+  // Handle video pause (manual)
   const handleVideoPause = (time: number) => {
     // Call original handler if provided
     props.onPause?.(time)
     
-    // V2 feature: Show PuzzleHint agent
-    setPausedSeconds(time)
-    setPausedTimestamp(formatTimestamp(time))
-    setShowPuzzleHint(true)
-    
-    console.log(`V2: Video paused at ${formatTimestamp(time)} - Showing PuzzleHint agent`)
+    // Dispatch manual pause to state machine
+    dispatch({
+      type: 'VIDEO_MANUALLY_PAUSED',
+      payload: { time }
+    })
   }
   
-  // V2-specific: Enhanced play handler that hides PuzzleHint
+  // Handle video play
   const handleVideoPlay = () => {
     // Call original handler if provided
     props.onPlay?.()
     
-    // V2 feature: Hide PuzzleHint when playing
-    setShowPuzzleHint(false)
+    // Dispatch play to state machine
+    dispatch({
+      type: 'VIDEO_PLAYED',
+      payload: {}
+    })
   }
   
-  // Handle hint response from chat
-  const handleHintResponse = (accepted: boolean) => {
-    setShowPuzzleHint(false)
-    if (accepted) {
-      console.log(`User accepted hint at timestamp ${pausedTimestamp}`)
-    }
+  // REMOVED handleHintResponse - handled by state machine
+  
+  // Handle agent button clicks from sidebar
+  const handleAgentRequest = (agentType: string) => {
+    dispatch({
+      type: 'AGENT_BUTTON_CLICKED',
+      payload: agentType
+    })
   }
 
   return (
@@ -172,6 +176,7 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
         {/* Video Player Section */}
         <div className="flex-1 bg-black p-4">
           <StudentVideoPlayer 
+            ref={videoPlayerRef}
             {...props}
             onTimeUpdate={handleVideoTimeUpdate}  // V2 enhanced handler
             onPause={handleVideoPause}  // V2 enhanced pause handler
@@ -294,13 +299,10 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
             style={{ width: `${sidebarWidth}px` }}
           >
             <AIChatSidebarV2
-              courseId="lesson"
-              videoId={props.videoId || "demo"}
-              currentTime={currentTime}
-              onAgentTrigger={handleAgentTrigger}
-              showPuzzleHint={showPuzzleHint}
-              pausedTimestamp={pausedTimestamp}
-              onHintResponse={handleHintResponse}
+              messages={context.messages}
+              onAgentRequest={handleAgentRequest}
+              onAgentAccept={(id) => dispatch({ type: 'ACCEPT_AGENT', payload: id })}
+              onAgentReject={(id) => dispatch({ type: 'REJECT_AGENT', payload: id })}
             />
           </div>
         </>

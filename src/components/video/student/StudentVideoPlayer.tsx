@@ -1,12 +1,19 @@
 "use client"
 
-import { useRef, useEffect, useState } from "react"
+import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react"
 import { useAppStore } from "@/stores/app-store"
 import { cn } from "@/lib/utils"
 import { VideoEngine, VideoEngineRef } from "../shared/VideoEngine"
 import { VideoControls } from "../shared/VideoControls"
 import { VideoSeeker } from "../shared/VideoSeeker"
 import { TranscriptPanel } from "../shared/TranscriptPanel"
+
+export interface StudentVideoPlayerRef {
+  pause: () => void
+  play: () => void
+  isPaused: () => boolean
+  getCurrentTime: () => number
+}
 
 interface StudentVideoPlayerProps {
   videoUrl: string
@@ -19,7 +26,10 @@ interface StudentVideoPlayerProps {
   onEnded?: () => void
 }
 
-export function StudentVideoPlayer({
+export const StudentVideoPlayer = forwardRef<
+  StudentVideoPlayerRef,
+  StudentVideoPlayerProps
+>(({
   videoUrl,
   title,
   transcript,
@@ -28,7 +38,7 @@ export function StudentVideoPlayer({
   onPause,
   onPlay,
   onEnded,
-}: StudentVideoPlayerProps) {
+}, ref) => {
   // console.log('📹 StudentVideoPlayer rendering with:', { videoUrl, title })
   
   const containerRef = useRef<HTMLDivElement>(null)
@@ -69,6 +79,20 @@ export function StudentVideoPlayer({
   const clearVideoSegment = useAppStore((state) => state.clearVideoSegment)
   const addReflection = useAppStore((state) => state.addReflection)
   const addTranscriptReference = useAppStore((state) => state.addTranscriptReference)
+  
+  // Expose imperative API for parent components
+  useImperativeHandle(ref, () => ({
+    pause: () => {
+      videoEngineRef.current?.pause()
+      setIsPlaying(false)
+    },
+    play: () => {
+      videoEngineRef.current?.play()
+      setIsPlaying(true)
+    },
+    isPaused: () => !isPlaying,
+    getCurrentTime: () => currentTime
+  }), [isPlaying, currentTime, setIsPlaying])
 
   // Load student-specific video data when component mounts
   useEffect(() => {
@@ -76,6 +100,9 @@ export function StudentVideoPlayer({
       loadStudentVideo(videoId)
     }
   }, [videoId, loadStudentVideo])
+
+  // Load student-specific video data when component mounts
+  // Removed the video sync effect since it was causing issues
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -319,4 +346,6 @@ export function StudentVideoPlayer({
       )}
     </div>
   )
-}
+})
+
+StudentVideoPlayer.displayName = 'StudentVideoPlayer'
