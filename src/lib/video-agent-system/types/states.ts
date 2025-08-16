@@ -49,6 +49,22 @@ export interface ReflectionData {
   videoTimestamp?: number // Video timestamp when reflection was made
 }
 
+export interface QuizResultData {
+  score: number
+  total: number
+  percentage: number
+  completedAt: number
+  questions: {
+    questionId: string
+    question: string
+    userAnswer: number
+    correctAnswer: number
+    isCorrect: boolean
+    explanation: string
+    options: string[]
+  }[]
+}
+
 export interface Message {
   id: string
   type: 'system' | 'agent-prompt' | 'ai' | 'user' | 'quiz-question' | 'quiz-result' | 'reflection-options' | 'reflection-complete'
@@ -60,6 +76,7 @@ export interface Message {
   quizData?: QuizQuestion
   quizState?: QuizState
   reflectionData?: ReflectionData
+  quizResult?: QuizResultData  // For quiz completion messages
   actions?: {
     onAccept?: () => void
     onReject?: () => void

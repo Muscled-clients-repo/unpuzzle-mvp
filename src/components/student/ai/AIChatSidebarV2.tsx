@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Puzzle, Send, Sparkles, Bot, User, Pause, Lightbulb, CheckCircle2, MessageSquare, Route, Clock, Brain, Zap, Target, Mic, Camera, Video, Upload, Square, Play, Trash2, MicOff, Activity } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AIActivityLog } from "./AIActivityLog"
+import { QuizResultBox } from "./QuizResultBox"
 
 interface AIChatSidebarV2Props {
   messages: Message[]
@@ -45,6 +46,13 @@ export function AIChatSidebarV2({
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
   const [loomUrl, setLoomUrl] = useState('')
   const [showActivityLog, setShowActivityLog] = useState(false)
+  
+  // Track which agent is currently active based on messages
+  const activeAgent = messages.find(msg => 
+    msg.type === 'agent-prompt' && 
+    msg.state === MessageState.UNACTIVATED &&
+    !((msg as any).accepted)
+  )?.agentType || null
   const [acceptedAgents, setAcceptedAgents] = useState<Set<string>>(new Set())
   const scrollRef = useRef<HTMLDivElement>(null)
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -317,9 +325,10 @@ export function AIChatSidebarV2({
       )
     }
 
-    // AI messages - Enhanced design with reflection support
+    // AI messages - Enhanced design with reflection and quiz support
     if (msg.type === 'ai') {
       const reflectionData = (msg as any).reflectionData
+      const quizResult = (msg as any).quizResult
       
       return (
         <div key={msg.id} className="mb-4">
@@ -338,6 +347,13 @@ export function AIChatSidebarV2({
               </div>
               <div className="bg-secondary/30 rounded-lg p-3 border border-border/50">
                 <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
+                
+                {/* Show quiz results if this is a quiz completion message */}
+                {quizResult && (
+                  <div className="mt-3">
+                    <QuizResultBox quizResult={quizResult} />
+                  </div>
+                )}
                 
                 {/* Show voice memo player if this is a voice reflection */}
                 {reflectionData?.type === 'voice' && reflectionData.duration && (
@@ -459,44 +475,10 @@ export function AIChatSidebarV2({
       )
     }
 
-    // Quiz result messages - Horizontal compact layout
-    if (msg.type === 'quiz-result' && msg.quizState) {
-      const { quizState } = msg
-      const percentage = Math.round((quizState.score / quizState.questions.length) * 100)
-      const emoji = percentage >= 80 ? '🎉' : percentage >= 60 ? '👍' : '📚'
-      
-      return (
-        <div key={msg.id} className="mb-3">
-          <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
-            <div className="flex items-center justify-between">
-              {/* Left side - Score */}
-              <div className="flex items-center gap-2">
-                <span className="text-xl">{emoji}</span>
-                <div>
-                  <p className="text-xs font-medium text-blue-600 dark:text-blue-400">Quiz Complete</p>
-                  <p className="text-sm font-bold text-blue-700 dark:text-blue-300">
-                    {quizState.score}/{quizState.questions.length} • {percentage}%
-                  </p>
-                </div>
-              </div>
-              
-              {/* Right side - Question results */}
-              <div className="flex items-center gap-1.5 text-xs">
-                {quizState.questions.map((question, index) => {
-                  const userAnswer = quizState.userAnswers[index]
-                  const isCorrect = userAnswer === question.correctAnswer
-                  return (
-                    <span key={question.id} className="flex items-center">
-                      <span className="text-muted-foreground">Q{index + 1}</span>
-                      <span className="ml-0.5 text-[10px]">{isCorrect ? '✅' : '❌'}</span>
-                    </span>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )
+    // Quiz result messages - Now handled in AI messages with quizResult
+    // Skip rendering old quiz-result type messages
+    if (msg.type === 'quiz-result') {
+      return null
     }
 
     // Reflection options messages
@@ -876,25 +858,29 @@ export function AIChatSidebarV2({
         {/* Agent Buttons - Single row optimized */}
         <div className="flex gap-1 w-full">
           {[
-            { type: 'hint', icon: Puzzle, label: 'Hint', color: 'hover:bg-gradient-to-r hover:from-blue-500/10 hover:to-cyan-500/10 hover:border-blue-500/50' },
-            { type: 'quiz', icon: Brain, label: 'Quiz', color: 'hover:bg-gradient-to-r hover:from-green-500/10 hover:to-emerald-500/10 hover:border-green-500/50' },
-            { type: 'reflect', icon: Target, label: 'Reflect', color: 'hover:bg-gradient-to-r hover:from-purple-500/10 hover:to-yellow-500/10 hover:border-purple-500/50' },
-            { type: 'path', icon: Route, label: 'Path', color: 'hover:bg-gradient-to-r hover:from-indigo-500/10 hover:to-purple-500/10 hover:border-indigo-500/50' }
-          ].map(({ type, icon: Icon, label, color }) => (
-            <Button
-              key={type}
-              size="sm"
-              variant="outline"
-              className={cn(
-                "flex-1 flex-col justify-center items-center h-14 py-2 transition-all border-2",
-                color
-              )}
-              onClick={() => onAgentRequest(type)}
-            >
-              <Icon className="h-4 w-4" />
-              <span className="text-xs font-medium">{label}</span>
-            </Button>
-          ))}
+            { type: 'hint', icon: Puzzle, label: 'Hint', color: 'hover:bg-gradient-to-r hover:from-blue-500/10 hover:to-cyan-500/10 hover:border-blue-500/50', activeColor: 'bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border-blue-500' },
+            { type: 'quiz', icon: Brain, label: 'Quiz', color: 'hover:bg-gradient-to-r hover:from-green-500/10 hover:to-emerald-500/10 hover:border-green-500/50', activeColor: 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-green-500' },
+            { type: 'reflect', icon: Target, label: 'Reflect', color: 'hover:bg-gradient-to-r hover:from-purple-500/10 hover:to-yellow-500/10 hover:border-purple-500/50', activeColor: 'bg-gradient-to-r from-purple-500/20 to-yellow-500/20 border-purple-500' },
+            { type: 'path', icon: Route, label: 'Path', color: 'hover:bg-gradient-to-r hover:from-indigo-500/10 hover:to-purple-500/10 hover:border-indigo-500/50', activeColor: 'bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border-indigo-500' }
+          ].map(({ type, icon: Icon, label, color, activeColor }) => {
+            const isActive = activeAgent === type
+            return (
+              <Button
+                key={type}
+                size="sm"
+                variant="outline"
+                className={cn(
+                  "flex-1 flex-col justify-center items-center h-14 py-2 transition-all border-2",
+                  isActive ? activeColor : color
+                )}
+                onClick={() => onAgentRequest(type)}
+                disabled={isActive}
+              >
+                <Icon className={cn("h-4 w-4", isActive && "text-primary")} />
+                <span className={cn("text-xs font-medium", isActive && "text-primary")}>{label}</span>
+              </Button>
+            )
+          })}
         </div>
       </div>
 

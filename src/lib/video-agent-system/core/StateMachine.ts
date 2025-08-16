@@ -192,8 +192,6 @@ export class VideoAgentStateMachine {
     }
   }
   
-  private pausingForAgent = false  // Track if we're pausing for an agent
-  
   private async handleShowAgent(payload: any) {
     // Handle both old string format and new object format
     const agentType = typeof payload === 'string' ? payload : payload.agentType
@@ -202,15 +200,12 @@ export class VideoAgentStateMachine {
     console.log(`[SM] Showing agent: ${agentType}, passed time: ${passedTime}`)
     
     // NUCLEAR PRINCIPLE: Pause video first
+    // Don't use pausingForAgent flag - it's causing issues
+    // The video pause is handled properly by the controller
     try {
-      this.pausingForAgent = true
       await this.videoController.pauseVideo()
-      setTimeout(() => {
-        this.pausingForAgent = false
-      }, 500)
     } catch (error) {
       console.error('Failed to pause video:', error)
-      this.pausingForAgent = false
     }
     
     // NUCLEAR PRINCIPLE: Clean message filtering in one place
@@ -262,7 +257,7 @@ export class VideoAgentStateMachine {
       agentState: {
         currentUnactivatedId: agentMessage.id,
         currentSystemMessageId: systemMessage.id,
-        activeType: agentType as 'hint' | 'quiz' | 'reflect' | 'path'
+        activeType: null  // Don't set active until agent is accepted
       },
       messages: [
         ...currentMessages,  // Use filtered messages
@@ -274,12 +269,14 @@ export class VideoAgentStateMachine {
   
   private async handleManualPause(time: number) {
     console.log(`[SM] Manual pause at ${time}`)
+    console.log('[SM] Current agent state:', JSON.stringify(this.context.agentState))
+    console.log('[SM] Current system state:', this.context.state)
+    console.log('[SM] Active agent type:', this.context.agentState.activeType)
     
-    // Check if we're in the middle of creating a reflection
-    const hasReflectionOptions = this.context.messages.some(msg => msg.type === 'reflection-options')
-    if (hasReflectionOptions) {
-      console.log('[SM] Reflection in progress - not showing hint on manual pause')
-      // Just update video state without adding hint
+    // NUCLEAR PRINCIPLE: Use agent state as single source of truth
+    // If there's an active agent, don't show hint
+    if (this.context.agentState.activeType) {
+      console.log(`[SM] Agent ${this.context.agentState.activeType} is active - not showing hint`)
       this.updateContext({
         ...this.context,
         state: SystemState.VIDEO_PAUSED,
@@ -291,14 +288,13 @@ export class VideoAgentStateMachine {
       return
     }
     
-    // NUCLEAR PRINCIPLE: Clear unactivated messages inline
-    // Flow 1: Manual pause always shows Hint agent (only if not reflecting)
+    // NUCLEAR PRINCIPLE: Simple, deterministic behavior
+    // No agent active? Show hint. That's it.
     const currentMessages = this.context.messages.filter(msg => {
-      // Remove unactivated messages
+      // Remove any unactivated messages from before
       if (msg.state === MessageState.UNACTIVATED) return false
-      // Remove reflection options
+      // Remove transient UI
       if (msg.type === 'reflection-options') return false
-      // Keep everything else
       return true
     })
     
@@ -326,30 +322,39 @@ export class VideoAgentStateMachine {
       agentState: {
         currentUnactivatedId: hintMessage.id,
         currentSystemMessageId: systemMessage.id,
-        activeType: 'hint'
+        activeType: null  // Don't set active until hint is accepted
       },
       messages: [...currentMessages, systemMessage, hintMessage]  // Use filtered messages
     })
   }
   
   private async handleVideoResume() {
-    console.log('[SM] Video resumed, pausingForAgent:', this.pausingForAgent)
+    console.log('[SM] Video resumed')
+    console.log('[SM] Current agent state:', JSON.stringify(this.context.agentState))
+    console.log('[SM] Current system state:', this.context.state)
     
-    // Don't clear messages if we just paused for an agent
-    if (this.pausingForAgent) {
-      console.log('[SM] Ignoring resume - we just paused for an agent')
+    // NUCLEAR PRINCIPLE: Use agent state as single source of truth
+    // Special handling for active agents
+    if (this.context.agentState.activeType === 'quiz') {
+      console.log('[SM] Quiz in progress - keeping quiz UI while video plays')
+      this.updateContext({
+        ...this.context,
+        state: SystemState.VIDEO_PLAYING,
+        videoState: {
+          ...this.context.videoState,
+          isPlaying: true
+        }
+      })
       return
     }
     
-    // Check if we're in the middle of creating a reflection
-    const reflectionOptions = this.context.messages.find(msg => msg.type === 'reflection-options')
-    if (reflectionOptions) {
-      // Check if user has committed to a reflection type
-      const isCommitted = (reflectionOptions as any).reflectionCommitted === true
+    if (this.context.agentState.activeType === 'reflect') {
+      // Check if reflection is committed
+      const reflectionOptions = this.context.messages.find(msg => msg.type === 'reflection-options')
+      const isCommitted = reflectionOptions && (reflectionOptions as any).reflectionCommitted === true
       
       if (isCommitted) {
-        console.log('[SM] Reflection type chosen - keeping reflection UI while video plays')
-        // Just update video state without clearing messages
+        console.log('[SM] Reflection committed - keeping UI while video plays')
         this.updateContext({
           ...this.context,
           state: SystemState.VIDEO_PLAYING,
@@ -360,8 +365,8 @@ export class VideoAgentStateMachine {
         })
         return
       } else {
-        console.log('[SM] Reflection not committed - clearing reflection UI')
-        // User hasn't chosen a type, so clear the reflection
+        console.log('[SM] Reflection not committed - will clear')
+        // Clear the agent state since reflection wasn't committed
         // Continue to normal clearing logic below
       }
     }
@@ -393,7 +398,7 @@ export class VideoAgentStateMachine {
       agentState: {
         currentUnactivatedId: null,
         currentSystemMessageId: null,
-        activeType: null
+        activeType: null  // Clear any active agent when resuming
       },
       messages: filteredMessages
     })
@@ -409,7 +414,8 @@ export class VideoAgentStateMachine {
       return
     }
     
-    const agentType = this.context.agentState.activeType
+    // Get agent type from the message itself
+    const agentType = (agentMessage as any).agentType
     
     // Flow 6: Agent Acceptance
     const updatedMessages = this.context.messages.map(msg => {
@@ -447,11 +453,11 @@ export class VideoAgentStateMachine {
       }
     }
     
-    // For reflection, don't add permanent activation message yet (it can be abandoned)
-    // For other agents, add the activation message
+    // For reflection and quiz, don't add permanent activation message yet
+    // Reflection can be abandoned, quiz will add its own completion message
     let messagesWithActivation = updatedMessages
     
-    if (agentType !== 'reflect') {
+    if (agentType !== 'reflect' && agentType !== 'quiz') {
       const activationMessage: Message = {
         id: `sys-activate-${Date.now()}`,
         type: 'system' as const,
@@ -489,7 +495,8 @@ export class VideoAgentStateMachine {
       messages: [...messagesWithActivation, aiResponse],
       agentState: {
         ...this.context.agentState,
-        currentUnactivatedId: null // No longer unactivated
+        currentUnactivatedId: null, // No longer unactivated
+        activeType: null // Clear active type for hint/path agents
       }
     })
   }
@@ -533,7 +540,14 @@ export class VideoAgentStateMachine {
   // No separate methods that do their own updateContext calls
   
   private updateContext(newContext: SystemContext) {
+    const prevActiveType = this.context.agentState.activeType
     this.context = newContext
+    const newActiveType = this.context.agentState.activeType
+    
+    if (prevActiveType !== newActiveType) {
+      console.log(`[SM] ActiveType changed: ${prevActiveType} -> ${newActiveType}`)
+    }
+    
     this.notifySubscribers()
   }
   
@@ -652,7 +666,8 @@ export class VideoAgentStateMachine {
       messages: [...updatedMessages, aiIntro, firstQuestion],
       agentState: {
         ...this.context.agentState,
-        currentUnactivatedId: null
+        currentUnactivatedId: null,
+        activeType: 'quiz'  // Keep quiz as active agent
       }
     })
   }
@@ -664,7 +679,7 @@ export class VideoAgentStateMachine {
       countdown--
       
       if (countdown > 0) {
-        // Update countdown message
+        // Update countdown message - use arrow function to capture current context
         const updatedMessages = this.context.messages.map(msg => {
           if (msg.id === countdownMessageId) {
             return { ...msg, message: `Video continues in ${countdown}...` }
@@ -678,15 +693,15 @@ export class VideoAgentStateMachine {
         })
         
         // Continue countdown
-        setTimeout(updateCountdown, 1000)
+        setTimeout(() => updateCountdown(), 1000)
       } else {
-        // Countdown complete - remove countdown message and resume video
+        // Countdown complete - Create a command to clear the state properly
+        console.log('[SM] Countdown complete - dispatching state clear')
+        
+        // First clear the countdown message
         const updatedMessages = this.context.messages.filter(msg => msg.id !== countdownMessageId)
         
-        // Resume video playback
-        this.videoController.playVideo()
-        
-        // Update state and remove countdown message
+        // CRITICAL: Must clear activeType for manual pause to show hint
         this.updateContext({
           ...this.context,
           state: SystemState.VIDEO_PLAYING,
@@ -694,17 +709,33 @@ export class VideoAgentStateMachine {
             ...this.context.videoState,
             isPlaying: true
           },
+          agentState: {
+            currentUnactivatedId: null,
+            currentSystemMessageId: null,
+            activeType: null  // THIS MUST BE NULL
+          },
           messages: updatedMessages
         })
+        
+        // Verify the update worked
+        console.log('[SM] State after countdown reset:')
+        console.log('[SM] - activeType:', this.context.agentState.activeType, '(should be null)')
+        console.log('[SM] - state:', this.context.state)
+        
+        // Resume video playback
+        if (this.videoController && this.videoController.playVideo) {
+          this.videoController.playVideo()
+        }
       }
     }
     
     // Start countdown after 1 second delay
-    setTimeout(updateCountdown, 1000)
+    setTimeout(() => updateCountdown(), 1000)
   }
 
   private async handleQuizAnswer(payload: { questionId: string, selectedAnswer: number }) {
     console.log('[SM] Quiz answer selected:', payload)
+    console.log('[SM] Current activeType before processing:', this.context.agentState.activeType)
     
     // Find the current quiz question message
     const quizMessages = this.context.messages.filter(msg => msg.type === 'quiz-question')
@@ -741,6 +772,40 @@ export class VideoAgentStateMachine {
     let newMessages = [...this.context.messages, feedbackMessage]
 
     if (isLastQuestion) {
+      // NUCLEAR PRINCIPLE: Atomic cleanup - remove ALL quiz-related messages
+      // Build complete quiz data from all questions
+      const allQuizFeedback: any[] = []
+      quizState.questions.forEach((q, idx) => {
+        const userAnswer = newUserAnswers[idx]
+        const isAnswerCorrect = userAnswer === q.correctAnswer
+        allQuizFeedback.push({
+          questionId: q.id,
+          question: q.question,
+          userAnswer,
+          correctAnswer: q.correctAnswer,
+          isCorrect: isAnswerCorrect,
+          explanation: q.explanation,
+          options: q.options
+        })
+      })
+      
+      // NUCLEAR PRINCIPLE: Filter messages atomically
+      newMessages = newMessages.filter(msg => {
+        // Remove all quiz questions
+        if (msg.type === 'quiz-question') return false
+        // Remove all feedback messages
+        if (msg.type === 'ai' && msg.message.includes('Correct!')) return false
+        if (msg.type === 'ai' && msg.message.includes('Incorrect.')) return false
+        // Remove the "Starting your quiz now!" message
+        if (msg.type === 'ai' && msg.message.includes('Starting your quiz')) return false
+        // Remove the "Paused at X:XX" system message linked to quiz
+        if (msg.id === this.context.agentState.currentSystemMessageId) return false
+        // Remove quiz agent prompt messages (activated)
+        if (msg.type === 'agent-prompt' && msg.agentType === 'quiz' && msg.state === MessageState.ACTIVATED) return false
+        // Keep everything else
+        return true
+      })
+      
       // Add system message for quiz completion
       const currentTime = this.videoController.getCurrentTime()
       const formattedTime = this.formatTime(currentTime)
@@ -750,25 +815,26 @@ export class VideoAgentStateMachine {
         id: `sys-quiz-complete-${Date.now()}`,
         type: 'system' as const,
         state: MessageState.PERMANENT,
-        message: `📍 Quiz completed at ${formattedTime} • Score: ${newScore}/${quizState.questions.length} (${percentage}%)`,
+        message: `📍 PuzzleCheck • Quiz at ${formattedTime}`,
         timestamp: Date.now()
       }
       newMessages.push(quizCompleteSystemMsg)
       
-      // Quiz complete - show results
+      // Quiz complete - show results with ALL quiz data embedded
       const resultsMessage: Message = {
         id: `results-${Date.now()}`,
-        type: 'quiz-result' as const,
+        type: 'ai' as const,  // Use 'ai' type so it appears in chat flow
         state: MessageState.PERMANENT,
-        message: `Quiz Complete! You scored ${newScore} out of ${quizState.questions.length}`,
-        quizState: {
-          ...quizState,
-          userAnswers: newUserAnswers,
+        message: `Great job completing the quiz! You scored ${newScore} out of ${quizState.questions.length} (${percentage}%). Your understanding of the material is ${percentage >= 80 ? 'excellent' : percentage >= 60 ? 'good' : 'developing'}. Click below to review your answers.`,
+        quizResult: {  // Embed complete quiz data
           score: newScore,
-          isComplete: true
+          total: quizState.questions.length,
+          percentage,
+          questions: allQuizFeedback,
+          completedAt: currentTime
         },
         timestamp: Date.now()
-      }
+      } as Message
       newMessages.push(resultsMessage)
       
       // Add countdown message
@@ -782,12 +848,18 @@ export class VideoAgentStateMachine {
       }
       newMessages.push(countdownMessage)
       
-      // Update context first, then start countdown
+      // Update context first with quiz still active
       this.updateContext({
         ...this.context,
-        messages: newMessages
+        messages: newMessages,
+        agentState: {
+          ...this.context.agentState,
+          // Keep quiz as active during countdown - will be cleared by countdown completion
+          activeType: 'quiz'
+        }
       })
       
+      console.log('[SM] Quiz complete - starting countdown with quiz still active')
       // Start countdown to resume video with the countdown message ID
       this.startVideoCountdown(countdownId)
       return // Early return since we already updated context
@@ -849,7 +921,8 @@ export class VideoAgentStateMachine {
       messages: [...filteredMessages, introMessage, reflectionOptions],
       agentState: {
         ...this.context.agentState,
-        currentUnactivatedId: null
+        currentUnactivatedId: null,
+        activeType: 'reflect'  // Keep reflect as active agent
       }
     })
   }
@@ -887,7 +960,11 @@ export class VideoAgentStateMachine {
     
     this.updateContext({
       ...this.context,
-      messages: filteredMessages
+      messages: filteredMessages,
+      agentState: {
+        ...this.context.agentState,
+        activeType: null  // Clear active agent
+      }
     })
   }
 

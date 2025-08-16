@@ -294,12 +294,6 @@ export const StudentVideoPlayer = forwardRef<
           showControls ? "opacity-100" : "opacity-0"
         )}
       >
-        {title && (
-          <div className="absolute top-0 left-0 right-0 p-4 pointer-events-none">
-            <h3 className="text-white text-lg font-medium">{title}</h3>
-          </div>
-        )}
-
         <div 
           className="absolute bottom-0 left-0 right-0 px-4 pb-2 pt-4 pointer-events-auto z-30"
           onClick={(e) => e.stopPropagation()}
