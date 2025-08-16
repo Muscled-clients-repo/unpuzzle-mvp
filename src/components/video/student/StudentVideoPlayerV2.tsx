@@ -163,9 +163,13 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   
   // Handle agent button clicks from sidebar
   const handleAgentRequest = (agentType: string) => {
+    // Get current time from video player ref
+    const currentTime = videoPlayerRef.current?.getCurrentTime() || 0
+    console.log('[V2] Agent button clicked, current time:', currentTime)
+    
     dispatch({
       type: 'AGENT_BUTTON_CLICKED',
-      payload: agentType
+      payload: { agentType, time: currentTime }
     })
   }
 

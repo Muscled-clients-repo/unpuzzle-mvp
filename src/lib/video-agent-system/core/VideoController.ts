@@ -17,6 +17,38 @@ export class VideoController {
     this.videoRef = ref
   }
   
+  getCurrentTime(): number {
+    // Try multiple sources and log for debugging
+    let videoRefTime = 0
+    let storeTime = 0
+    let domTime = 0
+    
+    if (this.videoRef) {
+      videoRefTime = this.videoRef.getCurrentTime()
+    }
+    
+    // Fallback to Zustand store
+    const store = useAppStore.getState()
+    storeTime = store.currentTime
+    
+    // Fallback to DOM
+    const videoElement = document.querySelector('video') as HTMLVideoElement
+    if (videoElement) {
+      domTime = videoElement.currentTime
+    }
+    
+    console.log('[VideoController] getCurrentTime - videoRef:', videoRefTime, 'store:', storeTime, 'dom:', domTime)
+    
+    // Use the highest value (most recent) that's not zero
+    const times = [videoRefTime, storeTime, domTime].filter(t => t > 0)
+    if (times.length > 0) {
+      return Math.max(...times)
+    }
+    
+    // If all are zero, return store time as fallback
+    return storeTime
+  }
+  
   async pauseVideo(): Promise<boolean> {
     if (!this.videoRef) {
       throw new Error('No video ref available')

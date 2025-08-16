@@ -101,7 +101,7 @@ export function AIChatSidebarV2({
           borderColor: 'border-green-500/20',
           textColor: 'text-green-700 dark:text-green-300',
           icon: <Brain className="h-5 w-5" />,
-          label: 'QuizBot',
+          label: 'PuzzleCheck',
           description: 'Test your understanding'
         }
       case 'reflect':
@@ -111,7 +111,7 @@ export function AIChatSidebarV2({
           borderColor: 'border-blue-500/20',
           textColor: 'text-blue-700 dark:text-blue-300',
           icon: <Target className="h-5 w-5" />,
-          label: 'ReflectAI',
+          label: 'PuzzleReflect',
           description: 'Reflect on your learning'
         }
       case 'path':
@@ -121,7 +121,7 @@ export function AIChatSidebarV2({
           borderColor: 'border-indigo-500/20',
           textColor: 'text-indigo-700 dark:text-indigo-300',
           icon: <Route className="h-5 w-5" />,
-          label: 'PathFinder',
+          label: 'PuzzlePath',
           description: 'Get personalized learning paths'
         }
       default:
@@ -150,7 +150,7 @@ export function AIChatSidebarV2({
       )
     }
 
-    // Agent prompt messages (unactivated) - Enhanced card design
+    // Agent prompt messages (unactivated) - Enhanced card design from 1 commit ago
     if (msg.type === 'agent-prompt' && msg.state === MessageState.UNACTIVATED) {
       const config = getAgentConfig(msg.agentType)
       return (
@@ -311,8 +311,8 @@ export function AIChatSidebarV2({
           </div>
         </div>
         
-        {/* Agent Buttons - Enhanced grid */}
-        <div className="grid grid-cols-2 gap-2">
+        {/* Agent Buttons - Single row optimized */}
+        <div className="flex gap-1 w-full">
           {[
             { type: 'hint', icon: Puzzle, label: 'Hint', color: 'hover:bg-gradient-to-r hover:from-purple-500/10 hover:to-yellow-500/10 hover:border-purple-500/50' },
             { type: 'quiz', icon: Brain, label: 'Quiz', color: 'hover:bg-gradient-to-r hover:from-green-500/10 hover:to-emerald-500/10 hover:border-green-500/50' },
@@ -324,13 +324,13 @@ export function AIChatSidebarV2({
               size="sm"
               variant="outline"
               className={cn(
-                "justify-start transition-all border-2",
+                "flex-1 flex-col justify-center items-center h-14 py-2 transition-all border-2",
                 color
               )}
               onClick={() => onAgentRequest(type)}
             >
-              <Icon className="mr-2 h-4 w-4" />
-              <span className="font-medium">{label}</span>
+              <Icon className="h-4 w-4" />
+              <span className="text-xs font-medium">{label}</span>
             </Button>
           ))}
         </div>

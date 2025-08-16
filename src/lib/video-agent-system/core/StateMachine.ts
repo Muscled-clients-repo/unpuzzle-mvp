@@ -140,11 +140,22 @@ export class VideoAgentStateMachine {
     }
   }
   
-  private async handleShowAgent(agentType: string) {
-    console.log(`[SM] Showing agent: ${agentType}`)
+  private async handleShowAgent(payload: any) {
+    // Handle both old string format and new object format
+    const agentType = typeof payload === 'string' ? payload : payload.agentType
+    const passedTime = typeof payload === 'object' ? payload.time : null
+    
+    console.log(`[SM] Showing agent: ${agentType}, passed time: ${passedTime}`)
     
     // Flow 3 & 4: Clear ONLY unactivated agents (keep activated/rejected)
     this.clearUnactivatedMessages()
+    
+    // Use passed time if available, otherwise get from video controller
+    let currentVideoTime = passedTime
+    if (currentVideoTime === null || currentVideoTime === undefined) {
+      currentVideoTime = this.videoController.getCurrentTime()
+    }
+    console.log(`[SM] Using video time: ${currentVideoTime}`)
     
     // Flow 2: Pause video if playing (Issue #1 FIXED)
     if (this.context.videoState.isPlaying) {
@@ -157,12 +168,12 @@ export class VideoAgentStateMachine {
       }
     }
     
-    // 3. Add system message with proper typing
+    // 3. Add system message with proper typing using actual video time
     const systemMessage: Message = {
       id: `sys-${Date.now()}`,
       type: 'system' as const,
       state: MessageState.UNACTIVATED,
-      message: `Paused at ${this.formatTime(this.context.videoState.currentTime)}`,
+      message: `Paused at ${this.formatTime(currentVideoTime)}`,
       timestamp: Date.now()
     }
     
