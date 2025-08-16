@@ -38,6 +38,8 @@ export function useVideoAgentSystem() {
       state: SystemState.VIDEO_PAUSED,
       videoState: { isPlaying: false, currentTime: 0, duration: 0 },
       agentState: { currentUnactivatedId: null, currentSystemMessageId: null, activeType: null },
+      segmentState: { inPoint: null, outPoint: null, isComplete: false, sentToChat: false },
+      recordingState: { isRecording: false, isPaused: false },
       messages: [],
       errors: []
     },

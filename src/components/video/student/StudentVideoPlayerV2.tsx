@@ -214,6 +214,39 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
     })
   }
 
+  // Handle segment actions
+  const handleSetInPoint = () => {
+    console.log('[V2] Setting in point')
+    dispatch({
+      type: 'SET_IN_POINT',
+      payload: {}
+    })
+  }
+
+  const handleSetOutPoint = () => {
+    console.log('[V2] Setting out point')
+    dispatch({
+      type: 'SET_OUT_POINT',
+      payload: {}
+    })
+  }
+
+  const handleClearSegment = () => {
+    console.log('[V2] Clearing segment')
+    dispatch({
+      type: 'CLEAR_SEGMENT',
+      payload: {}
+    })
+  }
+
+  const handleSendSegmentToChat = () => {
+    console.log('[V2] Sending segment to chat')
+    dispatch({
+      type: 'SEND_SEGMENT_TO_CHAT',
+      payload: {}
+    })
+  }
+
   return (
     <div className="flex h-full">
       {/* Main Content */}
@@ -226,6 +259,13 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
             onTimeUpdate={handleVideoTimeUpdate}  // V2 enhanced handler
             onPause={handleVideoPause}  // V2 enhanced pause handler
             onPlay={handleVideoPlay}  // V2 enhanced play handler
+            // Pass segment handlers to child (these will be passed to VideoControls)
+            onSetInPoint={handleSetInPoint}
+            onSetOutPoint={handleSetOutPoint}
+            onSendToChat={handleSendSegmentToChat}
+            onClearSelection={handleClearSegment}
+            inPoint={context.segmentState.inPoint}
+            outPoint={context.segmentState.outPoint}
           />
         </div>
 
@@ -353,6 +393,10 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
               onReflectionSubmit={handleReflectionSubmit}
               onReflectionTypeChosen={handleReflectionTypeChosen}
               onReflectionCancel={handleReflectionCancel}
+              segmentContext={context.segmentState}
+              onClearSegmentContext={handleClearSegment}
+              dispatch={dispatch}
+              recordingState={context.recordingState}
             />
           </div>
         </>

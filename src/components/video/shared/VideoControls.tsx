@@ -41,10 +41,12 @@ interface VideoControlsProps {
   onSkip: (seconds: number) => void
   onFullscreen: () => void
   onTranscriptToggle: () => void
-  onSetInPoint: () => void
-  onSetOutPoint: () => void
-  onSendToChat: () => void
-  onClearSelection: () => void
+  onSetInPoint?: () => void
+  onSetOutPoint?: () => void
+  onSendToChat?: () => void
+  onClearSelection?: () => void
+  inPoint?: number | null
+  outPoint?: number | null
 }
 
 export function VideoControls({
@@ -66,9 +68,14 @@ export function VideoControls({
   onSetOutPoint,
   onSendToChat,
   onClearSelection,
+  inPoint: inPointProp,
+  outPoint: outPointProp,
 }: VideoControlsProps) {
-  const inPoint = useAppStore((state) => state.inPoint)
-  const outPoint = useAppStore((state) => state.outPoint)
+  // Use props if provided, otherwise fall back to store (for backwards compatibility)
+  const storeInPoint = useAppStore((state) => state.inPoint)
+  const storeOutPoint = useAppStore((state) => state.outPoint)
+  const inPoint = inPointProp !== undefined ? inPointProp : storeInPoint
+  const outPoint = outPointProp !== undefined ? outPointProp : storeOutPoint
   
   // console.log('🎮 VideoControls render - inPoint:', inPoint, 'outPoint:', outPoint, 'currentTime:', currentTime, 'duration:', duration, 'render timestamp:', Date.now())
 
@@ -93,9 +100,9 @@ export function VideoControls({
           className="text-white hover:bg-white/20"
         >
           {isPlaying ? (
-            <Pause className="h-5 w-5" />
+            <Pause className="h-6 w-6" />
           ) : (
-            <Play className="h-5 w-5" />
+            <Play className="h-6 w-6" />
           )}
         </Button>
 
@@ -105,7 +112,7 @@ export function VideoControls({
           onClick={() => onSkip(-10)}
           className="text-white hover:bg-white/20"
         >
-          <SkipBack className="h-4 w-4" />
+          <SkipBack className="h-5 w-5" />
         </Button>
 
         <Button
@@ -114,7 +121,7 @@ export function VideoControls({
           onClick={() => onSkip(10)}
           className="text-white hover:bg-white/20"
         >
-          <SkipForward className="h-4 w-4" />
+          <SkipForward className="h-5 w-5" />
         </Button>
 
         <div className="flex items-center space-x-2">
@@ -125,9 +132,9 @@ export function VideoControls({
             className="text-white hover:bg-white/20"
           >
             {isMuted ? (
-              <VolumeX className="h-4 w-4" />
+              <VolumeX className="h-5 w-5" />
             ) : (
-              <Volume2 className="h-4 w-4" />
+              <Volume2 className="h-5 w-5" />
             )}
           </Button>
           <div className="w-20">
@@ -162,9 +169,11 @@ export function VideoControls({
               title="Set In Point (I)"
             >
               <span className="text-sm font-mono">I</span>
-              {inPoint !== null && (
+              {inPoint !== null ? (
                 <span className="ml-1 text-xs font-normal">{formatTime(inPoint)}</span>
-              )}
+              ) : outPoint !== null ? (
+                <span className="ml-1 text-xs font-normal">--</span>
+              ) : null}
             </Button>
             
             <Button
@@ -178,9 +187,11 @@ export function VideoControls({
               title="Set Out Point (O)"
             >
               <span className="text-sm font-mono">O</span>
-              {outPoint !== null && (
+              {outPoint !== null ? (
                 <span className="ml-1 text-xs font-normal">{formatTime(outPoint)}</span>
-              )}
+              ) : inPoint !== null ? (
+                <span className="ml-1 text-xs font-normal">--</span>
+              ) : null}
             </Button>
           </div>
           
@@ -193,7 +204,7 @@ export function VideoControls({
                 className="text-green-400 hover:text-green-300 hover:bg-green-500/20 px-2 flex items-center gap-1"
                 title="Send clip to AI Chat"
               >
-                <Send className="h-3 w-3" />
+                <Send className="h-4 w-4" />
                 <span className="text-xs">Send to Chat</span>
               </Button>
               <Button
@@ -203,7 +214,7 @@ export function VideoControls({
                 className="text-white hover:bg-white/20"
                 title="Clear Selection"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </Button>
             </div>
           )}
@@ -219,7 +230,7 @@ export function VideoControls({
           )}
           title="Toggle Live Transcript"
         >
-          <FileText className="h-4 w-4" />
+          <FileText className="h-5 w-5" />
         </Button>
 
         <DropdownMenu>
@@ -229,7 +240,7 @@ export function VideoControls({
               size="icon"
               className="text-white hover:bg-white/20"
             >
-              <Settings className="h-4 w-4" />
+              <Settings className="h-5 w-5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -253,7 +264,7 @@ export function VideoControls({
           onClick={onFullscreen}
           className="text-white hover:bg-white/20"
         >
-          <Maximize className="h-4 w-4" />
+          <Maximize className="h-5 w-5" />
         </Button>
       </div>
     </div>

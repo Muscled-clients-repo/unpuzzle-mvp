@@ -95,11 +95,21 @@ export interface SystemContext {
     currentSystemMessageId: string | null
     activeType: 'hint' | 'quiz' | 'reflect' | 'path' | null
   }
+  segmentState: {
+    inPoint: number | null
+    outPoint: number | null
+    isComplete: boolean
+    sentToChat: boolean  // Track if segment has been sent as context
+  }
+  recordingState: {
+    isRecording: boolean
+    isPaused: boolean
+  }
   messages: Message[]
   errors: Error[]
 }
 
 export interface Action {
-  type: 'AGENT_BUTTON_CLICKED' | 'VIDEO_MANUALLY_PAUSED' | 'VIDEO_PLAYED' | 'ACCEPT_AGENT' | 'REJECT_AGENT' | 'QUIZ_ANSWER_SELECTED' | 'REFLECTION_SUBMITTED' | 'REFLECTION_TYPE_CHOSEN' | 'REFLECTION_CANCELLED'
+  type: 'AGENT_BUTTON_CLICKED' | 'VIDEO_MANUALLY_PAUSED' | 'VIDEO_PLAYED' | 'ACCEPT_AGENT' | 'REJECT_AGENT' | 'QUIZ_ANSWER_SELECTED' | 'REFLECTION_SUBMITTED' | 'REFLECTION_TYPE_CHOSEN' | 'REFLECTION_CANCELLED' | 'SET_IN_POINT' | 'SET_OUT_POINT' | 'CLEAR_SEGMENT' | 'SEND_SEGMENT_TO_CHAT' | 'RECORDING_STARTED' | 'RECORDING_PAUSED' | 'RECORDING_RESUMED' | 'RECORDING_STOPPED'
   payload: any
 }

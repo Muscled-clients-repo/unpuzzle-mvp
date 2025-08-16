@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Puzzle, Send, Sparkles, Bot, User, Pause, Lightbulb, CheckCircle2, MessageSquare, Route, Clock, Brain, Zap, Target, Mic, Camera, Video, Upload, Square, Play, Trash2, MicOff, Activity } from "lucide-react"
+import { Puzzle, Send, Sparkles, Bot, User, Pause, Lightbulb, CheckCircle2, MessageSquare, Route, Clock, Brain, Zap, Target, Mic, Camera, Video, Upload, Square, Play, Trash2, MicOff, Activity, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AIActivityLog } from "./AIActivityLog"
 import { QuizResultBox } from "./QuizResultBox"
@@ -22,6 +22,18 @@ interface AIChatSidebarV2Props {
   onReflectionSubmit?: (type: string, data: any) => void
   onReflectionTypeChosen?: (type: string) => void
   onReflectionCancel?: () => void
+  segmentContext?: {
+    inPoint: number | null
+    outPoint: number | null
+    isComplete: boolean
+    sentToChat: boolean
+  }
+  onClearSegmentContext?: () => void
+  dispatch?: (action: any) => void
+  recordingState?: {
+    isRecording: boolean
+    isPaused: boolean
+  }
 }
 
 export function AIChatSidebarV2({
@@ -33,7 +45,11 @@ export function AIChatSidebarV2({
   onQuizAnswer,
   onReflectionSubmit,
   onReflectionTypeChosen,
-  onReflectionCancel
+  onReflectionCancel,
+  segmentContext,
+  onClearSegmentContext,
+  dispatch,
+  recordingState
 }: AIChatSidebarV2Props) {
   const [inputValue, setInputValue] = useState("")
   const [isTyping, setIsTyping] = useState(false)
@@ -98,8 +114,19 @@ export function AIChatSidebarV2({
   const handleSendMessage = () => {
     if (!inputValue.trim()) return
     
-    // In a real implementation, this would send to the AI backend
-    console.log("User message:", inputValue)
+    // Build message with segment context if available
+    let message = inputValue
+    if (segmentContext?.sentToChat && segmentContext.inPoint !== null && segmentContext.outPoint !== null) {
+      const contextPrefix = `[Context: Video clip from ${formatRecordingTime(segmentContext.inPoint)} to ${formatRecordingTime(segmentContext.outPoint)}]\n`
+      message = contextPrefix + inputValue
+      console.log("User message with context:", message)
+      
+      // Clear segment context after sending
+      onClearSegmentContext?.()
+    } else {
+      console.log("User message:", message)
+    }
+    
     setInputValue("")
     
     // Show typing indicator
@@ -121,7 +148,7 @@ export function AIChatSidebarV2({
 
   const formatRecordingTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
+    const secs = Math.floor(seconds % 60)
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
@@ -211,10 +238,16 @@ export function AIChatSidebarV2({
           </div>
         )
       } else {
-        // Regular system messages (like "Paused at X:XX")
+        // Regular system messages (like "Paused at X:XX" or "Recording paused at X:XX")
+        const isRecordingPaused = msg.message.includes('Recording paused')
         return (
           <div key={msg.id} className="flex justify-start my-3">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-secondary/50 px-3 py-1.5 rounded-full backdrop-blur-sm border border-border/50">
+            <div className={cn(
+              "flex items-center gap-2 text-xs px-3 py-1.5 rounded-full backdrop-blur-sm border",
+              isRecordingPaused 
+                ? "text-red-600 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800"
+                : "text-muted-foreground bg-secondary/50 border-border/50"
+            )}>
               <Clock className="h-3 w-3" />
               <span className="font-medium">{msg.message}</span>
             </div>
@@ -493,6 +526,9 @@ export function AIChatSidebarV2({
         setRecordingTime(0)
         setHasRecording(false)
         
+        // Dispatch recording started action
+        dispatch?.({ type: 'RECORDING_STARTED', payload: {} })
+        
         // Start recording timer
         recordingIntervalRef.current = setInterval(() => {
           setRecordingTime(prev => prev + 1)
@@ -504,6 +540,8 @@ export function AIChatSidebarV2({
         if (recordingIntervalRef.current) {
           clearInterval(recordingIntervalRef.current)
         }
+        // Dispatch recording paused action
+        dispatch?.({ type: 'RECORDING_PAUSED', payload: {} })
       }
 
       const resumeRecording = () => {
@@ -511,6 +549,8 @@ export function AIChatSidebarV2({
         recordingIntervalRef.current = setInterval(() => {
           setRecordingTime(prev => prev + 1)
         }, 1000)
+        // Dispatch recording resumed action
+        dispatch?.({ type: 'RECORDING_RESUMED', payload: {} })
       }
 
       const stopRecording = () => {
@@ -521,6 +561,9 @@ export function AIChatSidebarV2({
         if (recordingIntervalRef.current) {
           clearInterval(recordingIntervalRef.current)
         }
+        
+        // Dispatch recording stopped action
+        dispatch?.({ type: 'RECORDING_STOPPED', payload: {} })
         
         // Simulate creating audio blob
         const mockBlob = new Blob(['mock-audio-data'], { type: 'audio/wav' })
@@ -626,16 +669,25 @@ export function AIChatSidebarV2({
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-2 flex-1">
-                        <div className="p-2 rounded-lg bg-secondary">
+                        <div className="p-2 rounded-lg bg-red-100 dark:bg-red-950/30">
                           <Mic className={cn(
-                            "h-5 w-5 text-muted-foreground",
-                            !isPaused && "animate-pulse"
+                            "h-5 w-5",
+                            isPaused ? "text-red-400" : "text-red-600"
                           )} />
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm text-muted-foreground">
-                              {isPaused ? 'Paused' : 'Recording'}
+                            {!isPaused && (
+                              <div className="relative">
+                                <div className="w-2 h-2 bg-red-500 rounded-full animate-ping"></div>
+                                <div className="absolute top-0 left-0 w-2 h-2 bg-red-600 rounded-full"></div>
+                              </div>
+                            )}
+                            <span className={cn(
+                              "text-sm font-medium",
+                              isPaused ? "text-red-400" : "text-red-600"
+                            )}>
+                              {isPaused ? 'Recording paused' : 'Recording'}
                             </span>
                             <span className="text-sm font-mono text-muted-foreground">{formatRecordingTime(recordingTime)}</span>
                             {isPaused && isVideoPlaying && (
@@ -913,9 +965,32 @@ export function AIChatSidebarV2({
 
       {/* Input - Enhanced design */}
       <div className="border-t bg-background/95 backdrop-blur-sm p-4">
+        {/* Segment Context Display */}
+        {segmentContext?.sentToChat && segmentContext.inPoint !== null && segmentContext.outPoint !== null && (
+          <div className="mb-3 p-2 bg-secondary/50 rounded-lg border border-primary/20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-1 h-4 bg-gradient-to-b from-green-500 to-red-500 rounded-full" />
+                <span className="text-xs text-muted-foreground">Context:</span>
+                <span className="text-xs font-medium">
+                  Video clip from {formatRecordingTime(segmentContext.inPoint)} to {formatRecordingTime(segmentContext.outPoint)}
+                </span>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onClearSegmentContext}
+                className="h-6 w-6 p-0 hover:bg-secondary"
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+        )}
+        
         <div className="flex gap-2 mb-2">
           <Input
-            placeholder="Ask about the video content..."
+            placeholder={segmentContext?.sentToChat ? "Ask about this video segment..." : "Ask about the video content..."}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}

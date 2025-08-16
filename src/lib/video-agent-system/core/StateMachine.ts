@@ -24,6 +24,16 @@ export class VideoAgentStateMachine {
         currentSystemMessageId: null,
         activeType: null
       },
+      segmentState: {
+        inPoint: null,
+        outPoint: null,
+        isComplete: false,
+        sentToChat: false
+      },
+      recordingState: {
+        isRecording: false,
+        isPaused: false
+      },
       messages: [],
       errors: []
     }
@@ -152,6 +162,86 @@ export class VideoAgentStateMachine {
           maxAttempts: 1,
           status: 'pending'
         }
+      case 'SET_IN_POINT':
+        return {
+          id: `cmd-${Date.now()}`,
+          type: CommandType.SET_IN_POINT,
+          payload: action.payload,
+          timestamp: Date.now(),
+          attempts: 0,
+          maxAttempts: 3,  // Allow retries for robustness
+          status: 'pending'
+        }
+      case 'SET_OUT_POINT':
+        return {
+          id: `cmd-${Date.now()}`,
+          type: CommandType.SET_OUT_POINT,
+          payload: action.payload,
+          timestamp: Date.now(),
+          attempts: 0,
+          maxAttempts: 3,  // Allow retries for robustness
+          status: 'pending'
+        }
+      case 'CLEAR_SEGMENT':
+        return {
+          id: `cmd-${Date.now()}`,
+          type: CommandType.CLEAR_SEGMENT,
+          payload: action.payload,
+          timestamp: Date.now(),
+          attempts: 0,
+          maxAttempts: 1,
+          status: 'pending'
+        }
+      case 'SEND_SEGMENT_TO_CHAT':
+        return {
+          id: `cmd-${Date.now()}`,
+          type: CommandType.SEND_SEGMENT_TO_CHAT,
+          payload: action.payload,
+          timestamp: Date.now(),
+          attempts: 0,
+          maxAttempts: 1,
+          status: 'pending'
+        }
+      case 'RECORDING_STARTED':
+        return {
+          id: `cmd-${Date.now()}`,
+          type: CommandType.RECORDING_STARTED,
+          payload: action.payload,
+          timestamp: Date.now(),
+          attempts: 0,
+          maxAttempts: 1,
+          status: 'pending'
+        }
+      case 'RECORDING_PAUSED':
+        return {
+          id: `cmd-${Date.now()}`,
+          type: CommandType.RECORDING_PAUSED,
+          payload: action.payload,
+          timestamp: Date.now(),
+          attempts: 0,
+          maxAttempts: 1,
+          status: 'pending'
+        }
+      case 'RECORDING_RESUMED':
+        return {
+          id: `cmd-${Date.now()}`,
+          type: CommandType.RECORDING_RESUMED,
+          payload: action.payload,
+          timestamp: Date.now(),
+          attempts: 0,
+          maxAttempts: 1,
+          status: 'pending'
+        }
+      case 'RECORDING_STOPPED':
+        return {
+          id: `cmd-${Date.now()}`,
+          type: CommandType.RECORDING_STOPPED,
+          payload: action.payload,
+          timestamp: Date.now(),
+          attempts: 0,
+          maxAttempts: 1,
+          status: 'pending'
+        }
       default:
         throw new Error(`Unknown action type: ${(action as any).type}`)
     }
@@ -188,6 +278,30 @@ export class VideoAgentStateMachine {
         break
       case CommandType.REFLECTION_CANCEL:
         await this.handleReflectionCancel()
+        break
+      case CommandType.SET_IN_POINT:
+        await this.handleSetInPoint()
+        break
+      case CommandType.SET_OUT_POINT:
+        await this.handleSetOutPoint()
+        break
+      case CommandType.CLEAR_SEGMENT:
+        await this.handleClearSegment()
+        break
+      case CommandType.SEND_SEGMENT_TO_CHAT:
+        await this.handleSendSegmentToChat()
+        break
+      case CommandType.RECORDING_STARTED:
+        await this.handleRecordingStarted()
+        break
+      case CommandType.RECORDING_PAUSED:
+        await this.handleRecordingPaused()
+        break
+      case CommandType.RECORDING_RESUMED:
+        await this.handleRecordingResumed()
+        break
+      case CommandType.RECORDING_STOPPED:
+        await this.handleRecordingStopped()
         break
     }
   }
@@ -231,7 +345,7 @@ export class VideoAgentStateMachine {
       id: `sys-${Date.now()}`,
       type: 'system' as const,
       state: MessageState.UNACTIVATED,
-      message: `Paused at ${this.formatTime(currentVideoTime)}`,
+      message: this.context.recordingState.isRecording ? `Recording paused at ${this.formatTime(currentVideoTime)}` : `Paused at ${this.formatTime(currentVideoTime)}`,
       timestamp: Date.now()
     }
     
@@ -302,7 +416,7 @@ export class VideoAgentStateMachine {
       id: `sys-${Date.now()}`,
       type: 'system' as const,
       state: MessageState.UNACTIVATED,
-      message: `Paused at ${this.formatTime(time)}`,
+      message: this.context.recordingState.isRecording ? `Recording paused at ${this.formatTime(time)}` : `Paused at ${this.formatTime(time)}`,
       timestamp: Date.now()
     }
     
@@ -968,6 +1082,131 @@ export class VideoAgentStateMachine {
     })
   }
 
+  // Segment management handlers
+  private async handleSetInPoint() {
+    console.log('[SM] Setting in point')
+    
+    // NUCLEAR PRINCIPLE: Pause video properly using the async method
+    try {
+      await this.videoController.pauseVideo()
+      console.log('[SM] Video paused for in point')
+    } catch (error) {
+      console.error('[SM] Failed to pause video for in point:', error)
+      // Continue anyway - setting the point is more important than pausing
+    }
+    
+    const currentTime = this.videoController.getCurrentTime()
+    const currentOutPoint = this.context.segmentState.outPoint
+    
+    // NUCLEAR PRINCIPLE: Atomic update with validation
+    // If new in point is after current out point, clear out point
+    let newOutPoint = currentOutPoint
+    if (currentOutPoint !== null && currentTime >= currentOutPoint) {
+      console.log('[SM] In point >= out point, clearing out point')
+      newOutPoint = null
+    }
+    
+    // NUCLEAR PRINCIPLE: Single atomic update
+    this.updateContext({
+      ...this.context,
+      videoState: {
+        ...this.context.videoState,
+        isPlaying: false  // Reflect that video is paused
+      },
+      segmentState: {
+        inPoint: currentTime,
+        outPoint: newOutPoint,
+        isComplete: newOutPoint !== null && currentTime < newOutPoint,
+        sentToChat: false  // Reset when segment changes
+      }
+    })
+    
+    console.log(`[SM] In point set to ${this.formatTime(currentTime)}`)
+  }
+  
+  private async handleSetOutPoint() {
+    console.log('[SM] Setting out point')
+    
+    // NUCLEAR PRINCIPLE: Pause video properly using the async method
+    try {
+      await this.videoController.pauseVideo()
+      console.log('[SM] Video paused for out point')
+    } catch (error) {
+      console.error('[SM] Failed to pause video for out point:', error)
+      // Continue anyway - setting the point is more important than pausing
+    }
+    
+    const currentTime = this.videoController.getCurrentTime()
+    const currentInPoint = this.context.segmentState.inPoint
+    
+    // NUCLEAR PRINCIPLE: Atomic update with validation
+    // If new out point is before current in point, clear in point
+    let newInPoint = currentInPoint
+    if (currentInPoint !== null && currentTime <= currentInPoint) {
+      console.log('[SM] Out point <= in point, clearing in point')
+      newInPoint = null
+    }
+    
+    // If no in point was set, set it to 0
+    if (newInPoint === null && currentInPoint === null) {
+      newInPoint = 0
+    }
+    
+    this.updateContext({
+      ...this.context,
+      videoState: {
+        ...this.context.videoState,
+        isPlaying: false
+      },
+      segmentState: {
+        inPoint: newInPoint,
+        outPoint: currentTime,
+        isComplete: newInPoint !== null && newInPoint < currentTime,
+        sentToChat: false  // Reset when segment changes
+      }
+    })
+    
+    console.log(`[SM] Out point set to ${this.formatTime(currentTime)}`)
+  }
+  
+  private async handleClearSegment() {
+    console.log('[SM] Clearing segment')
+    
+    // NUCLEAR PRINCIPLE: Reset to initial state
+    this.updateContext({
+      ...this.context,
+      segmentState: {
+        inPoint: null,
+        outPoint: null,
+        isComplete: false,
+        sentToChat: false
+      }
+    })
+  }
+  
+  private async handleSendSegmentToChat() {
+    const { inPoint, outPoint, isComplete } = this.context.segmentState
+    
+    if (!isComplete || inPoint === null || outPoint === null) {
+      console.error('[SM] Cannot send incomplete segment to chat')
+      return
+    }
+    
+    console.log(`[SM] Setting segment as chat context: ${this.formatTime(inPoint)} - ${this.formatTime(outPoint)}`)
+    
+    // NUCLEAR PRINCIPLE: Mark segment as sent to chat (as context, not message)
+    // The segment stays active as context for the next message
+    this.updateContext({
+      ...this.context,
+      segmentState: {
+        ...this.context.segmentState,
+        sentToChat: true  // Mark as sent but keep the segment active
+      }
+    })
+    
+    console.log('[SM] Segment set as chat context')
+  }
+
   private async handleReflectionSubmit(payload: { type: string, data: any }) {
     console.log('[SM] Reflection submitted:', payload)
     
@@ -1062,5 +1301,50 @@ export class VideoAgentStateMachine {
 
     // Start countdown to resume video
     this.startVideoCountdown(countdownId)
+  }
+
+  // Recording state handlers
+  private async handleRecordingStarted() {
+    console.log('[SM] Recording started')
+    this.updateContext({
+      ...this.context,
+      recordingState: {
+        isRecording: true,
+        isPaused: false
+      }
+    })
+  }
+
+  private async handleRecordingPaused() {
+    console.log('[SM] Recording paused')
+    this.updateContext({
+      ...this.context,
+      recordingState: {
+        ...this.context.recordingState,
+        isPaused: true
+      }
+    })
+  }
+
+  private async handleRecordingResumed() {
+    console.log('[SM] Recording resumed')
+    this.updateContext({
+      ...this.context,
+      recordingState: {
+        ...this.context.recordingState,
+        isPaused: false
+      }
+    })
+  }
+
+  private async handleRecordingStopped() {
+    console.log('[SM] Recording stopped')
+    this.updateContext({
+      ...this.context,
+      recordingState: {
+        isRecording: false,
+        isPaused: false
+      }
+    })
   }
 }
