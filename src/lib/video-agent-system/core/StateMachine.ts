@@ -1,4 +1,4 @@
-import { SystemContext, SystemState, MessageState, Message, Action } from '../types/states'
+import { SystemContext, SystemState, MessageState, Message, Action, QuizQuestion, QuizState } from '../types/states'
 import { Command, CommandType } from '../types/commands'
 import { CommandQueue } from './CommandQueue'
 import { VideoController, VideoRef } from './VideoController'
@@ -112,6 +112,16 @@ export class VideoAgentStateMachine {
           maxAttempts: 1,
           status: 'pending'
         }
+      case 'QUIZ_ANSWER_SELECTED':
+        return {
+          id: `cmd-${Date.now()}`,
+          type: CommandType.QUIZ_ANSWER,
+          payload: action.payload,
+          timestamp: Date.now(),
+          attempts: 0,
+          maxAttempts: 1,
+          status: 'pending'
+        }
       default:
         throw new Error(`Unknown action type: ${(action as any).type}`)
     }
@@ -136,6 +146,9 @@ export class VideoAgentStateMachine {
         break
       case CommandType.REQUEST_VIDEO_PAUSE:
         await this.videoController.pauseVideo()
+        break
+      case CommandType.QUIZ_ANSWER:
+        await this.handleQuizAnswer(command.payload)
         break
     }
   }
@@ -289,8 +302,15 @@ export class VideoAgentStateMachine {
       return msg
     })
     
-    // Generate AI response
     const agentType = this.context.agentState.activeType
+    
+    // Special handling for quiz agent
+    if (agentType === 'quiz') {
+      await this.startQuiz(updatedMessages)
+      return
+    }
+    
+    // Generate AI response for other agents
     const aiResponse: Message = {
       id: `ai-${Date.now()}`,
       type: 'ai' as const,
@@ -390,7 +410,7 @@ export class VideoAgentStateMachine {
       case 'hint':
         return 'Here\'s a hint: Pay attention to how the state is being managed in this section. The pattern used here will be important for the upcoming exercises.'
       case 'quiz':
-        return 'Quiz Time! Based on what you\'ve watched, what is the primary purpose of the useState hook?\n\n1. To fetch data from an API\n2. To manage local component state\n3. To handle side effects\n4. To optimize performance\n\nType the number of your answer!'
+        return 'Starting your quiz now! Answer each question to the best of your ability.'
       case 'reflect':
         return 'Let\'s reflect on what you\'ve learned:\n\n• What was the most important concept?\n• How does this connect to what you already know?\n• Where could you apply this knowledge?\n\nTake a moment to think about these questions.'
       case 'path':
@@ -398,5 +418,235 @@ export class VideoAgentStateMachine {
       default:
         return 'I\'m here to help you learn. Feel free to ask any questions!'
     }
+  }
+
+  private generateQuizQuestions(): QuizQuestion[] {
+    return [
+      {
+        id: 'q1',
+        question: 'What is the primary purpose of the useState hook in React?',
+        options: [
+          'To fetch data from an API',
+          'To manage local component state',
+          'To handle side effects',
+          'To optimize performance'
+        ],
+        correctAnswer: 1,
+        explanation: 'useState is used to add state to functional components, allowing them to store and update local data.'
+      },
+      {
+        id: 'q2',
+        question: 'When does the useEffect hook run by default?',
+        options: [
+          'Only when the component mounts',
+          'Only when the component unmounts', 
+          'After every render',
+          'Only when props change'
+        ],
+        correctAnswer: 2,
+        explanation: 'useEffect runs after every render by default, including the initial render and after every update.'
+      },
+      {
+        id: 'q3',
+        question: 'What happens when you call setState in React?',
+        options: [
+          'The component re-renders immediately',
+          'The component re-renders on the next event loop',
+          'The component schedules a re-render',
+          'Nothing happens until you refresh'
+        ],
+        correctAnswer: 2,
+        explanation: 'setState schedules a re-render, which React processes asynchronously for performance optimization.'
+      }
+    ]
+  }
+
+  private async startQuiz(updatedMessages: Message[]) {
+    console.log('[SM] Starting quiz')
+    
+    const questions = this.generateQuizQuestions()
+    const quizState: QuizState = {
+      questions,
+      currentQuestionIndex: 0,
+      userAnswers: new Array(questions.length).fill(null),
+      score: 0,
+      isComplete: false
+    }
+
+    // Add AI intro message
+    const aiIntro: Message = {
+      id: `ai-${Date.now()}`,
+      type: 'ai' as const,
+      state: MessageState.PERMANENT,
+      message: 'Starting your quiz now! Answer each question to the best of your ability.',
+      timestamp: Date.now()
+    }
+
+    // Add first quiz question
+    const firstQuestion: Message = {
+      id: `quiz-${Date.now()}`,
+      type: 'quiz-question' as const,
+      state: MessageState.PERMANENT,
+      message: `Question 1 of ${questions.length}`,
+      quizData: questions[0],
+      quizState,
+      timestamp: Date.now()
+    }
+
+    this.updateContext({
+      ...this.context,
+      state: SystemState.AGENT_ACTIVATED,
+      messages: [...updatedMessages, aiIntro, firstQuestion],
+      agentState: {
+        ...this.context.agentState,
+        currentUnactivatedId: null
+      }
+    })
+  }
+
+  private startVideoCountdown(countdownMessageId: string) {
+    let countdown = 3
+    
+    const updateCountdown = () => {
+      countdown--
+      
+      if (countdown > 0) {
+        // Update countdown message
+        const updatedMessages = this.context.messages.map(msg => {
+          if (msg.id === countdownMessageId) {
+            return { ...msg, message: `Video continues in ${countdown}...` }
+          }
+          return msg
+        })
+        
+        this.updateContext({
+          ...this.context,
+          messages: updatedMessages
+        })
+        
+        // Continue countdown
+        setTimeout(updateCountdown, 1000)
+      } else {
+        // Countdown complete - remove countdown message and resume video
+        const updatedMessages = this.context.messages.filter(msg => msg.id !== countdownMessageId)
+        
+        // Resume video playback
+        this.videoController.playVideo()
+        
+        // Update state and remove countdown message
+        this.updateContext({
+          ...this.context,
+          state: SystemState.VIDEO_PLAYING,
+          videoState: {
+            ...this.context.videoState,
+            isPlaying: true
+          },
+          messages: updatedMessages
+        })
+      }
+    }
+    
+    // Start countdown after 1 second delay
+    setTimeout(updateCountdown, 1000)
+  }
+
+  private async handleQuizAnswer(payload: { questionId: string, selectedAnswer: number }) {
+    console.log('[SM] Quiz answer selected:', payload)
+    
+    // Find the current quiz question message
+    const quizMessages = this.context.messages.filter(msg => msg.type === 'quiz-question')
+    const currentQuizMessage = quizMessages[quizMessages.length - 1]
+    
+    if (!currentQuizMessage?.quizState || !currentQuizMessage?.quizData) {
+      console.error('No active quiz found')
+      return
+    }
+
+    const { quizState, quizData } = currentQuizMessage
+    const { selectedAnswer } = payload
+    const isCorrect = selectedAnswer === quizData.correctAnswer
+
+    // Update quiz state
+    const newUserAnswers = [...quizState.userAnswers]
+    newUserAnswers[quizState.currentQuestionIndex] = selectedAnswer
+    
+    const newScore = quizState.score + (isCorrect ? 1 : 0)
+    const nextQuestionIndex = quizState.currentQuestionIndex + 1
+    const isLastQuestion = nextQuestionIndex >= quizState.questions.length
+
+    // Add feedback message
+    const feedbackMessage: Message = {
+      id: `feedback-${Date.now()}`,
+      type: 'ai' as const,
+      state: MessageState.PERMANENT,
+      message: isCorrect 
+        ? `✅ Correct! ${quizData.explanation}`
+        : `❌ Incorrect. ${quizData.explanation}`,
+      timestamp: Date.now()
+    }
+
+    let newMessages = [...this.context.messages, feedbackMessage]
+
+    if (isLastQuestion) {
+      // Quiz complete - show results
+      const resultsMessage: Message = {
+        id: `results-${Date.now()}`,
+        type: 'quiz-result' as const,
+        state: MessageState.PERMANENT,
+        message: `Quiz Complete! You scored ${newScore} out of ${quizState.questions.length}`,
+        quizState: {
+          ...quizState,
+          userAnswers: newUserAnswers,
+          score: newScore,
+          isComplete: true
+        },
+        timestamp: Date.now()
+      }
+      newMessages.push(resultsMessage)
+      
+      // Add countdown message
+      const countdownId = `countdown-${Date.now()}`
+      const countdownMessage: Message = {
+        id: countdownId,
+        type: 'system' as const,
+        state: MessageState.PERMANENT,
+        message: 'Video continues in 3...',
+        timestamp: Date.now()
+      }
+      newMessages.push(countdownMessage)
+      
+      // Update context first, then start countdown
+      this.updateContext({
+        ...this.context,
+        messages: newMessages
+      })
+      
+      // Start countdown to resume video with the countdown message ID
+      this.startVideoCountdown(countdownId)
+      return // Early return since we already updated context
+    } else {
+      // Show next question
+      const nextQuestion = quizState.questions[nextQuestionIndex]
+      const nextQuestionMessage: Message = {
+        id: `quiz-${Date.now()}`,
+        type: 'quiz-question' as const,
+        state: MessageState.PERMANENT,
+        message: `Question ${nextQuestionIndex + 1} of ${quizState.questions.length}`,
+        quizData: nextQuestion,
+        quizState: {
+          ...quizState,
+          currentQuestionIndex: nextQuestionIndex,
+          userAnswers: newUserAnswers,
+          score: newScore
+        },
+        timestamp: Date.now()
+      }
+      newMessages.push(nextQuestionMessage)
+    }
+
+    this.updateContext({
+      ...this.context,
+      messages: newMessages
+    })
   }
 }

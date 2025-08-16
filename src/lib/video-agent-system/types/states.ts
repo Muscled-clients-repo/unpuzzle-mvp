@@ -25,14 +25,32 @@ export enum MessageState {
   PERMANENT = 'permanent'
 }
 
+export interface QuizQuestion {
+  id: string
+  question: string
+  options: string[]
+  correctAnswer: number
+  explanation: string
+}
+
+export interface QuizState {
+  questions: QuizQuestion[]
+  currentQuestionIndex: number
+  userAnswers: (number | null)[]
+  score: number
+  isComplete: boolean
+}
+
 export interface Message {
   id: string
-  type: 'system' | 'agent-prompt' | 'ai' | 'user'
+  type: 'system' | 'agent-prompt' | 'ai' | 'user' | 'quiz-question' | 'quiz-result'
   agentType?: 'hint' | 'quiz' | 'reflect' | 'path'
   state: MessageState
   message: string
   timestamp: number
   linkedMessageId?: string
+  quizData?: QuizQuestion
+  quizState?: QuizState
   actions?: {
     onAccept?: () => void
     onReject?: () => void
@@ -56,6 +74,6 @@ export interface SystemContext {
 }
 
 export interface Action {
-  type: 'AGENT_BUTTON_CLICKED' | 'VIDEO_MANUALLY_PAUSED' | 'VIDEO_PLAYED' | 'ACCEPT_AGENT' | 'REJECT_AGENT'
+  type: 'AGENT_BUTTON_CLICKED' | 'VIDEO_MANUALLY_PAUSED' | 'VIDEO_PLAYED' | 'ACCEPT_AGENT' | 'REJECT_AGENT' | 'QUIZ_ANSWER_SELECTED'
   payload: any
 }

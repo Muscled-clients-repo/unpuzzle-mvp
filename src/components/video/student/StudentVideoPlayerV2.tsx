@@ -173,6 +173,16 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
     })
   }
 
+  // Handle quiz answer selection
+  const handleQuizAnswer = (questionId: string, selectedAnswer: number) => {
+    console.log('[V2] Quiz answer selected:', { questionId, selectedAnswer })
+    
+    dispatch({
+      type: 'QUIZ_ANSWER_SELECTED',
+      payload: { questionId, selectedAnswer }
+    })
+  }
+
   return (
     <div className="flex h-full">
       {/* Main Content */}
@@ -307,6 +317,7 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
               onAgentRequest={handleAgentRequest}
               onAgentAccept={(id) => dispatch({ type: 'ACCEPT_AGENT', payload: id })}
               onAgentReject={(id) => dispatch({ type: 'REJECT_AGENT', payload: id })}
+              onQuizAnswer={handleQuizAnswer}
             />
           </div>
         </>

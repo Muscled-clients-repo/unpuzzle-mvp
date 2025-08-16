@@ -15,13 +15,15 @@ interface AIChatSidebarV2Props {
   onAgentRequest: (type: string) => void
   onAgentAccept: (id: string) => void
   onAgentReject: (id: string) => void
+  onQuizAnswer?: (questionId: string, selectedAnswer: number) => void
 }
 
 export function AIChatSidebarV2({
   messages,
   onAgentRequest,
   onAgentAccept,
-  onAgentReject
+  onAgentReject,
+  onQuizAnswer
 }: AIChatSidebarV2Props) {
   const [inputValue, setInputValue] = useState("")
   const [isTyping, setIsTyping] = useState(false)
@@ -290,6 +292,80 @@ export function AIChatSidebarV2({
               <User className="h-5 w-5 text-white" />
             </AvatarFallback>
           </Avatar>
+        </div>
+      )
+    }
+
+    // Quiz question messages - Compact for sidebar
+    if (msg.type === 'quiz-question' && msg.quizData) {
+      const { quizData } = msg
+      return (
+        <div key={msg.id} className="mb-3">
+          <div className="bg-green-50 dark:bg-green-950/20 rounded-lg p-3 border border-green-200 dark:border-green-800">
+            <div className="flex items-center gap-2 mb-2">
+              <Brain className="h-4 w-4 text-green-600" />
+              <span className="text-sm font-semibold text-green-700 dark:text-green-300">
+                {msg.message}
+              </span>
+            </div>
+            <p className="text-sm font-medium mb-2">{quizData.question}</p>
+            <div className="space-y-1">
+              {quizData.options.map((option, index) => (
+                <Button
+                  key={index}
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start text-left text-xs p-2 h-auto hover:bg-green-50 dark:hover:bg-green-950/30"
+                  onClick={() => onQuizAnswer?.(quizData.id, index)}
+                >
+                  <span className="mr-2 text-green-600 font-semibold">
+                    {String.fromCharCode(65 + index)}.
+                  </span>
+                  <span className="truncate">{option}</span>
+                </Button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    // Quiz result messages - Horizontal compact layout
+    if (msg.type === 'quiz-result' && msg.quizState) {
+      const { quizState } = msg
+      const percentage = Math.round((quizState.score / quizState.questions.length) * 100)
+      const emoji = percentage >= 80 ? '🎉' : percentage >= 60 ? '👍' : '📚'
+      
+      return (
+        <div key={msg.id} className="mb-3">
+          <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
+            <div className="flex items-center justify-between">
+              {/* Left side - Score */}
+              <div className="flex items-center gap-2">
+                <span className="text-xl">{emoji}</span>
+                <div>
+                  <p className="text-xs font-medium text-blue-600 dark:text-blue-400">Quiz Complete</p>
+                  <p className="text-sm font-bold text-blue-700 dark:text-blue-300">
+                    {quizState.score}/{quizState.questions.length} • {percentage}%
+                  </p>
+                </div>
+              </div>
+              
+              {/* Right side - Question results */}
+              <div className="flex items-center gap-1.5 text-xs">
+                {quizState.questions.map((question, index) => {
+                  const userAnswer = quizState.userAnswers[index]
+                  const isCorrect = userAnswer === question.correctAnswer
+                  return (
+                    <span key={question.id} className="flex items-center">
+                      <span className="text-muted-foreground">Q{index + 1}</span>
+                      <span className="ml-0.5 text-[10px]">{isCorrect ? '✅' : '❌'}</span>
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
         </div>
       )
     }
