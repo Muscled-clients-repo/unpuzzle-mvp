@@ -81,10 +81,10 @@ export function AIActivityLog({ messages, isOpen = false, onToggle }: AIActivity
   // For overlay mode, render within container
   if (onToggle) {
     return (
-      <div className="absolute inset-0 z-50 bg-background/95 backdrop-blur-sm animate-in fade-in-0 slide-in-from-bottom-4">
-        <div className="flex flex-col h-full p-4">
+      <div className="absolute inset-0 z-50 bg-background/95 backdrop-blur-sm animate-in fade-in-0 slide-in-from-right">
+        <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center justify-between mb-4 pb-4 border-b">
+          <div className="flex items-center justify-between p-4 border-b">
             <div className="flex items-center gap-3">
               <Activity className="h-5 w-5 text-primary" />
               <h2 className="text-xl font-bold">Activity Log</h2>
@@ -105,7 +105,7 @@ export function AIActivityLog({ messages, isOpen = false, onToggle }: AIActivity
           </div>
           
           {/* Content */}
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 p-4">
             {activities.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">
                 No interactions yet. Start by pausing the video or clicking an agent button.

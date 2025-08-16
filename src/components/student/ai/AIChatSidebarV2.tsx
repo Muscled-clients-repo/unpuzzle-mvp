@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react"
 import { Message, MessageState, ReflectionData } from "@/lib/video-agent-system"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Puzzle, Send, Sparkles, Bot, User, Pause, Lightbulb, CheckCircle2, MessageSquare, Route, Clock, Brain, Zap, Target, Mic, Camera, Video, Upload, Square, Play, Trash2, MicOff, Activity, X } from "lucide-react"
@@ -69,163 +68,105 @@ export function AIChatSidebarV2({
     msg.state === MessageState.UNACTIVATED &&
     !((msg as any).accepted)
   )?.agentType || null
-  const [acceptedAgents, setAcceptedAgents] = useState<Set<string>>(new Set())
+  
   const scrollRef = useRef<HTMLDivElement>(null)
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const playbackIntervalRef = useRef<NodeJS.Timeout | null>(null)
   
-  // Add welcome message if no messages
-  const displayMessages: Message[] = messages.length === 0 ? [{
-    id: "welcome",
-    type: "ai" as const,
-    state: MessageState.PERMANENT,
-    message: "Welcome! This is Alam, I'll use my team of agents to accelerate your learning of this video.",
-    timestamp: Date.now()
-  }] : messages
-
-  // Scroll to bottom when messages change
-  // Clear accepted agents when reflection options appear (means they accepted)
+  // Auto-scroll to bottom when messages change
   useEffect(() => {
-    const hasReflectionOptions = messages.some(msg => msg.type === 'reflection-options')
-    if (hasReflectionOptions) {
-      setAcceptedAgents(new Set())
+    if (scrollRef.current) {
+      scrollRef.current.scrollIntoView({ behavior: "smooth" })
     }
   }, [messages])
-
-  // Pause recording when video plays
-  useEffect(() => {
-    if (isVideoPlaying && isRecording && !isPaused) {
-      // Video started playing while recording - pause the recording
-      console.log('[Sidebar] Video playing - pausing voice recording')
-      setIsPaused(true)
-      if (recordingIntervalRef.current) {
-        clearInterval(recordingIntervalRef.current)
-        recordingIntervalRef.current = null
-      }
-    }
-  }, [isVideoPlaying, isRecording, isPaused])
-
-  useEffect(() => {
-    setTimeout(() => {
-      scrollRef.current?.scrollIntoView({ behavior: "smooth" })
-    }, 100)
-  }, [messages])
-
+  
   const handleSendMessage = () => {
     if (!inputValue.trim()) return
     
-    // Build message with segment context if available
-    let message = inputValue
-    if (segmentContext?.sentToChat && segmentContext.inPoint !== null && segmentContext.outPoint !== null) {
-      const contextPrefix = `[Context: Video clip from ${formatRecordingTime(segmentContext.inPoint)} to ${formatRecordingTime(segmentContext.outPoint)}]\n`
-      message = contextPrefix + inputValue
-      console.log("User message with context:", message)
-      
-      // Clear segment context after sending
-      onClearSegmentContext?.()
-    } else {
-      console.log("User message:", message)
-    }
+    // Add segment context if present
+    const messageWithContext = segmentContext?.sentToChat 
+      ? `[Video segment: ${formatRecordingTime(segmentContext.inPoint!)} - ${formatRecordingTime(segmentContext.outPoint!)}]\n${inputValue}`
+      : inputValue
     
+    // Simulate sending message
+    console.log("Sending message:", messageWithContext)
     setInputValue("")
-    
-    // Show typing indicator
     setIsTyping(true)
+    
+    // Clear segment context after sending
+    if (segmentContext?.sentToChat) {
+      onClearSegmentContext?.()
+    }
     
     // Simulate AI response
     setTimeout(() => {
       setIsTyping(false)
-      // Response would be handled by state machine in real implementation
     }, 2000)
   }
-
-  const formatTimestamp = (timestamp: number): string => {
-    return new Date(timestamp).toLocaleTimeString([], { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    })
+  
+  const getAgentConfig = (type?: string) => {
+    switch (type) {
+      case 'hint':
+        return {
+          icon: Lightbulb,
+          title: 'PuzzleHint',
+          color: 'from-blue-500/20 to-cyan-500/20',
+          borderColor: 'border-blue-500',
+          buttonColor: 'bg-blue-500 hover:bg-blue-600',
+          iconBg: 'bg-gradient-to-br from-blue-500 to-cyan-500'
+        }
+      case 'quiz':
+        return {
+          icon: Brain,
+          title: 'PuzzleCheck',
+          color: 'from-emerald-500/20 to-green-500/20',
+          borderColor: 'border-emerald-500',
+          buttonColor: 'bg-emerald-500 hover:bg-emerald-600',
+          iconBg: 'bg-gradient-to-br from-emerald-500 to-green-500'
+        }
+      case 'reflect':
+        return {
+          icon: Zap,
+          title: 'PuzzleReflect',
+          color: 'from-purple-500/20 to-pink-500/20',
+          borderColor: 'border-purple-500',
+          buttonColor: 'bg-purple-500 hover:bg-purple-600',
+          iconBg: 'bg-gradient-to-br from-purple-500 to-pink-500'
+        }
+      case 'path':
+        return {
+          icon: Target,
+          title: 'PuzzlePath',
+          color: 'from-orange-500/20 to-amber-500/20',
+          borderColor: 'border-orange-500',
+          buttonColor: 'bg-orange-500 hover:bg-orange-600',
+          iconBg: 'bg-gradient-to-br from-orange-500 to-amber-500'
+        }
+      default:
+        return {
+          icon: Puzzle,
+          title: 'Unknown',
+          color: 'from-gray-500/20 to-gray-400/20',
+          borderColor: 'border-gray-500',
+          buttonColor: 'bg-gray-500 hover:bg-gray-600',
+          iconBg: 'bg-gray-500'
+        }
+    }
   }
-
+  
   const formatRecordingTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60)
     const secs = Math.floor(seconds % 60)
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
-
-  const getAgentIcon = (agentType?: string) => {
-    switch (agentType) {
-      case 'hint':
-        return <Puzzle className="h-4 w-4" />
-      case 'quiz':
-        return <Brain className="h-4 w-4" />
-      case 'reflect':
-        return <Target className="h-4 w-4" />
-      case 'path':
-        return <Route className="h-4 w-4" />
-      default:
-        return <Bot className="h-4 w-4" />
-    }
-  }
-
-  const getAgentConfig = (agentType?: string) => {
-    switch (agentType) {
-      case 'hint':
-        return {
-          color: 'from-blue-500 to-cyan-500',
-          bgColor: 'bg-gradient-to-br from-blue-500/10 to-cyan-500/10',
-          borderColor: 'border-blue-500/20',
-          textColor: 'text-blue-700 dark:text-blue-300',
-          icon: <Puzzle className="h-5 w-5" />,
-          label: 'PuzzleHint',
-          description: 'Get hints about key concepts'
-        }
-      case 'quiz':
-        return {
-          color: 'from-green-500 to-emerald-500',
-          bgColor: 'bg-gradient-to-br from-green-500/10 to-emerald-500/10',
-          borderColor: 'border-green-500/20',
-          textColor: 'text-green-700 dark:text-green-300',
-          icon: <Brain className="h-5 w-5" />,
-          label: 'PuzzleCheck',
-          description: 'Test your understanding'
-        }
-      case 'reflect':
-        return {
-          color: 'from-purple-500 to-yellow-500',
-          bgColor: 'bg-gradient-to-br from-purple-500/10 to-yellow-500/10',
-          borderColor: 'border-purple-500/20',
-          textColor: 'text-purple-700 dark:text-purple-300',
-          icon: <Target className="h-5 w-5" />,
-          label: 'PuzzleReflect',
-          description: 'Reflect on your learning'
-        }
-      case 'path':
-        return {
-          color: 'from-indigo-500 to-purple-500',
-          bgColor: 'bg-gradient-to-br from-indigo-500/10 to-purple-500/10',
-          borderColor: 'border-indigo-500/20',
-          textColor: 'text-indigo-700 dark:text-indigo-300',
-          icon: <Route className="h-5 w-5" />,
-          label: 'PuzzlePath',
-          description: 'Get personalized learning paths'
-        }
-      default:
-        return {
-          color: 'from-gray-500 to-gray-600',
-          bgColor: 'bg-gray-500/10',
-          borderColor: 'border-gray-500/20',
-          textColor: 'text-gray-700 dark:text-gray-300',
-          icon: <Bot className="h-5 w-5" />,
-          label: 'AI Assistant',
-          description: 'General assistance'
-        }
-    }
-  }
-
+  
+  // Filter messages for display (no filtering here, done in state machine)
+  const displayMessages = messages
+  
   const renderMessage = (msg: Message) => {
-    // System messages - Subtle, consistent design, left-aligned
+    // System messages (like "Paused at X:XX") - More subtle styling
     if (msg.type === 'system') {
-      // Check if this is a timestamp activity message (contains 📍)
+      // Check if this is an activity message (e.g., "📍 PuzzleHint • Hint at 0:20")
       const isActivityMessage = msg.message.includes('📍')
       
       if (isActivityMessage) {
@@ -263,54 +204,38 @@ export function AIChatSidebarV2({
         <Card 
           key={msg.id}
           className={cn(
-            "mb-4 border-2 overflow-hidden transition-all hover:shadow-lg",
-            config.borderColor,
-            config.bgColor
+            "my-4 overflow-hidden shadow-lg",
+            `bg-gradient-to-br ${config.color}`,
+            `border-2 ${config.borderColor}`
           )}
         >
-          <div className="p-5">
-            <div className="flex items-start gap-4">
-              <div className={cn(
-                "p-3 rounded-xl bg-gradient-to-br shadow-lg",
-                config.color
-              )}>
-                <div className="text-white">
-                  {config.icon}
-                </div>
-              </div>
+          <div className="p-4">
+            <div className="flex items-start gap-3">
+              <Avatar className="h-10 w-10 border-2 border-white/20 shadow-md">
+                <AvatarFallback className={config.iconBg}>
+                  <config.icon className="h-5 w-5 text-white" />
+                </AvatarFallback>
+              </Avatar>
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className={cn("font-bold text-sm", config.textColor)}>
-                    {config.label}
-                  </span>
-                  <Sparkles className="h-3 w-3 text-yellow-500 animate-pulse" />
+                  <span className="font-bold text-sm">{config.title}</span>
+                  <span className="text-xs text-muted-foreground">AI Assistant</span>
                 </div>
-                <p className="font-medium text-foreground mb-4">{msg.message}</p>
-                <div className="flex gap-3">
+                <p className="text-sm mb-4">{msg.message}</p>
+                <div className="flex gap-2">
                   <Button
                     size="sm"
-                    onClick={() => {
-                      if (!acceptedAgents.has(msg.id)) {
-                        setAcceptedAgents(prev => new Set([...prev, msg.id]))
-                        onAgentAccept(msg.id)
-                      }
-                    }}
-                    disabled={acceptedAgents.has(msg.id)}
-                    className={cn(
-                      "bg-gradient-to-r text-white font-medium shadow-md hover:shadow-lg transition-all",
-                      config.color,
-                      acceptedAgents.has(msg.id) && "opacity-50 cursor-not-allowed"
-                    )}
+                    className={cn("text-white shadow-md", config.buttonColor)}
+                    onClick={() => onAgentAccept(msg.id)}
                   >
-                    <Zap className="mr-1 h-3 w-3" />
-                    {acceptedAgents.has(msg.id) ? "Loading..." : "Yes, let's go!"}
+                    <CheckCircle2 className="mr-1.5 h-4 w-4" />
+                    Let's go
                   </Button>
                   <Button
                     size="sm"
                     variant="ghost"
+                    className="hover:bg-white/20"
                     onClick={() => onAgentReject(msg.id)}
-                    disabled={acceptedAgents.has(msg.id)}
-                    className="hover:bg-secondary/50"
                   >
                     Not now
                   </Button>
@@ -321,197 +246,150 @@ export function AIChatSidebarV2({
         </Card>
       )
     }
-
-    // Agent prompt messages (activated, rejected, or accepted but still unactivated for reflect) - Enhanced style
-    if (msg.type === 'agent-prompt' && (msg.state === MessageState.ACTIVATED || msg.state === MessageState.REJECTED || (msg.state === MessageState.UNACTIVATED && (msg as any).accepted))) {
+    
+    // Activated/Rejected agent prompts (show without buttons) - Minimalist design
+    if (msg.type === 'agent-prompt' && (msg.state === MessageState.ACTIVATED || msg.state === MessageState.REJECTED || (msg as any).accepted)) {
       const config = getAgentConfig(msg.agentType)
+      const isRejected = msg.state === MessageState.REJECTED
+      
       return (
-        <div key={msg.id} className="mb-4">
-          <div className={cn(
-            "flex items-start gap-3 p-3 rounded-lg",
-            msg.state === MessageState.REJECTED ? "opacity-60" : "",
-            config.bgColor
+        <div key={msg.id} className="flex items-start gap-3 my-4">
+          <Avatar className={cn(
+            "h-10 w-10 border-2 shadow-md",
+            isRejected ? "opacity-50 border-gray-300" : "border-primary/20"
           )}>
-            <Avatar className="h-10 w-10 border-2 border-background shadow-md">
-              <AvatarFallback className={cn("bg-gradient-to-br text-white", config.color)}>
-                {getAgentIcon(msg.agentType)}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className={cn("text-sm font-bold", config.textColor)}>
-                  {config.label}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {formatTimestamp(msg.timestamp)}
-                </span>
-                {msg.state === MessageState.REJECTED && (
-                  <span className="text-xs bg-secondary/50 px-2 py-0.5 rounded-full text-muted-foreground">
-                    Declined
-                  </span>
-                )}
-              </div>
-              <p className="text-sm text-foreground/90">{msg.message}</p>
+            <AvatarFallback className={cn(
+              isRejected ? "bg-gray-400" : config.iconBg
+            )}>
+              <config.icon className="h-5 w-5 text-white" />
+            </AvatarFallback>
+          </Avatar>
+          <div className={cn(
+            "flex-1 bg-secondary/30 rounded-lg px-4 py-3 border",
+            isRejected ? "opacity-60 border-gray-300" : "border-border/50"
+          )}>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-semibold text-sm">{config.title}</span>
+              {isRejected && (
+                <span className="text-xs text-muted-foreground">(Skipped)</span>
+              )}
             </div>
+            <p className="text-sm">{msg.message}</p>
           </div>
         </div>
       )
     }
-
-    // AI messages - Enhanced design with reflection and quiz support
+    
+    // AI messages (responses) - Enhanced styling with better visual hierarchy
     if (msg.type === 'ai') {
-      const reflectionData = (msg as any).reflectionData
+      // Check if this is a quiz result message
       const quizResult = (msg as any).quizResult
       
       return (
-        <div key={msg.id} className="mb-4">
-          <div className="flex items-start gap-3">
-            <Avatar className="h-10 w-10 border-2 border-primary/20 shadow-md">
-              <AvatarFallback className="bg-gradient-to-br from-primary to-primary/70">
-                <Bot className="h-5 w-5 text-primary-foreground" />
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-sm font-bold text-primary">AI Assistant</span>
-                <span className="text-xs text-muted-foreground">
-                  {formatTimestamp(msg.timestamp)}
-                </span>
-              </div>
-              <div className="bg-secondary/30 rounded-lg p-3 border border-border/50">
-                <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
-                
-                {/* Show quiz results if this is a quiz completion message */}
-                {quizResult && (
-                  <div className="mt-3">
-                    <QuizResultBox quizResult={quizResult} />
-                  </div>
-                )}
-                
-                {/* Show voice memo player if this is a voice reflection */}
-                {reflectionData?.type === 'voice' && reflectionData.duration && (
-                  <div className="mt-3 bg-background/50 rounded-md p-2 border border-border/50">
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="p-1.5 h-8 w-8 hover:bg-primary/10"
-                      >
-                        <Play className="h-4 w-4 text-primary/70" />
-                      </Button>
-                      <div className="flex-1">
-                        <div className="h-1 bg-secondary rounded-full overflow-hidden">
-                          <div className="h-full w-0 bg-primary/50" />
-                        </div>
-                        <div className="flex items-center justify-between mt-1">
-                          <span className="text-[10px] text-muted-foreground">0:00</span>
-                          <span className="text-[10px] font-medium text-muted-foreground">
-                            {formatRecordingTime(reflectionData.duration)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 px-2">
-                        <Mic className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-xs text-muted-foreground">Voice Memo</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Show screenshot indicator if this is a screenshot reflection */}
-                {reflectionData?.type === 'screenshot' && (
-                  <div className="mt-3 bg-background/50 rounded-md p-2 border border-border/50">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 rounded bg-secondary">
-                        <Camera className="h-3.5 w-3.5 text-muted-foreground" />
-                      </div>
-                      <span className="text-xs text-muted-foreground">Screenshot attached</span>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Show loom link if this is a loom reflection */}
-                {reflectionData?.type === 'loom' && (
-                  <div className="mt-3 bg-background/50 rounded-md p-2 border border-border/50">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 rounded bg-secondary">
-                        <Video className="h-3.5 w-3.5 text-muted-foreground" />
-                      </div>
-                      <span className="text-xs text-muted-foreground truncate flex-1">
-                        Loom video linked
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
+        <div key={msg.id} className="flex items-start gap-3 my-4">
+          <Avatar className="h-10 w-10 border-2 border-primary/20 shadow-md">
+            <AvatarFallback className="bg-gradient-to-br from-primary to-primary/70">
+              <Bot className="h-5 w-5 text-primary-foreground" />
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex-1 bg-gradient-to-br from-secondary/50 to-secondary/30 rounded-lg px-4 py-3 border border-border/50">
+            <div className="prose prose-sm dark:prose-invert max-w-none">
+              <div className="text-sm whitespace-pre-wrap">{msg.message}</div>
             </div>
+            {quizResult && (
+              <div className="mt-3">
+                <QuizResultBox quizResult={quizResult} />
+              </div>
+            )}
           </div>
         </div>
       )
     }
-
-    // User messages - Enhanced style
+    
+    // User messages - Clean and simple
     if (msg.type === 'user') {
       return (
-        <div key={msg.id} className="mb-4 flex items-start gap-3 justify-end">
-          <div className="flex-1 max-w-[80%]">
-            <div className="flex items-center gap-2 mb-1 justify-end">
-              <span className="text-xs text-muted-foreground">
-                {formatTimestamp(msg.timestamp)}
-              </span>
-              <span className="text-sm font-medium">You</span>
-            </div>
-            <div className="bg-gradient-to-br from-primary/20 to-primary/10 rounded-lg p-3 border border-primary/20">
-              <p className="text-sm">{msg.message}</p>
-            </div>
+        <div key={msg.id} className="flex items-start gap-3 my-4 justify-end">
+          <div className="bg-primary text-primary-foreground rounded-lg px-4 py-3 max-w-[80%] shadow-md">
+            <p className="text-sm">{msg.message}</p>
           </div>
-          <Avatar className="h-10 w-10 border-2 border-background shadow-md">
-            <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600">
-              <User className="h-5 w-5 text-white" />
+          <Avatar className="h-10 w-10 border-2 border-primary shadow-md">
+            <AvatarFallback className="bg-primary text-primary-foreground">
+              <User className="h-5 w-5" />
             </AvatarFallback>
           </Avatar>
         </div>
       )
     }
-
-    // Quiz question messages - Compact for sidebar
-    if (msg.type === 'quiz-question' && msg.quizData) {
-      const { quizData } = msg
+    
+    // Quiz question messages - Interactive quiz cards
+    if (msg.type === 'quiz-question') {
+      const quizData = msg.quizData
+      const quizState = msg.quizState
+      
+      if (!quizData) return null
+      
+      const hasAnswered = quizState?.userAnswers[quizState.currentQuestionIndex] !== null
+      const selectedAnswer = quizState?.userAnswers[quizState.currentQuestionIndex]
+      const isCorrect = selectedAnswer === quizData.correctAnswer
+      
       return (
-        <div key={msg.id} className="mb-3">
-          <div className="bg-green-50 dark:bg-green-950/20 rounded-lg p-3 border border-green-200 dark:border-green-800">
-            <div className="flex items-center gap-2 mb-2">
-              <Brain className="h-4 w-4 text-green-600" />
-              <span className="text-sm font-semibold text-green-700 dark:text-green-300">
-                {msg.message}
-              </span>
+        <Card key={msg.id} className="my-4 bg-gradient-to-br from-emerald-500/10 to-green-500/10 border-2 border-emerald-500/50">
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Brain className="h-5 w-5 text-emerald-600" />
+              <span className="font-bold text-sm">Quiz Question {(quizState?.currentQuestionIndex || 0) + 1}</span>
             </div>
-            <p className="text-sm font-medium mb-2">{quizData.question}</p>
-            <div className="space-y-1">
+            <p className="text-sm font-medium mb-4">{quizData.question}</p>
+            <div className="space-y-2">
               {quizData.options.map((option, index) => (
-                <Button
+                <button
                   key={index}
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-start text-left text-xs p-2 h-auto hover:bg-green-50 dark:hover:bg-green-950/30"
-                  onClick={() => onQuizAnswer?.(quizData.id, index)}
+                  onClick={() => !hasAnswered && onQuizAnswer?.(quizData.id, index)}
+                  disabled={hasAnswered}
+                  className={cn(
+                    "w-full text-left p-3 rounded-lg transition-all text-sm",
+                    hasAnswered && index === selectedAnswer
+                      ? isCorrect
+                        ? "bg-green-100 dark:bg-green-950 border-2 border-green-500"
+                        : "bg-red-100 dark:bg-red-950 border-2 border-red-500"
+                      : hasAnswered && index === quizData.correctAnswer
+                      ? "bg-green-100 dark:bg-green-950 border-2 border-green-500"
+                      : hasAnswered
+                      ? "bg-gray-100 dark:bg-gray-800 opacity-50"
+                      : "bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700"
+                  )}
                 >
-                  <span className="mr-2 text-green-600 font-semibold">
-                    {String.fromCharCode(65 + index)}.
-                  </span>
-                  <span className="truncate">{option}</span>
-                </Button>
+                  <div className="flex items-center justify-between">
+                    <span>{option}</span>
+                    {hasAnswered && index === selectedAnswer && (
+                      <span className={isCorrect ? "text-green-600" : "text-red-600"}>
+                        {isCorrect ? "✓" : "✗"}
+                      </span>
+                    )}
+                    {hasAnswered && index === quizData.correctAnswer && index !== selectedAnswer && (
+                      <span className="text-green-600">✓</span>
+                    )}
+                  </div>
+                </button>
               ))}
             </div>
+            {hasAnswered && (
+              <div className={cn(
+                "mt-4 p-3 rounded-lg text-sm",
+                isCorrect 
+                  ? "bg-green-50 dark:bg-green-950/30 text-green-800 dark:text-green-200"
+                  : "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200"
+              )}>
+                <p className="font-semibold mb-1">
+                  {isCorrect ? "Correct! 🎉" : "Not quite right."}
+                </p>
+                <p>{quizData.explanation}</p>
+              </div>
+            )}
           </div>
-        </div>
+        </Card>
       )
-    }
-
-    // Quiz result messages - Now handled in AI messages with quizResult
-    // Skip rendering old quiz-result type messages
-    if (msg.type === 'quiz-result') {
-      return null
     }
 
     // Reflection options messages
@@ -574,84 +452,62 @@ export function AIChatSidebarV2({
         setHasRecording(false)
         setRecordingTime(0)
         setAudioBlob(null)
-        setIsPlaying(false)
-        setPlaybackTime(0)
       }
 
-      const playRecording = () => {
+      const startPlayback = () => {
         setIsPlaying(true)
         setPlaybackTime(0)
         
         playbackIntervalRef.current = setInterval(() => {
           setPlaybackTime(prev => {
             if (prev >= recordingTime) {
-              setIsPlaying(false)
-              if (playbackIntervalRef.current) {
-                clearInterval(playbackIntervalRef.current)
-              }
-              return 0
+              stopPlayback()
+              return recordingTime
             }
             return prev + 1
           })
         }, 1000)
       }
 
-      const pausePlayback = () => {
+      const stopPlayback = () => {
         setIsPlaying(false)
         if (playbackIntervalRef.current) {
           clearInterval(playbackIntervalRef.current)
         }
       }
 
-      const sendRecording = () => {
-        if (hasRecording && audioBlob) {
-          onReflectionSubmit?.('voice', {
+      const submitRecording = () => {
+        if (audioBlob) {
+          // Create reflection data
+          const reflectionData: ReflectionData = {
+            type: 'voice',
+            content: URL.createObjectURL(audioBlob),
             duration: recordingTime,
-            audioUrl: 'data:audio/wav;base64,mock-audio-data'
-          })
-          // Reset after sending
-          deleteRecording()
-        }
-      }
-
-      const handleScreenshotUpload = () => {
-        // Notify that screenshot was chosen
-        onReflectionTypeChosen?.('screenshot')
-        
-        const input = document.createElement('input')
-        input.type = 'file'
-        input.accept = 'image/*'
-        input.onchange = (e: any) => {
-          const file = e.target.files[0]
-          if (file) {
-            const reader = new FileReader()
-            reader.onload = (e) => {
-              onReflectionSubmit?.('screenshot', {
-                imageUrl: e.target?.result
-              })
-            }
-            reader.readAsDataURL(file)
+            videoTimestamp: 0 // You might want to get this from video state
           }
-        }
-        input.click()
-      }
-
-      const handleLoomSubmit = () => {
-        if (loomUrl.trim()) {
-          onReflectionSubmit?.('loom', {
-            loomUrl: loomUrl.trim()
-          })
+          
+          onReflectionSubmit?.('voice', reflectionData)
+          
+          // Reset all states
+          setIsRecording(false)
+          setHasRecording(false)
+          setRecordingTime(0)
+          setAudioBlob(null)
         }
       }
 
       return (
-        <div key={msg.id} className="mb-3">
-          <div className="space-y-2">
-            {/* Voice Memo Option - Enhanced Messenger Style */}
-            <Card className="border-blue-200 dark:border-blue-800 overflow-hidden">
-              <div className="p-3">
+        <Card key={msg.id} className="my-4 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-2 border-purple-500/50">
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Zap className="h-5 w-5 text-purple-600" />
+              <span className="font-bold text-sm">Choose Your Reflection Method</span>
+            </div>
+            
+            <div className="space-y-3">
+              {/* Voice Memo Option */}
+              <div className="space-y-2">
                 {!isRecording && !hasRecording ? (
-                  // Initial state - Start recording
                   <button
                     onClick={startRecording}
                     className="w-full flex items-center gap-3 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg p-2 transition-colors"
@@ -669,11 +525,17 @@ export function AIChatSidebarV2({
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-2 flex-1">
-                        <div className="p-2 rounded-lg bg-red-100 dark:bg-red-950/30">
+                        <div className="relative p-2 rounded-lg bg-red-100 dark:bg-red-950/30">
                           <Mic className={cn(
                             "h-5 w-5",
                             isPaused ? "text-red-400" : "text-red-600"
                           )} />
+                          {!isPaused && (
+                            <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full animate-ping"></div>
+                          )}
+                          {!isPaused && (
+                            <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-600 rounded-full"></div>
+                          )}
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
@@ -712,140 +574,142 @@ export function AIChatSidebarV2({
                       </div>
                     </div>
                     {/* Recording controls - minimalist */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex gap-2">
+                      {!isPaused ? (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={pauseRecording}
+                          className="flex-1"
+                        >
+                          <Pause className="h-4 w-4" />
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={resumeRecording}
+                          className="flex-1"
+                        >
+                          <Play className="h-4 w-4" />
+                        </Button>
+                      )}
                       <Button
                         size="sm"
-                        variant="secondary"
                         onClick={stopRecording}
-                        className="flex-1"
+                        className="flex-1 bg-red-500 hover:bg-red-600 text-white"
                       >
-                        <Square className="h-3 w-3 mr-1" />
+                        <Square className="h-4 w-4 mr-1" />
                         Stop
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={isPaused ? resumeRecording : pauseRecording}
-                        className="hover:bg-secondary"
-                      >
-                        {isPaused ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
-                      </Button>
                     </div>
                   </div>
-                ) : (
-                  // Has recording - Playback state - minimalist
+                ) : hasRecording ? (
+                  // Playback state - minimalist
                   <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="p-2 hover:bg-secondary"
-                        onClick={isPlaying ? pausePlayback : playRecording}
-                      >
-                        {isPlaying ? (
-                          <Pause className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <Play className="h-4 w-4 text-muted-foreground" />
-                        )}
-                      </Button>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs text-muted-foreground">
-                            {formatRecordingTime(isPlaying ? playbackTime : 0)}
-                          </span>
-                          <span className="text-xs text-muted-foreground">/</span>
-                          <span className="text-xs text-muted-foreground">
-                            {formatRecordingTime(recordingTime)}
-                          </span>
+                    <div className="bg-secondary/50 rounded-lg p-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-950/30">
+                          {isPlaying ? (
+                            <MicOff className="h-5 w-5 text-blue-600 animate-pulse" />
+                          ) : (
+                            <Mic className="h-5 w-5 text-blue-600" />
+                          )}
                         </div>
-                        {/* Progress bar - minimalist */}
-                        <div className="h-1 bg-secondary rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-muted-foreground/50 transition-all duration-300"
-                            style={{ 
-                              width: `${isPlaying ? (playbackTime / recordingTime) * 100 : 0}%` 
-                            }}
-                          />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">Voice Memo Ready</p>
+                          <p className="text-xs text-muted-foreground">
+                            {isPlaying 
+                              ? `Playing ${formatRecordingTime(playbackTime)} / ${formatRecordingTime(recordingTime)}`
+                              : `Duration: ${formatRecordingTime(recordingTime)}`
+                            }
+                          </p>
                         </div>
                       </div>
+                    </div>
+                    {/* Playback controls */}
+                    <div className="flex gap-2">
+                      {!isPlaying ? (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={startPlayback}
+                          className="flex-1"
+                        >
+                          <Play className="h-4 w-4 mr-1" />
+                          Play
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={stopPlayback}
+                          className="flex-1"
+                        >
+                          <Square className="h-4 w-4 mr-1" />
+                          Stop
+                        </Button>
+                      )}
                       <Button
                         size="sm"
-                        variant="ghost"
-                        className="p-2 hover:bg-secondary"
+                        variant="destructive"
                         onClick={deleteRecording}
                       >
-                        <Trash2 className="h-4 w-4 text-muted-foreground" />
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={submitRecording}
+                        className="flex-1 bg-purple-500 hover:bg-purple-600 text-white"
+                      >
+                        <Send className="h-3 w-3 mr-1" />
+                        Submit
                       </Button>
                     </div>
-                    {/* Send button - minimalist */}
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="w-full"
-                      onClick={sendRecording}
-                    >
-                      <Send className="h-3 w-3 mr-2" />
-                      Send Voice Memo
-                    </Button>
                   </div>
-                )}
+                ) : null}
               </div>
-            </Card>
 
-            {/* Screenshot Upload Option */}
-            <Card className="p-3 hover:shadow-md transition-shadow cursor-pointer border-green-200 dark:border-green-800">
-              <button
-                onClick={handleScreenshotUpload}
-                className="w-full flex items-center gap-3"
-              >
-                <div className="p-2 rounded-lg bg-green-100 dark:bg-green-950/30">
-                  <Camera className="h-5 w-5 text-green-600" />
-                </div>
-                <div className="text-left flex-1">
-                  <p className="font-medium text-sm">Screenshot</p>
-                  <p className="text-xs text-muted-foreground">Upload a screenshot or diagram</p>
-                </div>
-              </button>
-            </Card>
+              {/* Screenshot Option */}
+              {!isRecording && !hasRecording && (
+                <>
+                  <button
+                    onClick={() => {
+                      onReflectionTypeChosen?.('screenshot')
+                      console.log('Screenshot reflection chosen')
+                    }}
+                    className="w-full flex items-center gap-3 hover:bg-green-50 dark:hover:bg-green-950/30 rounded-lg p-2 transition-colors"
+                  >
+                    <div className="p-2 rounded-lg bg-green-100 dark:bg-green-950/30">
+                      <Camera className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div className="text-left flex-1">
+                      <p className="font-medium text-sm">Screenshot</p>
+                      <p className="text-xs text-muted-foreground">Capture screen with annotations</p>
+                    </div>
+                  </button>
 
-            {/* Loom Video Option */}
-            <Card className="p-3 border-purple-200 dark:border-purple-800">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-950/30">
-                  <Video className="h-5 w-5 text-purple-600" />
-                </div>
-                <div className="text-left flex-1">
-                  <p className="font-medium text-sm">Loom Video</p>
-                  <p className="text-xs text-muted-foreground">Share a Loom recording link</p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Paste Loom URL..."
-                  value={loomUrl}
-                  onChange={(e) => {
-                    setLoomUrl(e.target.value)
-                    // Notify that loom was chosen when they start typing
-                    if (e.target.value && !loomUrl) {
+                  {/* Loom Option */}
+                  <button
+                    onClick={() => {
                       onReflectionTypeChosen?.('loom')
-                    }
-                  }}
-                  className="flex-1 text-xs h-8"
-                />
-                <Button
-                  size="sm"
-                  onClick={handleLoomSubmit}
-                  disabled={!loomUrl.trim()}
-                  className="h-8 px-3"
-                >
-                  <Upload className="h-3 w-3" />
-                </Button>
-              </div>
-            </Card>
-            
-            {/* Cancel button */}
-            {(isRecording || hasRecording || loomUrl) && (
-              <div className="mt-3">
+                      console.log('Loom reflection chosen')
+                    }}
+                    className="w-full flex items-center gap-3 hover:bg-purple-50 dark:hover:bg-purple-950/30 rounded-lg p-2 transition-colors"
+                  >
+                    <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-950/30">
+                      <Video className="h-5 w-5 text-purple-600" />
+                    </div>
+                    <div className="text-left flex-1">
+                      <p className="font-medium text-sm">Loom Video</p>
+                      <p className="text-xs text-muted-foreground">Record screen & camera</p>
+                    </div>
+                  </button>
+                </>
+              )}
+
+              {/* Cancel button - always visible */}
+              {(isRecording || hasRecording) && (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -867,10 +731,10 @@ export function AIChatSidebarV2({
                 >
                   Cancel Reflection
                 </Button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        </Card>
       )
     }
 
@@ -882,8 +746,8 @@ export function AIChatSidebarV2({
 
   return (
     <div className="relative flex flex-col h-full bg-gradient-to-b from-background to-secondary/5">
-      {/* Header - Enhanced design */}
-      <div className="border-b bg-background/95 backdrop-blur-sm p-4">
+      {/* Header - Fixed at top */}
+      <div className="border-b bg-background/95 backdrop-blur-sm p-4 flex-shrink-0">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-gradient-to-br from-primary to-primary/70 shadow-md">
@@ -911,33 +775,29 @@ export function AIChatSidebarV2({
         <div className="flex gap-1 w-full">
           {[
             { type: 'hint', icon: Puzzle, label: 'Hint', color: 'hover:bg-gradient-to-r hover:from-blue-500/10 hover:to-cyan-500/10 hover:border-blue-500/50', activeColor: 'bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border-blue-500' },
-            { type: 'quiz', icon: Brain, label: 'Quiz', color: 'hover:bg-gradient-to-r hover:from-green-500/10 hover:to-emerald-500/10 hover:border-green-500/50', activeColor: 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-green-500' },
-            { type: 'reflect', icon: Target, label: 'Reflect', color: 'hover:bg-gradient-to-r hover:from-purple-500/10 hover:to-yellow-500/10 hover:border-purple-500/50', activeColor: 'bg-gradient-to-r from-purple-500/20 to-yellow-500/20 border-purple-500' },
-            { type: 'path', icon: Route, label: 'Path', color: 'hover:bg-gradient-to-r hover:from-indigo-500/10 hover:to-purple-500/10 hover:border-indigo-500/50', activeColor: 'bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border-indigo-500' }
-          ].map(({ type, icon: Icon, label, color, activeColor }) => {
-            const isActive = activeAgent === type
-            return (
-              <Button
-                key={type}
-                size="sm"
-                variant="outline"
-                className={cn(
-                  "flex-1 flex-col justify-center items-center h-14 py-2 transition-all border-2",
-                  isActive ? activeColor : color
-                )}
-                onClick={() => onAgentRequest(type)}
-                disabled={isActive}
-              >
-                <Icon className={cn("h-4 w-4", isActive && "text-primary")} />
-                <span className={cn("text-xs font-medium", isActive && "text-primary")}>{label}</span>
-              </Button>
-            )
-          })}
+            { type: 'quiz', icon: Brain, label: 'Quiz', color: 'hover:bg-gradient-to-r hover:from-emerald-500/10 hover:to-green-500/10 hover:border-emerald-500/50', activeColor: 'bg-gradient-to-r from-emerald-500/20 to-green-500/20 border-emerald-500' },
+            { type: 'reflect', icon: Zap, label: 'Reflect', color: 'hover:bg-gradient-to-r hover:from-purple-500/10 hover:to-pink-500/10 hover:border-purple-500/50', activeColor: 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 border-purple-500' },
+            { type: 'path', icon: Target, label: 'Path', color: 'hover:bg-gradient-to-r hover:from-orange-500/10 hover:to-amber-500/10 hover:border-orange-500/50', activeColor: 'bg-gradient-to-r from-orange-500/20 to-amber-500/20 border-orange-500' }
+          ].map(({ type, icon: Icon, label, color, activeColor }) => (
+            <Button
+              key={type}
+              size="sm"
+              variant="outline"
+              onClick={() => onAgentRequest(type)}
+              className={cn(
+                "flex-1 h-9 px-2 transition-all duration-200 border-2",
+                activeAgent === type ? activeColor : color
+              )}
+            >
+              <Icon className="h-3.5 w-3.5 mr-1" />
+              <span className="text-xs font-medium">{label}</span>
+            </Button>
+          ))}
         </div>
       </div>
 
-      {/* Messages - With gradient background */}
-      <ScrollArea className="flex-1 p-4">
+      {/* Messages - Scrollable area */}
+      <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-2">
           {/* Chat Messages */}
           {displayMessages.map(renderMessage)}
@@ -961,10 +821,10 @@ export function AIChatSidebarV2({
           
           <div ref={scrollRef} />
         </div>
-      </ScrollArea>
+      </div>
 
-      {/* Input - Enhanced design */}
-      <div className="border-t bg-background/95 backdrop-blur-sm p-4">
+      {/* Input - Fixed at bottom */}
+      <div className="border-t bg-background/95 backdrop-blur-sm p-4 flex-shrink-0">
         {/* Segment Context Display */}
         {segmentContext?.sentToChat && segmentContext.inPoint !== null && segmentContext.outPoint !== null && (
           <div className="mb-3 p-2 bg-secondary/50 rounded-lg border border-primary/20">

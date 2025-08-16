@@ -1,15 +1,15 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { useParams } from "next/navigation"
 import dynamic from "next/dynamic"
 import { useAppStore } from "@/stores/app-store"
 import { LoadingSpinner } from "@/components/common/LoadingSpinner"
 
-// Dynamically import the VideoPlayer component with loading fallback
-const VideoPlayer = dynamic(
-  () => import("@/components/video/student/StudentVideoPlayer").then(mod => ({ 
-    default: mod.StudentVideoPlayer 
+// Dynamically import the V2 VideoPlayer component with loading fallback
+const StudentVideoPlayerV2 = dynamic(
+  () => import("@/components/video/student/StudentVideoPlayerV2").then(mod => ({ 
+    default: mod.StudentVideoPlayerV2 
   })),
   { 
     loading: () => (
@@ -21,20 +21,6 @@ const VideoPlayer = dynamic(
   }
 )
 
-// Dynamically import the AIChatSidebar component
-const AIChatSidebar = dynamic(
-  () => import("@/components/student/ai/ai-chat-sidebar").then(mod => ({
-    default: mod.AIChatSidebar
-  })),
-  { 
-    loading: () => (
-      <div className="h-full flex items-center justify-center bg-background">
-        <LoadingSpinner />
-      </div>
-    ),
-    ssr: false
-  }
-)
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -56,12 +42,6 @@ export default function VideoPlayerPage() {
   const courseId = params.id as string
   const videoId = params.videoId as string
   
-  // Use Zustand store for video and UI state  
-  const currentTime = useAppStore((state) => state.currentTime)
-  const showChatSidebar = useAppStore((state) => state.preferences.showChatSidebar)
-  const sidebarWidth = useAppStore((state) => state.preferences.sidebarWidth)
-  const updatePreferences = useAppStore((state) => state.updatePreferences)
-  
   // NEW: Use student video slice for video data
   const {
     currentVideo: storeVideoData,
@@ -75,27 +55,40 @@ export default function VideoPlayerPage() {
   // OLD: Keep lessons for standalone mode
   const { lessons, loadLessons, trackView } = useAppStore()
   
-  const [isResizing, setIsResizing] = useState(false)
-  const sidebarRef = useRef<HTMLDivElement>(null)
-  
   // Check if this is a standalone lesson
   const isStandaloneLesson = courseId === 'lesson'
   
+  // Add loading state
+  const [isLoading, setIsLoading] = useState(true)
+  
   // Load student video data for course videos
   useEffect(() => {
-    if (!isStandaloneLesson) {
-      console.log('📹 Loading student video data for:', videoId)
-      console.log('📚 Loading course data for:', courseId)
-      loadStudentVideo(videoId)
-      loadCourseById(courseId) // Also load course data
+    const loadData = async () => {
+      setIsLoading(true)
+      if (!isStandaloneLesson) {
+        console.log('📹 Loading student video data for:', videoId)
+        console.log('📚 Loading course data for:', courseId)
+        await Promise.all([
+          loadStudentVideo(videoId),
+          loadCourseById(courseId)
+        ])
+      }
+      // Give a small delay to ensure store is updated
+      setTimeout(() => setIsLoading(false), 100)
     }
+    loadData()
   }, [isStandaloneLesson, videoId, courseId, loadStudentVideo, loadCourseById])
   
   // Load lessons if needed for standalone
   useEffect(() => {
-    if (isStandaloneLesson && lessons.length === 0) {
-      loadLessons()
+    const loadStandaloneLessons = async () => {
+      if (isStandaloneLesson && lessons.length === 0) {
+        setIsLoading(true)
+        await loadLessons()
+        setTimeout(() => setIsLoading(false), 100)
+      }
     }
+    loadStandaloneLessons()
   }, [isStandaloneLesson])
   
   // Track view for standalone lesson
@@ -128,40 +121,18 @@ export default function VideoPlayerPage() {
     
   const currentVideoIndex = !isStandaloneLesson ? (course?.videos.findIndex(v => v.id === videoId) ?? -1) : 0
 
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!isResizing) return
-    
-    const newWidth = window.innerWidth - e.clientX
-    // Constrain width between 300px and 600px
-    if (newWidth >= 300 && newWidth <= 600) {
-      updatePreferences({ sidebarWidth: newWidth })
-    }
+  // Show loading state while data is being fetched
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 top-16 bg-background">
+        <div className="flex h-full items-center justify-center">
+          <LoadingSpinner />
+        </div>
+      </div>
+    )
   }
 
-  const handleMouseUp = () => {
-    setIsResizing(false)
-  }
-
-  useEffect(() => {
-    if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove)
-      document.addEventListener('mouseup', handleMouseUp)
-      // Prevent text selection while resizing
-      document.body.style.userSelect = 'none'
-      document.body.style.cursor = 'col-resize'
-    } else {
-      document.body.style.userSelect = ''
-      document.body.style.cursor = ''
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-      document.body.style.userSelect = ''
-      document.body.style.cursor = ''
-    }
-  }, [isResizing, handleMouseMove])
-
+  // Only show "Video Not Found" after loading is complete
   if (!course || !currentVideo) {
     return (
       <div className="flex min-h-screen flex-col">
@@ -194,176 +165,31 @@ export default function VideoPlayerPage() {
     console.log('Time update:', time)
   }
 
-  const handleAgentTrigger = (type: "hint" | "check" | "reflect" | "path") => {
-    console.log(`AI Agent triggered: ${type} at ${currentTime}s`)
-    // This would trigger the AI chat sidebar to show relevant content
+  const handlePause = (time: number) => {
+    console.log('Paused at', time)
   }
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault()
-    setIsResizing(true)
+  const handlePlay = () => {
+    console.log('Playing')
+  }
+
+  const handleEnded = () => {
+    console.log('Video ended')
   }
 
   return (
-    <div className="flex h-screen flex-col">
-
-      <div className="flex flex-1 min-h-0">
-        {/* Main Content */}
-        <div className="flex-1 overflow-y-auto">
-            {/* Video Player */}
-            <div className="flex-1 bg-black p-4">
-              <VideoPlayer
-                videoUrl={currentVideo.videoUrl}
-                title={currentVideo.title}
-                transcript={currentVideo.transcript}
-                videoId={videoId}
-                onTimeUpdate={handleTimeUpdate}
-                onPause={(time) => console.log('Paused at', time)}
-                onPlay={() => console.log('Playing')}
-                onEnded={() => console.log('Video ended')}
-              />
-            </div>
-
-            {/* Video Info & Controls */}
-            <div className="border-t bg-background p-6">
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h1 className="text-2xl font-bold">{currentVideo.title}</h1>
-                  <Button
-                    variant="outline"
-                    onClick={() => updatePreferences({ showChatSidebar: !showChatSidebar })}
-                  >
-                    <MessageSquare className="mr-2 h-4 w-4" />
-                    {showChatSidebar ? 'Hide' : 'Show'} AI Assistant
-                  </Button>
-                </div>
-                
-                <p className="text-muted-foreground mb-4">
-                  {currentVideo.description}
-                </p>
-
-                {/* Video Navigation */}
-                <div className="flex items-center justify-between">
-                  <Button
-                    asChild
-                    variant="outline"
-                    disabled={!prevVideo}
-                    className="flex items-center gap-2"
-                  >
-                    {prevVideo ? (
-                      <Link href={`/student/course/${courseId}/video/${prevVideo.id}`}>
-                        <ChevronLeft className="h-4 w-4" />
-                        Previous Lesson
-                      </Link>
-                    ) : (
-                      <span>
-                        <ChevronLeft className="h-4 w-4" />
-                        Previous Lesson
-                      </span>
-                    )}
-                  </Button>
-
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Clock className="h-4 w-4" />
-                      <span>{currentVideo.duration}</span>
-                    </div>
-                    <Badge variant="secondary">
-                      Lesson {currentVideoIndex + 1}
-                    </Badge>
-                  </div>
-
-                  <Button
-                    asChild
-                    disabled={!nextVideo}
-                    className="flex items-center gap-2"
-                  >
-                    {nextVideo ? (
-                      <Link href={`/student/course/${courseId}/video/${nextVideo.id}`}>
-                        Next Lesson
-                        <ChevronRight className="h-4 w-4" />
-                      </Link>
-                    ) : (
-                      <span>
-                        Course Complete!
-                        <CheckCircle2 className="h-4 w-4" />
-                      </span>
-                    )}
-                  </Button>
-                </div>
-              </div>
-
-              {/* Course Playlist - Only show for course videos */}
-              {!isStandaloneLesson && course && (
-                <Card className="mt-6">
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <BookOpen className="h-5 w-5" />
-                      Course Content
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                      {course.videos.map((video, index) => (
-                      <Link
-                        key={video.id}
-                        href={`/student/course/${courseId}/video/${video.id}`}
-                        className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
-                          video.id === videoId 
-                            ? 'bg-primary/10 border border-primary/20' 
-                            : 'hover:bg-muted'
-                        }`}
-                      >
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-sm font-medium">
-                          {video.id === videoId ? (
-                            <Play className="h-4 w-4" />
-                          ) : (
-                            index + 1
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-medium text-sm">{video.title}</p>
-                          <p className="text-xs text-muted-foreground">{video.duration}</p>
-                        </div>
-                        {index < currentVideoIndex && (
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        )}
-                      </Link>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-            </div>
-          </div>
-
-        {/* AI Chat Sidebar */}
-        {showChatSidebar && (
-          <>
-            {/* Resize Handle */}
-            <div
-              className="w-1 bg-border hover:bg-primary/20 cursor-col-resize transition-colors relative group"
-              onMouseDown={handleMouseDown}
-            >
-              <div className="absolute inset-y-0 -left-1 -right-1 group-hover:bg-primary/10" />
-            </div>
-            
-            {/* Sidebar */}
-            <div 
-              ref={sidebarRef}
-              className="flex-shrink-0 h-full overflow-hidden border-l"
-              style={{ width: `${sidebarWidth}px` }}
-            >
-              <AIChatSidebar
-                courseId={courseId}
-                videoId={videoId}
-                currentTime={currentTime}
-                onAgentTrigger={handleAgentTrigger}
-              />
-            </div>
-          </>
-        )}
-      </div>
+    <div className="fixed inset-0 top-16 bg-background">
+      {/* V2 Video Player with integrated AI sidebar - takes full viewport minus header */}
+      <StudentVideoPlayerV2
+        videoUrl={currentVideo.videoUrl}
+        title={currentVideo.title}
+        transcript={currentVideo.transcript?.join(' ')}
+        videoId={videoId}
+        onTimeUpdate={handleTimeUpdate}
+        onPause={handlePause}
+        onPlay={handlePlay}
+        onEnded={handleEnded}
+      />
     </div>
   )
 }

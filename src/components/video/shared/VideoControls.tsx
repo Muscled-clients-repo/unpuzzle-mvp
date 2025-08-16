@@ -109,7 +109,7 @@ export function VideoControls({
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => onSkip(-10)}
+          onClick={() => onSkip(-5)}
           className="text-white hover:bg-white/20"
         >
           <SkipBack className="h-5 w-5" />
@@ -118,7 +118,7 @@ export function VideoControls({
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => onSkip(10)}
+          onClick={() => onSkip(5)}
           className="text-white hover:bg-white/20"
         >
           <SkipForward className="h-5 w-5" />

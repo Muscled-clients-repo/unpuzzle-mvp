@@ -248,7 +248,7 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full w-full overflow-hidden">
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto">
         {/* Video Player Section */}
@@ -380,8 +380,8 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
           {/* Sidebar */}
           <div 
             ref={sidebarRef}
-            className="flex-shrink-0 h-full overflow-hidden border-l bg-background"
-            style={{ width: `${sidebarWidth}px` }}
+            className="border-l bg-background"
+            style={{ width: `${sidebarWidth}px`, height: '100%', overflow: 'hidden', flexShrink: 0 }}
           >
             <AIChatSidebarV2
               messages={context.messages}
