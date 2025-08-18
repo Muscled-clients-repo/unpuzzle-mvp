@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useAuth } from "@/hooks"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -30,7 +30,7 @@ import {
 } from "lucide-react"
 
 export default function SignupPage() {
-  const router = useRouter()
+  const { signup, isLoading, error: authError, redirectToDashboard, user } = useAuth()
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -41,10 +41,10 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [agreeToTerms, setAgreeToTerms] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const [passwordStrength, setPasswordStrength] = useState(0)
+  const [registeredEmail, setRegisteredEmail] = useState("") // Store the email after successful signup
 
   const calculatePasswordStrength = (password: string) => {
     let strength = 0
@@ -86,23 +86,86 @@ export default function SignupPage() {
     setSuccess("")
     
     if (!validateForm()) return
-    
-    setIsLoading(true)
 
-    // Simulate signup API call
-    setTimeout(() => {
-      setSuccess("Account created successfully! Redirecting to login...")
-      setTimeout(() => {
-        router.push("/login")
-      }, 2000)
-    }, 1500)
+    const result = await signup({
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      email: formData.email,
+      password: formData.password,
+      agreeToTerms
+    })
+
+    if (result.success) {
+      setSuccess("Account created successfully! Please check your email to confirm your account.")
+      
+      // Store the email before clearing the form
+      setRegisteredEmail(formData.email)
+      
+      // Clear the form
+      setFormData({
+        firstName: "",
+        lastName: "",
+        email: "",
+        password: "",
+        confirmPassword: ""
+      })
+      setPasswordStrength(0)
+      setAgreeToTerms(false)
+    } else {
+      setError(result.error?.message || "Failed to create account. Please try again.")
+    }
   }
+
+  // Redirect if already logged in (after initial auth check completes)
+  useEffect(() => {
+    console.log("user: ",user)
+    if (user && !isLoading) {
+      redirectToDashboard()
+    }
+  }, [user, isLoading, redirectToDashboard])
 
   const getPasswordStrengthText = () => {
     if (passwordStrength <= 25) return "Weak"
     if (passwordStrength <= 50) return "Fair"
     if (passwordStrength <= 75) return "Good"
     return "Strong"
+  }
+
+  const getEmailProviderInfo = (email: string) => {
+    const domain = email.split('@')[1]?.toLowerCase()
+    
+    const emailProviders: { [key: string]: string } = {
+      'gmail.com': 'https://mail.google.com',
+      'yahoo.com': 'https://mail.yahoo.com',
+      'outlook.com': 'https://outlook.live.com',
+      'hotmail.com': 'https://outlook.live.com',
+      'icloud.com': 'https://www.icloud.com/mail',
+      'protonmail.com': 'https://mail.protonmail.com',
+    }
+    
+    // Check if it's a known provider
+    for (const [provider, url] of Object.entries(emailProviders)) {
+      if (domain?.includes(provider)) {
+        return { isBusinessEmail: false, url }
+      }
+    }
+    
+    // It's a business/custom domain email
+    return { isBusinessEmail: true, url: null }
+  }
+
+  const openEmailProvider = () => {
+    const { url } = getEmailProviderInfo(registeredEmail || formData.email)
+    if (url) {
+      window.open(url, '_blank')
+    }
+  }
+  
+  const isBusinessEmail = () => {
+    const emailToCheck = registeredEmail || formData.email
+    if (!emailToCheck) return false // No email to check
+    const { isBusinessEmail } = getEmailProviderInfo(emailToCheck)
+    return isBusinessEmail
   }
 
   const benefits = [
@@ -128,10 +191,55 @@ export default function SignupPage() {
     }
   ]
 
+  if(success) {
+    return (
+      <div className="w-screen h-screen flex justify-center items-center">
+        <Alert className="border-green-200 bg-green-50 w-full max-w-md space-y-8 ">
+          <Mail className="h-4 w-4 text-green-600" />
+          <div className="flex-1">
+            <AlertDescription className="text-green-800">
+              <strong>Success!</strong> {success}
+              {isBusinessEmail() && (
+                <div className="mt-2 text-sm">
+                  <span className="text-amber-700">
+                    Looks like you&apos;re using a business email. Please login to your business email provider to verify your account.
+                  </span>
+                </div>
+              )}
+            </AlertDescription>
+            <div className="mt-3 flex gap-3">
+              {!isBusinessEmail() && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={openEmailProvider}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  <Mail className="mr-2 h-4 w-4" />
+                  Check Email
+                </Button>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => window.location.href = '/login'}
+                className={isBusinessEmail() ? "border-green-600 text-green-600 hover:bg-green-50" : "border-green-600 text-green-600 hover:bg-green-50"}
+              >
+                Go to Login
+              </Button>
+            </div>
+          </div>
+        </Alert>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen flex">
       {/* Left Panel - Signup Form */}
       <div className="flex-1 flex items-center justify-center p-8 bg-background">
+        
         <div className="w-full max-w-md space-y-8">
           {/* Logo and Title */}
           <div className="text-center">
@@ -159,20 +267,12 @@ export default function SignupPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Alerts */}
-              {error && (
+              {(error || authError) && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
+                  <AlertDescription>{error || authError?.message}</AlertDescription>
                 </Alert>
               )}
-              {success && (
-                <Alert className="border-green-200 bg-green-50 text-green-800">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <AlertDescription>{success}</AlertDescription>
-                </Alert>
-              )}
-
-              {/* Signup Form */}
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -267,6 +367,20 @@ export default function SignupPage() {
                         </span>
                       </div>
                       <Progress value={passwordStrength} className="h-1.5" />
+                      <div className="text-xs text-muted-foreground space-y-1">
+                        <p className={formData.password.length >= 8 ? 'text-green-600' : ''}>
+                          ✓ At least 8 characters
+                        </p>
+                        <p className={formData.password.match(/[A-Z]/) ? 'text-green-600' : ''}>
+                          ✓ At least one uppercase letter
+                        </p>
+                        <p className={formData.password.match(/[a-z]/) ? 'text-green-600' : ''}>
+                          ✓ At least one lowercase letter
+                        </p>
+                        <p className={formData.password.match(/[0-9]/) ? 'text-green-600' : ''}>
+                          ✓ At least one number
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>

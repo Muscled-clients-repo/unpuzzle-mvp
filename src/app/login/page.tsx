@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useAuth } from "@/hooks"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -26,12 +26,11 @@ import {
 } from "lucide-react"
 
 export default function LoginPage() {
-  const router = useRouter()
+  const { login, isLoading, error: authError, redirectToDashboard, user } = useAuth()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
 
@@ -39,21 +38,29 @@ export default function LoginPage() {
     e.preventDefault()
     setError("")
     setSuccess("")
-    setIsLoading(true)
 
-    // Simulate login API call
-    setTimeout(() => {
-      if (email === "student@example.com" && password === "password") {
-        setSuccess("Login successful! Redirecting to your dashboard...")
-        setTimeout(() => {
-          router.push("/student/dashboard")
-        }, 1500)
-      } else {
-        setError("Invalid email or password. Please try again.")
-        setIsLoading(false)
-      }
-    }, 1500)
+    const result = await login({
+      email,
+      password,
+      rememberMe
+    })
+
+    if (result.success) {
+      setSuccess("Login successful! Redirecting to your dashboard...")
+      setTimeout(() => {
+        redirectToDashboard()
+      }, 1500)
+    } else {
+      setError(result.error?.message || "Invalid email or password. Please try again.")
+    }
   }
+
+  // Redirect if already logged in (after initial auth check completes)
+  useEffect(() => {
+    if (user && !isLoading) {
+      redirectToDashboard()
+    }
+  }, [user, isLoading, redirectToDashboard])
 
 
   const features = [
@@ -110,10 +117,10 @@ export default function LoginPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Alerts */}
-              {error && (
+              {(error || authError) && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
+                  <AlertDescription>{error || authError?.message}</AlertDescription>
                 </Alert>
               )}
               {success && (
@@ -221,12 +228,14 @@ export default function LoginPage() {
             </CardFooter>
           </Card>
 
-          {/* Demo Credentials */}
-          <div className="text-center">
-            <p className="text-xs text-muted-foreground">
-              Demo credentials: student@example.com / password
-            </p>
-          </div>
+          {/* Demo Credentials - Remove in production */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">
+                Demo: Use your actual credentials to login
+              </p>
+            </div>
+          )}
         </div>
       </div>
 

@@ -22,21 +22,8 @@ interface StoreProviderProps {
 
 export function StoreProvider({ children }: StoreProviderProps) {
   useEffect(() => {
-    // Initialize with mock user for development
-    if (isBrowser) {
-      const store = useAppStore.getState()
-      if (!store.profile) {
-        // Set up a basic user for testing
-        const mockUser = mockUsers.learners[0]
-        store.setUser({
-          id: mockUser.id,
-          name: mockUser.name,
-          email: mockUser.email,
-          role: mockUser.role,
-          subscription: mockUser.subscription
-        })
-      }
-    }
+    // Mock user initialization removed - auth is now handled by useAuth hook
+    // The useAuth hook will handle session restoration from cookies
 
     // Only expose store in development and in browser environment
     if (isBrowser && isDevelopment) {
