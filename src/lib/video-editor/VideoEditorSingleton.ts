@@ -9,6 +9,7 @@ import { PlaybackService } from './services/PlaybackService'
 import { TimelineService } from './services/TimelineService'
 import { VideoEditorCommands } from './commands/VideoEditorCommands'
 import { VideoEditorQueries } from './queries/VideoEditorQueries'
+import { TimeCalculations } from './utils/TimeCalculations'
 
 let instance: VideoEditorInstance | null = null
 
@@ -72,6 +73,22 @@ export function getVideoEditorInstance(): VideoEditorInstance {
     eventBus.on('playback.timeUpdate', ({ currentTime }) => {
       // Forward to State Machine for technical state updates
       stateMachine.send({ type: 'VIDEO.TIME_UPDATE', time: currentTime })
+      
+      // V2 BULLETPROOF: Check if we've reached clip boundary using centralized utility
+      const snapshot = stateMachine.getSnapshot()
+      const { playback, timeline } = snapshot.context
+      
+      if (playback.currentClipId && snapshot.matches('playing')) {
+        const currentClip = timeline.clips.find(c => c.id === playback.currentClipId)
+        if (currentClip) {
+          const timelinePosition = TimeCalculations.videoTimeToTimelinePosition(currentTime, currentClip)
+          
+          // Use centralized boundary checking
+          if (TimeCalculations.hasReachedClipEnd(timelinePosition, currentClip)) {
+            stateMachine.send({ type: 'VIDEO.ENDED' })
+          }
+        }
+      }
     })
   )
   
@@ -197,8 +214,8 @@ export function getVideoEditorInstance(): VideoEditorInstance {
     // Forward State Machine decisions to services
     if (stateChanged || hasNewClipTransition || hasNewSeek) {
       
-      // Handle clip transitions
-      if (hasNewClipTransition && snapshot.matches('playing')) {
+      // Handle clip transitions - Now works for any state, not just playing
+      if (hasNewClipTransition) {
         const clip = playback.pendingClipTransition!
         
         // Mark as processed to prevent infinite loop
@@ -211,13 +228,20 @@ export function getVideoEditorInstance(): VideoEditorInstance {
               processedSeek = playback.pendingSeek.time
               await playbackService.seek(playback.pendingSeek.time)
             }
-            await playbackService.play()
+            
+            // Check state again after async operations (fix race condition)
+            const currentSnapshot = stateMachine.getSnapshot()
+            if (currentSnapshot.matches('playing')) {
+              await playbackService.play()
+            }
             
             // Clear pending actions after successful execution
             stateMachine.send({ type: 'PLAYBACK.ACTIONS_PROCESSED' })
           })
           .catch(error => {
             console.error('❌ Integration Layer: Playback failed', error)
+            // Clear pending actions even on error to prevent stuck state
+            stateMachine.send({ type: 'PLAYBACK.ACTIONS_PROCESSED' })
           })
       }
       

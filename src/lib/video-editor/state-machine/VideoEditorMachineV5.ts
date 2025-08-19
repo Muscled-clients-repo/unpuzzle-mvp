@@ -16,6 +16,7 @@
 
 import { setup, assign } from 'xstate'
 import type { VideoSegment } from '../types'
+import { TimeCalculations } from '../utils/TimeCalculations'
 
 // ============================================
 // PRINCIPLE 1: Single Source of Truth (SSOT)
@@ -284,7 +285,7 @@ export const videoEditorMachine = setup({
             ...context.playback,
             globalTimelinePosition: position,
             // Set pending seek but no clip transition (already loaded)
-            pendingSeek: { time: position - targetClip.startTime },
+            pendingSeek: { time: TimeCalculations.calculateSeekTime(position, targetClip) },
             pendingClipTransition: null
           }
         }
@@ -298,7 +299,7 @@ export const videoEditorMachine = setup({
             activeClipStartTime: targetClip.startTime,
             globalTimelinePosition: position,
             pendingClipTransition: targetClip,
-            pendingSeek: { time: position - targetClip.startTime }
+            pendingSeek: { time: TimeCalculations.calculateSeekTime(position, targetClip) }
           }
         }
       }
@@ -372,19 +373,30 @@ export const videoEditorMachine = setup({
     // Actions to handle video events from services
     updateVideoTime: assign(({ context, event }) => {
       if (event.type === 'VIDEO.TIME_UPDATE') {
+        // Find the current clip to check boundaries
+        const currentClip = context.timeline.clips.find(c => c.id === context.playback.currentClipId)
+        
+        if (!currentClip) {
+          return context // No current clip, can't update
+        }
+        
+        // Use centralized time calculation utility
+        const timelinePosition = TimeCalculations.videoTimeToTimelinePosition(event.time, currentClip)
+        const clampedPosition = TimeCalculations.clampToClipBoundaries(timelinePosition, currentClip)
+        
         return {
           ...context,
           playback: {
             ...context.playback,
             currentVideoTime: event.time,
-            globalTimelinePosition: context.playback.activeClipStartTime + event.time
+            globalTimelinePosition: clampedPosition
           },
-          currentTime: context.playback.activeClipStartTime + event.time,
+          currentTime: clampedPosition,
           timeline: {
             ...context.timeline,
             scrubber: {
               ...context.timeline.scrubber,
-              position: context.playback.activeClipStartTime + event.time
+              position: clampedPosition
             }
           }
         }
@@ -492,62 +504,63 @@ export const videoEditorMachine = setup({
     }),
     
     // Timeline clip actions - PROPER XState v5 pattern
-    addClipToTimeline: assign({
-      timeline: ({ context, event }) => {
-        
-        // Type guard for the specific event
-        if (event.type !== 'TIMELINE.CLIP_ADDED') {
-          return context.timeline
-        }
-        
-        const clip = event.clip
-        const currentTimeline = context.timeline
-        
-        // V2 BULLETPROOF: Check for duplicate clips (SSOT principle)
-        const existingClip = currentTimeline.clips.find(c => c.id === clip.id)
-        if (existingClip) {
-          return currentTimeline
-        }
-        
-        // Calculate position for non-overlapping clips
-        const trackClips = currentTimeline.clips.filter(c => c.trackId === clip.trackId)
-        let startTime = clip.startTime
-        
-        // Always calculate the correct position based on existing clips
-        if (trackClips.length > 0) {
-          // Find the end of the last clip on this track
-          const maxEndTime = trackClips.reduce((max, c) => 
-            Math.max(max, c.startTime + c.duration), 0
-          )
-          // Place new clip after all existing clips
-          startTime = maxEndTime
-        }
-        
-        const clipWithPosition = { ...clip, startTime }
-        
-        return {
-          ...currentTimeline,
-          clips: [...currentTimeline.clips, clipWithPosition]
-        }
-      },
-      totalDuration: ({ context, event }) => {
-        if (event.type !== 'TIMELINE.CLIP_ADDED') {
-          return context.totalDuration
-        }
-        
-        const clip = event.clip
-        const trackClips = context.timeline.clips.filter(c => c.trackId === clip.trackId)
-        let startTime = clip.startTime
-        
-        if (startTime === 0 && trackClips.length > 0) {
-          const lastClip = trackClips.reduce((latest, c) => 
-            (c.startTime > latest.startTime) ? c : latest
-          )
-          startTime = lastClip.startTime + lastClip.duration
-        }
-        
-        return Math.max(context.totalDuration, startTime + clip.duration)
+    addClipToTimeline: assign(({ context, event }) => {
+      
+      // Type guard for the specific event
+      if (event.type !== 'TIMELINE.CLIP_ADDED') {
+        return context
       }
+      
+      const clip = event.clip
+      const currentTimeline = context.timeline
+      
+      // V2 BULLETPROOF: Check for duplicate clips (SSOT principle)
+      const existingClip = currentTimeline.clips.find(c => c.id === clip.id)
+      if (existingClip) {
+        return context
+      }
+      
+      // Calculate position for non-overlapping clips
+      const trackClips = currentTimeline.clips.filter(c => c.trackId === clip.trackId)
+      let startTime = clip.startTime
+      
+      // Always calculate the correct position based on existing clips
+      if (trackClips.length > 0) {
+        // Find the end of the last clip on this track
+        const maxEndTime = trackClips.reduce((max, c) => 
+          Math.max(max, c.startTime + c.duration), 0
+        )
+        // Place new clip after all existing clips
+        startTime = maxEndTime
+      }
+      
+      const clipWithPosition = { ...clip, startTime }
+      
+      // Always move scrubber to the new clip's start position and load first frame
+      const updatedContext = {
+        ...context,
+        timeline: {
+          ...currentTimeline,
+          clips: [...currentTimeline.clips, clipWithPosition],
+          scrubber: {
+            ...currentTimeline.scrubber,
+            position: startTime // Move scrubber to the new clip
+          }
+        },
+        totalDuration: Math.max(context.totalDuration, startTime + clipWithPosition.duration),
+        currentTime: startTime,
+        // Set up playback state to show first frame of new clip
+        playback: {
+          ...context.playback,
+          currentClipId: clipWithPosition.id,
+          activeClipStartTime: startTime,
+          globalTimelinePosition: startTime,
+          pendingClipTransition: clipWithPosition,
+          pendingSeek: { time: 0 } // Seek to first frame
+        }
+      }
+      
+      return updatedContext
     }),
     
     selectClip: assign({

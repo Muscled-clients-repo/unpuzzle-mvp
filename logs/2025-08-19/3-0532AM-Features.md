@@ -60,6 +60,8 @@
 - [x] Drag scrubber to navigate through timeline ✅
 - [x] Scrubber follows playback when playing ✅
 - [x] Current time indicator linked to scrubber position ✅
+- [x] Clickable time ruler for scrubber positioning ✅
+- [x] Magnetic scrubber with larger hit area ✅
 
 ## Group B: Playback Synchronization
 **Purpose**: Synchronized playback between preview and timeline
@@ -88,9 +90,9 @@
 
 ### Phase C1: Basic Clip Editing
 - [x] Select clips on timeline ✅
-- [ ] Split/cut clip at playhead position
+- [x] Split/cut clip at playhead position ✅
 - [x] Delete selected clip segments ✅
-- [ ] "T" keyboard shortcut for split
+- [x] "T" keyboard shortcut for split ✅
 
 ### Phase C2: Advanced Clip Operations
 - [x] Multi-select clips (Cmd+Click) ✅
@@ -158,9 +160,10 @@
 - [ ] Clip labels/names
 
 ### Phase G2: UI Indicators
-- [ ] Selection highlighting
+- [x] Selection highlighting ✅
 - [ ] Hover states
 - [ ] Active state indicators
+- [x] Improved clip selection after split ✅
 - [ ] Safe zones (optional)
 
 ## Group H: Audio Controls
@@ -201,6 +204,7 @@
 - [x] Recording start/stop controls ✅
 - [x] Mode selection in commands ✅
 - [x] Recording button with icon ✅
+- [x] Recording from playing/paused states ✅
 
 ### Phase K2: Recording Status
 - [x] Recording duration display ✅
