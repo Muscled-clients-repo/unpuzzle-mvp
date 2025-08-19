@@ -35,7 +35,22 @@ export interface CourseFormData {
   duration?: number
   difficulty: 'beginner' | 'intermediate' | 'advanced'
   tags: string[]
+  category?: string
+  // Support both camelCase (frontend) and snake_case (backend API)
   isFree?: boolean
+  is_free?: boolean
+  prerequisites?: string[]
+  learningOutcomes?: string[]
+  learning_outcomes?: string[]
+  targetAudience?: string[]
+  target_audience?: string[]
+  courseStructure?: {
+    modules: Array<{
+      title: string
+      lessons: number
+      duration: number
+    }>
+  }
 }
 
 // Video data for course

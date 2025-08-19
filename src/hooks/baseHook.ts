@@ -36,35 +36,43 @@ export const useApiRequest = () => {
       ...options,
     }
     
-    const response = await fetch(url, defaultOptions)
-    
-    if (!response.ok) {
+    try {
+      const response = await fetch(url, defaultOptions)
       
-      let errorData
-      const contentType = response.headers.get('content-type')
-      
-      if (contentType && contentType.includes('application/json')) {
-        try {
-          errorData = await response.json()
-        } catch {
-          errorData = { message: 'Failed to parse error response' }
+      if (!response.ok) {
+        let errorData
+        const contentType = response.headers.get('content-type')
+        
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            errorData = await response.json()
+          } catch {
+            errorData = { message: 'Failed to parse error response' }
+          }
+        } else {
+          // If not JSON, try to read as text
+          try {
+            const text = await response.text()
+            errorData = { message: text || `HTTP error! status: ${response.status}` }
+          } catch {
+            errorData = { message: `HTTP error! status: ${response.status}` }
+          }
         }
-      } else {
-        // If not JSON, try to read as text
-        try {
-          const text = await response.text()
-          errorData = { message: text || `HTTP error! status: ${response.status}` }
-        } catch {
-          errorData = { message: `HTTP error! status: ${response.status}` }
-        }
+        
+        // Include more details in the error
+        const errorMessage = errorData.message || errorData.error || errorData.detail || `HTTP error! status: ${response.status}`
+        throw new Error(errorMessage)
       }
       
-      // Include more details in the error
-      const errorMessage = errorData.message || errorData.error || errorData.detail || `HTTP error! status: ${response.status}`
-      throw new Error(errorMessage)
+      return response.json() as Promise<ApiResponse<T>>
+    } catch (error) {
+      // Handle network errors (backend not running, etc.)
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        throw new Error(`Cannot connect to backend at ${url}. Please ensure the backend server is running on ${API_BASE_URL}`)
+      }
+      // Re-throw other errors
+      throw error
     }
-    
-    return response.json() as Promise<ApiResponse<T>>
   }, [])
   
   return { apiRequest }

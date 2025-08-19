@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/stores/app-store'
 import { useApiRequest } from './baseHook'
+import { isDevelopment } from '@/config/env'
 import { 
   User, 
   UserRole, 
@@ -271,16 +272,16 @@ export const useAuth = (): UseAuthReturn => {
     
     switch (user.role) {
       case 'student':
-        router.push('/student/dashboard')
+        router.push('/student')
         break
       case 'instructor':
-        router.push('/instructor/dashboard')
+        router.push('/instructor')
         break
       case 'moderator':
-        router.push('/moderator/dashboard')
+        router.push('/moderator')
         break
       case 'admin':
-        router.push('/admin/dashboard')
+        router.push('/admin')
         break
       default:
         router.push('/')
@@ -290,16 +291,16 @@ export const useAuth = (): UseAuthReturn => {
   const redirectToRole = useCallback((role: UserRole) => {
     switch (role) {
       case 'student':
-        router.push('/student/dashboard')
+        router.push('/student')
         break
       case 'instructor':
-        router.push('/instructor/dashboard')
+        router.push('/instructor')
         break
       case 'moderator':
-        router.push('/moderator/dashboard')
+        router.push('/moderator')
         break
       case 'admin':
-        router.push('/admin/dashboard')
+        router.push('/admin')
         break
     }
   }, [router])
@@ -477,14 +478,24 @@ export const useAuth = (): UseAuthReturn => {
             await fetchCsrfToken()
           }
         } catch (err) {
-          // 401 errors and "Authentication required" are expected when no valid session exists
-          // Only log other errors
-          if (err instanceof Error && 
-              !err.message.includes('401') && 
-              !err.message.toLowerCase().includes('authentication required')) {
-            console.error('Auto-login failed:', err)
+          // Handle different types of authentication errors
+          if (err instanceof Error) {
+            const isAuthError = err.message.includes('401') || 
+                               err.message.toLowerCase().includes('authentication required') ||
+                               err.message.toLowerCase().includes('session expired')
+            
+            const isNetworkError = err.message.toLowerCase().includes('cannot connect to backend') ||
+                                 err.message.toLowerCase().includes('failed to fetch')
+            
+            if (isDevelopment && isNetworkError) {
+              console.info('🔧 Backend server not available - this is normal for development. Authentication will be skipped.')
+            } else if (isDevelopment && isAuthError) {
+              console.info('🔐 No valid session found - this is normal for development.')
+            } else if (!isAuthError && !isNetworkError) {
+              console.error('Auto-login failed:', err)
+            }
           }
-          // For auth errors, user is simply not logged in - this is normal
+          // For auth errors and network errors, user is simply not logged in - this is normal
         } finally {
           if (mounted) {
             setIsLoading(false)
