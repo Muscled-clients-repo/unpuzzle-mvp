@@ -71,8 +71,8 @@ export function TimelineContainer() {
     commands.execute('SCRUBBER.END_DRAG', {})
   }
   
-  const handleClipSelect = (clipId: string) => {
-    commands.execute('TIMELINE.CLIP_SELECTED', { clipId })
+  const handleClipSelect = (clipId: string, multiSelect: boolean) => {
+    commands.execute('TIMELINE.CLIP_SELECTED', { clipId, multiSelect })
   }
   
   return (

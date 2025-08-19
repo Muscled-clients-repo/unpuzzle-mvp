@@ -21,11 +21,8 @@ interface VideoEditorInstance {
 
 export function getVideoEditorInstance(): VideoEditorInstance {
   if (instance) {
-    console.log('♻️ Reusing existing video editor instance')
     return instance
   }
-
-  console.log('🚀 Creating new video editor instance')
   
   // 1. Create state machine actor (XState v5 pattern)
   // Initial context comes from machine definition
@@ -34,11 +31,6 @@ export function getVideoEditorInstance(): VideoEditorInstance {
   // 2. Start the actor
   stateMachine.start()
   
-  // 3. Log initial state
-  console.log('State machine initialized:', {
-    state: stateMachine.getSnapshot().value,
-    context: stateMachine.getSnapshot().context
-  })
 
   // Initialize services with event bus
   const recordingService = new RecordingService(eventBus)
@@ -52,7 +44,6 @@ export function getVideoEditorInstance(): VideoEditorInstance {
   // Forward segment events (for SSOT - State Machine stores segments)
   unsubscribers.push(
     eventBus.on('timeline.segmentAdded', ({ segment }) => {
-      console.log('🔗 Forwarding segmentAdded event to state machine', segment)
       stateMachine.send({ type: 'TIMELINE.ADD_SEGMENT', segment })
     })
   )
@@ -66,7 +57,6 @@ export function getVideoEditorInstance(): VideoEditorInstance {
   // Forward clip events
   unsubscribers.push(
     eventBus.on('timeline.clipAdded', ({ clip }) => {
-      console.log('🔗 Forwarding clipAdded event to state machine', clip)
       stateMachine.send({ type: 'TIMELINE.CLIP_ADDED', clip })
     })
   )
@@ -89,7 +79,6 @@ export function getVideoEditorInstance(): VideoEditorInstance {
   // Forward video ended events to State Machine
   unsubscribers.push(
     eventBus.on('playback.ended', ({ currentTime }) => {
-      console.log('🏁 Integration Layer: Video ended, forwarding to State Machine')
       stateMachine.send({ type: 'VIDEO.ENDED' })
     })
   )
@@ -105,7 +94,6 @@ export function getVideoEditorInstance(): VideoEditorInstance {
   // Forward video loaded events to State Machine
   unsubscribers.push(
     eventBus.on('playback.videoLoaded', ({ duration }) => {
-      console.log('📹 Integration Layer: Video loaded, forwarding to State Machine', duration)
       // Get current video URL from the video element
       const videoElement = document.getElementById('preview-video') as HTMLVideoElement
       const url = videoElement?.src || ''
@@ -116,7 +104,6 @@ export function getVideoEditorInstance(): VideoEditorInstance {
   // Set video source when recording completes
   unsubscribers.push(
     eventBus.on('recording.complete', ({ videoUrl }) => {
-      console.log('📹 Setting video source from recording:', videoUrl)
       const videoElement = document.getElementById('preview-video') as HTMLVideoElement
       if (videoElement && videoUrl) {
         videoElement.src = videoUrl
@@ -130,12 +117,30 @@ export function getVideoEditorInstance(): VideoEditorInstance {
     })
   )
   
+  // V2 BULLETPROOF Integration Layer: Clear preview when all clips deleted
+  unsubscribers.push(
+    eventBus.on('preview.clear', () => {
+      const videoElement = document.getElementById('preview-video') as HTMLVideoElement
+      if (videoElement) {
+        // V2 BULLETPROOF: Properly clear video to avoid errors
+        videoElement.pause()
+        videoElement.removeAttribute('src') // Remove src instead of setting to empty
+        videoElement.load() // Reset the video element
+        videoElement.style.display = 'none'
+        // Show placeholder
+        const placeholder = document.getElementById('preview-placeholder')
+        if (placeholder) {
+          placeholder.style.display = 'block'
+        }
+      }
+    })
+  )
+  
   // Connect video element once it's available
   if (typeof window !== 'undefined') {
     const checkVideoElement = setInterval(() => {
       const videoElement = document.getElementById('preview-video') as HTMLVideoElement
       if (videoElement && !videoElement.dataset.connected) {
-        console.log('Connecting video element to PlaybackService')
         playbackService.setVideoElement(videoElement)
         videoElement.dataset.connected = 'true'
         clearInterval(checkVideoElement)
@@ -148,7 +153,6 @@ export function getVideoEditorInstance(): VideoEditorInstance {
 
   // State Machine observer - Integration Layer
   // This observes State Machine decisions and forwards them to services
-  console.log('🔧 Setting up State Machine observer for integration layer')
   
   let previousState: string | null = null
   let processedClipTransition: string | null = null
@@ -187,22 +191,15 @@ export function getVideoEditorInstance(): VideoEditorInstance {
     
     // Reduced debug logging - only log significant state changes
     if (stateChanged || hasNewClipTransition || hasNewSeek) {
-      console.log('🔄 Integration Layer: State change detected', { currentState, hasNewClipTransition, hasNewSeek })
       lastLogTime = now
     }
     
     // Forward State Machine decisions to services
     if (stateChanged || hasNewClipTransition || hasNewSeek) {
-      console.log('🔄 State Machine changed:', currentState, 'Playback state:', {
-        currentClipId: playback.currentClipId,
-        pendingClipTransition: !!playback.pendingClipTransition,
-        pendingSeek: !!playback.pendingSeek
-      })
       
       // Handle clip transitions
       if (hasNewClipTransition && snapshot.matches('playing')) {
         const clip = playback.pendingClipTransition!
-        console.log('🎬 Integration Layer: Loading clip for playback', clip.sourceUrl)
         
         // Mark as processed to prevent infinite loop
         processedClipTransition = clip.id
@@ -211,11 +208,9 @@ export function getVideoEditorInstance(): VideoEditorInstance {
         playbackService.loadVideo(clip.sourceUrl)
           .then(async () => {
             if (playback.pendingSeek) {
-              console.log('🎯 Integration Layer: Seeking to position', playback.pendingSeek.time)
               processedSeek = playback.pendingSeek.time
               await playbackService.seek(playback.pendingSeek.time)
             }
-            console.log('▶️ Integration Layer: Starting playback')
             await playbackService.play()
             
             // Clear pending actions after successful execution
@@ -228,13 +223,11 @@ export function getVideoEditorInstance(): VideoEditorInstance {
       
       // Handle standalone seeks (without clip transitions) 
       else if (hasNewSeek && !hasNewClipTransition && playback.currentClipId) {
-        console.log('🎯 Integration Layer: Seeking to position and resuming', playback.pendingSeek!.time)
         processedSeek = playback.pendingSeek!.time
         playbackService.seek(playback.pendingSeek!.time)
           .then(async () => {
             // If we're in playing state, also start playback after seek
             if (snapshot.matches('playing')) {
-              console.log('▶️ Integration Layer: Resuming playback after seek')
               await playbackService.play()
             }
             // Clear pending actions after successful execution
@@ -247,7 +240,6 @@ export function getVideoEditorInstance(): VideoEditorInstance {
       
       // Handle pause requests (only on state change to paused)
       if (currentState === 'paused' && stateChanged) {
-        console.log('⏸️ Integration Layer: Pausing playback')
         playbackService.pause()
       }
     }
@@ -272,7 +264,6 @@ export function getVideoEditorInstance(): VideoEditorInstance {
   
   // Create cleanup function
   const cleanup = () => {
-    console.log('🧹 Cleaning up video editor instance')
     unsubscribers.forEach(unsubscribe => unsubscribe())
     stateMachine.stop()
     instance = null

@@ -88,6 +88,7 @@ export interface VideoEditorContext {
 export type VideoEditorEvent = 
   | { type: 'RECORDING.START'; mode: 'screen' | 'camera' | 'audio' }
   | { type: 'RECORDING.STOP' }
+  | { type: 'RECORDING.CANCELLED' }
   | { type: 'PLAYBACK.PLAY' }
   | { type: 'PLAYBACK.PAUSE' }
   | { type: 'PLAYBACK.SEEK'; time: number }
@@ -98,13 +99,15 @@ export type VideoEditorEvent =
   | { type: 'TIMELINE.ADD_SEGMENT'; segment: VideoSegment }
   | { type: 'TIMELINE.SELECT_SEGMENT'; segmentId: string }
   | { type: 'TIMELINE.CLIP_ADDED'; clip: TimelineClip }
-  | { type: 'TIMELINE.CLIP_SELECTED'; clipId: string }
+  | { type: 'TIMELINE.CLIP_SELECTED'; clipId: string; multiSelect?: boolean }
   | { type: 'TIMELINE.TRACK_ADDED'; track: Track }
   | { type: 'SCRUBBER.START_DRAG' }
   | { type: 'SCRUBBER.DRAG'; position: number }
   | { type: 'SCRUBBER.END_DRAG' }
   | { type: 'SCRUBBER.CLICK'; position: number }
   | { type: 'CLIPS.DELETE_SELECTED' }
+  | { type: 'CLIPS.DESELECT_ALL' }
+  | { type: 'CLIPS.SPLIT_AT_PLAYHEAD' }
 
 // Default state following SSOT principle
 const DEFAULT_TRACKS: Track[] = [
@@ -214,7 +217,6 @@ export const videoEditorMachine = setup({
         // If no clip at current position, check if we should start from the beginning
         const firstClip = context.timeline.clips.sort((a, b) => a.startTime - b.startTime)[0]
         if (firstClip) {
-          console.log('State Machine: No clip at position, starting from first clip', firstClip.id)
           return {
             ...context,
             isPlaying: true,
@@ -235,7 +237,6 @@ export const videoEditorMachine = setup({
             }
           }
         } else {
-          console.warn('State Machine: No clips available')
           return {
             ...context,
             isPlaying: false
@@ -249,7 +250,6 @@ export const videoEditorMachine = setup({
       
       if (shouldResetAll) {
         const firstClip = context.timeline.clips.sort((a, b) => a.startTime - b.startTime)[0]
-        console.log('State Machine: At end of all clips, resetting to beginning')
         return {
           ...context,
           isPlaying: true,
@@ -272,13 +272,11 @@ export const videoEditorMachine = setup({
       }
       
       // Normal clip playback
-      console.log('State Machine: Playing clip at position', position, 'clip:', targetClip.id)
       // Check if we're resuming the same clip or switching clips
       const isResuming = context.playback.currentClipId === targetClip.id && 
                         !context.playback.pendingClipTransition
       
       if (isResuming) {
-        console.log('State Machine: Resuming current clip without reload')
         return {
           ...context,
           isPlaying: true,
@@ -291,7 +289,6 @@ export const videoEditorMachine = setup({
           }
         }
       } else {
-        console.log('State Machine: Loading new clip or switching clips')
         return {
           ...context,
           isPlaying: true,
@@ -324,7 +321,6 @@ export const videoEditorMachine = setup({
       }
       
       const seekTime = event.time
-      console.log('State Machine: Seeking to time', seekTime)
       
       // BUSINESS LOGIC: Find which clip contains this time
       const targetClip = context.timeline.clips.find(clip => 
@@ -333,7 +329,6 @@ export const videoEditorMachine = setup({
       
       if (targetClip) {
         const localTime = seekTime - targetClip.startTime
-        console.log('State Machine: Found clip for seek', targetClip.id, 'local time:', localTime)
         
         return {
           ...context,
@@ -355,7 +350,6 @@ export const videoEditorMachine = setup({
           }
         }
       } else {
-        console.warn('State Machine: No clip found for seek time', seekTime)
         return {
           ...context,
           currentTime: seekTime,
@@ -413,7 +407,6 @@ export const videoEditorMachine = setup({
     }),
     
     handleVideoEnded: assign(({ context }) => {
-      console.log('State Machine: Video ended - checking for next clip')
       
       // Multi-clip transition logic
       const currentClip = context.timeline.clips.find(c => c.id === context.playback.currentClipId)
@@ -426,7 +419,6 @@ export const videoEditorMachine = setup({
         )
         
         if (nextClip) {
-          console.log('State Machine: Transitioning to next clip', nextClip.id)
           return {
             ...context,
             isPlaying: true, // Keep playing for seamless transition
@@ -447,7 +439,6 @@ export const videoEditorMachine = setup({
             }
           }
         } else {
-          console.log('State Machine: No more clips, ending playback')
           return {
             ...context,
             isPlaying: false,
@@ -459,7 +450,6 @@ export const videoEditorMachine = setup({
           }
         }
       } else {
-        console.warn('State Machine: Current clip not found when video ended')
         return {
           ...context,
           isPlaying: false,
@@ -504,7 +494,6 @@ export const videoEditorMachine = setup({
     // Timeline clip actions - PROPER XState v5 pattern
     addClipToTimeline: assign({
       timeline: ({ context, event }) => {
-        console.log('✅ XState v5 addClipToTimeline:', { event })
         
         // Type guard for the specific event
         if (event.type !== 'TIMELINE.CLIP_ADDED') {
@@ -513,6 +502,12 @@ export const videoEditorMachine = setup({
         
         const clip = event.clip
         const currentTimeline = context.timeline
+        
+        // V2 BULLETPROOF: Check for duplicate clips (SSOT principle)
+        const existingClip = currentTimeline.clips.find(c => c.id === clip.id)
+        if (existingClip) {
+          return currentTimeline
+        }
         
         // Calculate position for non-overlapping clips
         const trackClips = currentTimeline.clips.filter(c => c.trackId === clip.trackId)
@@ -529,7 +524,6 @@ export const videoEditorMachine = setup({
         }
         
         const clipWithPosition = { ...clip, startTime }
-        console.log('📎 Adding clip to timeline:', clipWithPosition)
         
         return {
           ...currentTimeline,
@@ -562,12 +556,30 @@ export const videoEditorMachine = setup({
           return context.timeline
         }
         
+        
+        // V2 BULLETPROOF: Support multi-select with Cmd/Ctrl key
+        const updatedClips = context.timeline.clips.map(clip => {
+          if (clip.id === event.clipId) {
+            // Toggle selection if multi-select, otherwise select
+            return {
+              ...clip,
+              isSelected: event.multiSelect ? !clip.isSelected : true
+            }
+          } else if (!event.multiSelect) {
+            // Clear other selections if not multi-selecting
+            return {
+              ...clip,
+              isSelected: false
+            }
+          }
+          // Keep existing selection state if multi-selecting
+          return clip
+        })
+        
+        
         return {
           ...context.timeline,
-          clips: context.timeline.clips.map(clip => ({
-            ...clip,
-            isSelected: clip.id === event.clipId
-          }))
+          clips: updatedClips
         }
       }
     }),
@@ -629,28 +641,108 @@ export const videoEditorMachine = setup({
       })
     }),
     
-    deleteSelectedClips: assign({
+    deleteSelectedClips: assign(({ context }) => {
+      const selectedClips = context.timeline.clips.filter(clip => clip.isSelected)
+      const remainingClips = context.timeline.clips.filter(clip => !clip.isSelected)
+      
+      // V2 BULLETPROOF: State Machine must update ALL state (business + technical)
+      // Check if we're deleting the currently playing clip
+      const deletingCurrentClip = selectedClips.some(clip => clip.id === context.playback.currentClipId)
+      
+      // Calculate new total duration
+      const newTotalDuration = remainingClips.length === 0 
+        ? 0 
+        : remainingClips.reduce((max, clip) => Math.max(max, clip.startTime + clip.duration), 0)
+      
+      // Reset playback state if current clip was deleted or no clips remain
+      const shouldResetPlayback = deletingCurrentClip || remainingClips.length === 0
+      
+      return {
+        ...context,
+        timeline: {
+          ...context.timeline,
+          clips: remainingClips,
+          scrubber: {
+            ...context.timeline.scrubber,
+            position: shouldResetPlayback ? 0 : context.timeline.scrubber.position
+          }
+        },
+        totalDuration: newTotalDuration,
+        currentTime: shouldResetPlayback ? 0 : context.currentTime,
+        isPlaying: false, // Stop playback when deleting clips
+        playback: shouldResetPlayback ? {
+          ...context.playback,
+          currentClipId: null,
+          loadedVideoUrl: null,
+          currentVideoTime: 0,
+          videoDuration: 0,
+          activeClipStartTime: 0,
+          globalTimelinePosition: 0,
+          pendingClipTransition: null,
+          pendingSeek: null
+        } : context.playback
+      }
+    }),
+    
+    deselectAllClips: assign({
       timeline: ({ context }) => ({
         ...context.timeline,
-        clips: context.timeline.clips.filter(clip => !clip.isSelected)
-      }),
-      // If we deleted all clips, reset the duration and clear preview
-      totalDuration: ({ context }) => {
-        const remainingClips = context.timeline.clips.filter(clip => !clip.isSelected)
-        if (remainingClips.length === 0) {
-          return 0
+        clips: context.timeline.clips.map(clip => ({
+          ...clip,
+          isSelected: false
+        }))
+      })
+    }),
+    
+    splitClipAtPlayhead: assign(({ context }) => {
+      const playheadPosition = context.timeline.scrubber.position
+      
+      // Find the clip that contains the playhead position
+      const clipToSplit = context.timeline.clips.find(clip => 
+        playheadPosition > clip.startTime && 
+        playheadPosition < clip.startTime + clip.duration
+      )
+      
+      if (!clipToSplit) {
+        // No clip at playhead position, nothing to split
+        return context
+      }
+      
+      // Calculate split point relative to clip start
+      const splitPoint = playheadPosition - clipToSplit.startTime
+      
+      // Create two new clips from the original
+      const firstClip: TimelineClip = {
+        ...clipToSplit,
+        duration: splitPoint,
+        outPoint: clipToSplit.inPoint + splitPoint,
+        isSelected: true // Select only the first (left) part after split
+      }
+      
+      const secondClip: TimelineClip = {
+        ...clipToSplit,
+        id: `${clipToSplit.id}-split-${Date.now()}`,
+        startTime: playheadPosition,
+        duration: clipToSplit.duration - splitPoint,
+        inPoint: clipToSplit.inPoint + splitPoint,
+        label: `${clipToSplit.label} (2)`,
+        isSelected: false // Don't select the second part
+      }
+      
+      // Replace the original clip with the two new clips
+      // Also deselect all other clips - only the left part should be selected
+      const updatedClips = context.timeline.clips
+        .filter(c => c.id !== clipToSplit.id)
+        .map(c => ({ ...c, isSelected: false })) // Deselect all existing clips
+        .concat([firstClip, secondClip])
+        .sort((a, b) => a.startTime - b.startTime)
+      
+      return {
+        ...context,
+        timeline: {
+          ...context.timeline,
+          clips: updatedClips
         }
-        // Calculate new total duration from remaining clips
-        return remainingClips.reduce((max, clip) => 
-          Math.max(max, clip.startTime + clip.duration), 0
-        )
-      },
-      currentTime: ({ context }) => {
-        const remainingClips = context.timeline.clips.filter(clip => !clip.isSelected)
-        if (remainingClips.length === 0) {
-          return 0
-        }
-        return context.currentTime
       }
     }),
     
@@ -740,6 +832,12 @@ export const videoEditorMachine = setup({
         },
         'CLIPS.DELETE_SELECTED': {
           actions: 'deleteSelectedClips'
+        },
+        'CLIPS.DESELECT_ALL': {
+          actions: 'deselectAllClips'
+        },
+        'CLIPS.SPLIT_AT_PLAYHEAD': {
+          actions: 'splitClipAtPlayhead'
         }
       }
     },
@@ -748,11 +846,26 @@ export const videoEditorMachine = setup({
         'RECORDING.STOP': {
           target: 'idle',
           actions: 'stopRecording'
+        },
+        'RECORDING.CANCELLED': {
+          target: 'idle',
+          // V2 BULLETPROOF: Reset state without creating segment
+          actions: assign({
+            recording: () => ({
+              startTime: null,
+              duration: 0,
+              isActive: false
+            })
+          })
         }
       }
     },
     playing: {
       on: {
+        'RECORDING.START': {
+          target: 'recording',
+          actions: ['pausePlayback', 'startRecording']
+        },
         'PLAYBACK.PAUSE': {
           target: 'paused',
           actions: 'pausePlayback'
@@ -796,6 +909,10 @@ export const videoEditorMachine = setup({
     },
     paused: {
       on: {
+        'RECORDING.START': {
+          target: 'recording',
+          actions: 'startRecording'
+        },
         'PLAYBACK.PLAY': {
           target: 'playing',
           actions: 'resumePlayback'
@@ -824,6 +941,12 @@ export const videoEditorMachine = setup({
         },
         'SCRUBBER.CLICK': {
           actions: 'clickScrubber'
+        },
+        'CLIPS.DELETE_SELECTED': {
+          actions: 'deleteSelectedClips'
+        },
+        'CLIPS.SPLIT_AT_PLAYHEAD': {
+          actions: 'splitClipAtPlayhead'
         }
       }
     },

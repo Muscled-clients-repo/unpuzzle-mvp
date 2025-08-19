@@ -121,8 +121,11 @@ export function RecordingControlsContainer() {
   const handleStartRecording = async (mode: string) => {
     try {
       await commands.startRecording(mode as 'screen' | 'camera' | 'audio')
-    } catch (error) {
-      console.error('Failed to start recording:', error)
+    } catch (error: any) {
+      // V2 BULLETPROOF: Only log actual errors, not user cancellations
+      if (error?.name !== 'NotAllowedError') {
+        console.error('Failed to start recording:', error)
+      }
     }
   }
 

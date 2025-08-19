@@ -28,7 +28,7 @@ interface TimelineProps {
   onScrubberDragStart: () => void
   onScrubberDrag: (position: number) => void
   onScrubberDragEnd: () => void
-  onClipSelect: (clipId: string) => void
+  onClipSelect: (clipId: string, multiSelect: boolean) => void
 }
 
 export function TimelineNew({
@@ -99,11 +99,19 @@ export function TimelineNew({
             MozUserSelect: 'none',
             msUserSelect: 'none'
           }}>
-          {/* Time Ruler */}
-          <div className="h-10 bg-gray-900 border-b border-gray-800 relative sticky top-0 z-10">
+          {/* Time Ruler - Now clickable */}
+          <div 
+            className="h-10 bg-gray-900 border-b border-gray-800 relative sticky top-0 z-10 cursor-pointer"
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect()
+              const x = e.clientX - rect.left
+              const position = x / pixelsPerSecond
+              onScrubberClick(Math.max(0, Math.min(position, totalDuration)))
+            }}
+          >
             {/* Major time marks every second */}
             {Array.from({ length: Math.ceil(totalDuration) + 10 }).map((_, i) => (
-              <div key={i} className="absolute" style={{ left: i * pixelsPerSecond }}>
+              <div key={i} className="absolute pointer-events-none" style={{ left: i * pixelsPerSecond }}>
                 <div className="h-2 w-px bg-gray-600" />
                 <span className="absolute top-2 left-0 text-xs text-gray-400 transform -translate-x-1/2">
                   {formatTime(i)}
@@ -161,7 +169,9 @@ export function TimelineNew({
                     }}
                     onClick={(e) => {
                       e.stopPropagation()  // Prevent scrubber movement
-                      onClipSelect(clip.id)
+                      // V2 BULLETPROOF: Support multi-select with Cmd/Ctrl key
+                      const multiSelect = e.metaKey || e.ctrlKey
+                      onClipSelect(clip.id, multiSelect)
                     }}
                   >
                     {/* Thumbnail background */}
@@ -212,12 +222,13 @@ export function TimelineNew({
             }}
           />
           
-          {/* Playhead/Scrubber */}
+          {/* Playhead/Scrubber with larger hit area */}
           <div
-            className="absolute top-0 w-0.5 bg-red-500 z-30"
+            className="absolute top-0 z-30"
             style={{ 
-              left: scrubberPosition * pixelsPerSecond,
+              left: scrubberPosition * pixelsPerSecond - 10, // Offset for hit area
               height: '100%',
+              width: '20px', // 20px wide hit area
               cursor: 'ew-resize'
             }}
             onMouseDown={(e) => {
@@ -253,12 +264,22 @@ export function TimelineNew({
               document.addEventListener('mouseup', handleMouseUp)
             }}
           >
-            {/* Scrubber head - now interactive */}
+            {/* Invisible hit area - 20px wide centered on scrubber */}
+            <div className="absolute inset-0" />
+            
+            {/* Visible scrubber line - centered in hit area */}
+            <div 
+              className="absolute top-0 w-0.5 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)] pointer-events-none"
+              style={{
+                left: '10px', // Center the line in the 20px hit area
+                height: '100%'
+              }}
+            />
+            
+            {/* Scrubber head - centered */}
             <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 pointer-events-none">
               <div className="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[10px] border-t-red-500" />
             </div>
-            {/* Vertical line with glow effect */}
-            <div className="w-full h-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)] pointer-events-none" />
           </div>
         </div>
       </div>

@@ -81,10 +81,22 @@ export class TimelineService {
     // Cleanup any existing listener first
     if (this.unsubscribe) {
       this.unsubscribe()
+      this.unsubscribe = null
     }
+    
+    // Track if we've already processed a recording to prevent duplicates
+    let lastProcessedRecording: string | null = null
     
     // Create unsubscribe function to prevent duplicate listeners
     this.unsubscribe = this.eventBus.on('recording.stopped', ({ duration, videoUrl }) => {
+      // V2 BULLETPROOF: Prevent duplicate processing of the same recording
+      const recordingId = `${videoUrl}-${duration}`
+      if (lastProcessedRecording === recordingId) {
+        console.warn('⚠️ Timeline: Duplicate recording event detected, skipping')
+        return
+      }
+      lastProcessedRecording = recordingId
+      
       // Request to add segment (service doesn't store, just emits)
       // State machine will calculate position and validate
       this.requestAddSegment({
@@ -98,8 +110,9 @@ export class TimelineService {
       // ALSO create a clip for the new timeline system
       console.log('🎬 Timeline: Recording stopped, creating clip', { duration, videoUrl })
       
+      const uniqueId = `clip-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
       const clip: TimelineClip = {
-        id: `clip-${Date.now()}`,
+        id: uniqueId,
         trackId: 'video-1', // Default to first video track
         sourceUrl: videoUrl,
         startTime: 0, // State machine will calculate actual position
@@ -111,8 +124,14 @@ export class TimelineService {
       }
       
       // Emit event - state machine will handle placement
-      console.log('📤 TimelineService emitting clipAdded event:', clip)
       this.eventBus.emit('timeline.clipAdded', { clip })
+      
+      // Clear the tracking after a short delay (to handle any immediate duplicates)
+      setTimeout(() => {
+        if (lastProcessedRecording === recordingId) {
+          lastProcessedRecording = null
+        }
+      }, 100)
     })
   }
   

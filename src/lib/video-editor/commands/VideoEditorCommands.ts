@@ -37,8 +37,18 @@ export class VideoEditorCommands {
     try {
       // 2. Execute service action SECOND
       await this.recordingService.start(mode)
-    } catch (error) {
-      // Compensating action on failure (future enhancement)
+    } catch (error: any) {
+      // V2 BULLETPROOF: Compensating action on failure
+      
+      // If user cancelled (NotAllowedError), revert state machine
+      if (error.name === 'NotAllowedError') {
+        // V2 BULLETPROOF: Use proper cancellation event
+        this.stateMachine.send({ type: 'RECORDING.CANCELLED' })
+        // Don't throw for user cancellation
+        return
+      }
+      
+      // Only log actual errors, not cancellations
       console.error('Recording start failed:', error)
       throw error
     }
@@ -74,12 +84,10 @@ export class VideoEditorCommands {
 
   // Playback Commands  
   play(): void {
-    console.log('🎮 Commands: Sending PLAY to State Machine')
     this.stateMachine.send({ type: 'PLAYBACK.PLAY' })
   }
 
   pause(): void {
-    console.log('🎮 Commands: Sending PAUSE to State Machine')
     this.stateMachine.send({ type: 'PLAYBACK.PAUSE' })
   }
 
@@ -88,7 +96,6 @@ export class VideoEditorCommands {
       throw new Error('Seek time cannot be negative')
     }
 
-    console.log('🎮 Commands: Sending SEEK to State Machine', time)
     this.stateMachine.send({ type: 'PLAYBACK.SEEK', time })
   }
 
@@ -139,6 +146,11 @@ export class VideoEditorCommands {
     }
   }
 
+  // Split clip at playhead position
+  splitClipAtPlayhead(): void {
+    this.stateMachine.send({ type: 'CLIPS.SPLIT_AT_PLAYHEAD' })
+  }
+
   // Generic execute method for all commands
   execute(command: string, params: Record<string, unknown> = {}): void {
     switch (command) {
@@ -168,7 +180,11 @@ export class VideoEditorCommands {
         this.stateMachine.send({ type: 'TIMELINE.CLIP_ADDED', clip: params.clip as TimelineClip })
         break
       case 'TIMELINE.CLIP_SELECTED':
-        this.stateMachine.send({ type: 'TIMELINE.CLIP_SELECTED', clipId: params.clipId as string })
+        this.stateMachine.send({ 
+          type: 'TIMELINE.CLIP_SELECTED', 
+          clipId: params.clipId as string,
+          multiSelect: params.multiSelect as boolean
+        })
         break
       case 'TIMELINE.TRACK_ADDED':
         this.stateMachine.send({ type: 'TIMELINE.TRACK_ADDED', track: params.track as Track })
@@ -190,6 +206,9 @@ export class VideoEditorCommands {
         break
       case 'CLIPS.DELETE_SELECTED':
         this.deleteSelectedClips()
+        break
+      case 'CLIPS.SPLIT_AT_PLAYHEAD':
+        this.splitClipAtPlayhead()
         break
       default:
         console.warn(`Unknown command: ${command}`)

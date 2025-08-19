@@ -26,6 +26,28 @@ function VideoStudioContent() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Spacebar - Play/Pause
+      if (e.key === ' ' || e.code === 'Space') {
+        // Prevent default browser scroll behavior
+        e.preventDefault()
+        
+        // Check if we're not in an input field or textarea
+        const target = e.target as HTMLElement
+        const isInputField = target.tagName === 'INPUT' || 
+                           target.tagName === 'TEXTAREA' || 
+                           target.contentEditable === 'true'
+        
+        if (!isInputField) {
+          // Toggle play/pause based on current state
+          const state = queries.getCurrentState()
+          if (state === 'playing') {
+            commands.pause()
+          } else if (state === 'idle' || state === 'paused') {
+            commands.play()
+          }
+        }
+      }
+      
       // Delete key - delete selected clips
       if (e.key === 'Delete' || e.key === 'Backspace') {
         // Only call getTimelineClips when delete key is actually pressed
@@ -33,6 +55,20 @@ function VideoStudioContent() {
         if (hasSelectedClips) {
           e.preventDefault()
           commands.deleteSelectedClips()
+        }
+      }
+      
+      // T key - split clip at playhead position
+      if (e.key === 't' || e.key === 'T') {
+        // Check if we're not in an input field
+        const target = e.target as HTMLElement
+        const isInputField = target.tagName === 'INPUT' || 
+                           target.tagName === 'TEXTAREA' || 
+                           target.contentEditable === 'true'
+        
+        if (!isInputField) {
+          e.preventDefault()
+          commands.splitClipAtPlayhead()
         }
       }
     }
