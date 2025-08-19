@@ -45,6 +45,7 @@ export default function CreateCoursePage() {
     currentStep,
     uploadQueue,
     isAutoSaving,
+    saveError,
     setCourseInfo,
     addVideosToQueue,
     updateVideoName,
@@ -58,7 +59,9 @@ export default function CreateCoursePage() {
     saveDraft,
     publishCourse,
     setCurrentStep,
-    toggleAutoSave
+    toggleAutoSave,
+    clearSaveError,
+    retryAutoSave
   } = useAppStore()
 
   const [draggedVideo, setDraggedVideo] = useState<string | null>(null)
@@ -69,6 +72,7 @@ export default function CreateCoursePage() {
   const [chapterTitle, setChapterTitle] = useState("")
   const [editingVideo, setEditingVideo] = useState<string | null>(null)
   const [videoTitle, setVideoTitle] = useState("")
+  const [saveMessage, setSaveMessage] = useState<string | null>(null)
 
   // Auto-expand first chapter when it has videos
   useEffect(() => {
@@ -94,7 +98,7 @@ export default function CreateCoursePage() {
         chapters: [],
         videos: [],
         status: 'draft',
-        autoSaveEnabled: true
+        autoSaveEnabled: false
       })
       // Auto-create Chapter 1
       createChapter('Chapter 1')
@@ -169,6 +173,51 @@ export default function CreateCoursePage() {
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
+      {/* Success Message */}
+      {saveMessage && (
+        <div className="mb-4 p-4 bg-green-50 text-green-800 border border-green-200 rounded-md flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="h-5 w-5" />
+            <p>{saveMessage}</p>
+          </div>
+          <button 
+            onClick={() => setSaveMessage(null)}
+            className="text-sm underline hover:no-underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Error Message */}
+      {saveError && (
+        <div className="mb-4 p-4 bg-red-50 text-red-800 border border-red-200 rounded-md">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertCircle className="h-5 w-5" />
+            <p className="font-medium">Failed to save course</p>
+          </div>
+          <p className="text-sm mb-3">{saveError}</p>
+          <div className="flex gap-3">
+            <button 
+              onClick={retryAutoSave}
+              className="text-sm bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 disabled:opacity-50"
+              disabled={isAutoSaving}
+            >
+              {isAutoSaving ? 'Retrying...' : 'Retry'}
+            </button>
+            <button 
+              onClick={clearSaveError}
+              className="text-sm border border-red-300 px-3 py-1 rounded hover:bg-red-100"
+            >
+              Dismiss
+            </button>
+          </div>
+          <p className="text-xs mt-2 text-red-600">
+            Auto-save is paused until this error is resolved. Make changes to retry automatically.
+          </p>
+        </div>
+      )}
+      
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
@@ -184,10 +233,48 @@ export default function CreateCoursePage() {
               Saving...
             </div>
           )}
-          <Button variant="outline" onClick={saveDraft}>
+          {saveError && (
+            <div className="flex items-center gap-2 text-sm text-red-600">
+              <AlertCircle className="h-4 w-4" />
+              Save failed
+            </div>
+          )}
+          {courseCreation?.lastSaved && !isAutoSaving && !saveError && (
+            <div className="flex items-center gap-2 text-sm text-green-600">
+              <CheckCircle className="h-4 w-4" />
+              Saved {new Date(courseCreation.lastSaved).toLocaleTimeString()}
+            </div>
+          )}
+          <Button 
+            variant="outline" 
+            onClick={async () => {
+              // Clear any existing error before manual save
+              clearSaveError()
+              await saveDraft()
+              
+              // Check if save was successful (no error after attempting)
+              const currentState = useAppStore.getState()
+              if (!currentState.saveError) {
+                setSaveMessage('Course draft saved successfully!')
+                setTimeout(() => setSaveMessage(null), 3000)
+              }
+            }}
+            disabled={isAutoSaving}
+          >
             <Save className="mr-2 h-4 w-4" />
             Save Draft
           </Button>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={courseCreation?.autoSaveEnabled || false}
+                onChange={toggleAutoSave}
+                className="rounded"
+              />
+              Auto-save
+            </label>
+          </div>
           <Button 
             onClick={publishCourse}
             disabled={!courseCreation?.title || (courseCreation?.videos.length || 0) === 0}

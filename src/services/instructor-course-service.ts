@@ -11,7 +11,27 @@ import {
 import { mockCourses } from '@/data/mock/courses'
 
 export class InstructorCourseService {
-  async getInstructorCourses(instructorId: string): Promise<ServiceResult<Course[]>> {
+  private cache = new Map<string, { data: any, timestamp: number }>()
+  private CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+  private clearCoursesCache() {
+    for (const key of this.cache.keys()) {
+      if (key.startsWith('courses-')) {
+        this.cache.delete(key)
+      }
+    }
+  }
+
+  async getInstructorCourses(instructorId: string, forceRefresh = false): Promise<ServiceResult<Course[]>> {
+    const cacheKey = `courses-${instructorId}`
+    
+    // Return cached data if fresh
+    if (!forceRefresh && !useMockData) {
+      const cached = this.cache.get(cacheKey)
+      if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+        return { data: cached.data }
+      }
+    }
     if (useMockData) {
       // Transform mock courses to match domain Course type
       const transformedCourses: Course[] = mockCourses.map(course => ({
@@ -53,7 +73,13 @@ export class InstructorCourseService {
       return { data: transformedCourses }
     }
 
-    const response = await apiClient.get<Course[]>(`/api/instructor/courses`)
+    const response = await apiClient.get<Course[]>(`/api/v1/instructor/courses`)
+    
+    // Cache successful response
+    if (!response.error && response.data) {
+      this.cache.set(cacheKey, { data: response.data, timestamp: Date.now() })
+    }
+    
     return response.error
       ? { error: response.error }
       : { data: response.data }
@@ -120,7 +146,7 @@ export class InstructorCourseService {
       }
     }
 
-    const response = await apiClient.get(`/api/instructor/courses/${courseId}/analytics`)
+    const response = await apiClient.get(`/api/v1/instructor/courses/${courseId}/analytics`)
     return response.error
       ? { error: response.error }
       : { data: response.data }
@@ -154,7 +180,7 @@ export class InstructorCourseService {
       return { data: newCourse }
     }
 
-    const response = await apiClient.post<Course>('/api/instructor/courses', course)
+    const response = await apiClient.post<Course>('/api/v1/instructor/courses', course)
     return response.error
       ? { error: response.error }
       : { data: response.data }
@@ -178,9 +204,54 @@ export class InstructorCourseService {
     }
 
     const response = await apiClient.put<Course>(
-      `/api/instructor/courses/${courseId}`,
+      `/api/v1/instructor/courses/${courseId}`,
       updates
     )
+    return response.error
+      ? { error: response.error }
+      : { data: response.data }
+  }
+
+  async deleteCourse(courseId: string): Promise<ServiceResult<{ success: boolean }>> {
+    if (useMockData) {
+      return { data: { success: true } }
+    }
+
+    const response = await apiClient.delete(`/api/v1/instructor/courses/${courseId}`)
+    
+    // Clear cache on deletion
+    if (!response.error) {
+      this.clearCoursesCache()
+    }
+    
+    return response.error
+      ? { error: response.error }
+      : { data: { success: true } }
+  }
+
+  async duplicateCourse(courseId: string): Promise<ServiceResult<Course>> {
+    if (useMockData) {
+      const course = mockCourses.find(c => c.id === courseId)
+      if (!course) return { error: 'Course not found' }
+      
+      const duplicatedCourse = {
+        ...course,
+        id: `course-${Date.now()}`,
+        title: `${course.title} (Copy)`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+      
+      return { data: duplicatedCourse as any }
+    }
+
+    const response = await apiClient.post<Course>(`/api/v1/instructor/courses/${courseId}/duplicate`)
+    
+    // Clear cache on duplication
+    if (!response.error) {
+      this.clearCoursesCache()
+    }
+    
     return response.error
       ? { error: response.error }
       : { data: response.data }
@@ -194,11 +265,17 @@ export class InstructorCourseService {
     }
 
     const response = await apiClient.post(
-      `/api/instructor/courses/${courseId}/publish`
+      `/api/v1/instructor/courses/${courseId}/publish`
     )
+    
+    // Clear cache on publish
+    if (!response.error) {
+      this.clearCoursesCache()
+    }
+    
     return response.error
       ? { error: response.error }
-      : { data: response.data }
+      : { data: response.data || { success: true } }
   }
 
   async unpublishCourse(courseId: string): Promise<ServiceResult<{ success: boolean }>> {
@@ -209,11 +286,17 @@ export class InstructorCourseService {
     }
 
     const response = await apiClient.post(
-      `/api/instructor/courses/${courseId}/unpublish`
+      `/api/v1/instructor/courses/${courseId}/unpublish`
     )
+    
+    // Clear cache on unpublish
+    if (!response.error) {
+      this.clearCoursesCache()
+    }
+    
     return response.error
       ? { error: response.error }
-      : { data: response.data }
+      : { data: response.data || { success: true } }
   }
 
   async addVideoToCourse(

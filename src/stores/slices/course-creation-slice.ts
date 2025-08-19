@@ -1,4 +1,5 @@
 import { StateCreator } from 'zustand'
+import { instructorCourseService } from '@/services/instructor-course-service'
 
 export interface VideoUpload {
   id: string
@@ -10,7 +11,7 @@ export interface VideoUpload {
   progress: number
   url?: string
   thumbnailUrl?: string
-  chapterId?: string
+  chapterId?: string | null
   order: number
   transcript?: string
 }
@@ -26,6 +27,7 @@ export interface Chapter {
 
 export interface CourseCreationData {
   // Basic Info
+  id?: string // Course ID for updates
   title: string
   description: string
   category: string
@@ -42,6 +44,7 @@ export interface CourseCreationData {
   totalDuration?: string
   lastSaved?: Date
   autoSaveEnabled: boolean
+  hasAutoSaveError?: boolean // Track if auto-save failed
 }
 
 export interface CourseCreationSlice {
@@ -49,6 +52,8 @@ export interface CourseCreationSlice {
   uploadQueue: VideoUpload[]
   isAutoSaving: boolean
   currentStep: 'info' | 'content' | 'review'
+  saveError: string | null
+  lastSaveAttempt: Date | null
   
   // Basic Info Actions
   setCourseInfo: (info: Partial<CourseCreationData>) => void
@@ -75,9 +80,11 @@ export interface CourseCreationSlice {
   saveDraft: () => Promise<void>
   publishCourse: () => Promise<void>
   toggleAutoSave: () => void
+  clearSaveError: () => void
+  retryAutoSave: () => Promise<void>
   
   // Navigation
-  setCurrentStep: (step: CourseCreationData['currentStep']) => void
+  setCurrentStep: (step: 'info' | 'content' | 'review') => void
   resetCourseCreation: () => void
   
   // Edit mode
@@ -89,6 +96,8 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
   uploadQueue: [],
   isAutoSaving: false,
   currentStep: 'info',
+  saveError: null,
+  lastSaveAttempt: null,
   
   setCourseInfo: (info) => {
     set(state => ({
@@ -96,13 +105,23 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         ...state.courseCreation,
         ...info,
         lastSaved: new Date()
-      } as CourseCreationData
+      } as CourseCreationData,
+      // Clear save error when user modifies data (gives them a chance to retry)
+      saveError: null
     }))
     
-    // Trigger auto-save if enabled
-    const { courseCreation } = get()
-    if (courseCreation?.autoSaveEnabled) {
-      get().saveDraft()
+    // Trigger auto-save if enabled AND no previous error exists
+    const { courseCreation, saveError } = get()
+    if (courseCreation?.autoSaveEnabled && !saveError) {
+      // Debounce auto-save to avoid too many requests
+      const currentTime = Date.now()
+      const lastAttempt = get().lastSaveAttempt?.getTime() || 0
+      const timeSinceLastAttempt = currentTime - lastAttempt
+      
+      // Only auto-save if it's been at least 2 seconds since last attempt
+      if (timeSinceLastAttempt > 2000) {
+        get().saveDraft()
+      }
     }
   },
   
@@ -251,7 +270,7 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         chapters: [newChapter],
         videos: [],
         status: 'draft',
-        autoSaveEnabled: true
+        autoSaveEnabled: false
       }
     }))
   },
@@ -409,34 +428,146 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
   },
   
   saveDraft: async () => {
-    set({ isAutoSaving: true })
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    set(state => ({
-      isAutoSaving: false,
-      courseCreation: state.courseCreation ? {
-        ...state.courseCreation,
-        lastSaved: new Date()
-      } : null
-    }))
-    console.log('Course draft saved!')
+    const { courseCreation } = get()
+    if (!courseCreation) return
+    
+    // Validation before saving
+    const title = courseCreation.title?.trim() || ''
+    const description = courseCreation.description?.trim() || ''
+    
+    // Don't save if basic required fields are empty or too short
+    if (!title || title.length < 3) {
+      set({
+        saveError: 'Course title is required and must be at least 3 characters long',
+        isAutoSaving: false
+      })
+      return
+    }
+    
+    if (description.length > 0 && description.length < 10) {
+      set({
+        saveError: 'Description must be at least 10 characters long or left empty',
+        isAutoSaving: false
+      })
+      return
+    }
+    
+    set({ isAutoSaving: true, lastSaveAttempt: new Date() })
+    
+    try {
+      // Prepare course data for API
+      const courseData = {
+        title: title,
+        description: description,
+        category: courseCreation.category || 'programming',
+        difficulty: courseCreation.level || 'beginner',
+        price: courseCreation.price || 0,
+        isFree: courseCreation.price === 0,
+        tags: courseCreation.category ? [courseCreation.category] : ['programming'],
+        status: 'draft' as const
+        // Don't send video data in create - handle separately
+      }
+      
+      let result
+      
+      // If course already has an ID, update it; otherwise create new
+      if (courseCreation.id) {
+        result = await instructorCourseService.updateCourse(courseCreation.id, courseData)
+      } else {
+        result = await instructorCourseService.createCourse(courseData)
+      }
+      
+      if (result.data) {
+        set(state => ({
+          isAutoSaving: false,
+          saveError: null, // Clear any previous error
+          courseCreation: state.courseCreation ? {
+            ...state.courseCreation,
+            lastSaved: new Date(),
+            hasAutoSaveError: false,
+            // Store the created course ID for future updates
+            id: result.data!.id || state.courseCreation.id
+          } : null
+        }))
+        console.log('Course draft saved successfully!', result.data)
+        
+        // Also update the instructor courses in the store
+        const appState = get() as any
+        if (appState.loadInstructorCourses && appState.profile?.id) {
+          appState.loadInstructorCourses(appState.profile.id)
+        }
+      } else {
+        throw new Error(result.error || 'Failed to save draft')
+      }
+    } catch (error) {
+      console.error('Failed to save draft:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save draft'
+      
+      set(state => ({
+        isAutoSaving: false,
+        saveError: errorMessage,
+        courseCreation: state.courseCreation ? {
+          ...state.courseCreation,
+          hasAutoSaveError: true
+        } : null
+      }))
+    }
   },
   
   publishCourse: async () => {
-    set(state => ({
-      courseCreation: state.courseCreation ? {
-        ...state.courseCreation,
-        status: 'under_review' as const
-      } : null
-    }))
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    set(state => ({
-      courseCreation: state.courseCreation ? {
-        ...state.courseCreation,
-        status: 'published' as const
-      } : null
-    }))
-    console.log('Course published!')
+    const { courseCreation } = get()
+    if (!courseCreation) return
+    
+    try {
+      // First save the draft if not already saved
+      if (!courseCreation.id) {
+        await get().saveDraft()
+      }
+      
+      const updatedCourseCreation = get().courseCreation
+      if (!updatedCourseCreation?.id) {
+        console.error('Failed to get course ID')
+        return
+      }
+      
+      // Update status to under_review
+      set(state => ({
+        courseCreation: state.courseCreation ? {
+          ...state.courseCreation,
+          status: 'under_review' as const
+        } : null
+      }))
+      
+      // Call publish API
+      const result = await instructorCourseService.publishCourse(updatedCourseCreation.id)
+      
+      if (result.data) {
+        set(state => ({
+          courseCreation: state.courseCreation ? {
+            ...state.courseCreation,
+            status: 'published' as const
+          } : null
+        }))
+        console.log('Course published successfully!')
+        
+        // Update the instructor courses in the store
+        const appState = get() as any
+        if (appState.loadInstructorCourses && appState.profile?.id) {
+          appState.loadInstructorCourses(appState.profile.id)
+        }
+      } else {
+        throw new Error(result.error || 'Failed to publish course')
+      }
+    } catch (error) {
+      console.error('Failed to publish course:', error)
+      // Revert status on error
+      set(state => ({
+        courseCreation: state.courseCreation ? {
+          ...state.courseCreation,
+          status: 'draft' as const
+        } : null
+      }))
+    }
   },
   
   toggleAutoSave: () => {
@@ -457,8 +588,20 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       courseCreation: null,
       uploadQueue: [],
       isAutoSaving: false,
-      currentStep: 'info'
+      currentStep: 'info',
+      saveError: null,
+      lastSaveAttempt: null
     })
+  },
+
+  clearSaveError: () => {
+    set({ saveError: null })
+  },
+
+  retryAutoSave: async () => {
+    // Clear the error and retry saving
+    set({ saveError: null })
+    await get().saveDraft()
   },
   
   loadCourseForEdit: (courseId) => {
@@ -492,7 +635,7 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       status: 'draft',
       totalDuration: '1h 15min',
       lastSaved: new Date(),
-      autoSaveEnabled: true
+      autoSaveEnabled: false
     }
     
     set({

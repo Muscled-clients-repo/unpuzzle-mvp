@@ -1,7 +1,7 @@
 // src/lib/api-client.ts
 // Centralized API client with mock data support
 
-export const useMockData = process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true' || true // Default to mock for now
+export const useMockData = process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true' || false // Default to real API
 
 interface ApiResponse<T> {
   data?: T
@@ -13,7 +13,7 @@ class ApiClient {
   private baseUrl: string
   
   constructor() {
-    this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+    this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
   }
   
   async get<T>(endpoint: string): Promise<ApiResponse<T>> {
@@ -27,8 +27,10 @@ class ApiClient {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         credentials: 'include',
+        mode: 'cors', // Explicitly set CORS mode
       })
       
       if (!response.ok) {
@@ -46,7 +48,7 @@ class ApiClient {
     }
   }
   
-  async post<T>(endpoint: string, body?: any): Promise<ApiResponse<T>> {
+  async post<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
     if (useMockData) {
       // Mock response - will be handled by service layer
       return { status: 200 } as ApiResponse<T>
@@ -57,9 +59,11 @@ class ApiClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify(body),
+        mode: 'cors', // Explicitly set CORS mode
+        body: body ? JSON.stringify(body) : undefined,
       })
       
       if (!response.ok) {
@@ -77,7 +81,7 @@ class ApiClient {
     }
   }
   
-  async put<T>(endpoint: string, body?: any): Promise<ApiResponse<T>> {
+  async put<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
     if (useMockData) {
       return { status: 200 } as ApiResponse<T>
     }
@@ -87,9 +91,11 @@ class ApiClient {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify(body),
+        mode: 'cors', // Explicitly set CORS mode
+        body: body ? JSON.stringify(body) : undefined,
       })
       
       if (!response.ok) {
@@ -117,8 +123,10 @@ class ApiClient {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         credentials: 'include',
+        mode: 'cors', // Explicitly set CORS mode
       })
       
       if (!response.ok) {
