@@ -1,5 +1,18 @@
-// BULLETPROOF ARCHITECTURE COMPLIANT - XState v5 Implementation
-// Following all 5 principles with NO contradictions
+/**
+ * BULLETPROOF Video Editor State Machine - XState v5 Implementation
+ * 
+ * This is THE ONLY state machine for the video editor.
+ * Contains ALL business and technical state following BULLETPROOF principles.
+ * 
+ * KEY FEATURES:
+ * - Multi-clip recording and seamless playback transitions
+ * - Complete state authority (business + technical state)
+ * - Event-driven integration with stateless services
+ * - Type-safe with comprehensive error handling
+ * 
+ * @see /src/lib/video-editor/README.md for architecture guide
+ * @see /logs/2025-08-19/BULLETPROOF-ARCHITECTURE-V2-LESSONS-LEARNED.md
+ */
 
 import { setup, assign } from 'xstate'
 import type { VideoSegment } from '../types'
@@ -41,7 +54,7 @@ export interface VideoEditorContext {
     duration: number
     isActive: boolean
   }
-  // PHASE 3: Enhanced playback state per BULLETPROOF Principle 1
+  // Enhanced playback state for multi-clip functionality
   playback: {
     // Technical state (following BULLETPROOF architecture)
     currentVideoTime: number
@@ -78,10 +91,10 @@ export type VideoEditorEvent =
   | { type: 'PLAYBACK.PLAY' }
   | { type: 'PLAYBACK.PAUSE' }
   | { type: 'PLAYBACK.SEEK'; time: number }
-  | { type: 'PLAYBACK.ACTIONS_PROCESSED' }  // PHASE 4: Clear pending actions
-  | { type: 'VIDEO.LOADED'; duration: number; url: string }  // New event for video loaded
-  | { type: 'VIDEO.TIME_UPDATE'; time: number }  // PHASE 3: Video time updates from service
-  | { type: 'VIDEO.ENDED' }  // PHASE 3: Video playback ended
+  | { type: 'PLAYBACK.ACTIONS_PROCESSED' }  // Clear pending actions
+  | { type: 'VIDEO.LOADED'; duration: number; url: string }  // Video loaded event
+  | { type: 'VIDEO.TIME_UPDATE'; time: number }  // Video time updates from service
+  | { type: 'VIDEO.ENDED' }  // Video playback ended
   | { type: 'TIMELINE.ADD_SEGMENT'; segment: VideoSegment }
   | { type: 'TIMELINE.SELECT_SEGMENT'; segmentId: string }
   | { type: 'TIMELINE.CLIP_ADDED'; clip: TimelineClip }
@@ -112,7 +125,7 @@ function getInitialContext(): VideoEditorContext {
       duration: 0,
       isActive: false
     },
-    // PHASE 3: Add playback state to initial context
+    // Initialize playback state
     playback: {
       currentVideoTime: 0,
       videoDuration: 0,
@@ -179,7 +192,7 @@ export const videoEditorMachine = setup({
       }
     }),
     
-    // PHASE 3: Enhanced playback actions with business logic
+    // Enhanced playback actions with business logic
     pausePlayback: assign({
       isPlaying: false,
       playback: ({ context }) => ({
@@ -196,7 +209,7 @@ export const videoEditorMachine = setup({
         position >= clip.startTime && position < clip.startTime + clip.duration
       )
       
-      // PHASE 5: Enhanced multi-clip logic
+      // Enhanced multi-clip logic
       if (!targetClip) {
         // If no clip at current position, check if we should start from the beginning
         const firstClip = context.timeline.clips.sort((a, b) => a.startTime - b.startTime)[0]
@@ -362,7 +375,7 @@ export const videoEditorMachine = setup({
       }
     }),
     
-    // PHASE 3: Actions to handle video events from services
+    // Actions to handle video events from services
     updateVideoTime: assign(({ context, event }) => {
       if (event.type === 'VIDEO.TIME_UPDATE') {
         return {
@@ -402,7 +415,7 @@ export const videoEditorMachine = setup({
     handleVideoEnded: assign(({ context }) => {
       console.log('State Machine: Video ended - checking for next clip')
       
-      // PHASE 5: Multi-clip transition logic
+      // Multi-clip transition logic
       const currentClip = context.timeline.clips.find(c => c.id === context.playback.currentClipId)
       if (currentClip) {
         const currentClipEndTime = currentClip.startTime + currentClip.duration
@@ -459,7 +472,7 @@ export const videoEditorMachine = setup({
       }
     }),
     
-    // PHASE 4: Clear pending actions after Integration Layer processes them
+    // Clear pending actions after Integration Layer processes them
     clearPendingActions: assign(({ context }) => ({
       ...context,
       playback: {
@@ -761,7 +774,7 @@ export const videoEditorMachine = setup({
         'SCRUBBER.DRAG': {
           actions: 'updateScrubberPosition'
         },
-        // PHASE 3: Handle video events from services
+        // Handle video events from services
         'VIDEO.TIME_UPDATE': {
           actions: 'updateVideoTime'
         },

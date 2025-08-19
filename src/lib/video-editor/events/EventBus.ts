@@ -9,6 +9,7 @@ export interface VideoEditorEvents {
   // Recording events
   'recording.started': { startTime: number; mode: string }
   'recording.stopped': { duration: number; videoBlob: Blob; videoUrl: string }
+  'recording.complete': { videoUrl: string }
   'recording.error': { error: Error }
   
   // Playback events
@@ -17,6 +18,7 @@ export interface VideoEditorEvents {
   'playback.seek': { time: number }
   'playback.timeUpdate': { currentTime: number }
   'playback.videoLoaded': { duration: number }
+  'playback.ended': { currentTime: number }
   
   // Timeline events
   'timeline.segmentAdded': { segment: VideoSegment }
@@ -50,7 +52,7 @@ export class TypedEventBus {
   ): void {
     // Log event for debugging/replay
     this.eventLog.push({
-      type: type as string,
+      type,
       payload,
       timestamp: performance.now()
     })

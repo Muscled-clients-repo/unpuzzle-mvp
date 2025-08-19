@@ -77,7 +77,7 @@ export function getVideoEditorInstance(): VideoEditorInstance {
     })
   )
   
-  // PHASE 4: Forward service events to State Machine
+  // Forward service events to State Machine
   unsubscribers.push(
     eventBus.on('playback.timeUpdate', ({ currentTime }) => {
       // Forward to State Machine for technical state updates
@@ -146,7 +146,7 @@ export function getVideoEditorInstance(): VideoEditorInstance {
     setTimeout(() => clearInterval(checkVideoElement), 5000)
   }
 
-  // PHASE 4: State Machine observer - Integration Layer
+  // State Machine observer - Integration Layer
   // This observes State Machine decisions and forwards them to services
   console.log('🔧 Setting up State Machine observer for integration layer')
   
@@ -161,8 +161,7 @@ export function getVideoEditorInstance(): VideoEditorInstance {
     
     // Safety check for playback state
     if (!playback) {
-      console.warn('INTEGRATION DEBUG: playback state is undefined in context')
-      console.log('INTEGRATION DEBUG: Full context:', snapshot.context)
+      console.warn('Integration Layer: playback state is undefined in context')
       previousState = currentState
       return
     }
@@ -186,14 +185,13 @@ export function getVideoEditorInstance(): VideoEditorInstance {
     const now = Date.now()
     const shouldLog = stateChanged || hasNewClipTransition || hasNewSeek || (now - lastLogTime > 500)
     
-    if (shouldLog) {
-      console.log('🔎 INTEGRATION DEBUG: State Machine subscription triggered')
-      console.log('INTEGRATION DEBUG: State changed:', stateChanged, 'from', previousState, 'to', currentState)
-      console.log('INTEGRATION DEBUG: New actions:', { hasNewClipTransition, hasNewSeek })
+    // Reduced debug logging - only log significant state changes
+    if (stateChanged || hasNewClipTransition || hasNewSeek) {
+      console.log('🔄 Integration Layer: State change detected', { currentState, hasNewClipTransition, hasNewSeek })
       lastLogTime = now
     }
     
-    // PHASE 4: Forward State Machine decisions to services
+    // Forward State Machine decisions to services
     if (stateChanged || hasNewClipTransition || hasNewSeek) {
       console.log('🔄 State Machine changed:', currentState, 'Playback state:', {
         currentClipId: playback.currentClipId,
@@ -261,7 +259,6 @@ export function getVideoEditorInstance(): VideoEditorInstance {
   // Initialize commands and queries
   const commands = new VideoEditorCommands(
     recordingService,
-    playbackService,
     timelineService,
     stateMachine
   )

@@ -3,13 +3,13 @@
 // FIX: Line 690 return type corrected to Promise<RecordingResult>
 
 import type { RecordingService } from '../services/RecordingService'
-import type { PlaybackService } from '../services/PlaybackService'
 import type { TimelineService } from '../services/TimelineService'
 import type { VideoSegment, RecordingResult } from '../types'
+import type { TimelineClip, Track } from '../state-machine/VideoEditorMachineV5'
 import { eventBus } from '../events/EventBus'
 
 // PRINCIPLE 1: NO 'any' types - Proper XState v5 typing
-import type { Actor, SnapshotFrom } from 'xstate'
+import type { Actor } from 'xstate'
 import type { videoEditorMachine } from '../state-machine/VideoEditorMachineV5'
 
 type StateMachine = Actor<typeof videoEditorMachine>
@@ -17,10 +17,9 @@ type StateMachine = Actor<typeof videoEditorMachine>
 export class VideoEditorCommands {
   constructor(
     private recordingService: RecordingService,
-    private playbackService: PlaybackService,
     private timelineService: TimelineService,
     private stateMachine: StateMachine
-    // PHASE 2: Keep services for now, only playback commands are pure events
+    // Keep services for recording and timeline operations
   ) {}
 
   // Recording Commands
@@ -98,7 +97,7 @@ export class VideoEditorCommands {
     // Create segment with ID
     const newSegment: VideoSegment = {
       ...segment,
-      id: `segment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      id: `segment-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
     }
     
     // Send to state machine (single source of truth)
@@ -166,13 +165,13 @@ export class VideoEditorCommands {
         break
       // NEW: Timeline commands (Phase A1)
       case 'TIMELINE.CLIP_ADDED':
-        this.stateMachine.send({ type: 'TIMELINE.CLIP_ADDED', clip: params.clip as any })
+        this.stateMachine.send({ type: 'TIMELINE.CLIP_ADDED', clip: params.clip as TimelineClip })
         break
       case 'TIMELINE.CLIP_SELECTED':
         this.stateMachine.send({ type: 'TIMELINE.CLIP_SELECTED', clipId: params.clipId as string })
         break
       case 'TIMELINE.TRACK_ADDED':
-        this.stateMachine.send({ type: 'TIMELINE.TRACK_ADDED', track: params.track as any })
+        this.stateMachine.send({ type: 'TIMELINE.TRACK_ADDED', track: params.track as Track })
         break
       // NEW: Scrubber commands (Phase A2)
       case 'SCRUBBER.START_DRAG':
@@ -180,14 +179,14 @@ export class VideoEditorCommands {
         break
       case 'SCRUBBER.DRAG':
         this.stateMachine.send({ type: 'SCRUBBER.DRAG', position: params.position as number })
-        // PHASE 2: State Machine will handle seeking during drag
+        // State Machine will handle seeking during drag
         break
       case 'SCRUBBER.END_DRAG':
         this.stateMachine.send({ type: 'SCRUBBER.END_DRAG' })
         break
       case 'SCRUBBER.CLICK':
         this.stateMachine.send({ type: 'SCRUBBER.CLICK', position: params.position as number })
-        // PHASE 2: State Machine will handle seeking on click
+        // State Machine will handle seeking on click
         break
       case 'CLIPS.DELETE_SELECTED':
         this.deleteSelectedClips()

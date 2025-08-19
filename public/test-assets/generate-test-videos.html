@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generate Test Videos</title>
+</head>
+<body>
+    <h1>Test Video Generator</h1>
+    <p>This page generates test videos using canvas and MediaRecorder API</p>
+    
+    <div id="videos"></div>
+    
+    <script>
+        // Generate test videos of different durations
+        const testVideos = [
+            { name: 'test-5s.webm', duration: 5, color: '#4299e1', text: '5 Second Test' },
+            { name: 'test-30s.webm', duration: 30, color: '#48bb78', text: '30 Second Test' },
+            { name: 'test-2min.webm', duration: 120, color: '#ed8936', text: '2 Minute Test' }
+        ];
+
+        async function generateTestVideo(config) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1280;
+            canvas.height = 720;
+            const ctx = canvas.getContext('2d');
+            
+            const stream = canvas.captureStream(30); // 30 fps
+            const mediaRecorder = new MediaRecorder(stream, {
+                mimeType: 'video/webm;codecs=vp9',
+                videoBitsPerSecond: 2500000
+            });
+            
+            const chunks = [];
+            mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+            
+            return new Promise((resolve) => {
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    resolve(blob);
+                };
+                
+                let frame = 0;
+                const fps = 30;
+                const totalFrames = config.duration * fps;
+                
+                mediaRecorder.start();
+                
+                const drawFrame = () => {
+                    // Clear canvas
+                    ctx.fillStyle = '#1a202c';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    // Draw animated background
+                    const time = frame / fps;
+                    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+                    gradient.addColorStop(0, config.color);
+                    gradient.addColorStop(1, '#1a202c');
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(
+                        Math.sin(time * 0.5) * 100,
+                        Math.cos(time * 0.3) * 100,
+                        canvas.width,
+                        canvas.height
+                    );
+                    
+                    // Draw test pattern
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 2;
+                    for (let i = 0; i < 10; i++) {
+                        ctx.beginPath();
+                        ctx.arc(
+                            canvas.width / 2 + Math.sin(time + i) * 200,
+                            canvas.height / 2 + Math.cos(time + i) * 200,
+                            20 + i * 10,
+                            0,
+                            Math.PI * 2
+                        );
+                        ctx.stroke();
+                    }
+                    
+                    // Draw text
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = 'bold 48px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(config.text, canvas.width / 2, canvas.height / 2 - 50);
+                    
+                    // Draw timer
+                    ctx.font = 'bold 72px monospace';
+                    const seconds = Math.floor(time);
+                    const minutes = Math.floor(seconds / 60);
+                    const displaySeconds = seconds % 60;
+                    ctx.fillText(
+                        `${String(minutes).padStart(2, '0')}:${String(displaySeconds).padStart(2, '0')}`,
+                        canvas.width / 2,
+                        canvas.height / 2 + 50
+                    );
+                    
+                    // Draw frame counter
+                    ctx.font = '24px monospace';
+                    ctx.fillText(`Frame: ${frame}/${totalFrames}`, canvas.width / 2, canvas.height - 50);
+                    
+                    frame++;
+                    
+                    if (frame < totalFrames) {
+                        setTimeout(drawFrame, 1000 / fps);
+                    } else {
+                        mediaRecorder.stop();
+                    }
+                };
+                
+                drawFrame();
+            });
+        }
+
+        async function generateAllVideos() {
+            const container = document.getElementById('videos');
+            
+            for (const config of testVideos) {
+                const status = document.createElement('p');
+                status.textContent = `Generating ${config.name}...`;
+                container.appendChild(status);
+                
+                const blob = await generateTestVideo(config);
+                const url = URL.createObjectURL(blob);
+                
+                // Create download link
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = config.name;
+                link.textContent = `Download ${config.name}`;
+                link.style.display = 'block';
+                link.style.margin = '10px 0';
+                container.appendChild(link);
+                
+                // Auto-download
+                link.click();
+                
+                status.textContent = `✓ Generated ${config.name} (${(blob.size / 1024 / 1024).toFixed(2)} MB)`;
+            }
+            
+            const complete = document.createElement('h2');
+            complete.textContent = 'All test videos generated! Move them to public/test-assets/';
+            complete.style.color = 'green';
+            container.appendChild(complete);
+        }
+
+        // Start generation automatically
+        generateAllVideos();
+    </script>
+</body>
+</html>
