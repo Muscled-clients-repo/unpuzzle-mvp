@@ -467,15 +467,20 @@ export const useAuth = (): UseAuthReturn => {
     const initAuth = async () => {
       // Only run if no user is set and component is mounted
       if (!user && mounted) {
+        console.log('🔐 Auth: Starting auto-login process...')
         setIsLoading(true)
         
         try {
           // Try to get user profile (will work if cookies are valid)
+          console.log('🔐 Auth: Attempting to get user profile...')
           const profile = await getUserProfile()
           
           if (profile && mounted) {
+            console.log('🔐 Auth: Profile obtained successfully:', profile)
             // Fetch CSRF token for future requests
             await fetchCsrfToken()
+          } else {
+            console.log('🔐 Auth: No profile returned or component unmounted')
           }
         } catch (err) {
           // Handle different types of authentication errors

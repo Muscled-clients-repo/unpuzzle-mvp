@@ -22,17 +22,21 @@ export class InstructorCourseService {
     }
   }
 
-  async getInstructorCourses(instructorId: string, forceRefresh = false): Promise<ServiceResult<Course[]>> {
-    const cacheKey = `courses-${instructorId}`
+  async getInstructorCourses(forceRefresh = false): Promise<ServiceResult<Course[]>> {
+    console.log('🌐 getInstructorCourses service called:', { forceRefresh, useMockData })
+    console.log('📍 useMockData type:', typeof useMockData, 'value:', useMockData)
+    const cacheKey = 'instructor-courses'
     
     // Return cached data if fresh
     if (!forceRefresh && !useMockData) {
       const cached = this.cache.get(cacheKey)
       if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+        console.log('💾 Returning cached data')
         return { data: cached.data }
       }
     }
     if (useMockData) {
+      console.log('🎭 Using mock data')
       // Transform mock courses to match domain Course type
       const transformedCourses: Course[] = mockCourses.map(course => ({
         id: course.id,
@@ -40,7 +44,7 @@ export class InstructorCourseService {
         description: course.description,
         thumbnailUrl: course.thumbnail,
         instructor: {
-          id: instructorId,
+          id: 'mock-instructor-1',
           name: course.instructor.name,
           email: `${course.instructor.name.toLowerCase().replace(' ', '.')}@example.com`,
           avatar: course.instructor.avatar
@@ -73,10 +77,13 @@ export class InstructorCourseService {
       return { data: transformedCourses }
     }
 
+    console.log('🚀 Making API call to: /api/v1/instructor/courses')
     const response = await apiClient.get<Course[]>(`/api/v1/instructor/courses`)
+    console.log('📡 API response:', response)
     
     // Cache successful response
     if (!response.error && response.data) {
+      console.log('💾 Caching response data')
       this.cache.set(cacheKey, { data: response.data, timestamp: Date.now() })
     }
     

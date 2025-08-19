@@ -54,6 +54,8 @@ export default function TeachCoursesPage() {
     clearMessages,
     profile
   } = useAppStore()
+  
+  console.log('🔍 Current state:', { instructorCourses, loading, error, hasProfile: !!profile })
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [sortBy, setSortBy] = useState("lastUpdated")
@@ -78,12 +80,11 @@ export default function TeachCoursesPage() {
   }
   
   useEffect(() => {
-    if (profile?.id) {
-      loadInstructorCourses(profile.id)
-    }
-  }, [loadInstructorCourses, profile])
+    console.log('📋 Courses page mounted, loading instructor courses...')
+    loadInstructorCourses()
+  }, [loadInstructorCourses])
 
-  const filteredCourses = instructorCourses.filter(course => {
+  const filteredCourses = (instructorCourses || []).filter(course => {
     const matchesSearch = course.title.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesStatus = statusFilter === "all" || (course as any).status === statusFilter
     return matchesSearch && matchesStatus
@@ -103,7 +104,7 @@ export default function TeachCoursesPage() {
   })
 
   // Loading state
-  if (loading && instructorCourses.length === 0) {
+  if (loading && (!instructorCourses || instructorCourses.length === 0)) {
     return (
       <div className="container mx-auto p-6">
         <div className="flex justify-center items-center h-64">
@@ -114,7 +115,7 @@ export default function TeachCoursesPage() {
   }
 
   // Error state
-  if (error && instructorCourses.length === 0) {
+  if (error && (!instructorCourses || instructorCourses.length === 0)) {
     return (
       <div className="container mx-auto p-6">
         <Card className="p-12">
@@ -124,7 +125,7 @@ export default function TeachCoursesPage() {
             <p className="mt-2 text-sm text-muted-foreground">{error}</p>
             <Button 
               className="mt-4" 
-              onClick={() => profile?.id && loadInstructorCourses(profile.id)}
+              onClick={() => loadInstructorCourses()}
             >
               Try Again
             </Button>
@@ -173,9 +174,9 @@ export default function TeachCoursesPage() {
             <Video className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{instructorCourses.length}</div>
+            <div className="text-2xl font-bold">{(instructorCourses || []).length}</div>
             <p className="text-xs text-muted-foreground">
-              {instructorCourses.filter(c => (c as any).status === 'published' || c.isPublished).length} published
+              {(instructorCourses || []).filter(c => (c as any).status === 'published' || c.isPublished).length} published
             </p>
           </CardContent>
         </Card>
@@ -187,7 +188,7 @@ export default function TeachCoursesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {instructorCourses.reduce((acc, c) => acc + (c.enrollmentCount || 0), 0).toLocaleString()}
+              {(instructorCourses || []).reduce((acc, c) => acc + (c.enrollmentCount || 0), 0).toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
               Across all courses
@@ -202,7 +203,7 @@ export default function TeachCoursesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${instructorCourses.reduce((acc, c) => acc + ((c as any).revenue || 0), 0).toLocaleString()}
+              ${(instructorCourses || []).reduce((acc, c) => acc + ((c as any).revenue || 0), 0).toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
               Lifetime earnings
@@ -217,12 +218,12 @@ export default function TeachCoursesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {instructorCourses.filter(c => (c as any).status === 'published' || c.isPublished).length > 0
+              {(instructorCourses || []).filter(c => (c as any).status === 'published' || c.isPublished).length > 0
                 ? Math.round(
-                    instructorCourses
+                    (instructorCourses || [])
                       .filter(c => (c as any).status === 'published' || c.isPublished)
                       .reduce((acc, c) => acc + ((c as any).completionRate || 0), 0) / 
-                    instructorCourses.filter(c => (c as any).status === 'published' || c.isPublished).length
+                    (instructorCourses || []).filter(c => (c as any).status === 'published' || c.isPublished).length
                   )
                 : 0}%
             </div>

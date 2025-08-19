@@ -25,7 +25,7 @@ export interface InstructorCourseState {
 }
 
 export interface InstructorCourseActions {
-  loadInstructorCourses: (instructorId: string) => Promise<void>
+  loadInstructorCourses: () => Promise<void>
   loadCourseAnalytics: (courseId: string) => Promise<void>
   createCourse: (course: Partial<Course>) => Promise<void>
   updateCourse: (courseId: string, updates: Partial<Course>) => Promise<void>
@@ -52,15 +52,38 @@ const initialState: InstructorCourseState = {
 export const createInstructorCourseSlice: StateCreator<InstructorCourseSlice> = (set, get) => ({
   ...initialState,
 
-  loadInstructorCourses: async (instructorId: string) => {
+  loadInstructorCourses: async () => {
+    console.log('🔍 loadInstructorCourses called')
     set({ loading: true, error: null })
     
-    const result = await instructorCourseService.getInstructorCourses(instructorId)
-    
-    if (result.error) {
-      set({ loading: false, error: result.error })
-    } else {
-      set({ loading: false, instructorCourses: result.data || [], error: null })
+    try {
+      console.log('📞 About to call instructorCourseService.getInstructorCourses()')
+      const result = await instructorCourseService.getInstructorCourses()
+      console.log('📊 API result received:', result)
+      console.log('📊 Result type:', typeof result)
+      console.log('📊 Result.data:', result.data)
+      console.log('📊 Result.error:', result.error)
+      
+      if (result.error) {
+        console.log('❌ Error loading courses:', result.error)
+        set({ loading: false, error: result.error })
+      } else {
+        // Handle both ServiceResult format and raw API response format
+        let coursesData = result.data
+        
+        // If result.data has a nested 'data' property, extract it
+        if (coursesData && typeof coursesData === 'object' && 'data' in coursesData && Array.isArray(coursesData.data)) {
+          coursesData = coursesData.data
+          console.log('📦 Extracted nested data array:', coursesData.length, 'courses')
+        }
+        
+        console.log('✅ Courses loaded successfully:', coursesData?.length || 0, 'courses')
+        set({ loading: false, instructorCourses: coursesData || [], error: null })
+      }
+      console.log('🏁 loadInstructorCourses completed, loading set to false')
+    } catch (error) {
+      console.error('💥 Unexpected error in loadInstructorCourses:', error)
+      set({ loading: false, error: 'Unexpected error occurred' })
     }
   },
 
