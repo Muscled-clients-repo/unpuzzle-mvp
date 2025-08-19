@@ -41,6 +41,20 @@ export interface VideoEditorContext {
     duration: number
     isActive: boolean
   }
+  // PHASE 3: Enhanced playback state per BULLETPROOF Principle 1
+  playback: {
+    // Technical state (following BULLETPROOF architecture)
+    currentVideoTime: number
+    videoDuration: number
+    loadedVideoUrl: string | null
+    // Business state
+    currentClipId: string | null
+    activeClipStartTime: number
+    globalTimelinePosition: number
+    // State Machine pre-calculated decisions for Integration Layer
+    pendingClipTransition: TimelineClip | null
+    pendingSeek: { time: number } | null
+  }
   timeline: {
     clips: TimelineClip[]
     tracks: Track[]
@@ -64,7 +78,10 @@ export type VideoEditorEvent =
   | { type: 'PLAYBACK.PLAY' }
   | { type: 'PLAYBACK.PAUSE' }
   | { type: 'PLAYBACK.SEEK'; time: number }
-  | { type: 'VIDEO.LOADED'; duration: number }  // New event for video loaded
+  | { type: 'PLAYBACK.ACTIONS_PROCESSED' }  // PHASE 4: Clear pending actions
+  | { type: 'VIDEO.LOADED'; duration: number; url: string }  // New event for video loaded
+  | { type: 'VIDEO.TIME_UPDATE'; time: number }  // PHASE 3: Video time updates from service
+  | { type: 'VIDEO.ENDED' }  // PHASE 3: Video playback ended
   | { type: 'TIMELINE.ADD_SEGMENT'; segment: VideoSegment }
   | { type: 'TIMELINE.SELECT_SEGMENT'; segmentId: string }
   | { type: 'TIMELINE.CLIP_ADDED'; clip: TimelineClip }
@@ -74,6 +91,7 @@ export type VideoEditorEvent =
   | { type: 'SCRUBBER.DRAG'; position: number }
   | { type: 'SCRUBBER.END_DRAG' }
   | { type: 'SCRUBBER.CLICK'; position: number }
+  | { type: 'CLIPS.DELETE_SELECTED' }
 
 // Default state following SSOT principle
 const DEFAULT_TRACKS: Track[] = [
@@ -93,6 +111,17 @@ function getInitialContext(): VideoEditorContext {
       startTime: null,
       duration: 0,
       isActive: false
+    },
+    // PHASE 3: Add playback state to initial context
+    playback: {
+      currentVideoTime: 0,
+      videoDuration: 0,
+      loadedVideoUrl: null,
+      currentClipId: null,
+      activeClipStartTime: 0,
+      globalTimelinePosition: 0,
+      pendingClipTransition: null,
+      pendingSeek: null
     },
     timeline: {
       clips: [],
@@ -150,13 +179,119 @@ export const videoEditorMachine = setup({
       }
     }),
     
-    // Playback actions
+    // PHASE 3: Enhanced playback actions with business logic
     pausePlayback: assign({
-      isPlaying: false
+      isPlaying: false,
+      playback: ({ context }) => ({
+        ...context.playback,
+        pendingClipTransition: null,
+        pendingSeek: null
+      })
     }),
     
-    resumePlayback: assign({
-      isPlaying: true
+    resumePlayback: assign(({ context }) => {
+      // BUSINESS LOGIC: Determine which clip should play
+      const position = context.timeline.scrubber.position
+      const targetClip = context.timeline.clips.find(clip => 
+        position >= clip.startTime && position < clip.startTime + clip.duration
+      )
+      
+      // PHASE 5: Enhanced multi-clip logic
+      if (!targetClip) {
+        // If no clip at current position, check if we should start from the beginning
+        const firstClip = context.timeline.clips.sort((a, b) => a.startTime - b.startTime)[0]
+        if (firstClip) {
+          console.log('State Machine: No clip at position, starting from first clip', firstClip.id)
+          return {
+            ...context,
+            isPlaying: true,
+            timeline: {
+              ...context.timeline,
+              scrubber: {
+                ...context.timeline.scrubber,
+                position: firstClip.startTime
+              }
+            },
+            playback: {
+              ...context.playback,
+              currentClipId: firstClip.id,
+              activeClipStartTime: firstClip.startTime,
+              globalTimelinePosition: firstClip.startTime,
+              pendingClipTransition: firstClip,
+              pendingSeek: { time: 0 }
+            }
+          }
+        } else {
+          console.warn('State Machine: No clips available')
+          return {
+            ...context,
+            isPlaying: false
+          }
+        }
+      }
+      
+      // Check if at end of current clip and need to reset to beginning of all clips
+      const allClipsEndTime = Math.max(...context.timeline.clips.map(c => c.startTime + c.duration))
+      const shouldResetAll = position >= allClipsEndTime - 0.1
+      
+      if (shouldResetAll) {
+        const firstClip = context.timeline.clips.sort((a, b) => a.startTime - b.startTime)[0]
+        console.log('State Machine: At end of all clips, resetting to beginning')
+        return {
+          ...context,
+          isPlaying: true,
+          timeline: {
+            ...context.timeline,
+            scrubber: {
+              ...context.timeline.scrubber,
+              position: firstClip.startTime
+            }
+          },
+          playback: {
+            ...context.playback,
+            currentClipId: firstClip.id,
+            activeClipStartTime: firstClip.startTime,
+            globalTimelinePosition: firstClip.startTime,
+            pendingClipTransition: firstClip,
+            pendingSeek: { time: 0 }
+          }
+        }
+      }
+      
+      // Normal clip playback
+      console.log('State Machine: Playing clip at position', position, 'clip:', targetClip.id)
+      // Check if we're resuming the same clip or switching clips
+      const isResuming = context.playback.currentClipId === targetClip.id && 
+                        !context.playback.pendingClipTransition
+      
+      if (isResuming) {
+        console.log('State Machine: Resuming current clip without reload')
+        return {
+          ...context,
+          isPlaying: true,
+          playback: {
+            ...context.playback,
+            globalTimelinePosition: position,
+            // Set pending seek but no clip transition (already loaded)
+            pendingSeek: { time: position - targetClip.startTime },
+            pendingClipTransition: null
+          }
+        }
+      } else {
+        console.log('State Machine: Loading new clip or switching clips')
+        return {
+          ...context,
+          isPlaying: true,
+          playback: {
+            ...context.playback,
+            currentClipId: targetClip.id,
+            activeClipStartTime: targetClip.startTime,
+            globalTimelinePosition: position,
+            pendingClipTransition: targetClip,
+            pendingSeek: { time: position - targetClip.startTime }
+          }
+        }
+      }
     }),
     
     // Update totalDuration when video loads
@@ -170,26 +305,169 @@ export const videoEditorMachine = setup({
       }
     }),
     
-    seek: assign({
-      currentTime: ({ event }) => {
-        if (event.type === 'PLAYBACK.SEEK') {
-          return event.time
-        }
-        return 0
-      },
-      timeline: ({ context, event }) => {
-        if (event.type === 'PLAYBACK.SEEK') {
-          return {
+    seek: assign(({ context, event }) => {
+      if (event.type !== 'PLAYBACK.SEEK') {
+        return context
+      }
+      
+      const seekTime = event.time
+      console.log('State Machine: Seeking to time', seekTime)
+      
+      // BUSINESS LOGIC: Find which clip contains this time
+      const targetClip = context.timeline.clips.find(clip => 
+        seekTime >= clip.startTime && seekTime < clip.startTime + clip.duration
+      )
+      
+      if (targetClip) {
+        const localTime = seekTime - targetClip.startTime
+        console.log('State Machine: Found clip for seek', targetClip.id, 'local time:', localTime)
+        
+        return {
+          ...context,
+          currentTime: seekTime,
+          timeline: {
             ...context.timeline,
             scrubber: {
               ...context.timeline.scrubber,
-              position: event.time
+              position: seekTime
+            }
+          },
+          playback: {
+            ...context.playback,
+            currentClipId: targetClip.id,
+            activeClipStartTime: targetClip.startTime,
+            globalTimelinePosition: seekTime,
+            pendingClipTransition: targetClip,
+            pendingSeek: { time: localTime }
+          }
+        }
+      } else {
+        console.warn('State Machine: No clip found for seek time', seekTime)
+        return {
+          ...context,
+          currentTime: seekTime,
+          timeline: {
+            ...context.timeline,
+            scrubber: {
+              ...context.timeline.scrubber,
+              position: seekTime
+            }
+          },
+          playback: {
+            ...context.playback,
+            pendingSeek: null,
+            pendingClipTransition: null
+          }
+        }
+      }
+    }),
+    
+    // PHASE 3: Actions to handle video events from services
+    updateVideoTime: assign(({ context, event }) => {
+      if (event.type === 'VIDEO.TIME_UPDATE') {
+        return {
+          ...context,
+          playback: {
+            ...context.playback,
+            currentVideoTime: event.time,
+            globalTimelinePosition: context.playback.activeClipStartTime + event.time
+          },
+          currentTime: context.playback.activeClipStartTime + event.time,
+          timeline: {
+            ...context.timeline,
+            scrubber: {
+              ...context.timeline.scrubber,
+              position: context.playback.activeClipStartTime + event.time
             }
           }
         }
-        return context.timeline
+      }
+      return context
+    }),
+    
+    updateVideoLoaded: assign(({ context, event }) => {
+      if (event.type === 'VIDEO.LOADED') {
+        return {
+          ...context,
+          playback: {
+            ...context.playback,
+            videoDuration: event.duration,
+            loadedVideoUrl: event.url
+          }
+        }
+      }
+      return context
+    }),
+    
+    handleVideoEnded: assign(({ context }) => {
+      console.log('State Machine: Video ended - checking for next clip')
+      
+      // PHASE 5: Multi-clip transition logic
+      const currentClip = context.timeline.clips.find(c => c.id === context.playback.currentClipId)
+      if (currentClip) {
+        const currentClipEndTime = currentClip.startTime + currentClip.duration
+        
+        // Find the next clip that starts at or after the current clip ends
+        const nextClip = context.timeline.clips.find(clip => 
+          clip.startTime >= currentClipEndTime && clip.id !== currentClip.id
+        )
+        
+        if (nextClip) {
+          console.log('State Machine: Transitioning to next clip', nextClip.id)
+          return {
+            ...context,
+            isPlaying: true, // Keep playing for seamless transition
+            timeline: {
+              ...context.timeline,
+              scrubber: {
+                ...context.timeline.scrubber,
+                position: nextClip.startTime
+              }
+            },
+            playback: {
+              ...context.playback,
+              currentClipId: nextClip.id,
+              activeClipStartTime: nextClip.startTime,
+              globalTimelinePosition: nextClip.startTime,
+              pendingClipTransition: nextClip,
+              pendingSeek: { time: 0 } // Start from beginning of next clip
+            }
+          }
+        } else {
+          console.log('State Machine: No more clips, ending playback')
+          return {
+            ...context,
+            isPlaying: false,
+            playback: {
+              ...context.playback,
+              pendingClipTransition: null,
+              pendingSeek: null
+            }
+          }
+        }
+      } else {
+        console.warn('State Machine: Current clip not found when video ended')
+        return {
+          ...context,
+          isPlaying: false,
+          playback: {
+            ...context.playback,
+            pendingClipTransition: null,
+            pendingSeek: null
+          }
+        }
       }
     }),
+    
+    // PHASE 4: Clear pending actions after Integration Layer processes them
+    clearPendingActions: assign(({ context }) => ({
+      ...context,
+      playback: {
+        ...context.playback,
+        pendingClipTransition: null,
+        pendingSeek: null
+      }
+    })),
     
     // Segment actions
     addSegment: assign({
@@ -338,6 +616,31 @@ export const videoEditorMachine = setup({
       })
     }),
     
+    deleteSelectedClips: assign({
+      timeline: ({ context }) => ({
+        ...context.timeline,
+        clips: context.timeline.clips.filter(clip => !clip.isSelected)
+      }),
+      // If we deleted all clips, reset the duration and clear preview
+      totalDuration: ({ context }) => {
+        const remainingClips = context.timeline.clips.filter(clip => !clip.isSelected)
+        if (remainingClips.length === 0) {
+          return 0
+        }
+        // Calculate new total duration from remaining clips
+        return remainingClips.reduce((max, clip) => 
+          Math.max(max, clip.startTime + clip.duration), 0
+        )
+      },
+      currentTime: ({ context }) => {
+        const remainingClips = context.timeline.clips.filter(clip => !clip.isSelected)
+        if (remainingClips.length === 0) {
+          return 0
+        }
+        return context.currentTime
+      }
+    }),
+    
     clickScrubber: assign({
       timeline: ({ context, event }) => {
         if (event.type !== 'SCRUBBER.CLICK') {
@@ -365,6 +668,18 @@ export const videoEditorMachine = setup({
       return (context?.segments?.length > 0) || 
              (context?.timeline?.clips?.length > 0) ||
              (context?.totalDuration > 0)
+    },
+    hasMoreClips: ({ context }) => {
+      // Check if there are more clips after the current one
+      const currentClip = context.timeline.clips.find(c => c.id === context.playback.currentClipId)
+      if (!currentClip) return false
+      
+      const currentClipEndTime = currentClip.startTime + currentClip.duration
+      const nextClip = context.timeline.clips.find(clip => 
+        clip.startTime >= currentClipEndTime && clip.id !== currentClip.id
+      )
+      
+      return !!nextClip
     }
   }
 }).createMachine({
@@ -380,7 +695,8 @@ export const videoEditorMachine = setup({
         },
         'PLAYBACK.PLAY': {
           target: 'playing',
-          guard: 'hasSegments'
+          guard: 'hasSegments',
+          actions: 'resumePlayback'
         },
         'TIMELINE.ADD_SEGMENT': {
           actions: 'addSegment'
@@ -408,6 +724,9 @@ export const videoEditorMachine = setup({
         },
         'VIDEO.LOADED': {
           actions: 'updateVideoDuration'
+        },
+        'CLIPS.DELETE_SELECTED': {
+          actions: 'deleteSelectedClips'
         }
       }
     },
@@ -429,6 +748,9 @@ export const videoEditorMachine = setup({
           target: 'seeking',
           actions: 'seek'
         },
+        'PLAYBACK.ACTIONS_PROCESSED': {
+          actions: 'clearPendingActions'
+        },
         'TIMELINE.CLIP_SELECTED': {
           actions: 'selectClip'
         },
@@ -438,7 +760,25 @@ export const videoEditorMachine = setup({
         // Add SCRUBBER.DRAG to update position during playback
         'SCRUBBER.DRAG': {
           actions: 'updateScrubberPosition'
-        }
+        },
+        // PHASE 3: Handle video events from services
+        'VIDEO.TIME_UPDATE': {
+          actions: 'updateVideoTime'
+        },
+        'VIDEO.LOADED': {
+          actions: ['updateVideoLoaded', 'clearPendingActions']
+        },
+        'VIDEO.ENDED': [
+          {
+            target: 'playing',
+            guard: 'hasMoreClips',
+            actions: 'handleVideoEnded'
+          },
+          {
+            target: 'paused', 
+            actions: 'handleVideoEnded'
+          }
+        ]
       }
     },
     paused: {
@@ -450,6 +790,9 @@ export const videoEditorMachine = setup({
         'PLAYBACK.SEEK': {
           target: 'seeking',
           actions: 'seek'
+        },
+        'PLAYBACK.ACTIONS_PROCESSED': {
+          actions: 'clearPendingActions'
         },
         'TIMELINE.CLIP_ADDED': {
           actions: 'addClipToTimeline'

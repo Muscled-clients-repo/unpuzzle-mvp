@@ -3,13 +3,14 @@
 // NEW VIDEO STUDIO - Using bulletproof architecture
 // Keeps the same UI, replaces the data layer
 
-import { VideoEditorProvider } from '@/lib/video-editor'
+import { VideoEditorProvider, useVideoEditor } from '@/lib/video-editor'
 import { RecordingControlsContainer } from './recorder/RecordingControls'
 import { PlaybackControls } from './playback/PlaybackControls'
 import { TimelineContainer } from './timeline/TimelineContainer'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Trash2 } from 'lucide-react'
 import Link from 'next/link'
+import { useEffect } from 'react'
 
 export function VideoStudioNew() {
   return (
@@ -20,6 +21,26 @@ export function VideoStudioNew() {
 }
 
 function VideoStudioContent() {
+  const { commands, queries } = useVideoEditor()
+  
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Delete key - delete selected clips
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        // Only call getTimelineClips when delete key is actually pressed
+        const hasSelectedClips = queries.getTimelineClips().some(clip => clip.isSelected)
+        if (hasSelectedClips) {
+          e.preventDefault()
+          commands.deleteSelectedClips()
+        }
+      }
+    }
+    
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [commands, queries]) // Keep dependencies for proper closure capture
+  
   return (
     <div className="h-screen flex flex-col bg-gray-900 text-white">
       {/* Header - Fixed height */}

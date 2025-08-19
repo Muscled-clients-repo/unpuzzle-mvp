@@ -156,9 +156,13 @@ export function TimelineNew({
                       left: clip.startTime * pixelsPerSecond,
                       width: clip.duration * pixelsPerSecond,
                       top: 4,
-                      bottom: 4
+                      bottom: 4,
+                      zIndex: 10  // Ensure clips are above timeline click area
                     }}
-                    onClick={() => onClipSelect(clip.id)}
+                    onClick={(e) => {
+                      e.stopPropagation()  // Prevent scrubber movement
+                      onClipSelect(clip.id)
+                    }}
                   >
                     {/* Thumbnail background */}
                     <div 
@@ -197,9 +201,9 @@ export function TimelineNew({
             </div>
           ))}
           
-          {/* Clickable timeline area for scrubber */}
+          {/* Clickable timeline area for scrubber - only on empty areas */}
           <div
-            className="absolute top-0 left-0 right-0 bottom-0 cursor-pointer z-25"
+            className="absolute top-0 left-0 right-0 bottom-0 cursor-pointer z-5"
             onClick={(e) => {
               const rect = e.currentTarget.getBoundingClientRect()
               const x = e.clientX - rect.left

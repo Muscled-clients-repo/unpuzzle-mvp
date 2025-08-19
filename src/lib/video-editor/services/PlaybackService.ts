@@ -7,6 +7,9 @@ import type { TypedEventBus } from '../events/EventBus'
 export class PlaybackService {
   private videoElement: HTMLVideoElement | null = null
   private animationFrameId: number | null = null
+  private lastEmittedUrl: string | null = null // Prevent duplicate duration events
+  // ❌ REMOVED: Business state (currentClipId, clips, globalTimeOffset)
+  // State Machine will own this data
 
   constructor(private eventBus: TypedEventBus) {
     this.setupEventListeners()
@@ -17,18 +20,51 @@ export class PlaybackService {
     this.setupVideoEventListeners()
   }
 
-  play(): void {
+  // Load a specific video source
+  async loadVideo(url: string): Promise<void> {
+    if (!this.videoElement) {
+      throw new Error('No video element set')
+    }
+
+    // Reset duration tracking for new video
+    this.lastEmittedUrl = null
+    
+    this.videoElement.src = url
+    this.videoElement.classList.remove('hidden')
+    
+    // Wait for metadata to load
+    return new Promise<void>((resolve, reject) => {
+      const onLoadedMetadata = () => {
+        this.videoElement!.removeEventListener('loadedmetadata', onLoadedMetadata)
+        this.videoElement!.removeEventListener('error', onError)
+        resolve()
+      }
+      const onError = (error: Event) => {
+        this.videoElement!.removeEventListener('loadedmetadata', onLoadedMetadata)
+        this.videoElement!.removeEventListener('error', onError)
+        reject(error)
+      }
+      this.videoElement.addEventListener('loadedmetadata', onLoadedMetadata)
+      this.videoElement.addEventListener('error', onError)
+    })
+  }
+
+  // ❌ REMOVED: updateClips() - State Machine owns clips data
+
+  // ❌ REMOVED: getClipAtPosition() - Business logic moved to State Machine
+
+  // ❌ REMOVED: loadClipForPosition() - Business logic moved to State Machine
+
+  async play(): Promise<void> {
     if (!this.videoElement) {
       throw new Error('No video element set')
     }
 
     if (!this.videoElement.src) {
-      console.warn('No video source set')
+      console.warn('No video source set - video must be loaded first')
       return
     }
 
-    // Note: Reset logic moved to Commands layer for single source of truth
-    
     this.videoElement.play()
       .then(() => {
         this.startTimeTracking()
@@ -54,24 +90,24 @@ export class PlaybackService {
     })
   }
 
-  seek(time: number): void {
+  async seek(time: number): Promise<void> {
     if (!this.videoElement) {
       throw new Error('No video element set')
     }
 
     this.videoElement.currentTime = time
-    
     this.eventBus.emit('playback.seek', { time })
   }
 
   private setupEventListeners(): void {
-    // Listen for recording stopped to load the video
+    // ❌ REMOVED: Business logic event listeners
+    // Service will respond to direct commands only
+    
+    // Listen for recording stopped for UI updates only
     this.eventBus.on('recording.stopped', ({ videoUrl }) => {
       if (this.videoElement) {
-        console.log('Loading video into preview:', videoUrl)
-        this.videoElement.src = videoUrl
-        this.videoElement.classList.remove('hidden')
-        // Hide the placeholder text
+        console.log('Recording stopped, video available for playback')
+        // Hide placeholder when content available
         const placeholder = document.getElementById('preview-placeholder')
         if (placeholder) {
           placeholder.classList.add('hidden')
@@ -79,39 +115,99 @@ export class PlaybackService {
       }
     })
     
-    this.eventBus.on('timeline.segmentSelected', ({ segmentId }) => {
-      // Handle segment selection for playback
-      // This will be implemented when segments have video URLs
+    // Listen for preview clear event (when all clips deleted)
+    this.eventBus.on('preview.clear', () => {
+      if (this.videoElement) {
+        console.log('Clearing video preview')
+        // Remove src attribute instead of setting to empty string to avoid errors
+        this.videoElement.removeAttribute('src')
+        this.videoElement.classList.add('hidden')
+        // Show placeholder
+        const placeholder = document.getElementById('preview-placeholder')
+        if (placeholder) {
+          placeholder.classList.remove('hidden')
+        }
+      }
     })
+    
+    // ❌ REMOVED: Segment selection business logic
   }
 
   private setupVideoEventListeners(): void {
     if (!this.videoElement) return
 
-    this.videoElement.addEventListener('loadedmetadata', () => {
+    // Try multiple events to get valid duration
+    const emitVideoLoaded = () => {
+      const currentUrl = this.videoElement!.src
+      
+      // Prevent duplicate emissions for the same video
+      if (this.lastEmittedUrl === currentUrl) {
+        return
+      }
+      
       const duration = this.videoElement!.duration
-      // Check for invalid duration (Infinity or NaN)
-      const validDuration = !isFinite(duration) || isNaN(duration) ? 0 : duration
+      console.log('Video event triggered, duration:', duration)
       
-      console.log('Video loaded, duration:', duration, 'valid:', validDuration)
-      
-      // Only emit if we have a valid duration
-      if (validDuration > 0) {
+      // For recorded videos, try to get duration from different sources
+      if (!isFinite(duration) || isNaN(duration) || duration === 0) {
+        // For blob URLs, sometimes duration isn't available immediately
+        // Try to get it from the video element's buffered property
+        if (this.videoElement!.buffered.length > 0) {
+          const bufferedDuration = this.videoElement!.buffered.end(0)
+          if (isFinite(bufferedDuration) && bufferedDuration > 0) {
+            console.log('Using buffered duration:', bufferedDuration)
+            this.lastEmittedUrl = currentUrl
+            this.eventBus.emit('playback.videoLoaded', {
+              duration: bufferedDuration
+            })
+            return
+          }
+        }
+        
+        // For short videos, wait a bit and try again (only if we haven't emitted yet)
+        if (this.lastEmittedUrl !== currentUrl) {
+          setTimeout(() => {
+            if (this.lastEmittedUrl === currentUrl) return // Already emitted
+            
+            const retryDuration = this.videoElement!.duration
+            console.log('Retry duration check:', retryDuration)
+            if (isFinite(retryDuration) && retryDuration > 0) {
+              this.lastEmittedUrl = currentUrl
+              this.eventBus.emit('playback.videoLoaded', {
+                duration: retryDuration
+              })
+            } else {
+              // Fallback: emit with a small default duration for very short recordings
+              console.warn('Could not determine video duration, using fallback')
+              this.lastEmittedUrl = currentUrl
+              this.eventBus.emit('playback.videoLoaded', {
+                duration: 1.0 // 1 second fallback
+              })
+            }
+          }, 100)
+        }
+      } else {
+        // Valid duration found
+        console.log('Valid duration found:', duration)
+        this.lastEmittedUrl = currentUrl
         this.eventBus.emit('playback.videoLoaded', {
-          duration: validDuration
+          duration: duration
         })
       }
-    })
+    }
+
+    // Listen to multiple events
+    this.videoElement.addEventListener('loadedmetadata', emitVideoLoaded)
+    this.videoElement.addEventListener('loadeddata', emitVideoLoaded)
+    this.videoElement.addEventListener('canplay', emitVideoLoaded)
 
     this.videoElement.addEventListener('ended', () => {
       this.stopTimeTracking()
-      // Keep scrubber at the end position (don't reset)
-      const endTime = this.videoElement!.duration
       this.eventBus.emit('playback.ended', {
-        currentTime: endTime
+        currentTime: this.videoElement!.currentTime
       })
       this.eventBus.emit('playback.pause', {
-        currentTime: endTime
+        currentTime: this.videoElement!.currentTime
       })
     })
 

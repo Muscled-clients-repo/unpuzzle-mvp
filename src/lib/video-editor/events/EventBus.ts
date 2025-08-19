@@ -34,6 +34,10 @@ export interface VideoEditorEvents {
   'scrubber.positionChanged': { position: number; source: 'drag' | 'click' | 'playback' }
   'scrubber.dragStarted': { position: number }
   'scrubber.dragEnded': { position: number }
+  
+  // Clip management events
+  'clips.deleted': { remainingClips: number }
+  'preview.clear': {}
 }
 
 export class TypedEventBus {

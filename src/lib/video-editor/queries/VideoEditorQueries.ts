@@ -92,7 +92,7 @@ export class VideoEditorQueries {
   getTimelineClips(): ReadonlyArray<TimelineClip> {
     const snapshot = this.stateMachine.getSnapshot()
     const clips = snapshot.context.timeline.clips
-    console.log('📊 Queries.getTimelineClips() returning:', clips.length, 'clips')
+    // Removed verbose logging - this is called frequently by polling
     return clips
   }
   

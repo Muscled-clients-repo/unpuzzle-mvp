@@ -6,6 +6,7 @@ import type { RecordingService } from '../services/RecordingService'
 import type { PlaybackService } from '../services/PlaybackService'
 import type { TimelineService } from '../services/TimelineService'
 import type { VideoSegment, RecordingResult } from '../types'
+import { eventBus } from '../events/EventBus'
 
 // PRINCIPLE 1: NO 'any' types - Proper XState v5 typing
 import type { Actor, SnapshotFrom } from 'xstate'
@@ -19,6 +20,7 @@ export class VideoEditorCommands {
     private playbackService: PlaybackService,
     private timelineService: TimelineService,
     private stateMachine: StateMachine
+    // PHASE 2: Keep services for now, only playback commands are pure events
   ) {}
 
   // Recording Commands
@@ -73,53 +75,13 @@ export class VideoEditorCommands {
 
   // Playback Commands  
   play(): void {
-    const snapshot = this.stateMachine?.getSnapshot()
-    const currentState = snapshot?.value || 'idle'
-    console.log('🎮 Current state before play:', currentState)
-    
-    if (currentState === 'playing' || currentState === 'recording') {
-      console.warn('Already playing or recording, ignoring play command')
-      return
-    }
-
-    // Check if we're at the end using state machine's totalDuration (single source of truth)
-    const totalDuration = snapshot.context.totalDuration
-    const scrubberPosition = snapshot.context.timeline.scrubber.position
-    
-    console.log('🎬 Play command:', {
-      totalDuration,
-      scrubberPosition,
-      isAtEnd: totalDuration > 0 && scrubberPosition >= totalDuration - 0.1
-    })
-    
-    // If scrubber is at the end (or beyond), reset to beginning
-    if (totalDuration > 0 && scrubberPosition >= totalDuration - 0.1) {
-      console.log('At end of video, resetting to beginning')
-      this.stateMachine.send({ type: 'PLAYBACK.SEEK', time: 0 })
-      this.playbackService.seek(0)
-    } else if (scrubberPosition !== this.playbackService.currentTime) {
-      // Otherwise sync video position with scrubber position
-      console.log('Syncing video to scrubber position:', scrubberPosition)
-      this.playbackService.seek(scrubberPosition)
-    }
-
-    // Send state machine event first to ensure state transition (BEFORE service)
+    console.log('🎮 Commands: Sending PLAY to State Machine')
     this.stateMachine.send({ type: 'PLAYBACK.PLAY' })
-    
-    // Then execute the service action
-    this.playbackService.play()
   }
 
   pause(): void {
-    const snapshot = this.stateMachine?.getSnapshot()
-    const currentState = snapshot?.value || 'idle'
-    if (currentState !== 'playing') {
-      console.warn('Cannot pause in current state:', currentState)
-      return // Don't throw error, just return
-    }
-
+    console.log('🎮 Commands: Sending PAUSE to State Machine')
     this.stateMachine.send({ type: 'PLAYBACK.PAUSE' })
-    this.playbackService.pause()
   }
 
   seek(time: number): void {
@@ -127,8 +89,8 @@ export class VideoEditorCommands {
       throw new Error('Seek time cannot be negative')
     }
 
+    console.log('🎮 Commands: Sending SEEK to State Machine', time)
     this.stateMachine.send({ type: 'PLAYBACK.SEEK', time })
-    this.playbackService.seek(time)
   }
 
   // Timeline Commands
@@ -160,11 +122,29 @@ export class VideoEditorCommands {
     this.timelineService.requestSelectSegment(segmentId)
   }
 
+  // Delete selected clips
+  deleteSelectedClips(): void {
+    // Get current state to check what we're deleting
+    const snapshot = this.stateMachine.getSnapshot()
+    const remainingClips = snapshot.context.timeline.clips.filter(c => !c.isSelected)
+    
+    // Delete the clips
+    this.stateMachine.send({ type: 'CLIPS.DELETE_SELECTED' })
+    
+    // Following BULLETPROOF architecture: emit event for services to react
+    eventBus.emit('clips.deleted', { remainingClips: remainingClips.length })
+    
+    // If no clips remain, notify to clear the preview
+    if (remainingClips.length === 0) {
+      eventBus.emit('preview.clear', {})
+    }
+  }
+
   // Generic execute method for all commands
   execute(command: string, params: Record<string, unknown> = {}): void {
     switch (command) {
       case 'RECORDING.START':
-        this.startRecording(params.mode || 'screen')
+        this.startRecording((params.mode as 'screen' | 'camera' | 'audio') || 'screen')
         break
       case 'RECORDING.STOP':
         this.stopRecording()
@@ -176,40 +156,41 @@ export class VideoEditorCommands {
         this.pause()
         break
       case 'PLAYBACK.SEEK':
-        this.seek(params.time || 0)
+        this.seek((params.time as number) || 0)
         break
       case 'TIMELINE.ADD_SEGMENT':
-        this.addSegment(params.segment)
+        this.addSegment(params.segment as Omit<VideoSegment, 'id'>)
         break
       case 'TIMELINE.SELECT_SEGMENT':
-        this.selectSegment(params.segmentId)
+        this.selectSegment(params.segmentId as string)
         break
       // NEW: Timeline commands (Phase A1)
       case 'TIMELINE.CLIP_ADDED':
+        this.stateMachine.send({ type: 'TIMELINE.CLIP_ADDED', clip: params.clip as any })
+        break
       case 'TIMELINE.CLIP_SELECTED':
+        this.stateMachine.send({ type: 'TIMELINE.CLIP_SELECTED', clipId: params.clipId as string })
+        break
       case 'TIMELINE.TRACK_ADDED':
-        this.stateMachine.send({ type: command, ...params })
+        this.stateMachine.send({ type: 'TIMELINE.TRACK_ADDED', track: params.track as any })
         break
       // NEW: Scrubber commands (Phase A2)
       case 'SCRUBBER.START_DRAG':
-        this.stateMachine.send({ type: command, ...params })
+        this.stateMachine.send({ type: 'SCRUBBER.START_DRAG' })
         break
       case 'SCRUBBER.DRAG':
-        this.stateMachine.send({ type: command, ...params })
-        // Also seek video to this position during drag
-        if (params.position !== undefined) {
-          this.playbackService.seek(params.position)
-        }
+        this.stateMachine.send({ type: 'SCRUBBER.DRAG', position: params.position as number })
+        // PHASE 2: State Machine will handle seeking during drag
         break
       case 'SCRUBBER.END_DRAG':
-        this.stateMachine.send({ type: command, ...params })
+        this.stateMachine.send({ type: 'SCRUBBER.END_DRAG' })
         break
       case 'SCRUBBER.CLICK':
-        this.stateMachine.send({ type: command, ...params })
-        // Also seek video to clicked position
-        if (params.position !== undefined) {
-          this.playbackService.seek(params.position)
-        }
+        this.stateMachine.send({ type: 'SCRUBBER.CLICK', position: params.position as number })
+        // PHASE 2: State Machine will handle seeking on click
+        break
+      case 'CLIPS.DELETE_SELECTED':
+        this.deleteSelectedClips()
         break
       default:
         console.warn(`Unknown command: ${command}`)

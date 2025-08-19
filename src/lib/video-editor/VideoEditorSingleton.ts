@@ -1,7 +1,7 @@
 // PRINCIPLE 4: Service Boundary Isolation
 // Singleton to prevent duplicate initialization in React StrictMode
 
-import { createActor } from 'xstate'
+import { createActor, type Actor } from 'xstate'
 import { videoEditorMachine } from './state-machine/VideoEditorMachineV5'
 import { eventBus } from './events/EventBus'
 import { RecordingService } from './services/RecordingService'
@@ -16,6 +16,7 @@ interface VideoEditorInstance {
   commands: VideoEditorCommands
   queries: VideoEditorQueries
   cleanup: () => void
+  stateMachine: Actor<typeof videoEditorMachine>
 }
 
 export function getVideoEditorInstance(): VideoEditorInstance {
@@ -27,6 +28,7 @@ export function getVideoEditorInstance(): VideoEditorInstance {
   console.log('🚀 Creating new video editor instance')
   
   // 1. Create state machine actor (XState v5 pattern)
+  // Initial context comes from machine definition
   const stateMachine = createActor(videoEditorMachine)
   
   // 2. Start the actor
@@ -75,21 +77,20 @@ export function getVideoEditorInstance(): VideoEditorInstance {
     })
   )
   
-  // Connect playback time updates to scrubber position
+  // PHASE 4: Forward service events to State Machine
   unsubscribers.push(
     eventBus.on('playback.timeUpdate', ({ currentTime }) => {
-      // Update scrubber position during playback
-      stateMachine.send({ type: 'SCRUBBER.DRAG', position: currentTime })
+      // Forward to State Machine for technical state updates
+      stateMachine.send({ type: 'VIDEO.TIME_UPDATE', time: currentTime })
     })
   )
   
   
-  // Keep scrubber at end position when video ends
+  // Forward video ended events to State Machine
   unsubscribers.push(
     eventBus.on('playback.ended', ({ currentTime }) => {
-      // Update position and pause state machine
-      stateMachine.send({ type: 'SCRUBBER.DRAG', position: currentTime })
-      stateMachine.send({ type: 'PLAYBACK.PAUSE' })
+      console.log('🏁 Integration Layer: Video ended, forwarding to State Machine')
+      stateMachine.send({ type: 'VIDEO.ENDED' })
     })
   )
   
@@ -101,11 +102,14 @@ export function getVideoEditorInstance(): VideoEditorInstance {
     })
   )
   
-  // Handle video loaded event to update totalDuration in state machine
+  // Forward video loaded events to State Machine
   unsubscribers.push(
     eventBus.on('playback.videoLoaded', ({ duration }) => {
-      console.log('📹 Video loaded, updating totalDuration:', duration)
-      stateMachine.send({ type: 'VIDEO.LOADED', duration })
+      console.log('📹 Integration Layer: Video loaded, forwarding to State Machine', duration)
+      // Get current video URL from the video element
+      const videoElement = document.getElementById('preview-video') as HTMLVideoElement
+      const url = videoElement?.src || ''
+      stateMachine.send({ type: 'VIDEO.LOADED', duration, url })
     })
   )
   
@@ -142,6 +146,118 @@ export function getVideoEditorInstance(): VideoEditorInstance {
     setTimeout(() => clearInterval(checkVideoElement), 5000)
   }
 
+  // PHASE 4: State Machine observer - Integration Layer
+  // This observes State Machine decisions and forwards them to services
+  console.log('🔧 Setting up State Machine observer for integration layer')
+  
+  let previousState: string | null = null
+  let processedClipTransition: string | null = null
+  let processedSeek: number | null = null
+  let lastLogTime = 0
+  
+  const subscription = stateMachine.subscribe((snapshot) => {
+    const currentState = snapshot.value as string
+    const { playback } = snapshot.context
+    
+    // Safety check for playback state
+    if (!playback) {
+      console.warn('INTEGRATION DEBUG: playback state is undefined in context')
+      console.log('INTEGRATION DEBUG: Full context:', snapshot.context)
+      previousState = currentState
+      return
+    }
+    
+    // XState v5: Track changes manually
+    const stateChanged = previousState !== currentState
+    
+    // Reset processed tracking when state changes to ensure fresh detection
+    if (stateChanged && currentState === 'playing') {
+      processedClipTransition = null
+      processedSeek = null
+    }
+    
+    // Check if we have new pending actions to process (after potential reset)
+    const hasNewClipTransition = playback.pendingClipTransition && 
+      processedClipTransition !== playback.pendingClipTransition.id
+    const hasNewSeek = playback.pendingSeek && 
+      processedSeek !== playback.pendingSeek.time
+    
+    // Debounce logging to avoid spam (only log every 500ms or on significant changes)
+    const now = Date.now()
+    const shouldLog = stateChanged || hasNewClipTransition || hasNewSeek || (now - lastLogTime > 500)
+    
+    if (shouldLog) {
+      console.log('🔎 INTEGRATION DEBUG: State Machine subscription triggered')
+      console.log('INTEGRATION DEBUG: State changed:', stateChanged, 'from', previousState, 'to', currentState)
+      console.log('INTEGRATION DEBUG: New actions:', { hasNewClipTransition, hasNewSeek })
+      lastLogTime = now
+    }
+    
+    // PHASE 4: Forward State Machine decisions to services
+    if (stateChanged || hasNewClipTransition || hasNewSeek) {
+      console.log('🔄 State Machine changed:', currentState, 'Playback state:', {
+        currentClipId: playback.currentClipId,
+        pendingClipTransition: !!playback.pendingClipTransition,
+        pendingSeek: !!playback.pendingSeek
+      })
+      
+      // Handle clip transitions
+      if (hasNewClipTransition && snapshot.matches('playing')) {
+        const clip = playback.pendingClipTransition!
+        console.log('🎬 Integration Layer: Loading clip for playback', clip.sourceUrl)
+        
+        // Mark as processed to prevent infinite loop
+        processedClipTransition = clip.id
+        
+        // Sequential execution with proper await chain
+        playbackService.loadVideo(clip.sourceUrl)
+          .then(async () => {
+            if (playback.pendingSeek) {
+              console.log('🎯 Integration Layer: Seeking to position', playback.pendingSeek.time)
+              processedSeek = playback.pendingSeek.time
+              await playbackService.seek(playback.pendingSeek.time)
+            }
+            console.log('▶️ Integration Layer: Starting playback')
+            await playbackService.play()
+            
+            // Clear pending actions after successful execution
+            stateMachine.send({ type: 'PLAYBACK.ACTIONS_PROCESSED' })
+          })
+          .catch(error => {
+            console.error('❌ Integration Layer: Playback failed', error)
+          })
+      }
+      
+      // Handle standalone seeks (without clip transitions) 
+      else if (hasNewSeek && !hasNewClipTransition && playback.currentClipId) {
+        console.log('🎯 Integration Layer: Seeking to position and resuming', playback.pendingSeek!.time)
+        processedSeek = playback.pendingSeek!.time
+        playbackService.seek(playback.pendingSeek!.time)
+          .then(async () => {
+            // If we're in playing state, also start playback after seek
+            if (snapshot.matches('playing')) {
+              console.log('▶️ Integration Layer: Resuming playback after seek')
+              await playbackService.play()
+            }
+            // Clear pending actions after successful execution
+            stateMachine.send({ type: 'PLAYBACK.ACTIONS_PROCESSED' })
+          })
+          .catch(error => {
+            console.error('❌ Integration Layer: Seek failed', error)
+          })
+      }
+      
+      // Handle pause requests (only on state change to paused)
+      if (currentState === 'paused' && stateChanged) {
+        console.log('⏸️ Integration Layer: Pausing playback')
+        playbackService.pause()
+      }
+    }
+    
+    // Update previous state for next comparison
+    previousState = currentState
+  })
+
   // Initialize commands and queries
   const commands = new VideoEditorCommands(
     recordingService,
@@ -165,12 +281,22 @@ export function getVideoEditorInstance(): VideoEditorInstance {
     instance = null
   }
   
-  instance = { commands, queries, cleanup }
+  instance = { commands, queries, cleanup, stateMachine }
+  
+  // Make instance available globally for services
+  if (typeof window !== 'undefined') {
+    (window as any).videoEditorInstance = instance
+  }
+  
   return instance
 }
 
 export function cleanupVideoEditor() {
   if (instance) {
     instance.cleanup()
+    // Clean up global reference
+    if (typeof window !== 'undefined') {
+      delete (window as any).videoEditorInstance
+    }
   }
 }
