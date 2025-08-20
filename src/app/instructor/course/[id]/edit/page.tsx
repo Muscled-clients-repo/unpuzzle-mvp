@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { useAppStore } from "@/stores/app-store"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -28,7 +28,11 @@ import {
   Edit2,
   Trash2,
   GripVertical,
-  Video
+  Video,
+  Upload,
+  FileVideo,
+  RefreshCcw,
+  Clock
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -47,11 +51,62 @@ export default function EditCoursePage() {
     isAutoSaving,
     saveError,
     loadCourseForEdit,
-    getEditModeStatus
+    getEditModeStatus,
+    initiateVideoUpload,
+    uploadQueue,
+    retryFailedUpload,
+    removeVideo
   } = useAppStore()
 
   const [activeTab, setActiveTab] = useState("info")
   const [initialLoad, setInitialLoad] = useState(true)
+  
+  // Video upload refs and handlers
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (files && files.length > 0) {
+      initiateVideoUpload(files)
+    }
+    // Clear input to allow same file selection again
+    if (event.target) {
+      event.target.value = ''
+    }
+  }
+  
+  const handleFileDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const files = event.dataTransfer.files
+    if (files && files.length > 0) {
+      initiateVideoUpload(files)
+    }
+  }
+  
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+  
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return <Clock className="h-4 w-4 text-yellow-500" />
+      case 'uploading':
+        return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
+      case 'processing':
+        return <Loader2 className="h-4 w-4 text-purple-500 animate-spin" />
+      case 'complete':
+        return <CheckCircle className="h-4 w-4 text-green-500" />
+      case 'error':
+        return <AlertCircle className="h-4 w-4 text-red-500" />
+      default:
+        return <FileVideo className="h-4 w-4 text-gray-500" />
+    }
+  }
 
   // Load course data on mount
   useEffect(() => {
@@ -325,6 +380,137 @@ export default function EditCoursePage() {
                   ))
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Video Upload Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Upload className="h-5 w-5" />
+                Upload Videos
+              </CardTitle>
+              <CardDescription>
+                Drag and drop video files or click to browse. Supported formats: MP4, WebM, AVI, MOV (max 500MB each)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div
+                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer"
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleFileDrop}
+              >
+                <Video className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                <p className="text-lg font-medium mb-2">Drop video files here</p>
+                <p className="text-sm text-gray-600 mb-4">or click to browse</p>
+                <Button variant="outline">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Select Videos
+                </Button>
+              </div>
+              
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="video/*"
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+              
+              {/* Upload Queue */}
+              {uploadQueue.length > 0 && (
+                <div className="mt-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium">Upload Queue ({uploadQueue.length})</h4>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        uploadQueue
+                          .filter(v => v.status === 'error')
+                          .forEach(v => retryFailedUpload(v.id))
+                      }}
+                      disabled={!uploadQueue.some(v => v.status === 'error')}
+                    >
+                      <RefreshCcw className="h-4 w-4 mr-2" />
+                      Retry Failed
+                    </Button>
+                  </div>
+                  
+                  {uploadQueue.map((video) => (
+                    <div key={video.id} className="border rounded-lg p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-3 flex-1">
+                          {getStatusIcon(video.status)}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{video.name}</p>
+                            <p className="text-sm text-gray-500">
+                              {formatFileSize(video.size)}
+                              {video.duration && ` • ${video.duration}`}
+                            </p>
+                            {video.uploadError && (
+                              <p className="text-sm text-red-600 mt-1">
+                                Error: {video.uploadError}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          {video.status === 'error' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => retryFailedUpload(video.id)}
+                            >
+                              <RefreshCcw className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => removeVideo(video.id)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      {/* Progress Bar */}
+                      {(video.status === 'uploading' || video.status === 'processing') && (
+                        <div className="mt-3">
+                          <div className="flex items-center justify-between text-sm mb-1">
+                            <span className="capitalize">{video.status}...</span>
+                            <span>{video.progress}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className={cn(
+                                "h-2 rounded-full transition-all duration-300",
+                                video.status === 'uploading' 
+                                  ? "bg-blue-500" 
+                                  : "bg-purple-500"
+                              )}
+                              style={{ width: `${video.progress}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Success State */}
+                      {video.status === 'complete' && (
+                        <div className="mt-3 p-2 bg-green-50 rounded-lg">
+                          <p className="text-sm text-green-700">
+                            ✅ Upload complete! Video is ready to use.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

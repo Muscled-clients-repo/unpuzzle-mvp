@@ -2,9 +2,9 @@
 	"info": {
 		"_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 		"name": "Unpuzzle MVP API - Complete",
-		"description": "Complete API collection for Unpuzzle MVP backend with all endpoints including Session Management, RBAC, and Course Management System. Updated based on comprehensive API analysis.",
+		"description": "Complete API collection for Unpuzzle MVP backend with all endpoints including Session Management, RBAC, Course Management System, and Advanced Media Upload with Backblaze B2 integration. Updated with comprehensive video upload workflow and file management capabilities.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-		"version": "2.0.0"
+		"version": "2.1.0"
 	},
 	"item": [
 		{
@@ -1182,6 +1182,34 @@
 					"response": []
 				},
 				{
+					"name": "Get Instructor Course by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/instructor/courses/{{course_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"instructor",
+								"courses",
+								"{{course_id}}"
+							]
+						},
+						"description": "Get a specific course by ID with all videos. Instructor must own the course. Rate limited to 100 requests per minute. Requires authentication and instructor role."
+					},
+					"response": []
+				},
+				{
 					"name": "Create Course",
 					"event": [
 						{
@@ -2050,6 +2078,370 @@
 				}
 			],
 			"description": "System health and status endpoints"
+		},
+		{
+			"name": "Media Upload (Backblaze)",
+			"description": "User-specific media file upload and management with Backblaze B2 storage. All media files are automatically associated with the authenticated user and filtered by user ownership.",
+			"item": [
+				{
+					"name": "Upload Workflow",
+					"item": [
+						{
+							"name": "Initiate Upload",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    if (response.success && response.data) {",
+											"        pm.environment.set('upload_session_key', response.data.sessionKey);",
+											"        pm.environment.set('upload_url', response.data.uploadUrl);",
+											"        pm.environment.set('storage_key', response.data.storageKey);",
+											"        console.log('Upload session initiated:', response.data.sessionKey);",
+											"    }",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"filename\": \"sample-video.mp4\",\n    \"fileSize\": 10485760,\n    \"contentType\": \"video/mp4\",\n    \"courseId\": \"{{course_id}}\",\n    \"tags\": [\"lesson\", \"tutorial\"]\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/media/upload/initiate",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"media",
+										"upload",
+										"initiate"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Complete Upload",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    if (response.success && response.data) {",
+											"        pm.environment.set('media_file_id', response.data.mediaFileId);",
+											"        pm.environment.set('cdn_url', response.data.cdnUrl);",
+											"        console.log('Upload completed. Media File ID:', response.data.mediaFileId);",
+											"    }",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"sessionKey\": \"{{upload_session_key}}\",\n    \"storageKey\": \"{{storage_key}}\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/media/upload/complete",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"media",
+										"upload",
+										"complete"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Get Upload Progress",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/media/upload/progress/{{upload_session_key}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"media",
+										"upload",
+										"progress",
+										"{{upload_session_key}}"
+									]
+								}
+							},
+							"response": []
+						}
+					],
+					"description": "Complete video upload workflow using presigned URLs"
+				},
+				{
+					"name": "Media File Management",
+					"item": [
+						{
+							"name": "Get Media File Info",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/media/media/{{media_file_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"media",
+										"media",
+										"{{media_file_id}}"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Process Video Metadata",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/media/media/{{media_file_id}}/process",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"media",
+										"media",
+										"{{media_file_id}}",
+										"process"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Attach Media to Video",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"videoId\": \"{{video_id}}\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/media/media/{{media_file_id}}/attach-video",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"media",
+										"media",
+										"{{media_file_id}}",
+										"attach-video"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Delete Media File",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/media/media/{{media_file_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"media",
+										"media",
+										"{{media_file_id}}"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "List User Media Files",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/media/user/media?page=1&limit=20&type=video&status=completed&sortBy=created&sortOrder=desc",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"media",
+										"user",
+										"media"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1",
+											"description": "Page number for pagination"
+										},
+										{
+											"key": "limit",
+											"value": "20",
+											"description": "Number of items per page"
+										},
+										{
+											"key": "type",
+											"value": "video",
+											"description": "Filter by file type"
+										},
+										{
+											"key": "status",
+											"value": "completed",
+											"description": "Filter by processing status"
+										},
+										{
+											"key": "sortBy",
+											"value": "created",
+											"description": "Sort field"
+										},
+										{
+											"key": "sortOrder",
+											"value": "desc",
+											"description": "Sort order"
+										}
+									]
+								}
+							},
+							"response": []
+						}
+					],
+					"description": "Manage uploaded media files and metadata"
+				},
+				{
+					"name": "Storage & Analytics",
+					"item": [
+						{
+							"name": "Get Storage Usage",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/media/user/storage-usage",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"media",
+										"user",
+										"storage-usage"
+									]
+								}
+							},
+							"response": []
+						}
+					],
+					"description": "Storage usage and analytics endpoints"
+				}
+			],
+			"description": "Advanced media upload system using Backblaze B2 with CDN delivery. Supports direct browser uploads, progress tracking, and comprehensive media management."
 		}
 	],
 	"event": [
@@ -2186,6 +2578,36 @@
 			"value": "",
 			"type": "string",
 			"description": "JSON string of user roles"
+		},
+		{
+			"key": "upload_session_key",
+			"value": "",
+			"type": "string",
+			"description": "Upload session key for tracking upload progress"
+		},
+		{
+			"key": "storage_key",
+			"value": "",
+			"type": "string",
+			"description": "Backblaze storage key for file location"
+		},
+		{
+			"key": "media_file_id",
+			"value": "",
+			"type": "string",
+			"description": "Media file ID from completed uploads"
+		},
+		{
+			"key": "upload_url",
+			"value": "",
+			"type": "string",
+			"description": "Presigned upload URL for direct file upload"
+		},
+		{
+			"key": "cdn_url",
+			"value": "",
+			"type": "string",
+			"description": "CDN URL for video delivery"
 		}
 	]
 }

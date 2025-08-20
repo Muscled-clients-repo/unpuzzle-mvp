@@ -1,5 +1,6 @@
 import { StateCreator } from 'zustand'
 import { instructorCourseService } from '@/services/instructor-course-service'
+import { videoUploadService, UploadSession, MediaFile } from '@/services/video-upload-service'
 
 export interface VideoUpload {
   id: string
@@ -14,6 +15,11 @@ export interface VideoUpload {
   chapterId?: string | null
   order: number
   transcript?: string
+  // Upload session data
+  sessionKey?: string
+  storageKey?: string
+  mediaFileId?: string
+  uploadError?: string
 }
 
 export interface Chapter {
@@ -50,6 +56,7 @@ export interface CourseCreationData {
 export interface CourseCreationSlice {
   courseCreation: CourseCreationData | null
   uploadQueue: VideoUpload[]
+  uploadSessions: Map<string, UploadSession>
   isAutoSaving: boolean
   currentStep: 'info' | 'content' | 'review'
   saveError: string | null
@@ -64,6 +71,13 @@ export interface CourseCreationSlice {
   updateVideoStatus: (videoId: string, status: VideoUpload['status']) => void
   updateVideoName: (videoId: string, name: string) => void
   removeVideo: (videoId: string) => void
+  
+  // Enhanced Upload Actions
+  initiateVideoUpload: (files: FileList, chapterId?: string) => Promise<void>
+  handleUploadProgress: (videoId: string, progress: number) => void
+  completeVideoUpload: (videoId: string, mediaFile: MediaFile) => void
+  retryFailedUpload: (videoId: string) => Promise<void>
+  setUploadError: (videoId: string, error: string) => void
   
   // Chapter Actions
   createChapter: (title: string) => void
@@ -100,6 +114,7 @@ export interface CourseCreationSlice {
 export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set, get) => ({
   courseCreation: null,
   uploadQueue: [],
+  uploadSessions: new Map(),
   isAutoSaving: false,
   currentStep: 'info',
   saveError: null,
@@ -719,5 +734,251 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
   getEditModeStatus: () => {
     const { courseCreation } = get()
     return !!(courseCreation?.id)
+  },
+
+  // NEW UPLOAD ACTIONS: Video Upload Implementation
+  initiateVideoUpload: async (files: FileList, chapterId?: string) => {
+    console.log('🚀 Starting video upload for', files.length, 'files')
+    const { courseCreation } = get()
+    
+    const videoPromises = Array.from(files).map(async (file) => {
+      // Generate unique video ID
+      const videoId = `video-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
+      
+      // Validate file
+      const validation = videoUploadService.validateVideoFile(file)
+      if (!validation.valid) {
+        console.error('❌ File validation failed:', validation.error)
+        get().setUploadError(videoId, validation.error || 'Invalid file')
+        return
+      }
+      
+      // Add to upload queue immediately
+      const newVideo: VideoUpload = {
+        id: videoId,
+        file,
+        name: file.name,
+        size: file.size,
+        status: 'pending',
+        progress: 0,
+        chapterId,
+        order: get().uploadQueue.length
+      }
+      
+      set(state => ({
+        uploadQueue: [...state.uploadQueue, newVideo]
+      }))
+
+      try {
+        console.log('🔄 Initiating upload for:', file.name)
+        get().updateVideoStatus(videoId, 'pending')
+        
+        // Step 1: Initiate upload
+        const sessionResult = await videoUploadService.initiateUpload(file, courseCreation?.id)
+        if (sessionResult.error) {
+          throw new Error(sessionResult.error)
+        }
+
+        if (!sessionResult.data) {
+          throw new Error('No upload session data received from server')
+        }
+
+        const session = sessionResult.data
+        console.log('✅ Upload session created:', session.sessionKey)
+        
+        // Store session data
+        set(state => ({ 
+          uploadSessions: new Map(state.uploadSessions.set(videoId, session)),
+          uploadQueue: state.uploadQueue.map(v => 
+            v.id === videoId 
+              ? { ...v, sessionKey: session.sessionKey, storageKey: session.storageKey }
+              : v
+          )
+        }))
+
+        // Step 2: Update status to uploading
+        get().updateVideoStatus(videoId, 'uploading')
+
+        // Step 3: Upload file with progress tracking
+        console.log('📤 Starting file upload to storage')
+        const uploadResult = await videoUploadService.uploadFile(
+          session,
+          file,
+          (progress) => get().handleUploadProgress(videoId, progress)
+        )
+        
+        if (uploadResult.error) {
+          throw new Error(uploadResult.error)
+        }
+
+        console.log('✅ File uploaded to storage successfully')
+        get().updateVideoStatus(videoId, 'processing')
+
+        // Step 4: Complete upload
+        console.log('🏁 Completing upload process')
+        const completeResult = await videoUploadService.completeUpload(
+          session.sessionKey, 
+          session.storageKey
+        )
+        
+        if (completeResult.error) {
+          throw new Error(completeResult.error)
+        }
+
+        const mediaFile = completeResult.data!
+        console.log('✅ Upload completed successfully:', mediaFile.id)
+        
+        // Step 5: Update video with completed data
+        get().completeVideoUpload(videoId, mediaFile)
+
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Upload failed'
+        console.error('❌ Upload failed for', file.name, ':', errorMessage)
+        get().setUploadError(videoId, errorMessage)
+      }
+    })
+
+    // Wait for all uploads to complete (or fail)
+    await Promise.allSettled(videoPromises)
+    console.log('🏁 All upload processes completed')
+  },
+
+  handleUploadProgress: (videoId: string, progress: number) => {
+    set(state => ({
+      uploadQueue: state.uploadQueue.map(video =>
+        video.id === videoId 
+          ? { ...video, progress }
+          : video
+      )
+    }))
+  },
+
+  completeVideoUpload: (videoId: string, mediaFile: MediaFile) => {
+    console.log('✅ Completing video upload:', videoId, mediaFile.id)
+    
+    set(state => ({
+      uploadQueue: state.uploadQueue.map(video =>
+        video.id === videoId 
+          ? {
+              ...video,
+              status: 'complete',
+              progress: 100,
+              mediaFileId: mediaFile.id,
+              url: mediaFile.cdnUrl || mediaFile.storageKey,
+              thumbnailUrl: mediaFile.cdnUrl ? `${mediaFile.cdnUrl}/thumbnail.jpg` : undefined,
+              duration: mediaFile.metadata?.duration 
+                ? videoUploadService.formatDuration(mediaFile.metadata.duration) 
+                : undefined,
+              uploadError: undefined
+            }
+          : video
+      )
+    }))
+
+    // If video belongs to a chapter, update the chapter's video list
+    const video = get().uploadQueue.find(v => v.id === videoId)
+    if (!video) {
+      console.error('❌ Video not found in upload queue:', videoId)
+      return
+    }
+
+    if (video.chapterId) {
+      set(state => ({
+        courseCreation: state.courseCreation ? {
+          ...state.courseCreation,
+          chapters: state.courseCreation.chapters.map(chapter =>
+            chapter.id === video.chapterId
+              ? {
+                  ...chapter,
+                  videos: [...chapter.videos, {
+                    id: video.id,
+                    file: video.file,
+                    name: video.name,
+                    size: video.size,
+                    duration: video.duration,
+                    status: 'complete' as const,
+                    progress: 100,
+                    url: mediaFile.cdnUrl || mediaFile.storageKey,
+                    thumbnailUrl: video.thumbnailUrl,
+                    chapterId: video.chapterId,
+                    order: video.order,
+                    transcript: video.transcript,
+                    sessionKey: video.sessionKey,
+                    storageKey: video.storageKey,
+                    mediaFileId: mediaFile.id,
+                    uploadError: undefined
+                  }]
+                }
+              : chapter
+          )
+        } : null
+      }))
+    } else {
+      // Add to course videos if not in a chapter
+      set(state => ({
+        courseCreation: state.courseCreation ? {
+          ...state.courseCreation,
+          videos: [...state.courseCreation.videos, {
+            id: video.id,
+            file: video.file,
+            name: video.name,
+            size: video.size,
+            duration: video.duration,
+            status: 'complete' as const,
+            progress: 100,
+            url: mediaFile.cdnUrl || mediaFile.storageKey,
+            thumbnailUrl: video.thumbnailUrl,
+            chapterId: video.chapterId,
+            order: video.order,
+            transcript: video.transcript,
+            sessionKey: video.sessionKey,
+            storageKey: video.storageKey,
+            mediaFileId: mediaFile.id,
+            uploadError: undefined
+          }]
+        } : null
+      }))
+    }
+  },
+
+  retryFailedUpload: async (videoId: string) => {
+    console.log('🔄 Retrying failed upload:', videoId)
+    
+    const video = get().uploadQueue.find(v => v.id === videoId)
+    if (!video || !video.file) {
+      console.error('❌ Cannot retry: video or file not found')
+      return
+    }
+
+    // Reset video status and progress
+    set(state => ({
+      uploadQueue: state.uploadQueue.map(v =>
+        v.id === videoId 
+          ? { ...v, status: 'pending', progress: 0, uploadError: undefined }
+          : v
+      )
+    }))
+
+    // Create new file list and retry upload
+    const fileList = new DataTransfer()
+    fileList.items.add(video.file)
+    
+    await get().initiateVideoUpload(fileList.files, video.chapterId || undefined)
+  },
+
+  setUploadError: (videoId: string, error: string) => {
+    console.error('❌ Setting upload error for', videoId, ':', error)
+    
+    set(state => ({
+      uploadQueue: state.uploadQueue.map(video =>
+        video.id === videoId 
+          ? { 
+              ...video, 
+              status: 'error',
+              uploadError: error
+            }
+          : video
+      )
+    }))
   }
 })

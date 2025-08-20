@@ -13,6 +13,12 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Server Actions configuration for file uploads
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '500mb', // Allow up to 500MB for video uploads
+    },
+  },
   // Webpack configuration (for production builds)
   webpack: (config) => {
     config.watchOptions = {
