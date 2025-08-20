@@ -38,7 +38,6 @@ export default function EditCoursePage() {
   const courseId = params.id as string
   
   const {
-    courses,
     courseCreation,
     setCourseInfo,
     createChapter,
@@ -46,59 +45,59 @@ export default function EditCoursePage() {
     deleteChapter,
     saveDraft,
     isAutoSaving,
-    loadCourses,
-    loadCourseForEdit
+    saveError,
+    loadCourseForEdit,
+    getEditModeStatus
   } = useAppStore()
 
-  const [isSaving, setIsSaving] = useState(false)
-  const [hasChanges, setHasChanges] = useState(false)
   const [activeTab, setActiveTab] = useState("info")
+  const [initialLoad, setInitialLoad] = useState(true)
 
   // Load course data on mount
   useEffect(() => {
-    // Load the course data for editing
-    loadCourseForEdit(courseId)
+    const loadData = async () => {
+      if (courseId && initialLoad) {
+        // Just load the specific course for editing
+        await loadCourseForEdit(courseId)
+        setInitialLoad(false)
+      }
+    }
     
-    // Also load instructor courses to get additional metadata if needed
-    loadCourses()
-  }, [courseId, loadCourseForEdit, loadCourses])
+    loadData()
+  }, [courseId, initialLoad]) // Removed function dependencies to avoid the error
+
+  // Check if we're in edit mode
+  const isEditMode = getEditModeStatus()
 
   const handleSave = async () => {
-    setIsSaving(true)
-    try {
-      await saveDraft()
-      setHasChanges(false)
-      // Show success message
+    // saveDraft now handles both create and edit automatically
+    await saveDraft()
+    
+    // Show success and redirect if no errors
+    if (!saveError) {
       setTimeout(() => {
-        router.push('/instructor')
+        router.push('/instructor/courses')
       }, 1000)
-    } catch (error) {
-      console.error('Failed to save course:', error)
-    } finally {
-      setIsSaving(false)
     }
   }
 
   const handleInputChange = (field: string, value: any) => {
+    // Use existing setCourseInfo - it already handles change tracking
     setCourseInfo({ [field]: value })
-    setHasChanges(true)
   }
 
   const handleAddChapter = () => {
     const chapterNumber = (courseCreation?.chapters.length || 0) + 1
     createChapter(`Chapter ${chapterNumber}`)
-    setHasChanges(true)
   }
 
   const handleUpdateChapter = (chapterId: string, field: string, value: string) => {
     updateChapter(chapterId, { [field]: value })
-    setHasChanges(true)
   }
 
   const handleDeleteChapter = (chapterId: string) => {
     if (confirm('Are you sure you want to delete this chapter?')) {
       deleteChapter(chapterId)
-      setHasChanges(true)
     }
   }
 
@@ -112,7 +111,7 @@ export default function EditCoursePage() {
 
   return (
     <div className="container max-w-6xl py-6">
-      {/* Header */}
+      {/* Header with edit mode indicator */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <Button
@@ -123,9 +122,11 @@ export default function EditCoursePage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">Edit Course</h1>
+            <h1 className="text-2xl font-bold">
+              {isEditMode ? 'Edit Course' : 'Create Course'}
+            </h1>
             <p className="text-sm text-muted-foreground">
-              Update your course information and content
+              {courseCreation.title || 'Untitled Course'}
             </p>
           </div>
         </div>
@@ -134,18 +135,18 @@ export default function EditCoursePage() {
           {isAutoSaving && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin" />
-              Auto-saving...
+              {isEditMode ? 'Updating...' : 'Saving...'}
             </div>
           )}
           
-          {hasChanges && !isAutoSaving && (
-            <Badge variant="outline" className="gap-1">
+          {saveError && (
+            <Badge variant="destructive" className="gap-1">
               <AlertCircle className="h-3 w-3" />
-              Unsaved changes
+              {saveError}
             </Badge>
           )}
           
-          {!hasChanges && !isAutoSaving && courseCreation.lastSaved && (
+          {!isAutoSaving && !saveError && courseCreation.lastSaved && (
             <Badge variant="outline" className="gap-1 text-green-600">
               <CheckCircle className="h-3 w-3" />
               Saved
@@ -154,19 +155,10 @@ export default function EditCoursePage() {
           
           <Button
             onClick={handleSave}
-            disabled={!hasChanges || isSaving}
+            disabled={isAutoSaving}
           >
-            {isSaving ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="mr-2 h-4 w-4" />
-                Save Changes
-              </>
-            )}
+            <Save className="mr-2 h-4 w-4" />
+            {isEditMode ? 'Update Course' : 'Save Draft'}
           </Button>
         </div>
       </div>
@@ -185,7 +177,7 @@ export default function EditCoursePage() {
             <CardHeader>
               <CardTitle>Course Information</CardTitle>
               <CardDescription>
-                Update the basic information about your course
+                {isEditMode ? 'Update your course information' : 'Enter your course information'}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

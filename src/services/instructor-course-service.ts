@@ -519,6 +519,110 @@ export class InstructorCourseService {
       ? { error: response.error }
       : { data: response.data }
   }
+
+  // Edit-specific methods for course editing workflow
+  async getCourseForEditing(courseId: string): Promise<ServiceResult<any>> {
+    console.log('🔍 Loading course for editing:', courseId)
+    
+    // Skip cache check - directly fetch the specific course
+    // This is more efficient than loading all courses first
+    
+    if (useMockData) {
+      const mockCourseData = {
+        id: courseId,
+        title: `Course ${courseId}`,
+        description: `Description for course ${courseId}`,
+        category: 'web-development',
+        level: 'intermediate',
+        price: 99,
+        chapters: [
+          {
+            id: 'chapter-1',
+            title: 'Introduction',
+            description: 'Getting started with the course',
+            order: 0,
+            videos: [],
+            duration: '30 min'
+          },
+          {
+            id: 'chapter-2', 
+            title: 'Core Concepts',
+            description: 'Understanding the fundamentals',
+            order: 1,
+            videos: [],
+            duration: '45 min'
+          }
+        ],
+        videos: [],
+        status: 'draft',
+        totalDuration: '1h 15min',
+        lastSaved: new Date(),
+        autoSaveEnabled: false
+      }
+      return { data: mockCourseData }
+    }
+
+    console.log('📡 Making API call to get course:', courseId)
+    const response = await apiClient.get<Course>(`/api/v1/instructor/courses/${courseId}`)
+    console.log('📨 API response:', response)
+    
+    if (response.error) {
+      console.log('❌ API error:', response.error)
+      return { error: response.error }
+    }
+
+    if (!response.data) {
+      console.log('❌ No data in response')
+      return { error: 'No course data received' }
+    }
+
+    // Transform API Course to CourseCreationData format
+    const course = response.data
+    console.log('🔄 Transforming course data:', course)
+    
+    const courseCreationData = {
+      id: course.id,
+      title: course.title || '',
+      description: course.description || '',
+      category: course.tags?.[0] || '',
+      level: course.difficulty || 'beginner',
+      price: course.price || 0,
+      chapters: [], // Will be loaded separately if needed
+      videos: course.videos || [],
+      status: course.isPublished ? 'published' : 'draft',
+      autoSaveEnabled: false,
+      lastSaved: course.updatedAt ? new Date(course.updatedAt) : new Date()
+    }
+    
+    console.log('✅ Transformed course data:', courseCreationData)
+    return { data: courseCreationData }
+  }
+
+  async updateCourseDetails(courseId: string, courseData: any): Promise<ServiceResult<Course>> {
+    console.log('💾 Updating course details:', courseId)
+    
+    if (useMockData) {
+      console.log('🎭 Mock update successful')
+      return { data: {} as Course }
+    }
+
+    // Transform to API format based on Postman collection
+    const updatePayload = {
+      title: courseData.title,
+      description: courseData.description,
+      price: courseData.price,
+      difficulty: courseData.level,
+      tags: courseData.category ? [courseData.category] : [],
+    }
+
+    const response = await apiClient.put<Course>(`/api/v1/instructor/courses/${courseId}`, updatePayload)
+    
+    if (response.error) {
+      return { error: response.error }
+    }
+
+    return { data: response.data! }
+  }
 }
 
 export const instructorCourseService = new InstructorCourseService()

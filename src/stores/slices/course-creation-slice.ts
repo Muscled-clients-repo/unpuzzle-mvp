@@ -88,7 +88,13 @@ export interface CourseCreationSlice {
   resetCourseCreation: () => void
   
   // Edit mode
-  loadCourseForEdit: (courseId: string) => void
+  loadCourseForEdit: (courseId: string) => Promise<void>
+  
+  // NEW EDIT-ONLY ACTIONS
+  updateExistingCourse: (courseId: string) => Promise<void>
+  loadCourseFromAPI: (courseId: string) => Promise<void>
+  markAsEditMode: () => void
+  getEditModeStatus: () => boolean
 }
 
 export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set, get) => ({
@@ -431,11 +437,17 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
     const { courseCreation } = get()
     if (!courseCreation) return
     
-    // Validation before saving
+    // Check if this is edit mode
+    if (courseCreation.id) {
+      // Use new edit function
+      await get().updateExistingCourse(courseCreation.id)
+      return
+    }
+    
+    // KEEP ALL EXISTING CREATION LOGIC UNCHANGED
     const title = courseCreation.title?.trim() || ''
     const description = courseCreation.description?.trim() || ''
     
-    // Don't save if basic required fields are empty or too short
     if (!title || title.length < 3) {
       set({
         saveError: 'Course title is required and must be at least 3 characters long',
@@ -455,7 +467,6 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
     set({ isAutoSaving: true, lastSaveAttempt: new Date() })
     
     try {
-      // Prepare course data for API
       const courseData = {
         title: title,
         description: description,
@@ -465,36 +476,25 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         isFree: courseCreation.price === 0,
         tags: courseCreation.category ? [courseCreation.category] : ['programming'],
         status: 'draft' as const
-        // Don't send video data in create - handle separately
       }
       
-      let result
-      
-      // If course already has an ID, update it; otherwise create new
-      if (courseCreation.id) {
-        result = await instructorCourseService.updateCourse(courseCreation.id, courseData)
-      } else {
-        result = await instructorCourseService.createCourse(courseData)
-      }
+      const result = await instructorCourseService.createCourse(courseData)
       
       if (result.data) {
         set(state => ({
           isAutoSaving: false,
-          saveError: null, // Clear any previous error
+          saveError: null,
           courseCreation: state.courseCreation ? {
             ...state.courseCreation,
             lastSaved: new Date(),
             hasAutoSaveError: false,
-            // Store the created course ID for future updates
             id: result.data!.id || state.courseCreation.id
           } : null
         }))
-        console.log('Course draft saved successfully!', result.data)
         
-        // Also update the instructor courses in the store
         const appState = get() as any
-        if (appState.loadInstructorCourses && appState.profile?.id) {
-          appState.loadInstructorCourses(appState.profile.id)
+        if (appState.loadInstructorCourses) {
+          appState.loadInstructorCourses()
         }
       } else {
         throw new Error(result.error || 'Failed to save draft')
@@ -604,43 +604,120 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
     await get().saveDraft()
   },
   
-  loadCourseForEdit: (courseId) => {
-    // Mock implementation - in production this would fetch from API
-    // For now, create sample course data based on courseId
-    const mockCourseData: CourseCreationData = {
-      title: `Course ${courseId}`,
-      description: `Description for course ${courseId}`,
-      category: 'web-development',
-      level: 'intermediate',
-      price: 99,
-      chapters: [
-        {
-          id: 'chapter-1',
-          title: 'Introduction',
-          description: 'Getting started with the course',
-          order: 0,
-          videos: [],
-          duration: '30 min'
-        },
-        {
-          id: 'chapter-2',
-          title: 'Core Concepts',
-          description: 'Understanding the fundamentals',
-          order: 1,
-          videos: [],
-          duration: '45 min'
-        }
-      ],
-      videos: [],
-      status: 'draft',
-      totalDuration: '1h 15min',
-      lastSaved: new Date(),
-      autoSaveEnabled: false
-    }
+  loadCourseForEdit: async (courseId) => {
+    console.log('📖 Loading course for edit:', courseId)
+    await get().loadCourseFromAPI(courseId)
+  },
+
+  // NEW ACTION: Load course from API
+  loadCourseFromAPI: async (courseId: string) => {
+    console.log('🔄 loadCourseFromAPI called with courseId:', courseId)
+    set({ isAutoSaving: true, saveError: null })
     
-    set({
-      courseCreation: mockCourseData,
-      currentStep: 'info'
-    })
+    try {
+      const result = await instructorCourseService.getCourseForEditing(courseId)
+      console.log('📦 Service returned:', result)
+      
+      if (result.error) {
+        console.log('❌ Service error:', result.error)
+        set({ 
+          saveError: result.error,
+          isAutoSaving: false
+        })
+        return
+      }
+
+      const courseData = result.data!
+      console.log('📋 Course data received:', courseData)
+      
+      // Ensure the data has the correct structure
+      const courseCreationData = {
+        id: courseId,
+        title: courseData.title || '',
+        description: courseData.description || '',
+        category: courseData.category || '',
+        level: courseData.level || 'beginner',
+        price: courseData.price || 0,
+        chapters: courseData.chapters || [],
+        videos: courseData.videos || [],
+        status: courseData.status || 'draft',
+        autoSaveEnabled: false,
+        lastSaved: courseData.lastSaved || new Date()
+      }
+      
+      console.log('💾 Setting courseCreation state with:', courseCreationData)
+      
+      set({
+        courseCreation: courseCreationData,
+        currentStep: 'info',
+        isAutoSaving: false,
+        saveError: null
+      })
+      
+      console.log('✅ Course loaded for editing successfully')
+    } catch (error) {
+      console.log('❌ Failed to load course:', error)
+      set({
+        saveError: 'Failed to load course',
+        isAutoSaving: false
+      })
+    }
+  },
+
+  // NEW ACTION: Update existing course
+  updateExistingCourse: async (courseId: string) => {
+    const { courseCreation } = get()
+    if (!courseCreation) return
+    
+    console.log('💾 Updating existing course:', courseId)
+    set({ isAutoSaving: true, saveError: null })
+    
+    try {
+      const result = await instructorCourseService.updateCourseDetails(courseId, courseCreation)
+      
+      if (result.error) {
+        set({ 
+          saveError: result.error,
+          isAutoSaving: false
+        })
+        return
+      }
+
+      set(state => ({
+        isAutoSaving: false,
+        saveError: null,
+        courseCreation: state.courseCreation ? {
+          ...state.courseCreation,
+          lastSaved: new Date()
+        } : null
+      }))
+      
+      console.log('✅ Course updated successfully')
+      
+    } catch (error) {
+      console.log('❌ Failed to update course:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update course'
+      
+      set({
+        isAutoSaving: false,
+        saveError: errorMessage
+      })
+    }
+  },
+
+  // NEW ACTION: Mark as edit mode
+  markAsEditMode: () => {
+    set(state => ({
+      courseCreation: state.courseCreation ? {
+        ...state.courseCreation,
+        isEditMode: true
+      } : null
+    }))
+  },
+
+  // NEW ACTION: Get edit mode status  
+  getEditModeStatus: () => {
+    const { courseCreation } = get()
+    return !!(courseCreation?.id)
   }
 })
