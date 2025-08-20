@@ -11,6 +11,8 @@ export class TimelineService {
   // ARCHITECTURE: Services are STATELESS (line 668 of bulletproof architecture)
   // NO state storage - only process events and emit new ones
   private unsubscribe: (() => void) | null = null
+  // CRITICAL FIX: Track processed recordings to prevent duplicates
+  private lastProcessedRecording: string | null = null
 
   constructor(private eventBus: TypedEventBus) {
     this.setupEventListeners()
@@ -84,18 +86,15 @@ export class TimelineService {
       this.unsubscribe = null
     }
     
-    // Track if we've already processed a recording to prevent duplicates
-    let lastProcessedRecording: string | null = null
-    
     // Create unsubscribe function to prevent duplicate listeners
     this.unsubscribe = this.eventBus.on('recording.stopped', ({ duration, videoUrl }) => {
       // V2 BULLETPROOF: Prevent duplicate processing of the same recording
       const recordingId = `${videoUrl}-${duration}`
-      if (lastProcessedRecording === recordingId) {
+      if (this.lastProcessedRecording === recordingId) {
         console.warn('⚠️ Timeline: Duplicate recording event detected, skipping')
         return
       }
-      lastProcessedRecording = recordingId
+      this.lastProcessedRecording = recordingId
       
       // Request to add segment (service doesn't store, just emits)
       // State machine will calculate position and validate
@@ -128,8 +127,8 @@ export class TimelineService {
       
       // Clear the tracking after a short delay (to handle any immediate duplicates)
       setTimeout(() => {
-        if (lastProcessedRecording === recordingId) {
-          lastProcessedRecording = null
+        if (this.lastProcessedRecording === recordingId) {
+          this.lastProcessedRecording = null
         }
       }, 100)
     })

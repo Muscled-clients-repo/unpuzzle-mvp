@@ -8,6 +8,8 @@ export class PlaybackService {
   private videoElement: HTMLVideoElement | null = null
   private animationFrameId: number | null = null
   private lastEmittedUrl: string | null = null // Prevent duplicate duration events
+  // CRITICAL FIX #2: Track listeners to prevent accumulation
+  private videoListenersAttached = false
   // ❌ REMOVED: Business state (currentClipId, clips, globalTimeOffset)
   // State Machine will own this data
 
@@ -17,7 +19,11 @@ export class PlaybackService {
 
   setVideoElement(element: HTMLVideoElement): void {
     this.videoElement = element
-    this.setupVideoEventListeners()
+    // CRITICAL FIX #2: Only attach listeners once to prevent accumulation
+    if (!this.videoListenersAttached) {
+      this.setupVideoEventListeners()
+      this.videoListenersAttached = true
+    }
   }
 
   // Load a specific video source
@@ -26,23 +32,37 @@ export class PlaybackService {
       throw new Error('No video element set')
     }
 
+    console.log('🎥 Attempting to load video:', url)
+
+    // CRITICAL FIX #2: DO NOT revoke blob URLs here - they might be used by other clips
+    // Blob URL cleanup should be handled at the application level when clips are deleted
+    // or when the session ends, not during clip transitions
+    const previousSrc = this.videoElement.src
+    if (previousSrc && previousSrc.startsWith('blob:') && previousSrc !== url) {
+      console.log('🔄 Switching from blob URL:', previousSrc, 'to:', url)
+      // Note: NOT revoking here to prevent breaking other clips that use the same URL
+    }
+
     // Reset duration tracking for new video
     this.lastEmittedUrl = null
     
+    console.log('🎥 Loading video:', url)
     this.videoElement.src = url
     this.videoElement.classList.remove('hidden')
     
-    // Wait for metadata to load
+    // Wait for metadata to load - let the video element handle validation
     return new Promise<void>((resolve, reject) => {
       const onLoadedMetadata = () => {
         this.videoElement!.removeEventListener('loadedmetadata', onLoadedMetadata)
         this.videoElement!.removeEventListener('error', onError)
+        console.log('✅ Video loaded successfully:', url)
         resolve()
       }
       const onError = (error: Event) => {
         this.videoElement!.removeEventListener('loadedmetadata', onLoadedMetadata)
         this.videoElement!.removeEventListener('error', onError)
-        reject(error)
+        console.error('🚫 Video loading failed:', url, error)
+        reject(new Error('Cannot load video: blob URL is invalid or revoked'))
       }
       this.videoElement.addEventListener('loadedmetadata', onLoadedMetadata)
       this.videoElement.addEventListener('error', onError)

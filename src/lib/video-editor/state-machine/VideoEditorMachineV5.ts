@@ -67,6 +67,9 @@ export interface VideoEditorContext {
     // State Machine pre-calculated decisions for Integration Layer
     pendingClipTransition: TimelineClip | null
     pendingSeek: { time: number } | null
+    // NEW: Proactive clip sequencing (Option A implementation)
+    clipSequence: TimelineClip[]
+    currentSequenceIndex: number
   }
   timeline: {
     clips: TimelineClip[]
@@ -137,7 +140,10 @@ function getInitialContext(): VideoEditorContext {
       activeClipStartTime: 0,
       globalTimelinePosition: 0,
       pendingClipTransition: null,
-      pendingSeek: null
+      pendingSeek: null,
+      // Initialize clip sequencing
+      clipSequence: [],
+      currentSequenceIndex: -1
     },
     timeline: {
       clips: [],
@@ -154,6 +160,58 @@ function getInitialContext(): VideoEditorContext {
       }
     }
   }
+}
+
+// ============================================
+// OPTION A: Clip Sequence Pre-calculation Helper
+// ============================================
+
+/**
+ * Calculate the complete playbook sequence from the current position
+ * This replaces reactive boundary monitoring with proactive planning
+ * 
+ * CRITICAL: For trimmed clips, each trim should be treated as a separate playback segment
+ * even if they share the same source URL. The key is the inPoint/outPoint values.
+ */
+function calculateClipSequence(clips: TimelineClip[], startPosition: number): { sequence: TimelineClip[], startIndex: number } {
+  if (clips.length === 0) {
+    return { sequence: [], startIndex: -1 }
+  }
+  
+  // Sort clips by timeline position (this handles trimmed clips correctly)
+  const sortedClips = [...clips].sort((a, b) => a.startTime - b.startTime)
+  
+  // Find the starting clip based on position
+  const startClipIndex = sortedClips.findIndex(clip => 
+    startPosition >= clip.startTime && startPosition < clip.startTime + clip.duration
+  )
+  
+  if (startClipIndex === -1) {
+    // No clip at current position, start from the first clip
+    console.log('🎯 No clip at position', startPosition, 'starting from first clip')
+    return { sequence: sortedClips, startIndex: 0 }
+  }
+  
+  // Create sequence starting from the current clip
+  const sequence = sortedClips.slice(startClipIndex)
+  
+  console.log('🎯 Calculated clip sequence for trimmed clips:', {
+    startPosition,
+    startClipIndex,
+    totalClips: clips.length,
+    sequenceLength: sequence.length,
+    sequence: sequence.map((c, idx) => ({ 
+      index: idx,
+      id: c.id, 
+      startTime: c.startTime, 
+      duration: c.duration,
+      inPoint: c.inPoint,
+      outPoint: c.outPoint,
+      sourceUrl: c.sourceUrl.substring(0, 20) + '...' // Truncate for readability
+    }))
+  })
+  
+  return { sequence, startIndex: 0 }
 }
 
 // ============================================
@@ -202,104 +260,63 @@ export const videoEditorMachine = setup({
         ...context.playback,
         pendingClipTransition: null,
         pendingSeek: null
+        // Preserve clipSequence and currentSequenceIndex for resume
       })
     }),
     
     resumePlayback: assign(({ context }) => {
-      // BUSINESS LOGIC: Determine which clip should play
+      // OPTION A: Proactive clip sequencing - calculate the complete playback sequence
       const position = context.timeline.scrubber.position
-      const targetClip = context.timeline.clips.find(clip => 
-        position >= clip.startTime && position < clip.startTime + clip.duration
-      )
       
-      // Enhanced multi-clip logic
-      if (!targetClip) {
-        // If no clip at current position, check if we should start from the beginning
-        const firstClip = context.timeline.clips.sort((a, b) => a.startTime - b.startTime)[0]
-        if (firstClip) {
-          return {
-            ...context,
-            isPlaying: true,
-            timeline: {
-              ...context.timeline,
-              scrubber: {
-                ...context.timeline.scrubber,
-                position: firstClip.startTime
-              }
-            },
-            playback: {
-              ...context.playback,
-              currentClipId: firstClip.id,
-              activeClipStartTime: firstClip.startTime,
-              globalTimelinePosition: firstClip.startTime,
-              pendingClipTransition: firstClip,
-              pendingSeek: { time: 0 }
-            }
-          }
-        } else {
-          return {
-            ...context,
-            isPlaying: false
-          }
+      console.log('🎯 OPTION A: Starting playback at position', position)
+      console.log('🎯 Available clips:', context.timeline.clips.map(c => ({
+        id: c.id,
+        startTime: c.startTime,
+        duration: c.duration,
+        sourceUrl: c.sourceUrl
+      })))
+      
+      // Calculate the complete clip sequence from current position
+      const { sequence, startIndex } = calculateClipSequence(context.timeline.clips, position)
+      
+      if (sequence.length === 0) {
+        console.log('🎯 No clips available for playback')
+        return {
+          ...context,
+          isPlaying: false
         }
       }
       
-      // Check if at end of current clip and need to reset to beginning of all clips
-      const allClipsEndTime = Math.max(...context.timeline.clips.map(c => c.startTime + c.duration))
-      const shouldResetAll = position >= allClipsEndTime - 0.1
+      const firstClip = sequence[startIndex]
+      const localTime = position - firstClip.startTime
       
-      if (shouldResetAll) {
-        const firstClip = context.timeline.clips.sort((a, b) => a.startTime - b.startTime)[0]
-        return {
-          ...context,
-          isPlaying: true,
-          timeline: {
-            ...context.timeline,
-            scrubber: {
-              ...context.timeline.scrubber,
-              position: firstClip.startTime
-            }
-          },
-          playback: {
-            ...context.playback,
-            currentClipId: firstClip.id,
-            activeClipStartTime: firstClip.startTime,
-            globalTimelinePosition: firstClip.startTime,
-            pendingClipTransition: firstClip,
-            pendingSeek: { time: 0 }
-          }
-        }
-      }
+      console.log('🎯 OPTION A: Starting with clip sequence:', {
+        clipId: firstClip.id,
+        sequenceLength: sequence.length,
+        startIndex,
+        localTime
+      })
       
-      // Normal clip playback
-      // Check if we're resuming the same clip or switching clips
-      const isResuming = context.playback.currentClipId === targetClip.id && 
-                        !context.playback.pendingClipTransition
-      
-      if (isResuming) {
-        return {
-          ...context,
-          isPlaying: true,
-          playback: {
-            ...context.playback,
-            globalTimelinePosition: position,
-            // Set pending seek but no clip transition (already loaded)
-            pendingSeek: { time: position - targetClip.startTime },
-            pendingClipTransition: null
+      return {
+        ...context,
+        isPlaying: true,
+        timeline: {
+          ...context.timeline,
+          scrubber: {
+            ...context.timeline.scrubber,
+            position
           }
-        }
-      } else {
-        return {
-          ...context,
-          isPlaying: true,
-          playback: {
-            ...context.playback,
-            currentClipId: targetClip.id,
-            activeClipStartTime: targetClip.startTime,
-            globalTimelinePosition: position,
-            pendingClipTransition: targetClip,
-            pendingSeek: { time: position - targetClip.startTime }
-          }
+        },
+        playback: {
+          ...context.playback,
+          currentClipId: firstClip.id,
+          activeClipStartTime: firstClip.startTime,
+          globalTimelinePosition: position,
+          pendingClipTransition: firstClip,
+          pendingSeek: { time: Math.max(0, localTime) },
+          // NEW: Set the pre-calculated sequence
+          clipSequence: sequence,
+          currentSequenceIndex: startIndex
         }
       }
     }),
@@ -322,13 +339,34 @@ export const videoEditorMachine = setup({
       
       const seekTime = event.time
       
+      // DEBUG: Log seek operation details
+      console.log('🎯 State Machine SEEK: Looking for clip at time', seekTime)
+      console.log('🎯 Available clips:', context.timeline.clips.map(c => ({
+        id: c.id,
+        startTime: c.startTime,
+        duration: c.duration,
+        sourceUrl: c.sourceUrl
+      })))
+      
       // BUSINESS LOGIC: Find which clip contains this time
       const targetClip = context.timeline.clips.find(clip => 
         seekTime >= clip.startTime && seekTime < clip.startTime + clip.duration
       )
       
       if (targetClip) {
+        console.log('🎯 State Machine SEEK: Found target clip:', {
+          id: targetClip.id,
+          sourceUrl: targetClip.sourceUrl,
+          currentClipId: context.playback.currentClipId,
+          isClipChange: context.playback.currentClipId !== targetClip.id
+        })
+      }
+      
+      if (targetClip) {
         const localTime = seekTime - targetClip.startTime
+        
+        // CRITICAL FIX #3: Only trigger clip transition if switching to a different clip
+        const isClipChange = context.playback.currentClipId !== targetClip.id
         
         return {
           ...context,
@@ -345,7 +383,7 @@ export const videoEditorMachine = setup({
             currentClipId: targetClip.id,
             activeClipStartTime: targetClip.startTime,
             globalTimelinePosition: seekTime,
-            pendingClipTransition: targetClip,
+            pendingClipTransition: isClipChange ? targetClip : null,
             pendingSeek: { time: localTime }
           }
         }
@@ -407,56 +445,59 @@ export const videoEditorMachine = setup({
     }),
     
     handleVideoEnded: assign(({ context }) => {
+      // OPTION A: Use pre-calculated clip sequence for natural progression
+      const { clipSequence, currentSequenceIndex } = context.playback
       
-      // Multi-clip transition logic
-      const currentClip = context.timeline.clips.find(c => c.id === context.playback.currentClipId)
-      if (currentClip) {
-        const currentClipEndTime = currentClip.startTime + currentClip.duration
+      console.log('🎯 OPTION A: Video ended, checking sequence:', {
+        currentIndex: currentSequenceIndex,
+        sequenceLength: clipSequence.length,
+        currentClipId: context.playback.currentClipId
+      })
+      
+      // Check if there's a next clip in the sequence
+      const nextIndex = currentSequenceIndex + 1
+      
+      if (nextIndex < clipSequence.length) {
+        const nextClip = clipSequence[nextIndex]
         
-        // Find the next clip that starts at or after the current clip ends
-        const nextClip = context.timeline.clips.find(clip => 
-          clip.startTime >= currentClipEndTime && clip.id !== currentClip.id
-        )
+        console.log('🎯 OPTION A: Moving to next clip in sequence:', {
+          nextClip: nextClip.id,
+          nextIndex,
+          startTime: nextClip.startTime
+        })
         
-        if (nextClip) {
-          return {
-            ...context,
-            isPlaying: true, // Keep playing for seamless transition
-            timeline: {
-              ...context.timeline,
-              scrubber: {
-                ...context.timeline.scrubber,
-                position: nextClip.startTime
-              }
-            },
-            playback: {
-              ...context.playback,
-              currentClipId: nextClip.id,
-              activeClipStartTime: nextClip.startTime,
-              globalTimelinePosition: nextClip.startTime,
-              pendingClipTransition: nextClip,
-              pendingSeek: { time: 0 } // Start from beginning of next clip
+        return {
+          ...context,
+          isPlaying: true, // Keep playing for seamless transition
+          timeline: {
+            ...context.timeline,
+            scrubber: {
+              ...context.timeline.scrubber,
+              position: nextClip.startTime
             }
-          }
-        } else {
-          return {
-            ...context,
-            isPlaying: false,
-            playback: {
-              ...context.playback,
-              pendingClipTransition: null,
-              pendingSeek: null
-            }
+          },
+          playback: {
+            ...context.playback,
+            currentClipId: nextClip.id,
+            activeClipStartTime: nextClip.startTime,
+            globalTimelinePosition: nextClip.startTime,
+            pendingClipTransition: nextClip,
+            pendingSeek: { time: 0 }, // Start from beginning of next clip
+            currentSequenceIndex: nextIndex // Advance in sequence
           }
         }
       } else {
+        console.log('🎯 OPTION A: End of clip sequence reached, stopping playback')
         return {
           ...context,
           isPlaying: false,
           playback: {
             ...context.playback,
             pendingClipTransition: null,
-            pendingSeek: null
+            pendingSeek: null,
+            // Reset sequence
+            clipSequence: [],
+            currentSequenceIndex: -1
           }
         }
       }
@@ -634,11 +675,46 @@ export const videoEditorMachine = setup({
       }
     }),
     
-    endScrubberDrag: assign({
-      timeline: ({ context }) => ({
-        ...context.timeline,
-        scrubber: { ...context.timeline.scrubber, isDragging: false }
-      })
+    endScrubberDrag: assign(({ context }) => {
+      const position = context.timeline.scrubber.position
+      
+      // Find which clip should be at this position
+      const targetClip = context.timeline.clips.find(clip => 
+        position >= clip.startTime && position < clip.startTime + clip.duration
+      )
+      
+      console.log('🎯 Scrubber drag ended at position:', position, 'target clip:', targetClip?.id)
+      
+      if (targetClip) {
+        // Check if we need to switch clips or just seek within current clip
+        const isClipChange = context.playback.currentClipId !== targetClip.id
+        const localTime = position - targetClip.startTime
+        
+        return {
+          ...context,
+          timeline: {
+            ...context.timeline,
+            scrubber: { ...context.timeline.scrubber, isDragging: false }
+          },
+          playback: {
+            ...context.playback,
+            currentClipId: targetClip.id,
+            activeClipStartTime: targetClip.startTime,
+            globalTimelinePosition: position,
+            // Set pending actions to trigger clip load and seek for preview
+            pendingClipTransition: isClipChange ? targetClip : null,
+            pendingSeek: { time: localTime }
+          }
+        }
+      } else {
+        return {
+          ...context,
+          timeline: {
+            ...context.timeline,
+            scrubber: { ...context.timeline.scrubber, isDragging: false }
+          }
+        }
+      }
     }),
     
     deleteSelectedClips: assign(({ context }) => {
@@ -679,7 +755,10 @@ export const videoEditorMachine = setup({
           activeClipStartTime: 0,
           globalTimelinePosition: 0,
           pendingClipTransition: null,
-          pendingSeek: null
+          pendingSeek: null,
+          // Reset clip sequence when playback is reset
+          clipSequence: [],
+          currentSequenceIndex: -1
         } : context.playback
       }
     }),
@@ -697,11 +776,28 @@ export const videoEditorMachine = setup({
     splitClipAtPlayhead: assign(({ context }) => {
       const playheadPosition = context.timeline.scrubber.position
       
+      console.log('🔪 SPLIT: Playhead at position', playheadPosition)
+      console.log('🔪 SPLIT: Available clips:', context.timeline.clips.map(c => ({
+        id: c.id,
+        startTime: c.startTime,
+        duration: c.duration,
+        sourceUrl: c.sourceUrl
+      })))
+      
       // Find the clip that contains the playhead position
       const clipToSplit = context.timeline.clips.find(clip => 
         playheadPosition > clip.startTime && 
         playheadPosition < clip.startTime + clip.duration
       )
+      
+      if (clipToSplit) {
+        console.log('🔪 SPLIT: Found clip to split:', {
+          id: clipToSplit.id,
+          sourceUrl: clipToSplit.sourceUrl,
+          startTime: clipToSplit.startTime,
+          duration: clipToSplit.duration
+        })
+      }
       
       if (!clipToSplit) {
         // No clip at playhead position, nothing to split
@@ -737,8 +833,26 @@ export const videoEditorMachine = setup({
         .concat([firstClip, secondClip])
         .sort((a, b) => a.startTime - b.startTime)
       
+      console.log('🔪 SPLIT: Created clips:', {
+        original: clipToSplit.id,
+        first: { id: firstClip.id, sourceUrl: firstClip.sourceUrl },
+        second: { id: secondClip.id, sourceUrl: secondClip.sourceUrl }
+      })
+      console.log('🔪 SPLIT: Final clip list:', updatedClips.map(c => ({
+        id: c.id,
+        sourceUrl: c.sourceUrl,
+        startTime: c.startTime,
+        duration: c.duration
+      })))
+      
+      // CRITICAL FIX: Update total duration after split
+      const newTotalDuration = updatedClips.length === 0 
+        ? 0 
+        : Math.max(...updatedClips.map(c => c.startTime + c.duration))
+      
       return {
         ...context,
+        totalDuration: newTotalDuration,
         timeline: {
           ...context.timeline,
           clips: updatedClips

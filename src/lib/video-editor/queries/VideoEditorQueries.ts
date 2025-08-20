@@ -76,7 +76,7 @@ export class VideoEditorQueries {
     // Validate based on current state and command
     switch (command) {
       case 'RECORDING.START':
-        return currentState === 'idle'
+        return ['idle', 'playing', 'paused'].includes(currentState as string)
       case 'RECORDING.STOP':
         return currentState === 'recording'
       case 'PLAYBACK.PLAY':
