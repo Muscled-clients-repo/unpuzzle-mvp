@@ -128,12 +128,8 @@ export default function EditCoursePage() {
     // saveDraft now handles both create and edit automatically
     await saveDraft()
     
-    // Show success and redirect if no errors
-    if (!saveError) {
-      setTimeout(() => {
-        router.push('/instructor/courses')
-      }, 1000)
-    }
+    // Stay on the edit page after saving
+    // The success indicator in the header will show the save status
   }
 
   const handleInputChange = (field: string, value: any) => {
@@ -268,11 +264,16 @@ export default function EditCoursePage() {
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="business">Business</SelectItem>
                       <SelectItem value="web-development">Web Development</SelectItem>
                       <SelectItem value="data-science">Data Science</SelectItem>
                       <SelectItem value="machine-learning">Machine Learning</SelectItem>
                       <SelectItem value="mobile-development">Mobile Development</SelectItem>
                       <SelectItem value="design">Design</SelectItem>
+                      <SelectItem value="marketing">Marketing</SelectItem>
+                      <SelectItem value="finance">Finance</SelectItem>
+                      <SelectItem value="health">Health & Fitness</SelectItem>
+                      <SelectItem value="personal-development">Personal Development</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
