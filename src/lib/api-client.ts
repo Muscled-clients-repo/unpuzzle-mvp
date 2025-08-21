@@ -198,6 +198,31 @@ class ApiClient {
   async getCourseMedia(courseId: string) {
     return this.get(`/api/v1/content/courses/${courseId}/media`)
   }
+
+  // Media Library Methods
+  async getUserUnassignedVideos(params?: {
+    page?: number
+    limit?: number
+  }) {
+    const query = new URLSearchParams()
+    if (params?.page) query.append('page', params.page.toString())
+    if (params?.limit) query.append('limit', params.limit.toString())
+    
+    return this.get(`/api/v1/media/user/unassigned-videos?${query}`)
+  }
+
+  async getUserMedia(params?: {
+    page?: number
+    limit?: number
+    type?: 'video' | 'audio' | 'document' | 'image'
+  }) {
+    const query = new URLSearchParams()
+    if (params?.page) query.append('page', params.page.toString())
+    if (params?.limit) query.append('limit', params.limit.toString())
+    if (params?.type) query.append('type', params.type)
+    
+    return this.get(`/api/v1/media/user/media?${query}`)
+  }
 }
 
 export const apiClient = new ApiClient()

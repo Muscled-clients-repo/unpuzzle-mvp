@@ -32,9 +32,11 @@ import {
   Upload,
   FileVideo,
   RefreshCcw,
-  Clock
+  Clock,
+  FolderOpen
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { MediaLibraryModal } from "./components/MediaLibraryModal"
 
 export default function EditCoursePage() {
   const router = useRouter()
@@ -60,7 +62,10 @@ export default function EditCoursePage() {
     reorderVideosInChapter,
     assignMediaToSection,
     unassignMediaFromSection,
-    completeVideoUpload
+    completeVideoUpload,
+    openMediaLibrary,
+    closeMediaLibrary,
+    mediaLibrary
   } = useAppStore()
 
   const [activeTab, setActiveTab] = useState("info")
@@ -499,9 +504,20 @@ export default function EditCoursePage() {
                           </Button>
                         </div>
                         
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span>{chapter.videos.length} videos</span>
-                          {chapter.duration && <span>{chapter.duration}</span>}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            <span>{chapter.videos.length} videos</span>
+                            {chapter.duration && <span>{chapter.duration}</span>}
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openMediaLibrary(chapter.id)}
+                            className="flex items-center gap-2"
+                          >
+                            <FolderOpen className="h-3 w-3" />
+                            Add Media
+                          </Button>
                         </div>
                         
                         {/* Display videos in this chapter */}
@@ -554,14 +570,15 @@ export default function EditCoursePage() {
                   </CardDescription>
                 </div>
                 {courseCreation?.chapters && courseCreation.chapters.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="chapter-select" className="text-sm">Auto-assign to:</Label>
-                    <Select
-                      value={selectedChapterId || courseCreation.chapters[0]?.id}
-                      onValueChange={setSelectedChapterId}
-                    >
-                      <SelectTrigger id="chapter-select" className="w-[200px]">
-                        <SelectValue />
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="chapter-select" className="text-sm">Auto-assign to:</Label>
+                      <Select
+                        value={selectedChapterId || courseCreation.chapters[0]?.id}
+                        onValueChange={setSelectedChapterId}
+                      >
+                        <SelectTrigger id="chapter-select" className="w-[200px]">
+                          <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {courseCreation.chapters.map((chapter) => (
@@ -572,6 +589,15 @@ export default function EditCoursePage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => openMediaLibrary(selectedChapterId || courseCreation.chapters[0]?.id)}
+                    className="flex items-center gap-2"
+                  >
+                    <FolderOpen className="h-4 w-4" />
+                    Add from Library
+                  </Button>
+                </div>
                 )}
               </div>
             </CardHeader>
@@ -746,6 +772,9 @@ export default function EditCoursePage() {
           </Card>
         </TabsContent>
       </Tabs>
+      
+      {/* Media Library Modal */}
+      <MediaLibraryModal />
     </div>
   )
 }

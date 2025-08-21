@@ -55,6 +55,26 @@ export interface CourseCreationData {
   hasAutoSaveError?: boolean // Track if auto-save failed
 }
 
+// Media Library Types
+interface MediaLibraryState {
+  isOpen: boolean
+  targetChapterId: string | null
+  media: any[]
+  loading: boolean
+  error: string | null
+  selectedIds: Set<string>
+  filters: {
+    type: 'all' | 'video' | 'audio' | 'document' | 'image'
+    search: string
+  }
+  pagination: {
+    page: number
+    limit: number
+    total: number
+    pages: number
+  }
+}
+
 export interface CourseCreationSlice {
   courseCreation: CourseCreationData | null
   uploadQueue: VideoUpload[]
@@ -63,6 +83,7 @@ export interface CourseCreationSlice {
   currentStep: 'info' | 'content' | 'review'
   saveError: string | null
   lastSaveAttempt: Date | null
+  mediaLibrary: MediaLibraryState
   
   // Basic Info Actions
   setCourseInfo: (info: Partial<CourseCreationData>) => void
@@ -97,6 +118,14 @@ export interface CourseCreationSlice {
   assignMediaToSection: (mediaFileId: string, sectionId: string, data?: any) => Promise<void>
   unassignMediaFromSection: (mediaFileId: string) => Promise<void>
   
+  // Media Library Actions
+  openMediaLibrary: (chapterId: string) => void
+  closeMediaLibrary: () => void
+  loadUnassignedMedia: (page?: number) => Promise<void>
+  toggleMediaSelection: (mediaId: string) => void
+  assignSelectedMedia: () => Promise<{ successful: number; failed: number } | undefined>
+  setMediaFilters: (filters: Partial<MediaLibraryState['filters']>) => void
+  
   // Save Actions
   saveDraft: () => Promise<void>
   publishCourse: () => Promise<void>
@@ -126,6 +155,24 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
   currentStep: 'info',
   saveError: null,
   lastSaveAttempt: null,
+  mediaLibrary: {
+    isOpen: false,
+    targetChapterId: null,
+    media: [],
+    loading: false,
+    error: null,
+    selectedIds: new Set(),
+    filters: {
+      type: 'all',
+      search: ''
+    },
+    pagination: {
+      page: 1,
+      limit: 20,
+      total: 0,
+      pages: 0
+    }
+  },
   
   setCourseInfo: (info) => {
     set(state => ({
@@ -643,6 +690,141 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       console.error('Failed to unassign media:', error)
       throw error
     }
+  },
+  
+  // Media Library Actions
+  openMediaLibrary: (chapterId) => {
+    set(state => ({
+      mediaLibrary: {
+        ...state.mediaLibrary,
+        isOpen: true,
+        targetChapterId: chapterId,
+        selectedIds: new Set()
+      }
+    }))
+    // Load media on open
+    get().loadUnassignedMedia()
+  },
+  
+  closeMediaLibrary: () => {
+    set(state => ({
+      mediaLibrary: {
+        ...state.mediaLibrary,
+        isOpen: false,
+        targetChapterId: null,
+        selectedIds: new Set()
+      }
+    }))
+  },
+  
+  loadUnassignedMedia: async (page = 1) => {
+    set(state => ({
+      mediaLibrary: {
+        ...state.mediaLibrary,
+        loading: true,
+        error: null
+      }
+    }))
+    
+    try {
+      const { mediaLibrary } = get()
+      const response = mediaLibrary.filters.type === 'all' 
+        ? await apiClient.getUserUnassignedVideos({ page, limit: 20 })
+        : await apiClient.getUserMedia({ 
+            page, 
+            limit: 20, 
+            type: mediaLibrary.filters.type 
+          })
+      
+      if (!response.error && response.data) {
+        const mediaData = response.data.data
+        set(state => ({
+          mediaLibrary: {
+            ...state.mediaLibrary,
+            media: mediaData.videos || mediaData.mediaFiles || [],
+            pagination: mediaData.pagination || {
+              page: 1,
+              limit: 20,
+              total: 0,
+              pages: 0
+            },
+            loading: false
+          }
+        }))
+      }
+    } catch (error) {
+      console.error('Failed to load media library:', error)
+      set(state => ({
+        mediaLibrary: {
+          ...state.mediaLibrary,
+          loading: false,
+          error: 'Failed to load media library'
+        }
+      }))
+    }
+  },
+  
+  toggleMediaSelection: (mediaId) => {
+    set(state => {
+      const newSelected = new Set(state.mediaLibrary.selectedIds)
+      if (newSelected.has(mediaId)) {
+        newSelected.delete(mediaId)
+      } else {
+        newSelected.add(mediaId)
+      }
+      return {
+        mediaLibrary: {
+          ...state.mediaLibrary,
+          selectedIds: newSelected
+        }
+      }
+    })
+  },
+  
+  assignSelectedMedia: async () => {
+    const { mediaLibrary, courseCreation } = get()
+    if (!mediaLibrary.targetChapterId || mediaLibrary.selectedIds.size === 0) {
+      return
+    }
+    
+    const selectedMedia = Array.from(mediaLibrary.selectedIds)
+    const results = await Promise.allSettled(
+      selectedMedia.map(mediaId => 
+        get().assignMediaToSection(mediaId, mediaLibrary.targetChapterId!, {
+          isPublished: true
+        })
+      )
+    )
+    
+    // Check results
+    const successful = results.filter(r => r.status === 'fulfilled').length
+    const failed = results.filter(r => r.status === 'rejected').length
+    
+    if (successful > 0) {
+      // Reload course media to reflect changes
+      if (courseCreation?.id) {
+        await get().loadCourseMedia(courseCreation.id)
+      }
+    }
+    
+    // Close modal and reset
+    get().closeMediaLibrary()
+    
+    return { successful, failed }
+  },
+  
+  setMediaFilters: (filters) => {
+    set(state => ({
+      mediaLibrary: {
+        ...state.mediaLibrary,
+        filters: {
+          ...state.mediaLibrary.filters,
+          ...filters
+        }
+      }
+    }))
+    // Reload with new filters
+    get().loadUnassignedMedia(1)
   },
   
   saveDraft: async () => {
