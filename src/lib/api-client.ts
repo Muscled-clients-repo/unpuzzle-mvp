@@ -143,6 +143,35 @@ class ApiClient {
       }
     }
   }
+
+  // Course Section CRUD Methods
+  async getCourseSections(courseId: string) {
+    return this.get(`/api/v1/content/courses/${courseId}/sections`)
+  }
+
+  async createCourseSection(courseId: string, data: {
+    title: string
+    description?: string
+    order?: number
+    isPublished?: boolean
+    isPreview?: boolean
+  }) {
+    return this.post(`/api/v1/content/courses/${courseId}/sections`, data)
+  }
+
+  async updateCourseSection(sectionId: string, data: {
+    title?: string
+    description?: string
+    order?: number
+    isPublished?: boolean
+    isPreview?: boolean
+  }) {
+    return this.put(`/api/v1/content/sections/${sectionId}`, data)
+  }
+
+  async deleteCourseSection(sectionId: string) {
+    return this.delete(`/api/v1/content/sections/${sectionId}`)
+  }
 }
 
 export const apiClient = new ApiClient()

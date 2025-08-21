@@ -1,6 +1,7 @@
 import { StateCreator } from 'zustand'
 import { instructorCourseService } from '@/services/instructor-course-service'
 import { videoUploadService, UploadSession, MediaFile } from '@/services/video-upload-service'
+import { apiClient } from '@/lib/api-client'
 
 export interface VideoUpload {
   id: string
@@ -80,9 +81,9 @@ export interface CourseCreationSlice {
   setUploadError: (videoId: string, error: string) => void
   
   // Chapter Actions
-  createChapter: (title: string) => void
-  updateChapter: (chapterId: string, updates: Partial<Chapter>) => void
-  deleteChapter: (chapterId: string) => void
+  createChapter: (title: string) => Promise<void>
+  updateChapter: (chapterId: string, updates: Partial<Chapter>) => Promise<void>
+  deleteChapter: (chapterId: string) => Promise<void>
   reorderChapters: (chapters: Chapter[]) => void
   
   // Drag & Drop Actions
@@ -270,50 +271,111 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
     }))
   },
   
-  createChapter: (title) => {
-    const newChapter: Chapter = {
-      id: `chapter-${Date.now()}`,
-      title,
-      order: get().courseCreation?.chapters.length || 0,
-      videos: []
+  createChapter: async (title) => {
+    const { courseCreation } = get()
+    
+    // If no course ID yet, need to save course first
+    if (!courseCreation?.id) {
+      console.error('Cannot create chapter without course ID')
+      // Could auto-save course here if needed
+      return
     }
     
-    set(state => ({
-      courseCreation: state.courseCreation ? {
-        ...state.courseCreation,
-        chapters: [...state.courseCreation.chapters, newChapter]
-      } : {
-        title: '',
+    try {
+      // Call API to create section
+      const response = await apiClient.createCourseSection(courseCreation.id, {
+        title,
         description: '',
-        category: '',
-        level: 'beginner',
-        price: 0,
-        chapters: [newChapter],
-        videos: [],
-        status: 'draft',
-        autoSaveEnabled: false
-      }
-    }))
-  },
-  
-  updateChapter: (chapterId, updates) => {
-    set(state => ({
-      courseCreation: state.courseCreation ? {
-        ...state.courseCreation,
-        chapters: state.courseCreation.chapters.map(ch => 
-          ch.id === chapterId ? { ...ch, ...updates } : ch
-        )
-      } : null
-    }))
-  },
-  
-  deleteChapter: (chapterId) => {
-    set(state => {
-      if (!state.courseCreation) return state
+        order: courseCreation.chapters.length + 1,
+        isPublished: false,
+        isPreview: false
+      })
       
-      const chapterToDelete = state.courseCreation.chapters.find(ch => ch.id === chapterId)
-      const orphanedVideos = chapterToDelete?.videos || []
-      const remainingChapters = state.courseCreation.chapters.filter(ch => ch.id !== chapterId)
+      if (response.error) {
+        console.error('Failed to create chapter:', response.error)
+        set({ saveError: response.error })
+        return
+      }
+      
+      // Handle nested data structure from API
+      const sectionData = response.data?.data || response.data
+      
+      // Map API response to chapter format
+      const newChapter: Chapter = {
+        id: sectionData.id || `chapter-${Date.now()}`,
+        title: sectionData.title || title,
+        order: sectionData.order || courseCreation.chapters.length + 1,
+        videos: []
+      }
+      
+      // Update local state with server response
+      set(state => ({
+        courseCreation: state.courseCreation ? {
+          ...state.courseCreation,
+          chapters: [...state.courseCreation.chapters, newChapter]
+        } : null,
+        saveError: null
+      }))
+    } catch (error) {
+      console.error('Failed to create chapter:', error)
+      set({ saveError: 'Failed to create chapter' })
+    }
+  },
+  
+  updateChapter: async (chapterId, updates) => {
+    try {
+      // Call API to update section
+      const response = await apiClient.updateCourseSection(chapterId, {
+        title: updates.title,
+        description: updates.description,
+        order: updates.order
+      })
+      
+      if (response.error) {
+        console.error('Failed to update chapter:', response.error)
+        set({ saveError: response.error })
+        return
+      }
+      
+      // Handle nested data structure if present
+      const sectionData = response.data?.data || response.data
+      
+      // Update local state with actual server response
+      set(state => ({
+        courseCreation: state.courseCreation ? {
+          ...state.courseCreation,
+          chapters: state.courseCreation.chapters.map(ch => 
+            ch.id === chapterId ? { ...ch, ...updates } : ch
+          )
+        } : null,
+        saveError: null
+      }))
+    } catch (error) {
+      console.error('Failed to update chapter:', error)
+      set({ saveError: 'Failed to update chapter' })
+    }
+  },
+  
+  deleteChapter: async (chapterId) => {
+    try {
+      // Call API to delete section
+      const response = await apiClient.deleteCourseSection(chapterId)
+      
+      if (response.error) {
+        console.error('Failed to delete chapter:', response.error)
+        set({ saveError: response.error })
+        return
+      }
+      
+      console.log('✅ Chapter deleted successfully:', response)
+      
+      // Update local state after successful deletion
+      set(state => {
+        if (!state.courseCreation) return state
+        
+        const chapterToDelete = state.courseCreation.chapters.find(ch => ch.id === chapterId)
+        const orphanedVideos = chapterToDelete?.videos || []
+        const remainingChapters = state.courseCreation.chapters.filter(ch => ch.id !== chapterId)
       
       // If there are other chapters, move videos to the first remaining chapter
       // Otherwise, create a new Chapter 1
@@ -358,13 +420,18 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         }
       }
       
-      return {
-        courseCreation: {
-          ...state.courseCreation,
-          chapters: remainingChapters
+        return {
+          courseCreation: {
+            ...state.courseCreation,
+            chapters: remainingChapters
+          },
+          saveError: null
         }
-      }
-    })
+      })
+    } catch (error) {
+      console.error('Failed to delete chapter:', error)
+      set({ saveError: 'Failed to delete chapter' })
+    }
   },
   
   reorderChapters: (chapters) => {
@@ -645,6 +712,35 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       const courseData = result.data!
       console.log('📋 Course data received:', courseData)
       
+      // Load sections from API
+      let chapters = courseData.chapters || []
+      try {
+        const sectionsResponse = await apiClient.getCourseSections(courseId)
+        console.log('📚 Sections loaded from API:', sectionsResponse)
+        
+        // Check the response structure - it seems to have data.data.sections
+        if (!sectionsResponse.error && sectionsResponse.data) {
+          const sectionsData = sectionsResponse.data.data || sectionsResponse.data
+          const sections = sectionsData.sections || []
+          
+          if (sections.length > 0) {
+            // Map backend sections to frontend chapters
+            chapters = sections.map((section: any, index: number) => ({
+              id: section.id || `section-${courseId}-${index}`,
+              title: section.title,
+              description: section.description || '',
+              order: section.order,
+              videos: section.mediaFiles || [],
+              isPublished: section.isPublished,
+              isPreview: section.isPreview
+            }))
+            console.log('📚 Mapped chapters:', chapters)
+          }
+        }
+      } catch (error) {
+        console.log('⚠️ Could not load sections from API, using course data chapters:', error)
+      }
+      
       // Ensure the data has the correct structure
       const courseCreationData = {
         id: courseId,
@@ -653,7 +749,7 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         category: courseData.category || '',
         level: courseData.level || 'beginner',
         price: courseData.price || 0,
-        chapters: courseData.chapters || [],
+        chapters,
         videos: courseData.videos || [],
         status: courseData.status || 'draft',
         autoSaveEnabled: false,

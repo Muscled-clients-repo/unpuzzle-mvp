@@ -60,6 +60,11 @@ export default function EditCoursePage() {
 
   const [activeTab, setActiveTab] = useState("info")
   const [initialLoad, setInitialLoad] = useState(true)
+  const [isCreatingChapter, setIsCreatingChapter] = useState(false)
+  const [updatingChapterId, setUpdatingChapterId] = useState<string | null>(null)
+  const [deletingChapterId, setDeletingChapterId] = useState<string | null>(null)
+  const [editedChapters, setEditedChapters] = useState<Record<string, any>>({})
+  const [hasChanges, setHasChanges] = useState<Record<string, boolean>>({})
   
   // Video upload refs and handlers
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -137,18 +142,62 @@ export default function EditCoursePage() {
     setCourseInfo({ [field]: value })
   }
 
-  const handleAddChapter = () => {
-    const chapterNumber = (courseCreation?.chapters.length || 0) + 1
-    createChapter(`Chapter ${chapterNumber}`)
+  const handleAddChapter = async () => {
+    setIsCreatingChapter(true)
+    try {
+      const chapterNumber = (courseCreation?.chapters.length || 0) + 1
+      await createChapter(`Chapter ${chapterNumber}`)
+    } finally {
+      setIsCreatingChapter(false)
+    }
   }
 
-  const handleUpdateChapter = (chapterId: string, field: string, value: string) => {
-    updateChapter(chapterId, { [field]: value })
+  const handleChapterChange = (chapterId: string, field: string, value: string) => {
+    // Track changes locally without API call
+    setEditedChapters(prev => ({
+      ...prev,
+      [chapterId]: {
+        ...prev[chapterId],
+        [field]: value
+      }
+    }))
+    setHasChanges(prev => ({
+      ...prev,
+      [chapterId]: true
+    }))
   }
 
-  const handleDeleteChapter = (chapterId: string) => {
+  const handleChapterBlur = async (chapterId: string) => {
+    // Only save if there are changes
+    if (!hasChanges[chapterId] || !editedChapters[chapterId]) return
+    
+    setUpdatingChapterId(chapterId)
+    try {
+      await updateChapter(chapterId, editedChapters[chapterId])
+      // Clear the changes after successful save
+      setEditedChapters(prev => {
+        const newState = { ...prev }
+        delete newState[chapterId]
+        return newState
+      })
+      setHasChanges(prev => {
+        const newState = { ...prev }
+        delete newState[chapterId]
+        return newState
+      })
+    } finally {
+      setUpdatingChapterId(null)
+    }
+  }
+
+  const handleDeleteChapter = async (chapterId: string) => {
     if (confirm('Are you sure you want to delete this chapter?')) {
-      deleteChapter(chapterId)
+      setDeletingChapterId(chapterId)
+      try {
+        await deleteChapter(chapterId)
+      } finally {
+        setDeletingChapterId(null)
+      }
     }
   }
 
@@ -323,9 +372,22 @@ export default function EditCoursePage() {
                     Organize your course content into chapters
                   </CardDescription>
                 </div>
-                <Button onClick={handleAddChapter} size="sm">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Chapter
+                <Button 
+                  onClick={handleAddChapter} 
+                  size="sm"
+                  disabled={isCreatingChapter}
+                >
+                  {isCreatingChapter ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Chapter
+                    </>
+                  )}
                 </Button>
               </div>
             </CardHeader>
@@ -347,18 +409,38 @@ export default function EditCoursePage() {
                       <div className="flex-1 space-y-3">
                         <div className="flex items-start gap-3">
                           <div className="flex-1 space-y-2">
+                            <div className="relative">
+                              {updatingChapterId === chapter.id && (
+                                <div className="absolute -left-8 top-2">
+                                  <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                                </div>
+                              )}
+                              {hasChanges[chapter.id] && updatingChapterId !== chapter.id && (
+                                <div className="absolute -left-8 top-2">
+                                  <div className="h-2 w-2 rounded-full bg-yellow-500" title="Unsaved changes" />
+                                </div>
+                              )}
                             <Input
-                              value={chapter.title}
-                              onChange={(e) => handleUpdateChapter(chapter.id, 'title', e.target.value)}
+                              value={editedChapters[chapter.id]?.title ?? chapter.title}
+                              onChange={(e) => handleChapterChange(chapter.id, 'title', e.target.value)}
+                              onBlur={() => handleChapterBlur(chapter.id)}
                               placeholder={`Chapter ${index + 1} title`}
-                              className="font-medium"
+                              className={cn(
+                                "font-medium",
+                                hasChanges[chapter.id] && "border-blue-500"
+                              )}
                             />
+                            </div>
                             <Textarea
-                              value={chapter.description || ''}
-                              onChange={(e) => handleUpdateChapter(chapter.id, 'description', e.target.value)}
+                              value={editedChapters[chapter.id]?.description ?? chapter.description ?? ''}
+                              onChange={(e) => handleChapterChange(chapter.id, 'description', e.target.value)}
+                              onBlur={() => handleChapterBlur(chapter.id)}
                               placeholder="Chapter description (optional)"
                               rows={2}
-                              className="text-sm"
+                              className={cn(
+                                "text-sm",
+                                hasChanges[chapter.id] && "border-blue-500"
+                              )}
                             />
                           </div>
                           
@@ -367,8 +449,13 @@ export default function EditCoursePage() {
                             size="icon"
                             onClick={() => handleDeleteChapter(chapter.id)}
                             className="text-destructive hover:text-destructive"
+                            disabled={deletingChapterId === chapter.id}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            {deletingChapterId === chapter.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
                           </Button>
                         </div>
                         
