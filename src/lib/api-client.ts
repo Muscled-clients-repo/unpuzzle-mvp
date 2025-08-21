@@ -172,6 +172,32 @@ class ApiClient {
   async deleteCourseSection(sectionId: string) {
     return this.delete(`/api/v1/content/sections/${sectionId}`)
   }
+
+  // Media File Assignment Methods
+  async assignMediaToSection(sectionId: string, data: {
+    mediaFileId: string
+    title?: string
+    description?: string
+    order?: number
+    isPreview?: boolean
+    isPublished?: boolean
+  }) {
+    return this.post(`/api/v1/content/sections/${sectionId}/media`, data)
+  }
+
+  async unassignMediaFromSection(mediaFileId: string) {
+    return this.post(`/api/v1/content/media/${mediaFileId}/unassign`)
+  }
+
+  async reorderMediaInSection(sectionId: string, mediaOrder: string[]) {
+    return this.put(`/api/v1/content/sections/${sectionId}/media/reorder`, {
+      mediaOrder
+    })
+  }
+
+  async getCourseMedia(courseId: string) {
+    return this.get(`/api/v1/content/courses/${courseId}/media`)
+  }
 }
 
 export const apiClient = new ApiClient()

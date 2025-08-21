@@ -45,6 +45,7 @@ export interface CourseCreationData {
   // Content Structure
   chapters: Chapter[]
   videos: VideoUpload[]
+  unassignedMedia?: VideoUpload[]
   
   // Metadata
   status: 'draft' | 'published' | 'under_review'
@@ -87,9 +88,14 @@ export interface CourseCreationSlice {
   reorderChapters: (chapters: Chapter[]) => void
   
   // Drag & Drop Actions
-  moveVideoToChapter: (videoId: string, chapterId: string | null) => void
-  reorderVideosInChapter: (chapterId: string, videos: VideoUpload[]) => void
-  moveVideoBetweenChapters: (videoId: string, fromChapterId: string | null, toChapterId: string | null, newIndex: number) => void
+  moveVideoToChapter: (videoId: string, chapterId: string | null) => Promise<void>
+  reorderVideosInChapter: (chapterId: string, videos: VideoUpload[]) => Promise<void>
+  moveVideoBetweenChapters: (videoId: string, fromChapterId: string | null, toChapterId: string | null, newIndex: number) => Promise<void>
+  
+  // Media Assignment Actions
+  loadCourseMedia: (courseId: string) => Promise<void>
+  assignMediaToSection: (mediaFileId: string, sectionId: string, data?: any) => Promise<void>
+  unassignMediaFromSection: (mediaFileId: string) => Promise<void>
   
   // Save Actions
   saveDraft: () => Promise<void>
@@ -158,58 +164,8 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
     // Get the first chapter (where we'll add videos by default)
     const firstChapterId = get().courseCreation?.chapters[0]?.id
     
-    const newVideos: VideoUpload[] = Array.from(files).map((file, index) => ({
-      id: `video-${Date.now()}-${index}`,
-      file,
-      name: file.name.replace(/\.[^/.]+$/, ''), // Remove extension
-      size: file.size,
-      status: 'pending' as const,
-      progress: 0,
-      order: get().uploadQueue.length + index,
-      chapterId: firstChapterId // Assign to first chapter automatically
-    }))
-    
-    set(state => ({
-      uploadQueue: [...state.uploadQueue, ...newVideos],
-      courseCreation: state.courseCreation ? {
-        ...state.courseCreation,
-        videos: [...(state.courseCreation.videos || []), ...newVideos],
-        chapters: state.courseCreation.chapters.map(chapter => 
-          chapter.id === firstChapterId 
-            ? { ...chapter, videos: [...chapter.videos, ...newVideos] }
-            : chapter
-        )
-      } : null
-    }))
-    
-    // Start upload simulation
-    newVideos.forEach(video => {
-      setTimeout(() => {
-        get().updateVideoStatus(video.id, 'uploading')
-        // Simulate upload progress
-        let progress = 0
-        const interval = setInterval(() => {
-          progress += Math.random() * 30
-          if (progress >= 100) {
-            progress = 100
-            clearInterval(interval)
-            get().updateVideoStatus(video.id, 'complete')
-            // Add mock URL after "upload"
-            set(state => ({
-              courseCreation: state.courseCreation ? {
-                ...state.courseCreation,
-                videos: state.courseCreation.videos.map(v => 
-                  v.id === video.id 
-                    ? { ...v, url: `/videos/${video.id}.mp4`, thumbnailUrl: `/thumbs/${video.id}.jpg`, duration: '5:30' }
-                    : v
-                )
-              } : null
-            }))
-          }
-          get().updateVideoProgress(video.id, Math.min(progress, 100))
-        }, 500)
-      }, 100)
-    })
+    // Use the enhanced upload function for real upload with progress tracking
+    get().initiateVideoUpload(files, firstChapterId)
   },
   
   updateVideoProgress: (videoId, progress) => {
@@ -221,7 +177,13 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         ...state.courseCreation,
         videos: state.courseCreation.videos.map(v => 
           v.id === videoId ? { ...v, progress } : v
-        )
+        ),
+        chapters: state.courseCreation.chapters.map(chapter => ({
+          ...chapter,
+          videos: chapter.videos.map(v => 
+            v.id === videoId ? { ...v, progress } : v
+          )
+        }))
       } : null
     }))
   },
@@ -235,7 +197,13 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         ...state.courseCreation,
         videos: state.courseCreation.videos.map(v => 
           v.id === videoId ? { ...v, status } : v
-        )
+        ),
+        chapters: state.courseCreation.chapters.map(chapter => ({
+          ...chapter,
+          videos: chapter.videos.map(v => 
+            v.id === videoId ? { ...v, status } : v
+          )
+        }))
       } : null
     }))
   },
@@ -443,34 +411,73 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
     }))
   },
   
-  moveVideoToChapter: (videoId, chapterId) => {
-    set(state => {
-      if (!state.courseCreation) return state
-      
-      const video = state.courseCreation.videos.find(v => v.id === videoId)
-      if (!video) return state
-      
-      const updatedVideo = { ...video, chapterId }
-      
-      return {
-        courseCreation: {
-          ...state.courseCreation,
-          videos: state.courseCreation.videos.map(v => 
-            v.id === videoId ? updatedVideo : v
-          ),
-          chapters: state.courseCreation.chapters.map(chapter => {
-            if (chapter.id === chapterId) {
-              return { ...chapter, videos: [...chapter.videos, updatedVideo] }
-            } else {
-              return { ...chapter, videos: chapter.videos.filter(v => v.id !== videoId) }
-            }
-          })
+  moveVideoToChapter: async (videoId, chapterId) => {
+    const state = get()
+    if (!state.courseCreation) return
+    
+    const video = state.courseCreation.videos.find(v => v.id === videoId)
+    if (!video) return
+    
+    // If chapterId is null, unassign the media
+    if (!chapterId) {
+      try {
+        const response = await apiClient.unassignMediaFromSection(videoId)
+        if (!response.error) {
+          // Move to unassigned media
+          set(state => ({
+            courseCreation: state.courseCreation ? {
+              ...state.courseCreation,
+              chapters: state.courseCreation.chapters.map(ch => ({
+                ...ch,
+                videos: ch.videos.filter(v => v.id !== videoId)
+              })),
+              unassignedMedia: [...(state.courseCreation.unassignedMedia || []), video]
+            } : null
+          }))
         }
+      } catch (error) {
+        console.error('Failed to unassign media:', error)
       }
-    })
+      return
+    }
+    
+    // Assign to new chapter
+    try {
+      const response = await apiClient.assignMediaToSection(chapterId, {
+        mediaFileId: videoId,
+        title: video.name,
+        order: state.courseCreation.chapters.find(ch => ch.id === chapterId)?.videos.length || 0,
+        isPublished: true
+      })
+      
+      if (!response.error) {
+        const updatedVideo = { ...video, chapterId }
+        
+        set(state => ({
+          courseCreation: state.courseCreation ? {
+            ...state.courseCreation,
+            videos: state.courseCreation.videos.map(v => 
+              v.id === videoId ? updatedVideo : v
+            ),
+            chapters: state.courseCreation.chapters.map(chapter => {
+              if (chapter.id === chapterId) {
+                return { ...chapter, videos: [...chapter.videos.filter(v => v.id !== videoId), updatedVideo] }
+              } else {
+                return { ...chapter, videos: chapter.videos.filter(v => v.id !== videoId) }
+              }
+            }),
+            unassignedMedia: state.courseCreation.unassignedMedia?.filter(v => v.id !== videoId)
+          } : null
+        }))
+      }
+    } catch (error) {
+      console.error('Failed to assign media to chapter:', error)
+      throw error
+    }
   },
   
-  reorderVideosInChapter: (chapterId, videos) => {
+  reorderVideosInChapter: async (chapterId, videos) => {
+    // Update local state optimistically
     set(state => ({
       courseCreation: state.courseCreation ? {
         ...state.courseCreation,
@@ -481,38 +488,161 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         )
       } : null
     }))
+    
+    // Call API to persist the new order
+    try {
+      const mediaOrder = videos.map(v => v.id)
+      const response = await apiClient.reorderMediaInSection(chapterId, mediaOrder)
+      
+      if (response.error) {
+        console.error('Failed to reorder media:', response.error)
+        // Could rollback the optimistic update here if needed
+      }
+    } catch (error) {
+      console.error('Failed to reorder media:', error)
+      throw error
+    }
   },
   
-  moveVideoBetweenChapters: (videoId, fromChapterId, toChapterId, newIndex) => {
-    set(state => {
-      if (!state.courseCreation) return state
+  moveVideoBetweenChapters: async (videoId, fromChapterId, toChapterId, newIndex) => {
+    const state = get()
+    if (!state.courseCreation) return
+    
+    const video = state.courseCreation.videos.find(v => v.id === videoId)
+    if (!video) return
+    
+    // Update local state optimistically
+    const updatedVideo = { ...video, chapterId: toChapterId }
+    
+    set(state => ({
+      courseCreation: state.courseCreation ? {
+        ...state.courseCreation,
+        videos: state.courseCreation.videos.map(v => 
+          v.id === videoId ? updatedVideo : v
+        ),
+        chapters: state.courseCreation.chapters.map(chapter => {
+          if (chapter.id === fromChapterId) {
+            // Remove from source chapter
+            return { ...chapter, videos: chapter.videos.filter(v => v.id !== videoId) }
+          } else if (chapter.id === toChapterId) {
+            // Add to target chapter at specific index
+            const newVideos = [...chapter.videos]
+            newVideos.splice(newIndex, 0, updatedVideo)
+            return { ...chapter, videos: newVideos.map((v, i) => ({ ...v, order: i })) }
+          }
+          return chapter
+        })
+      } : null
+    }))
+    
+    // Call API to persist the move
+    try {
+      // Assign to new chapter
+      const response = await apiClient.assignMediaToSection(toChapterId || '', {
+        mediaFileId: videoId,
+        title: video.name,
+        order: newIndex,
+        isPublished: true
+      })
       
-      const video = state.courseCreation.videos.find(v => v.id === videoId)
-      if (!video) return state
-      
-      const updatedVideo = { ...video, chapterId: toChapterId }
-      
-      return {
-        courseCreation: {
-          ...state.courseCreation,
-          videos: state.courseCreation.videos.map(v => 
-            v.id === videoId ? updatedVideo : v
-          ),
-          chapters: state.courseCreation.chapters.map(chapter => {
-            if (chapter.id === fromChapterId) {
-              // Remove from source chapter
-              return { ...chapter, videos: chapter.videos.filter(v => v.id !== videoId) }
-            } else if (chapter.id === toChapterId) {
-              // Add to target chapter at specific index
-              const newVideos = [...chapter.videos]
-              newVideos.splice(newIndex, 0, updatedVideo)
-              return { ...chapter, videos: newVideos.map((v, i) => ({ ...v, order: i })) }
-            }
-            return chapter
-          })
-        }
+      if (response.error) {
+        console.error('Failed to move media between chapters:', response.error)
+        // Could rollback here if needed
       }
-    })
+    } catch (error) {
+      console.error('Failed to move media between chapters:', error)
+      throw error
+    }
+  },
+  
+  // Media Assignment API Functions
+  loadCourseMedia: async (courseId) => {
+    try {
+      const response = await apiClient.getCourseMedia(courseId)
+      
+      if (!response.error && response.data) {
+        const mediaData = response.data.data || response.data
+        const sections = mediaData.sections || []
+        const unsectionedMedia = mediaData.unsectionedMedia || []
+        
+        // Update chapters with their media files
+        set(state => ({
+          courseCreation: state.courseCreation ? {
+            ...state.courseCreation,
+            chapters: sections.map((section: any) => ({
+              id: section.sectionId,
+              title: section.sectionTitle,
+              order: section.order,
+              videos: section.mediaFiles || []
+            })),
+            unassignedMedia: unsectionedMedia
+          } : null
+        }))
+      }
+    } catch (error) {
+      console.error('Failed to load course media:', error)
+    }
+  },
+  
+  assignMediaToSection: async (mediaFileId, sectionId, customData) => {
+    try {
+      const response = await apiClient.assignMediaToSection(sectionId, {
+        mediaFileId,
+        title: customData?.title,
+        description: customData?.description,
+        order: customData?.order,
+        isPreview: customData?.isPreview || false,
+        isPublished: customData?.isPublished ?? true
+      })
+      
+      if (!response.error) {
+        const mediaFile = response.data?.data?.mediaFile || response.data?.mediaFile
+        
+        // Update local state
+        set(state => ({
+          courseCreation: state.courseCreation ? {
+            ...state.courseCreation,
+            chapters: state.courseCreation.chapters.map(ch =>
+              ch.id === sectionId
+                ? { ...ch, videos: [...ch.videos, mediaFile] }
+                : ch
+            ),
+            unassignedMedia: state.courseCreation.unassignedMedia?.filter(m => m.id !== mediaFileId)
+          } : null
+        }))
+      }
+    } catch (error) {
+      console.error('Failed to assign media to section:', error)
+      throw error
+    }
+  },
+  
+  unassignMediaFromSection: async (mediaFileId) => {
+    try {
+      const response = await apiClient.unassignMediaFromSection(mediaFileId)
+      
+      if (!response.error) {
+        const mediaFile = response.data?.data?.mediaFile || response.data?.mediaFile
+        
+        // Remove from all chapters and add to unassigned
+        set(state => ({
+          courseCreation: state.courseCreation ? {
+            ...state.courseCreation,
+            chapters: state.courseCreation.chapters.map(ch => ({
+              ...ch,
+              videos: ch.videos.filter(v => v.id !== mediaFileId)
+            })),
+            unassignedMedia: [
+              ...(state.courseCreation.unassignedMedia || []),
+              mediaFile
+            ]
+          } : null
+        }))
+      }
+    } catch (error) {
+      console.error('Failed to unassign media:', error)
+      throw error
+    }
   },
   
   saveDraft: async () => {
@@ -766,6 +896,9 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       })
       
       console.log('✅ Course loaded for editing successfully')
+      
+      // Also load media assignments
+      await get().loadCourseMedia(courseId)
     } catch (error) {
       console.log('❌ Failed to load course:', error)
       set({

@@ -55,7 +55,12 @@ export default function EditCoursePage() {
     initiateVideoUpload,
     uploadQueue,
     retryFailedUpload,
-    removeVideo
+    removeVideo,
+    moveVideoToChapter,
+    reorderVideosInChapter,
+    assignMediaToSection,
+    unassignMediaFromSection,
+    completeVideoUpload
   } = useAppStore()
 
   const [activeTab, setActiveTab] = useState("info")
@@ -65,6 +70,8 @@ export default function EditCoursePage() {
   const [deletingChapterId, setDeletingChapterId] = useState<string | null>(null)
   const [editedChapters, setEditedChapters] = useState<Record<string, any>>({})
   const [hasChanges, setHasChanges] = useState<Record<string, boolean>>({})
+  const [assigningMediaId, setAssigningMediaId] = useState<string | null>(null)
+  const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null)
   
   // Video upload refs and handlers
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -94,6 +101,39 @@ export default function EditCoursePage() {
     const sizes = ['Bytes', 'KB', 'MB', 'GB']
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+  
+  // Handle completed upload - auto-assign to selected chapter
+  const handleUploadComplete = async (videoId: string, mediaFile: any) => {
+    // Complete the upload first
+    completeVideoUpload(videoId, mediaFile)
+    
+    // Auto-assign to selected or first chapter
+    const targetChapterId = selectedChapterId || courseCreation?.chapters[0]?.id
+    if (targetChapterId && mediaFile.id) {
+      setAssigningMediaId(videoId)
+      try {
+        await assignMediaToSection(mediaFile.id, targetChapterId, {
+          title: mediaFile.title || mediaFile.originalFilename,
+          isPublished: true
+        })
+      } catch (error) {
+        console.error('Failed to assign media to chapter:', error)
+      } finally {
+        setAssigningMediaId(null)
+      }
+    }
+  }
+  
+  // Handle removing media from chapter
+  const handleUnassignMedia = async (mediaId: string) => {
+    if (confirm('Remove this video from the chapter?')) {
+      try {
+        await unassignMediaFromSection(mediaId)
+      } catch (error) {
+        console.error('Failed to unassign media:', error)
+      }
+    }
   }
   
   const getStatusIcon = (status: string) => {
@@ -463,6 +503,35 @@ export default function EditCoursePage() {
                           <span>{chapter.videos.length} videos</span>
                           {chapter.duration && <span>{chapter.duration}</span>}
                         </div>
+                        
+                        {/* Display videos in this chapter */}
+                        {chapter.videos && chapter.videos.length > 0 && (
+                          <div className="mt-4 space-y-2">
+                            <h5 className="text-sm font-medium text-gray-700">Videos in this chapter:</h5>
+                            <div className="space-y-2">
+                              {chapter.videos.map((video: any, videoIndex: number) => (
+                                <div key={video.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm text-gray-500">{videoIndex + 1}.</span>
+                                    <FileVideo className="h-4 w-4 text-gray-400" />
+                                    <span className="text-sm">{video.title || video.name || video.originalFilename}</span>
+                                    {video.durationFormatted && (
+                                      <span className="text-xs text-gray-500">({video.durationFormatted})</span>
+                                    )}
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleUnassignMedia(video.id)}
+                                    className="text-red-600 hover:text-red-700"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))
@@ -474,13 +543,37 @@ export default function EditCoursePage() {
           {/* Video Upload Section */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Upload className="h-5 w-5" />
-                Upload Videos
-              </CardTitle>
-              <CardDescription>
-                Drag and drop video files or click to browse. Supported formats: MP4, WebM, AVI, MOV (max 500MB each)
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Upload className="h-5 w-5" />
+                    Upload Videos
+                  </CardTitle>
+                  <CardDescription>
+                    Drag and drop video files or click to browse. Supported formats: MP4, WebM, AVI, MOV (max 500MB each)
+                  </CardDescription>
+                </div>
+                {courseCreation?.chapters && courseCreation.chapters.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="chapter-select" className="text-sm">Auto-assign to:</Label>
+                    <Select
+                      value={selectedChapterId || courseCreation.chapters[0]?.id}
+                      onValueChange={setSelectedChapterId}
+                    >
+                      <SelectTrigger id="chapter-select" className="w-[200px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {courseCreation.chapters.map((chapter) => (
+                          <SelectItem key={chapter.id} value={chapter.id}>
+                            {chapter.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <div
@@ -591,7 +684,9 @@ export default function EditCoursePage() {
                       {video.status === 'complete' && (
                         <div className="mt-3 p-2 bg-green-50 rounded-lg">
                           <p className="text-sm text-green-700">
-                            ✅ Upload complete! Video is ready to use.
+                            ✅ Upload complete! 
+                            {assigningMediaId === video.id && ' Assigning to chapter...'}
+                            {!assigningMediaId && ' Video is ready to use.'}
                           </p>
                         </div>
                       )}
