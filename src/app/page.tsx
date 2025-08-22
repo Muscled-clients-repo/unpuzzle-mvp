@@ -13,7 +13,7 @@ export default function HomePage() {
     <div className="flex min-h-screen flex-col">
       <Header />
       
-      <main className="flex-1">
+      <main className="flex-1 pt-16">
         <section className="relative overflow-hidden bg-gradient-to-b from-background to-muted py-20">
           <div className="container px-4">
             <div className="mx-auto max-w-3xl text-center">

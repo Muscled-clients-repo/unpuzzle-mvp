@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/hooks"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -27,12 +28,17 @@ import {
 
 export default function LoginPage() {
   const { login, isLoading, error: authError, redirectToDashboard, user } = useAuth()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const returnUrl = searchParams.get('returnUrl')
+  
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
+  const [sessionExpiredMessage, setSessionExpiredMessage] = useState("")
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,21 +52,39 @@ export default function LoginPage() {
     })
 
     if (result.success) {
-      setSuccess("Login successful! Redirecting to your dashboard...")
+      setSuccess("Login successful! Redirecting...")
       setTimeout(() => {
-        redirectToDashboard()
+        // If we have a return URL, go there instead of dashboard
+        if (returnUrl) {
+          router.push(decodeURIComponent(returnUrl))
+        } else {
+          redirectToDashboard()
+        }
       }, 1500)
     } else {
       setError(result.error?.message || "Invalid email or password. Please try again.")
     }
   }
 
+  // Check for session expired message in sessionStorage
+  useEffect(() => {
+    const authError = sessionStorage.getItem('authError')
+    if (authError) {
+      setSessionExpiredMessage(authError)
+      sessionStorage.removeItem('authError')
+    }
+  }, [])
+
   // Redirect if already logged in (after initial auth check completes)
   useEffect(() => {
     if (user && !isLoading) {
-      redirectToDashboard()
+      if (returnUrl) {
+        router.push(decodeURIComponent(returnUrl))
+      } else {
+        redirectToDashboard()
+      }
     }
-  }, [user, isLoading, redirectToDashboard])
+  }, [user, isLoading, redirectToDashboard, returnUrl, router])
 
 
   const features = [
@@ -117,6 +141,12 @@ export default function LoginPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Alerts */}
+              {sessionExpiredMessage && (
+                <Alert className="border-yellow-200 bg-yellow-50 text-yellow-800">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{sessionExpiredMessage}</AlertDescription>
+                </Alert>
+              )}
               {(error || authError) && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
@@ -221,7 +251,10 @@ export default function LoginPage() {
             <CardFooter>
               <p className="text-center text-sm text-muted-foreground w-full">
                 Don&apos;t have an account?{" "}
-                <Link href="/signup" className="text-primary hover:underline font-medium">
+                <Link 
+                  href={returnUrl ? `/signup?returnUrl=${encodeURIComponent(returnUrl)}` : "/signup"} 
+                  className="text-primary hover:underline font-medium"
+                >
                   Sign up for free
                 </Link>
               </p>

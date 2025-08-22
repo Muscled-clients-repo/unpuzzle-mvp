@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
 import {
   Play,
   Clock,
@@ -32,6 +31,7 @@ import { useAppStore } from "@/stores/app-store"
 import { LoadingSpinner } from "@/components/common"
 import { ErrorFallback } from "@/components/common"
 import { EnrollmentDialog } from "@/components/enrollment/EnrollmentDialog"
+import { CourseReviews } from "@/components/course/course-reviews"
 
 export default function CoursePreviewPage() {
   const params = useParams()
@@ -41,25 +41,31 @@ export default function CoursePreviewPage() {
   // State for enrollment dialog
   const [showEnrollDialog, setShowEnrollDialog] = useState(false)
   
-  // Use new student-course-slice for course data
+  // Use both student-course-slice and public-course-slice for course data
   const { 
     enrolledCourses,
     currentCourse,
     loadCourseById,
     loadEnrolledCourses,
     loading,
-    error
+    error,
+    // Public course data
+    currentCourse: publicCourse,
+    loadCourseById: loadPublicCourse,
+    loadingCourse: loadingPublicCourse
   } = useAppStore()
   
   // Load course data
   useEffect(() => {
-    loadCourseById(courseId) // Load specific course details
+    loadCourseById(courseId) // Load specific course details for enrolled students
+    loadPublicCourse(courseId) // Load public course details
     loadEnrolledCourses('guest') // Check if user is already enrolled
-  }, [courseId, loadCourseById, loadEnrolledCourses])
+  }, [courseId, loadCourseById, loadPublicCourse, loadEnrolledCourses])
   
-  // Use course from store only
-  const course = currentCourse
+  // Use public course data as fallback if student course is not available
+  const course = currentCourse || publicCourse
   const instructor = course?.instructor
+  const isLoadingCourse = loading || loadingPublicCourse
   
   // Check enrollment status using new store
   const isEnrolled = enrolledCourses.some(c => c.id === courseId)
@@ -70,7 +76,7 @@ export default function CoursePreviewPage() {
     router.push(`/student/course/${courseId}`)
   }
   
-  if (loading) return <LoadingSpinner />
+  if (isLoadingCourse) return <LoadingSpinner />
   
   if (error) return <ErrorFallback error={error} />
   
@@ -104,10 +110,10 @@ export default function CoursePreviewPage() {
     <div className="flex min-h-screen flex-col">
       <Header />
       
-      <main className="flex-1">
+      <main className="flex-1 pt-16">
         {/* Hero Section */}
-        <section className="relative bg-gradient-to-r from-background to-muted">
-          <div className="container px-4 py-12">
+        <section className="relative bg-gradient-to-r from-background to-muted py-12">
+          <div className="container px-4">
             <div className="grid gap-8 lg:grid-cols-3">
               {/* Course Info */}
               <div className="lg:col-span-2">
@@ -432,68 +438,11 @@ export default function CoursePreviewPage() {
               </TabsContent>
 
               <TabsContent value="reviews" className="mt-8">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Student Reviews</CardTitle>
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-                        <span className="text-2xl font-bold">{course.rating}</span>
-                      </div>
-                      <div className="text-muted-foreground">
-                        ({Math.floor((course.students || 0) * 0.8)} reviews)
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-6">
-                      {[5, 4, 3, 2, 1].map((stars) => (
-                        <div key={stars} className="flex items-center gap-4">
-                          <div className="flex items-center gap-1">
-                            <span className="text-sm">{stars}</span>
-                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                          </div>
-                          <Progress value={stars === 5 ? 75 : stars === 4 ? 20 : 5} className="flex-1" />
-                          <span className="text-sm text-muted-foreground">
-                            {stars === 5 ? "75%" : stars === 4 ? "20%" : "5%"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="mt-8 space-y-6">
-                      <div className="border-b pb-6">
-                        <div className="mb-2 flex items-center gap-2">
-                          <div className="flex">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <Star key={star} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                            ))}
-                          </div>
-                          <span className="font-medium">Sarah M.</span>
-                          <span className="text-sm text-muted-foreground">2 weeks ago</span>
-                        </div>
-                        <p className="text-sm">
-                          &quot;The AI hints were incredibly helpful! When I got stuck on CSS Grid, the system detected my confusion and provided exactly the right explanation. Game changer for learning.&quot;
-                        </p>
-                      </div>
-                      
-                      <div className="border-b pb-6">
-                        <div className="mb-2 flex items-center gap-2">
-                          <div className="flex">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <Star key={star} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                            ))}
-                          </div>
-                          <span className="font-medium">Mike R.</span>
-                          <span className="text-sm text-muted-foreground">1 month ago</span>
-                        </div>
-                        <p className="text-sm">
-                          &quot;Best coding course I&apos;ve taken. The AI quizzes really helped reinforce what I learned, and the reflection prompts made me think deeper about the concepts.&quot;
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <CourseReviews 
+                  courseId={courseId}
+                  averageRating={course?.rating}
+                  totalReviews={course?.reviewCount}
+                />
               </TabsContent>
 
               <TabsContent value="instructor" className="mt-8">

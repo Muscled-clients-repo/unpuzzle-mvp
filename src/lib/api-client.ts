@@ -1,6 +1,8 @@
 // src/lib/api-client.ts
 // Centralized API client with mock data support
 
+import { handle401Error } from '@/utils/auth-redirect'
+
 export const useMockData = process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true' || false // Default to real API
 
 interface ApiResponse<T> {
@@ -34,6 +36,13 @@ class ApiClient {
       })
       
       if (!response.ok) {
+        // Handle 401 Unauthorized errors
+        if (response.status === 401) {
+          handle401Error({ status: 401 }, 'Your session has expired. Please login again.')
+          // Return error response so UI can handle it gracefully
+          return { error: 'Unauthorized', status: 401 }
+        }
+        
         const error = await response.text()
         return { error, status: response.status }
       }
@@ -67,6 +76,13 @@ class ApiClient {
       })
       
       if (!response.ok) {
+        // Handle 401 Unauthorized errors
+        if (response.status === 401) {
+          handle401Error({ status: 401 }, 'Your session has expired. Please login again.')
+          // Return error response so UI can handle it gracefully
+          return { error: 'Unauthorized', status: 401 }
+        }
+        
         const error = await response.text()
         return { error, status: response.status }
       }
@@ -99,6 +115,13 @@ class ApiClient {
       })
       
       if (!response.ok) {
+        // Handle 401 Unauthorized errors
+        if (response.status === 401) {
+          handle401Error({ status: 401 }, 'Your session has expired. Please login again.')
+          // Return error response so UI can handle it gracefully
+          return { error: 'Unauthorized', status: 401 }
+        }
+        
         const error = await response.text()
         return { error, status: response.status }
       }
@@ -130,6 +153,13 @@ class ApiClient {
       })
       
       if (!response.ok) {
+        // Handle 401 Unauthorized errors
+        if (response.status === 401) {
+          handle401Error({ status: 401 }, 'Your session has expired. Please login again.')
+          // Return error response so UI can handle it gracefully
+          return { error: 'Unauthorized', status: 401 }
+        }
+        
         const error = await response.text()
         return { error, status: response.status }
       }
@@ -249,6 +279,57 @@ class ApiClient {
     comment: string
   }) {
     return this.post(`/api/v1/student/courses/${courseId}/review`, review)
+  }
+
+  // Public Course Methods (No Auth Required)
+  async getPublicCourses(params?: {
+    search?: string
+    difficulty?: 'all' | 'beginner' | 'intermediate' | 'advanced'
+    category?: string
+    priceRange?: 'all' | 'free' | 'paid'
+    minRating?: number
+    instructor?: string
+    sortBy?: 'popular' | 'newest' | 'price-asc' | 'price-desc' | 'rating'
+    page?: number
+    limit?: number
+  }) {
+    const queryParams = new URLSearchParams()
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '' && value !== 'all') {
+          queryParams.append(key, value.toString())
+        }
+      })
+    }
+    
+    const url = `/api/v1/courses${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
+    return this.get(url)
+  }
+
+  async getPublicCourseById(courseId: string) {
+    return this.get(`/api/v1/courses/${courseId}`)
+  }
+
+  async getCourseReviews(courseId: string, params?: {
+    page?: number
+    limit?: number
+  }) {
+    const queryParams = new URLSearchParams()
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) {
+          queryParams.append(key, value.toString())
+        }
+      })
+    }
+    
+    const url = `/api/v1/courses/${courseId}/reviews${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
+    return this.get(url)
+  }
+
+  // Authenticated Public Course Methods
+  async getRecommendedCourses() {
+    return this.get('/api/v1/courses/recommended')
   }
 }
 

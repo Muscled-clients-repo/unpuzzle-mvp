@@ -4,31 +4,81 @@ import { useEffect } from "react"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { AICourseCard } from "@/components/course/ai-course-card"
+import { CourseFiltersComponent } from "@/components/course/course-filters"
 import { useAppStore } from "@/stores/app-store"
 import { LoadingSpinner } from "@/components/common"
 import { ErrorFallback } from "@/components/common"
+import { Button } from "@/components/ui/button"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 
 export default function CoursesPage() {
   const { 
-    recommendedCourses,
+    // Public course data
+    courses,
+    currentFilters,
+    totalPages,
+    currentPage,
+    totalCount,
+    hasNextPage,
+    hasPreviousPage,
     loading,
     error,
-    loadAllCourses
+    loadCourses,
+    updateFilters,
+    clearError,
+    resetFilters
   } = useAppStore()
 
   useEffect(() => {
-    loadAllCourses()
-  }, [loadAllCourses])
+    loadCourses()
+  }, [loadCourses])
 
-  if (loading) return <LoadingSpinner />
+  const handleFiltersChange = (newFilters: Partial<typeof currentFilters>) => {
+    updateFilters(newFilters)
+  }
+
+  const handleClearFilters = () => {
+    resetFilters()
+  }
+
+  const handlePageChange = (page: number) => {
+    updateFilters({ page })
+    // Scroll to top of results
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  if (loading && courses.length === 0) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <Header />
+        <main className="flex-1 pt-16 flex items-center justify-center">
+          <LoadingSpinner />
+        </main>
+        <Footer />
+      </div>
+    )
+  }
   
-  if (error) return <ErrorFallback error={error} />
+  if (error && courses.length === 0) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <Header />
+        <main className="flex-1 pt-16 flex items-center justify-center">
+          <ErrorFallback error={error} onRetry={() => {
+            clearError()
+            loadCourses()
+          }} />
+        </main>
+        <Footer />
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
       
-      <main className="flex-1">
+      <main className="flex-1 pt-16">
         <section className="border-b bg-muted/50 py-8">
           <div className="container px-4">
             <h1 className="mb-2 text-3xl font-bold">Browse All Courses</h1>
@@ -40,22 +90,93 @@ export default function CoursesPage() {
 
         <section className="py-8">
           <div className="container px-4">
-            <div className="mb-6">
-              <span className="text-sm text-muted-foreground">
-                {recommendedCourses.length} courses available
-              </span>
-            </div>
+            {/* Filters */}
+            <CourseFiltersComponent
+              filters={currentFilters}
+              onFiltersChange={handleFiltersChange}
+              onClearFilters={handleClearFilters}
+              totalCount={totalCount}
+            />
 
-            {recommendedCourses.length === 0 ? (
+            {/* Course Grid */}
+            {loading ? (
+              <div className="flex justify-center py-12">
+                <LoadingSpinner />
+              </div>
+            ) : courses.length === 0 ? (
               <div className="text-center py-12">
-                <p className="text-muted-foreground">No courses available at the moment.</p>
+                <p className="text-muted-foreground mb-4">
+                  No courses found with the current filters.
+                </p>
+                <Button onClick={handleClearFilters} variant="outline">
+                  Clear Filters
+                </Button>
               </div>
             ) : (
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {recommendedCourses.map((course) => (
-                  <AICourseCard key={course.id} course={course} />
-                ))}
-              </div>
+              <>
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {courses.map((course) => (
+                    <AICourseCard key={course.id} course={course} />
+                  ))}
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 mt-8">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={!hasPreviousPage || loading}
+                    >
+                      <ChevronLeft className="h-4 w-4 mr-2" />
+                      Previous
+                    </Button>
+                    
+                    <div className="flex items-center gap-2">
+                      {/* Show page numbers */}
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        // Calculate which pages to show
+                        let startPage = Math.max(1, currentPage - 2)
+                        const endPage = Math.min(totalPages, startPage + 4)
+                        
+                        // Adjust start if we're near the end
+                        if (endPage - startPage < 4) {
+                          startPage = Math.max(1, endPage - 4)
+                        }
+                        
+                        const page = startPage + i
+                        if (page > endPage) return null
+                        
+                        return (
+                          <Button
+                            key={page}
+                            variant={currentPage === page ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => handlePageChange(page)}
+                            disabled={loading}
+                          >
+                            {page}
+                          </Button>
+                        )
+                      }).filter(Boolean)}
+                    </div>
+                    
+                    <Button 
+                      variant="outline" 
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={!hasNextPage || loading}
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4 ml-2" />
+                    </Button>
+                  </div>
+                )}
+
+                {/* Results Summary */}
+                <div className="text-center mt-4 text-sm text-muted-foreground">
+                  Showing {((currentPage - 1) * 20) + 1} to {Math.min(currentPage * 20, totalCount)} of {totalCount.toLocaleString()} courses
+                </div>
+              </>
             )}
           </div>
         </section>
