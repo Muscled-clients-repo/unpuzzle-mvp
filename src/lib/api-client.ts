@@ -223,6 +223,33 @@ class ApiClient {
     
     return this.get(`/api/v1/media/user/media?${query}`)
   }
+
+  // Student Course Methods
+  async getStudentCourses() {
+    return this.get('/api/v1/student/courses')
+  }
+  
+  async enrollInCourse(courseId: string, data?: { 
+    paymentMethod?: string
+    couponCode?: string 
+  }) {
+    return this.post(`/api/v1/student/courses/${courseId}/enroll`, data)
+  }
+  
+  async unenrollFromCourse(courseId: string) {
+    return this.post(`/api/v1/student/courses/${courseId}/unenroll`)
+  }
+  
+  async getStudentCourseProgress(courseId: string) {
+    return this.get(`/api/v1/student/courses/${courseId}/progress`)
+  }
+  
+  async submitCourseReview(courseId: string, review: {
+    rating: number
+    comment: string
+  }) {
+    return this.post(`/api/v1/student/courses/${courseId}/review`, review)
+  }
 }
 
 export const apiClient = new ApiClient()

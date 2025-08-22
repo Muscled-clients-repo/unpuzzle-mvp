@@ -21,21 +21,28 @@ import {
   Calendar,
   Target,
   Brain,
-  Sparkles
+  Sparkles,
+  XCircle
 } from "lucide-react"
 import Link from "next/link"
 
 export default function MyCoursesPage() {
   const {
-    enrolledCourses,
-    courseProgress,
+    enrolledCourses = [], // Default to empty array
+    courseProgress = {}, // Default to empty object
     loading,
     error,
+    unenrollingCourseId,
+    loadingProgressCourseId,
     loadEnrolledCourses,
-    loadCourseProgress
+    loadCourseProgress,
+    unenrollFromCourse
   } = useAppStore()
   
   const userId = 'user-1' // In production, get from auth context
+  
+  // Ensure enrolledCourses is always an array (extra safety check)
+  const safeEnrolledCourses = Array.isArray(enrolledCourses) ? enrolledCourses : []
   
   useEffect(() => {
     loadEnrolledCourses(userId)
@@ -43,45 +50,30 @@ export default function MyCoursesPage() {
   
   useEffect(() => {
     // Load progress for each enrolled course
-    enrolledCourses.forEach(course => {
-      loadCourseProgress(userId, course.id)
+    safeEnrolledCourses.forEach(course => {
+      if (!courseProgress[course.id] && !loadingProgressCourseId) {
+        loadCourseProgress(userId, course.id)
+      }
     })
-  }, [enrolledCourses, userId, loadCourseProgress])
+  }, [safeEnrolledCourses, userId, courseProgress, loadingProgressCourseId, loadCourseProgress])
   
-  // Mock progress data for now - will come from courseProgress once loaded
-  const mockProgressData = {
-    "course-1": {
-      progress: courseProgress?.percentComplete || 35,
-      lastAccessed: courseProgress?.lastAccessedAt ? "2 hours ago" : "2 hours ago",
-      completedLessons: courseProgress?.videosCompleted || 2,
-      totalLessons: courseProgress?.totalVideos || 5,
-      currentLesson: "JavaScript Basics",
-      estimatedTimeLeft: "3.5 hours",
-      aiInteractionsUsed: 15,
-      strugglingTopics: ["CSS Grid", "Flexbox"],
-      nextMilestone: "Complete Module 2"
-    },
-    "course-2": {
-      progress: 15,
-      lastAccessed: "1 day ago", 
-      completedLessons: 1,
-      totalLessons: 5,
-      currentLesson: "Linear Regression",
-      estimatedTimeLeft: "6 hours",
-      aiInteractionsUsed: 8,
-      strugglingTopics: ["Gradient Descent"],
-      nextMilestone: "Complete first quiz"
-    },
-    "course-3": {
-      progress: 60,
-      lastAccessed: "3 days ago",
-      completedLessons: 3,
-      totalLessons: 5,
-      currentLesson: "Data Visualization",
-      estimatedTimeLeft: "2 hours",
-      aiInteractionsUsed: 22,
-      strugglingTopics: [],
-      nextMilestone: "Final project"
+  // Helper function to format last accessed time
+  const formatLastAccessed = (dateString: string | undefined) => {
+    if (!dateString) return "Not started"
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
+    
+    if (diffHours < 1) return "Just now"
+    if (diffHours < 24) return `${diffHours} hours ago`
+    const diffDays = Math.floor(diffHours / 24)
+    if (diffDays === 1) return "1 day ago"
+    return `${diffDays} days ago`
+  }
+
+  const handleUnenroll = async (courseId: string) => {
+    if (confirm('Are you sure you want to unenroll from this course?')) {
+      await unenrollFromCourse(courseId)
     }
   }
   
@@ -116,24 +108,44 @@ export default function MyCoursesPage() {
           {/* Course Tabs */}
           <Tabs defaultValue="all" className="mb-8">
             <TabsList>
-              <TabsTrigger value="all">All Courses ({enrolledCourses.length})</TabsTrigger>
-              <TabsTrigger value="in-progress">In Progress (2)</TabsTrigger>
-              <TabsTrigger value="completed">Completed (0)</TabsTrigger>
+              <TabsTrigger value="all">All Courses ({safeEnrolledCourses.length})</TabsTrigger>
+              <TabsTrigger value="in-progress">
+                In Progress ({safeEnrolledCourses.filter(course => {
+                  const progress = courseProgress[course.id]
+                  return progress && progress.percentComplete > 0 && progress.percentComplete < 100
+                }).length})
+              </TabsTrigger>
+              <TabsTrigger value="completed">
+                Completed ({safeEnrolledCourses.filter(course => {
+                  const progress = courseProgress[course.id]
+                  return progress && progress.percentComplete === 100
+                }).length})
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="all" className="mt-6">
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {enrolledCourses.map((course) => {
-                  const progress = mockProgressData[course.id as keyof typeof mockProgressData] || {
-                    progress: 0,
-                    lastAccessed: "Never",
-                    completedLessons: 0,
-                    totalLessons: course.videos?.length || 5,
-                    currentLesson: "Not started",
-                    estimatedTimeLeft: `${course.duration} hours`,
-                    aiInteractionsUsed: 0,
-                    strugglingTopics: [],
-                    nextMilestone: "Start course"
+                {safeEnrolledCourses.map((course) => {
+                  const progress = courseProgress[course.id] || {
+                    percentComplete: 0,
+                    lastAccessedAt: undefined,
+                    videosCompleted: 0,
+                    totalVideos: course.videos?.length || 0
+                  }
+                  
+                  // Calculate display values
+                  const displayProgress = {
+                    progress: progress.percentComplete || 0,
+                    lastAccessed: formatLastAccessed(progress.lastAccessedAt),
+                    completedLessons: progress.videosCompleted || 0,
+                    totalLessons: progress.totalVideos || course.videos?.length || 0,
+                    currentLesson: course.videos?.[progress.videosCompleted]?.title || "Not started",
+                    estimatedTimeLeft: `${Math.max(1, Math.ceil((course.duration || 0) * (1 - (progress.percentComplete || 0) / 100)))} hours`,
+                    aiInteractionsUsed: 0, // This would come from a separate API
+                    strugglingTopics: [] as string[], // This would come from analytics
+                    nextMilestone: progress.videosCompleted === 0 ? "Start the course" : 
+                                  progress.percentComplete >= 80 ? "Complete final project" : 
+                                  `Complete Module ${Math.floor(progress.videosCompleted / 3) + 1}`
                   }
                   
                   return (
@@ -145,8 +157,8 @@ export default function MyCoursesPage() {
                         </div>
                         {/* Progress Overlay */}
                         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background/90 to-transparent p-4">
-                          <Progress value={progress.progress} className="h-2" />
-                          <p className="text-xs text-white mt-1">{progress.progress}% Complete</p>
+                          <Progress value={displayProgress.progress} className="h-2" />
+                          <p className="text-xs text-white mt-1">{displayProgress.progress}% Complete</p>
                         </div>
                       </div>
 
@@ -169,15 +181,15 @@ export default function MyCoursesPage() {
                         <div className="space-y-2">
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">Current Lesson</span>
-                            <span className="font-medium">{progress.currentLesson}</span>
+                            <span className="font-medium">{displayProgress.currentLesson}</span>
                           </div>
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">Completed</span>
-                            <span className="font-medium">{progress.completedLessons}/{progress.totalLessons} lessons</span>
+                            <span className="font-medium">{displayProgress.completedLessons}/{displayProgress.totalLessons} lessons</span>
                           </div>
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">Time left</span>
-                            <span className="font-medium">{progress.estimatedTimeLeft}</span>
+                            <span className="font-medium">{displayProgress.estimatedTimeLeft}</span>
                           </div>
                         </div>
 
@@ -191,16 +203,16 @@ export default function MyCoursesPage() {
                           <div className="space-y-1">
                             <div className="flex items-center justify-between text-xs">
                               <span className="text-muted-foreground">AI interactions used</span>
-                              <span className="font-medium">{progress.aiInteractionsUsed}</span>
+                              <span className="font-medium">{displayProgress.aiInteractionsUsed}</span>
                             </div>
                             
-                            {progress.strugglingTopics.length > 0 && (
+                            {displayProgress.strugglingTopics.length > 0 && (
                               <div className="flex items-start gap-2 text-xs">
                                 <AlertCircle className="h-3 w-3 text-orange-500 mt-0.5" />
                                 <div>
                                   <span className="text-muted-foreground">Needs review: </span>
                                   <span className="text-orange-600 dark:text-orange-400">
-                                    {progress.strugglingTopics.join(", ")}
+                                    {displayProgress.strugglingTopics.join(", ")}
                                   </span>
                                 </div>
                               </div>
@@ -208,23 +220,37 @@ export default function MyCoursesPage() {
                             
                             <div className="flex items-center gap-2 text-xs">
                               <Target className="h-3 w-3 text-green-500" />
-                              <span className="text-muted-foreground">Next: {progress.nextMilestone}</span>
+                              <span className="text-muted-foreground">Next: {displayProgress.nextMilestone}</span>
                             </div>
                           </div>
                         </div>
 
-                        {/* Action Button */}
-                        <Button asChild className="w-full">
-                          <Link href={`/student/course/${course.id}/video/${course.videos?.[progress.completedLessons]?.id || course.videos?.[0]?.id || '1'}`}>
-                            <Play className="mr-2 h-4 w-4" />
-                            Continue Learning
-                          </Link>
-                        </Button>
+                        {/* Action Buttons */}
+                        <div className="flex gap-2">
+                          <Button asChild className="flex-1">
+                            <Link href={`/student/course/${course.id}/video/${course.videos?.[displayProgress.completedLessons]?.id || course.videos?.[0]?.id || '1'}`}>
+                              <Play className="mr-2 h-4 w-4" />
+                              Continue
+                            </Link>
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="icon"
+                            onClick={() => handleUnenroll(course.id)}
+                            disabled={unenrollingCourseId === course.id}
+                          >
+                            {unenrollingCourseId === course.id ? (
+                              <LoadingSpinner size="sm" />
+                            ) : (
+                              <XCircle className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
 
                         {/* Last Accessed */}
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Clock className="h-3 w-3" />
-                          Last accessed {progress.lastAccessed}
+                          Last accessed {displayProgress.lastAccessed}
                         </div>
                       </CardContent>
                     </Card>
@@ -250,17 +276,22 @@ export default function MyCoursesPage() {
 
             <TabsContent value="in-progress" className="mt-6">
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {enrolledCourses.slice(0, 2).map((course) => {
-                  const progress = mockProgressData[course.id as keyof typeof mockProgressData] || {
-                    progress: 0,
-                    lastAccessed: "Never",
-                    completedLessons: 0,
-                    totalLessons: course.videos?.length || 5,
-                    currentLesson: "Not started",
-                    estimatedTimeLeft: `${course.duration} hours`,
-                    aiInteractionsUsed: 0,
-                    strugglingTopics: [],
-                    nextMilestone: "Start course"
+                {safeEnrolledCourses.filter(course => {
+                  const progress = courseProgress[course.id]
+                  return progress && progress.percentComplete > 0 && progress.percentComplete < 100
+                }).map((course) => {
+                  const progress = courseProgress[course.id] || {
+                    percentComplete: 0,
+                    lastAccessedAt: undefined,
+                    videosCompleted: 0,
+                    totalVideos: course.videos?.length || 0
+                  }
+                  
+                  const displayProgress = {
+                    progress: progress.percentComplete || 0,
+                    lastAccessed: formatLastAccessed(progress.lastAccessedAt),
+                    completedLessons: progress.videosCompleted || 0,
+                    totalLessons: progress.totalVideos || course.videos?.length || 0
                   }
                   
                   return (
@@ -271,8 +302,8 @@ export default function MyCoursesPage() {
                           <BookOpen className="h-12 w-12 text-primary/40" />
                         </div>
                         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background/90 to-transparent p-4">
-                          <Progress value={progress.progress} className="h-2" />
-                          <p className="text-xs text-white mt-1">{progress.progress}% Complete</p>
+                          <Progress value={displayProgress.progress} className="h-2" />
+                          <p className="text-xs text-white mt-1">{displayProgress.progress}% Complete</p>
                         </div>
                       </div>
                       <CardHeader>
@@ -292,18 +323,64 @@ export default function MyCoursesPage() {
             </TabsContent>
 
             <TabsContent value="completed" className="mt-6">
-              <div className="text-center py-12">
-                <CheckCircle2 className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No Completed Courses Yet</h3>
-                <p className="text-muted-foreground mb-4">
-                  Keep learning to complete your first course!
-                </p>
-                <Button asChild>
-                  <Link href="/student">
-                    Go to Dashboard
-                  </Link>
-                </Button>
-              </div>
+              {safeEnrolledCourses.filter(course => {
+                const progress = courseProgress[course.id]
+                return progress && progress.percentComplete === 100
+              }).length > 0 ? (
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                  {safeEnrolledCourses.filter(course => {
+                    const progress = courseProgress[course.id]
+                    return progress && progress.percentComplete === 100
+                  }).map((course) => {
+                    const progress = courseProgress[course.id]
+                    return (
+                      <Card key={course.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                        <div className="relative aspect-video bg-gradient-to-br from-green-500/20 to-green-600/20">
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <CheckCircle2 className="h-16 w-16 text-green-600" />
+                          </div>
+                        </div>
+                        <CardHeader>
+                          <CardTitle className="line-clamp-1">{course.title}</CardTitle>
+                          <CardDescription className="line-clamp-2">
+                            {course.description}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2 mb-4">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Completed</span>
+                              <span className="font-medium text-green-600">100%</span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Finished</span>
+                              <span className="font-medium">{formatLastAccessed(progress?.lastAccessedAt)}</span>
+                            </div>
+                          </div>
+                          <Button asChild className="w-full" variant="outline">
+                            <Link href={`/student/course/${course.id}/certificate`}>
+                              View Certificate
+                            </Link>
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <CheckCircle2 className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No Completed Courses Yet</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Keep learning to complete your first course!
+                  </p>
+                  <Button asChild>
+                    <Link href="/student">
+                      Go to Dashboard
+                    </Link>
+                  </Button>
+                </div>
+              )}
             </TabsContent>
           </Tabs>
 
@@ -316,7 +393,7 @@ export default function MyCoursesPage() {
                     <BookOpen className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">{enrolledCourses.length}</p>
+                    <p className="text-2xl font-bold">{safeEnrolledCourses.length}</p>
                     <p className="text-xs text-muted-foreground">Active Courses</p>
                   </div>
                 </div>

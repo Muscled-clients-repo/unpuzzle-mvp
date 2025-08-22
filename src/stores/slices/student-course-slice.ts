@@ -7,9 +7,14 @@ export interface StudentCourseState {
   enrolledCourses: Course[]
   recommendedCourses: Course[]
   currentCourse: Course | null
-  courseProgress: CourseProgress | null
+  courseProgress: Record<string, CourseProgress> // Store progress per course
   loading: boolean
   error: string | null
+  // Operation-specific loading states
+  enrollingCourseId: string | null
+  unenrollingCourseId: string | null
+  loadingProgressCourseId: string | null
+  submittingReviewCourseId: string | null
 }
 
 export interface StudentCourseActions {
@@ -18,7 +23,9 @@ export interface StudentCourseActions {
   loadAllCourses: () => Promise<void>
   loadCourseById: (courseId: string) => Promise<void>
   loadCourseProgress: (userId: string, courseId: string) => Promise<void>
-  enrollInCourse: (userId: string, courseId: string) => Promise<void>
+  enrollInCourse: (userId: string, courseId: string, paymentData?: { paymentMethod?: string; couponCode?: string }) => Promise<void>
+  unenrollFromCourse: (courseId: string) => Promise<void>
+  submitCourseReview: (courseId: string, review: { rating: number; comment: string }) => Promise<void>
   setCurrentCourse: (course: Course | null) => void
   calculateProgress: (courseId: string) => number
 }
@@ -29,9 +36,13 @@ const initialState: StudentCourseState = {
   enrolledCourses: [],
   recommendedCourses: [],
   currentCourse: null,
-  courseProgress: null,
+  courseProgress: {},
   loading: false,
   error: null,
+  enrollingCourseId: null,
+  unenrollingCourseId: null,
+  loadingProgressCourseId: null,
+  submittingReviewCourseId: null,
 }
 
 export const createStudentCourseSlice: StateCreator<StudentCourseSlice> = (set, get) => ({
@@ -40,12 +51,21 @@ export const createStudentCourseSlice: StateCreator<StudentCourseSlice> = (set, 
   loadEnrolledCourses: async (userId: string) => {
     set({ loading: true, error: null })
     
-    const result = await studentCourseService.getEnrolledCourses(userId)
-    
-    if (result.error) {
-      set({ loading: false, error: result.error })
-    } else {
-      set({ loading: false, enrolledCourses: result.data || [], error: null })
+    try {
+      const result = await studentCourseService.getEnrolledCourses(userId)
+      
+      if (result.error) {
+        console.error('Error loading enrolled courses:', result.error)
+        set({ loading: false, error: result.error, enrolledCourses: [] })
+      } else {
+        // Ensure we always set an array
+        const courses = Array.isArray(result.data) ? result.data : []
+        console.log(`Loaded ${courses.length} enrolled courses`)
+        set({ loading: false, enrolledCourses: courses, error: null })
+      }
+    } catch (error) {
+      console.error('Exception loading enrolled courses:', error)
+      set({ loading: false, error: 'Failed to load courses', enrolledCourses: [] })
     }
   },
 
@@ -86,33 +106,73 @@ export const createStudentCourseSlice: StateCreator<StudentCourseSlice> = (set, 
   },
 
   loadCourseProgress: async (userId: string, courseId: string) => {
-    set({ loading: true, error: null })
+    set({ loadingProgressCourseId: courseId, error: null })
     
     const result = await studentCourseService.getCourseProgress(userId, courseId)
     
     if (result.error) {
-      set({ loading: false, error: result.error })
-    } else {
-      set({ loading: false, courseProgress: result.data || null, error: null })
+      set({ loadingProgressCourseId: null, error: result.error })
+    } else if (result.data) {
+      const currentProgress = get().courseProgress
+      set({ 
+        loadingProgressCourseId: null, 
+        courseProgress: { ...currentProgress, [courseId]: result.data },
+        error: null 
+      })
     }
   },
 
-  enrollInCourse: async (userId: string, courseId: string) => {
-    set({ loading: true, error: null })
+  enrollInCourse: async (userId: string, courseId: string, paymentData?: { paymentMethod?: string; couponCode?: string }) => {
+    set({ enrollingCourseId: courseId, error: null })
     
-    const result = await studentCourseService.enrollInCourse(userId, courseId)
+    const result = await studentCourseService.enrollInCourse(userId, courseId, paymentData)
     
     if (result.error) {
-      set({ loading: false, error: result.error })
+      set({ enrollingCourseId: null, error: result.error })
     } else if (result.data?.success) {
       // Reload enrolled courses after successful enrollment
       const coursesResult = await studentCourseService.getEnrolledCourses(userId)
       set({ 
-        loading: false, 
+        enrollingCourseId: null, 
         enrolledCourses: coursesResult.data || [],
         error: null 
       })
     }
+  },
+
+  unenrollFromCourse: async (courseId: string) => {
+    set({ unenrollingCourseId: courseId, error: null })
+    
+    const result = await studentCourseService.unenrollFromCourse(courseId)
+    
+    if (result.error) {
+      set({ unenrollingCourseId: null, error: result.error })
+      return
+    }
+    
+    // Optimistically remove from enrolled courses
+    const currentCourses = get().enrolledCourses
+    set({ 
+      enrolledCourses: currentCourses.filter(c => c.id !== courseId),
+      unenrollingCourseId: null,
+      error: null
+    })
+  },
+
+  submitCourseReview: async (courseId: string, review: { rating: number; comment: string }) => {
+    set({ submittingReviewCourseId: courseId, error: null })
+    
+    const result = await studentCourseService.submitCourseReview(courseId, review)
+    
+    if (result.error) {
+      set({ submittingReviewCourseId: null, error: result.error })
+      return
+    }
+    
+    set({ submittingReviewCourseId: null, error: null })
+    
+    // Optionally reload course to get updated review
+    // await get().loadCourseProgress('', courseId)
   },
 
   setCurrentCourse: (course: Course | null) => {
@@ -120,7 +180,8 @@ export const createStudentCourseSlice: StateCreator<StudentCourseSlice> = (set, 
   },
 
   calculateProgress: (courseId: string) => {
-    // Mock calculation - in reality would use actual progress data
-    return Math.floor(Math.random() * 100)
+    // Get actual progress from state if available
+    const progress = get().courseProgress[courseId]
+    return progress?.percentComplete || 0
   },
 })
