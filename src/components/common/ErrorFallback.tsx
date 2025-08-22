@@ -82,7 +82,7 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
       await navigator.clipboard.writeText(text)
       return true
     } catch (err) {
-      console.errorObj('Failed to copy to clipboard:', err)
+      console.error('Failed to copy to clipboard:', err)
       return false
     }
   }, [])
@@ -110,7 +110,7 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
       // Reset status after 3 seconds
       setTimeout(() => setCopyStatus('idle'), 3000)
     } else {
-      setCopyStatus('errorObj')
+      setCopyStatus('error')
       // Show manual copy dialog as fallback
       const reportText = JSON.stringify(bugReport, null, 2)
       const modal = document.createElement('div')
@@ -119,7 +119,7 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
                     background: white; padding: 20px; border: 1px solid #ccc; 
                     border-radius: 8px; z-index: 9999; max-width: 500px;">
           <h3 style="margin-bottom: 10px;">Copy Error Report</h3>
-          <p style="margin-bottom: 10px;">Please manually copy the errorObj report below:</p>
+          <p style="margin-bottom: 10px;">Please manually copy the error report below:</p>
           <textarea style="width: 100%; height: 200px; font-family: monospace; font-size: 12px;" 
                     readonly>${reportText}</textarea>
           <button onclick="this.parentElement.remove()" 
@@ -133,81 +133,80 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
   const getErrorIcon = () => {
     switch (errorObj.type) {
       case 'network':
-        return '🌐'
+        return <AlertCircle className="h-12 w-12 text-blue-500" />
       case 'authentication':
-        return '🔐'
+        return <AlertCircle className="h-12 w-12 text-amber-500" />
       case 'authorization':
-        return '🚫'
+        return <AlertCircle className="h-12 w-12 text-orange-500" />
       case 'not_found':
-        return '🔍'
+        return <AlertCircle className="h-12 w-12 text-yellow-500" />
       case 'validation':
-        return '⚠️'
+        return <AlertCircle className="h-12 w-12 text-purple-500" />
       case 'server':
-        return '🖥️'
+        return <AlertCircle className="h-12 w-12 text-red-500" />
       default:
-        return '❌'
+        return <AlertCircle className="h-12 w-12 text-gray-500" />
     }
   }
 
   const getErrorColor = () => {
     switch (errorObj.type) {
       case 'network':
-        return 'bg-blue-50 border-blue-200'
+        return 'bg-gradient-to-br from-blue-50 to-white border-blue-200'
       case 'authentication':
       case 'authorization':
-        return 'bg-red-50 border-red-200'
+        return 'bg-gradient-to-br from-amber-50 to-white border-amber-200'
       case 'not_found':
-        return 'bg-yellow-50 border-yellow-200'
+        return 'bg-gradient-to-br from-yellow-50 to-white border-yellow-200'
       case 'validation':
-        return 'bg-orange-50 border-orange-200'
+        return 'bg-gradient-to-br from-purple-50 to-white border-purple-200'
       case 'server':
-        return 'bg-red-50 border-red-200'
+        return 'bg-gradient-to-br from-red-50 to-white border-red-200'
       default:
-        return 'bg-gray-50 border-gray-200'
+        return 'bg-gradient-to-br from-gray-50 to-white border-gray-200'
     }
   }
 
   return (
     <div className="min-h-[400px] flex items-center justify-center p-6">
-      <Card className={`w-full max-w-2xl ${getErrorColor()}`}>
-        <CardHeader className="text-center">
-          <div className="mx-auto w-16 h-16 flex items-center justify-center text-4xl mb-4">
+      <Card className={`w-full max-w-2xl shadow-xl border-2 ${getErrorColor()}`}>
+        <CardHeader className="text-center pb-4">
+          <div className="mx-auto mb-4 p-4 rounded-full bg-white shadow-md w-fit">
             {getErrorIcon()}
           </div>
           
-          <CardTitle className="text-2xl font-bold flex items-center justify-center gap-2">
-            <AlertCircle className="h-6 w-6" />
+          <CardTitle className="text-2xl font-bold text-gray-800">
             Something went wrong
           </CardTitle>
           
-          <CardDescription className="text-lg">
-            {errorObjObj.userMessage}
+          <CardDescription className="text-base text-gray-600 mt-2">
+            {errorObj.userMessage}
           </CardDescription>
 
           <div className="flex justify-center gap-2 mt-4">
-            <Badge variant="outline" className="capitalize">
-              {errorObjObj.type.replace('_', ' ')}
+            <Badge variant="secondary" className="capitalize bg-white/80 text-gray-700 border-gray-300">
+              {errorObj.type.replace('_', ' ')}
             </Badge>
             
-            {errorObjObj.recoverable && (
-              <Badge variant="secondary">
+            {errorObj.recoverable && (
+              <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-300">
                 Recoverable
               </Badge>
             )}
             
-            <Badge variant="outline">
-              {errorObjObj.timestamp.toLocaleTimeString()}
+            <Badge variant="secondary" className="bg-white/80 text-gray-700 border-gray-300">
+              {errorObj.timestamp.toLocaleTimeString()}
             </Badge>
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-2">
           {/* Recovery Actions */}
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>What you can do:</AlertTitle>
+          <Alert className="bg-white/60 border-gray-200">
+            <AlertCircle className="h-4 w-4 text-blue-600" />
+            <AlertTitle className="text-gray-800 font-semibold">What you can do:</AlertTitle>
             <AlertDescription>
-              <ul className="list-disc list-inside mt-2 space-y-1">
+              <ul className="list-disc list-inside mt-2 space-y-1 text-gray-600">
                 {errorObj.recoverable && (
                   <li>Try refreshing the page or retrying the action</li>
                 )}
@@ -221,15 +220,15 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
           </Alert>
 
           {/* Action Buttons */}
-          <div className="flex flex-wrap gap-3 justify-center">
+          <div className="flex flex-wrap gap-3 justify-center pt-2">
             {errorObj.recoverable && (
-              <Button onClick={resetError} className="flex items-center gap-2">
+              <Button onClick={resetError} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-md">
                 <RefreshCw className="h-4 w-4" />
                 Try Again
               </Button>
             )}
             
-            <Button variant="outline" onClick={handleGoHome} className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleGoHome} className="flex items-center gap-2 border-gray-300 hover:bg-gray-50 shadow-sm">
               <Home className="h-4 w-4" />
               Go Home
             </Button>
@@ -238,7 +237,7 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
               variant="outline" 
               onClick={handleReportBug} 
               disabled={copyStatus === 'copying'}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 border-gray-300 hover:bg-gray-50 shadow-sm"
             >
               {copyStatus === 'idle' && (
                 <>
@@ -258,7 +257,7 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
                   Copied!
                 </>
               )}
-              {copyStatus === 'errorObj' && (
+              {copyStatus === 'error' && (
                 <>
                   <AlertCircle className="h-4 w-4 text-red-600" />
                   Copy Failed
@@ -268,7 +267,7 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
           </div>
 
           {/* Technical Details (Collapsible) */}
-          <div className="border-t pt-4">
+          <div className="border-t border-gray-200 pt-4">
             <Button
               variant="ghost"
               size="sm"
@@ -289,7 +288,7 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
             </Button>
 
             {showDetails && (
-              <div className="mt-4 p-4 bg-gray-100 rounded-lg text-sm font-mono space-y-2">
+              <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono space-y-2">
                 <div>
                   <strong>Error Type:</strong> {errorObj.type}
                 </div>
@@ -323,7 +322,7 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
                 {errorObj.details && (
                   <div>
                     <strong>Details:</strong>
-                    <pre className="mt-2 p-2 bg-white rounded text-xs overflow-auto max-h-32">
+                    <pre className="mt-2 p-2 bg-white border border-gray-200 rounded text-xs overflow-auto max-h-32">
                       {JSON.stringify(errorObj.details, null, 2)}
                     </pre>
                   </div>
@@ -337,15 +336,17 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
   )
 }
 
-// Specialized errorObj fallbacks for different contexts
-export function VideoErrorFallback({ errorObj, resetError }: ErrorFallbackProps) {
+// Specialized error fallbacks for different contexts
+export function VideoErrorFallback({ error, resetError }: ErrorFallbackProps) {
   return (
-    <div className="aspect-video flex items-center justify-center bg-gray-100 rounded-lg">
+    <div className="aspect-video flex items-center justify-center bg-gradient-to-br from-gray-50 to-white rounded-lg border-2 border-gray-200 shadow-lg">
       <div className="text-center p-6">
-        <div className="text-4xl mb-4">📹</div>
-        <h3 className="text-lg font-semibold mb-2">Video Error</h3>
-        <p className="text-gray-600 mb-4">{errorObj.userMessage}</p>
-        <Button onClick={resetError} size="sm">
+        <div className="mx-auto mb-4 p-3 rounded-full bg-white shadow-md w-fit">
+          <AlertCircle className="h-8 w-8 text-red-500" />
+        </div>
+        <h3 className="text-lg font-semibold text-gray-800 mb-2">Video Error</h3>
+        <p className="text-gray-600 mb-4">{error.userMessage}</p>
+        <Button onClick={resetError} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white shadow-md">
           <RefreshCw className="h-4 w-4 mr-2" />
           Retry Video
         </Button>
@@ -354,15 +355,15 @@ export function VideoErrorFallback({ errorObj, resetError }: ErrorFallbackProps)
   )
 }
 
-export function ChatErrorFallback({ errorObj, resetError }: ErrorFallbackProps) {
+export function ChatErrorFallback({ error, resetError }: ErrorFallbackProps) {
   return (
-    <div className="p-4 border border-red-200 bg-red-50 rounded-lg">
+    <div className="p-4 border-2 border-red-200 bg-gradient-to-br from-red-50 to-white rounded-lg shadow-md">
       <div className="flex items-center gap-2 mb-2">
         <AlertCircle className="h-4 w-4 text-red-500" />
-        <span className="font-medium text-red-800">Chat Error</span>
+        <span className="font-medium text-gray-800">Chat Error</span>
       </div>
-      <p className="text-red-700 text-sm mb-3">{errorObj.userMessage}</p>
-      <Button onClick={resetError} size="sm" variant="outline">
+      <p className="text-gray-600 text-sm mb-3">{error.userMessage}</p>
+      <Button onClick={resetError} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
         <RefreshCw className="h-4 w-4 mr-2" />
         Retry
       </Button>
