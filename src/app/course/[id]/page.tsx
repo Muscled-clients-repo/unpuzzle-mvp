@@ -1,7 +1,7 @@
 "use client"
 
-import { useParams } from "next/navigation"
-import { useEffect } from "react"
+import { useParams, useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Header } from "@/components/layout/header"
@@ -26,16 +26,20 @@ import {
   Brain,
   MessageSquare,
   Target,
-  TrendingUp,
-  Activity
+  ShoppingCart
 } from "lucide-react"
 import { useAppStore } from "@/stores/app-store"
 import { LoadingSpinner } from "@/components/common"
 import { ErrorFallback } from "@/components/common"
+import { EnrollmentDialog } from "@/components/enrollment/EnrollmentDialog"
 
 export default function CoursePreviewPage() {
   const params = useParams()
+  const router = useRouter()
   const courseId = params.id as string
+  
+  // State for enrollment dialog
+  const [showEnrollDialog, setShowEnrollDialog] = useState(false)
   
   // Use new student-course-slice for course data
   const { 
@@ -43,7 +47,6 @@ export default function CoursePreviewPage() {
     currentCourse,
     loadCourseById,
     loadEnrolledCourses,
-    enrollInCourse,
     loading,
     error
   } = useAppStore()
@@ -60,6 +63,12 @@ export default function CoursePreviewPage() {
   
   // Check enrollment status using new store
   const isEnrolled = enrolledCourses.some(c => c.id === courseId)
+  
+  // Handle enrollment success
+  const handleEnrollSuccess = () => {
+    setShowEnrollDialog(false)
+    router.push(`/student/course/${courseId}`)
+  }
   
   if (loading) return <LoadingSpinner />
   
@@ -254,10 +263,10 @@ export default function CoursePreviewPage() {
                         <Button 
                           className="w-full" 
                           size="lg"
-                          onClick={() => enrollInCourse('guest', courseId)}
-                          disabled={loading}
+                          onClick={() => setShowEnrollDialog(true)}
                         >
-                          {loading ? 'Enrolling...' : 'Enroll Now'}
+                          <ShoppingCart className="mr-2 h-5 w-5" />
+                          Enroll Now {course.price && course.price > 0 ? `- $${course.price}` : ''}
                         </Button>
                       )}
                       <Button variant="outline" className="w-full">
@@ -364,7 +373,7 @@ export default function CoursePreviewPage() {
                         Get contextual hints when you pause or rewind. AI analyzes your confusion points and provides targeted assistance.
                       </p>
                       <div className="rounded-lg bg-muted p-3 text-sm">
-                        <strong>Example:</strong> "Remember: Semantic HTML elements like &lt;header&gt; and &lt;nav&gt; describe content purpose, not appearance."
+                        <strong>Example:</strong> &quot;Remember: Semantic HTML elements like &lt;header&gt; and &lt;nav&gt; describe content purpose, not appearance.&quot;
                       </div>
                     </CardContent>
                   </Card>
@@ -381,7 +390,7 @@ export default function CoursePreviewPage() {
                         AI-generated quizzes at key learning moments to test your understanding and reinforce concepts.
                       </p>
                       <div className="rounded-lg bg-muted p-3 text-sm">
-                        <strong>Example:</strong> "What are the three core technologies of web development?"
+                        <strong>Example:</strong> &quot;What are the three core technologies of web development?&quot;
                       </div>
                     </CardContent>
                   </Card>
@@ -398,7 +407,7 @@ export default function CoursePreviewPage() {
                         Guided reflection prompts at section completion to deepen understanding and get instructor feedback.
                       </p>
                       <div className="rounded-lg bg-muted p-3 text-sm">
-                        <strong>Example:</strong> "How would you explain the difference between block and inline elements?"
+                        <strong>Example:</strong> &quot;How would you explain the difference between block and inline elements?&quot;
                       </div>
                     </CardContent>
                   </Card>
@@ -415,7 +424,7 @@ export default function CoursePreviewPage() {
                         Adaptive learning paths with supplementary content when struggling is detected.
                       </p>
                       <div className="rounded-lg bg-muted p-3 text-sm">
-                        <strong>Example:</strong> Recommends "CSS Box Model Explained" video when layout concepts are challenging.
+                        <strong>Example:</strong> Recommends &quot;CSS Box Model Explained&quot; video when layout concepts are challenging.
                       </div>
                     </CardContent>
                   </Card>
@@ -464,7 +473,7 @@ export default function CoursePreviewPage() {
                           <span className="text-sm text-muted-foreground">2 weeks ago</span>
                         </div>
                         <p className="text-sm">
-                          "The AI hints were incredibly helpful! When I got stuck on CSS Grid, the system detected my confusion and provided exactly the right explanation. Game changer for learning."
+                          &quot;The AI hints were incredibly helpful! When I got stuck on CSS Grid, the system detected my confusion and provided exactly the right explanation. Game changer for learning.&quot;
                         </p>
                       </div>
                       
@@ -479,7 +488,7 @@ export default function CoursePreviewPage() {
                           <span className="text-sm text-muted-foreground">1 month ago</span>
                         </div>
                         <p className="text-sm">
-                          "Best coding course I've taken. The AI quizzes really helped reinforce what I learned, and the reflection prompts made me think deeper about the concepts."
+                          &quot;Best coding course I&apos;ve taken. The AI quizzes really helped reinforce what I learned, and the reflection prompts made me think deeper about the concepts.&quot;
                         </p>
                       </div>
                     </div>
@@ -538,6 +547,16 @@ export default function CoursePreviewPage() {
       </main>
 
       <Footer />
+      
+      {/* Enrollment Dialog */}
+      {course && (
+        <EnrollmentDialog
+          course={course}
+          isOpen={showEnrollDialog}
+          onClose={() => setShowEnrollDialog(false)}
+          onSuccess={handleEnrollSuccess}
+        />
+      )}
     </div>
   )
 }

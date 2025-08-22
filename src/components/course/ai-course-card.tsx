@@ -1,5 +1,8 @@
+"use client"
+
 import Link from "next/link"
 import Image from "next/image"
+import { useState } from "react"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -16,11 +19,14 @@ import {
   MessageSquare,
   ChevronRight,
   Activity,
-  Award
+  Award,
+  ShoppingCart
 } from "lucide-react"
 import { Course, UserRole } from "@/types/domain"
 import { cn } from "@/lib/utils"
 import { FeatureGate } from "@/config/features"
+import { EnrollmentDialog } from "@/components/enrollment/EnrollmentDialog"
+import { useAppStore } from "@/stores/app-store"
 
 interface AICourseCardProps {
   course: Course
@@ -47,6 +53,16 @@ export function AICourseCard({
   showAITip = false
 }: AICourseCardProps) {
   const isEnrolled = variant === "enrolled"
+  const [showEnrollDialog, setShowEnrollDialog] = useState(false)
+  const { enrolledCourses } = useAppStore()
+  
+  // Check if user is actually enrolled (for course listing pages)
+  const isUserEnrolled = enrolledCourses?.some(c => c.id === course.id) || isEnrolled
+  
+  const handleEnrollSuccess = () => {
+    setShowEnrollDialog(false)
+    // The store will automatically update enrolled courses
+  }
   
   // Mock AI-powered insights
   const difficultyScore = 7.2 // AI-calculated based on content analysis
@@ -101,7 +117,7 @@ export function AICourseCard({
         </div>
 
         {/* AI Learning Metrics for Enrolled - Only for students with AI features */}
-        {isEnrolled && aiMetrics && userRole && (
+        {isUserEnrolled && aiMetrics && userRole && (
           <FeatureGate role={userRole} feature="aiChat">
             <div className="mt-3 grid grid-cols-3 gap-2">
             <div className="rounded-lg bg-green-50 dark:bg-green-950/20 p-2 text-center">
@@ -130,7 +146,7 @@ export function AICourseCard({
         )}
 
         {/* AI-Powered Struggling Topics Alert */}
-        {isEnrolled && aiMetrics?.strugglingTopics && aiMetrics.strugglingTopics.length > 0 && (
+        {isUserEnrolled && aiMetrics?.strugglingTopics && aiMetrics.strugglingTopics.length > 0 && (
           <div className="mt-3 rounded-lg bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 p-2">
             <div className="flex items-start gap-2">
               <Brain className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5" />
@@ -169,7 +185,7 @@ export function AICourseCard({
         </div>
 
         {/* AI Features Preview - Only for students */}
-        {!isEnrolled && userRole && (
+        {!isUserEnrolled && userRole && (
           <FeatureGate role={userRole} feature="aiChat">
             <div className="mt-3 space-y-2">
             {/* AI Tip */}
@@ -221,14 +237,16 @@ export function AICourseCard({
               {course.instructor.name}
             </span>
           </div>
-          {!isEnrolled && (
-            <span className="text-lg font-bold">${course.price}</span>
+          {!isUserEnrolled && (
+            <span className="text-lg font-bold">
+              {course.price && course.price > 0 ? `$${course.price}` : 'FREE'}
+            </span>
           )}
         </div>
       </CardContent>
 
       <CardFooter className="pt-0">
-        {isEnrolled ? (
+        {isUserEnrolled ? (
           <div className="w-full space-y-2">
             {/* AI Recommendation */}
             {progress && progress < 50 && dropoutRisk === "high" && (
@@ -243,7 +261,7 @@ export function AICourseCard({
             )}
             
             <Button className="w-full group" asChild>
-              <Link href={`/student/course/${course.id}/video/${course.videos[0]?.id}`}>
+              <Link href={`/student/course/${course.id}`}>
                 Continue Learning
                 <ChevronRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
               </Link>
@@ -251,17 +269,34 @@ export function AICourseCard({
           </div>
         ) : (
           <div className="w-full space-y-2">
-            <Button className="w-full" asChild>
-              <Link href={`/course/${course.id}`}>
-                View Course
-                <Sparkles className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
+            <div className="flex gap-2">
+              <Button className="flex-1" asChild>
+                <Link href={`/course/${course.id}`}>
+                  View Course
+                  <Sparkles className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+              <Button 
+                size="sm"
+                onClick={() => setShowEnrollDialog(true)}
+                className="px-3"
+              >
+                <ShoppingCart className="h-4 w-4" />
+              </Button>
+            </div>
             <p className="text-center text-[10px] text-muted-foreground">
               10 free AI interactions included
             </p>
           </div>
         )}
+        
+        {/* Enrollment Dialog */}
+        <EnrollmentDialog
+          course={course}
+          isOpen={showEnrollDialog}
+          onClose={() => setShowEnrollDialog(false)}
+          onSuccess={handleEnrollSuccess}
+        />
       </CardFooter>
     </Card>
   )
