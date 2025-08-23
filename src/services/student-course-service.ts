@@ -298,9 +298,16 @@ export class StudentCourseService {
   }
 
   async getCourseById(courseId: string): Promise<ServiceResult<Course | null>> {
+    console.log('🔍 StudentCourseService.getCourseById called with:', courseId)
+    console.log('📊 Available mock courses:', mockCourses.map(c => ({ id: c.id, title: c.title, videosCount: c.videos.length })))
+    
     if (useMockData) {
       const course = mockCourses.find(c => c.id === courseId)
-      if (!course) return { data: null }
+      console.log('🎯 Found course:', course ? { id: course.id, title: course.title, videosCount: course.videos.length } : 'NOT FOUND')
+      if (!course) {
+        console.log('❌ Course not found, returning error')
+        return { error: 'Course not found' }
+      }
 
       // Transform the found course to match domain Course type
       const transformedCourse: Course = {
@@ -344,10 +351,76 @@ export class StudentCourseService {
       }
     }
 
-    const response = await apiClient.get<Course>(`/api/courses/${courseId}`)
-    return response.error
-      ? { error: response.error }
-      : { data: response.data }
+    try {
+      const response = await apiClient.get<any>(`/api/v1/courses/${courseId}`)
+      
+      if (response.error) {
+        console.log('❌ API error:', response.error)
+        return { error: response.error }
+      }
+      
+      if (!response.data) {
+        console.log('❌ No data in response')
+        return { error: 'Course not found' }
+      }
+      
+      console.log('✅ Raw API response:', response.data)
+      
+      // Transform API response to frontend Course structure
+      const apiCourse = response.data
+      const transformedCourse: Course = {
+        id: apiCourse.id,
+        title: apiCourse.title,
+        description: apiCourse.description,
+        shortDescription: apiCourse.shortDescription,
+        thumbnailUrl: apiCourse.thumbnailUrl,
+        instructor: {
+          id: apiCourse.instructor.id,
+          name: apiCourse.instructor.name,
+          email: apiCourse.instructor.email,
+          avatar: apiCourse.instructor.avatarUrl
+        },
+        price: apiCourse.price || 0,
+        currency: apiCourse.currency || 'USD',
+        duration: apiCourse.duration || 0,
+        difficulty: apiCourse.difficulty,
+        language: apiCourse.language || 'en',
+        tags: apiCourse.tags || [],
+        category: apiCourse.category,
+        rating: apiCourse.ratingAverage || 0,
+        reviewCount: apiCourse.ratingCount || 0,
+        enrollmentCount: apiCourse.enrollmentCount || 0,
+        isPublished: apiCourse.isPublished,
+        isFree: apiCourse.isFree,
+        createdAt: apiCourse.createdAt,
+        updatedAt: apiCourse.updatedAt,
+        // Transform sections and mediaFiles to videos array
+        videos: (apiCourse.sections || []).flatMap((section: any) => 
+          (section.mediaFiles || []).map((media: any, index: number) => ({
+            id: media.id,
+            courseId: apiCourse.id,
+            title: media.title || `Video ${index + 1}`,
+            description: media.description || '',
+            duration: media.duration || 0,
+            order: media.order || index,
+            videoUrl: media.url || media.fileUrl || '',
+            thumbnailUrl: media.thumbnailUrl || '',
+            transcript: [],
+            createdAt: media.createdAt,
+            updatedAt: media.updatedAt
+          }))
+        ),
+        sections: apiCourse.sections || []
+      }
+      
+      console.log('✅ Transformed course:', transformedCourse)
+      console.log('📹 Videos found:', transformedCourse.videos.length)
+      
+      return { data: transformedCourse }
+    } catch (error) {
+      console.error('❌ Error in getCourseById:', error)
+      return { error: 'Network error while fetching course' }
+    }
   }
 
   async getPublicLessons(): Promise<ServiceResult<Lesson[]>> {

@@ -228,7 +228,7 @@ export default function MyCoursesPage() {
                         {/* Action Buttons */}
                         <div className="flex gap-2">
                           <Button asChild className="flex-1">
-                            <Link href={`/student/course/${course.id}/video/${course.videos?.[displayProgress.completedLessons]?.id || course.videos?.[0]?.id || '1'}`}>
+                            <Link href={`/learn/${course.id}?v=${course.videos?.[displayProgress.completedLessons]?.id || course.videos?.[0]?.id || '1'}`}>
                               <Play className="mr-2 h-4 w-4" />
                               Continue
                             </Link>
@@ -311,7 +311,7 @@ export default function MyCoursesPage() {
                       </CardHeader>
                       <CardContent>
                         <Button asChild className="w-full">
-                          <Link href={`/student/course/${course.id}/video/${course.videos?.[0]?.id || '1'}`}>
+                          <Link href={`/learn/${course.id}`}>
                             Continue Learning
                           </Link>
                         </Button>

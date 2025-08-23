@@ -260,7 +260,7 @@ export default function CoursePreviewPage() {
                     <div className="space-y-3">
                       {isEnrolled ? (
                         <Button className="w-full" size="lg" asChild>
-                          <Link href={`/student/course/${courseId}`}>
+                          <Link href={`/learn/${courseId}`}>
                             <CheckCircle2 className="mr-2 h-5 w-5" />
                             Continue Learning
                           </Link>

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { useParams, useSearchParams } from "next/navigation"
+import { useParams, useSearchParams, useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import { useAppStore } from "@/stores/app-store"
 import { LoadingSpinner } from "@/components/common/LoadingSpinner"
@@ -42,6 +42,7 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { 
   ChevronLeft,
+  ChevronRight,
   Clock,
   MessageSquare,
   Share2,
@@ -51,13 +52,17 @@ import {
   ArrowRight,
   Copy,
   CheckCircle,
+  CheckCircle2,
   Mail,
   Download,
   X,
   Lock,
   MessageCircle,
   ThumbsUp,
-  Zap
+  Zap,
+  BookOpen,
+  Play,
+  User
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import Link from "next/link"
@@ -68,19 +73,40 @@ import { Textarea } from "@/components/ui/textarea"
 export default function StandaloneLessonPage() {
   const params = useParams()
   const searchParams = useSearchParams()
-  const lessonId = params.id as string
+  const router = useRouter()
+  const contentId = params.id as string
   
   // Check for instructor mode
   const isInstructorMode = searchParams.get('instructor') === 'true'
   
-  // Use Zustand store
+  // Check for video query param (course deep linking)
+  const videoQueryParam = searchParams.get('v')
+  
+  // Detect if this is a course or standalone lesson
+  const isStandaloneLesson = contentId === 'lesson'
+  const isCourse = !isStandaloneLesson
+  
+  // Use Zustand store - both lesson and course data
   const { 
     lessons, 
     loadLessons, 
     trackView,
     trackAiInteraction,
-    user
+    user,
+    // Course-related from student video page
+    currentVideo: storeVideoData,
+    loadStudentVideo,
+    reflections,
+    addReflection,
+    currentCourse,
+    loadCourseById,
+    // Course loading states
+    loading: courseLoading,
+    error: courseError
   } = useAppStore()
+  
+  // State for current video in course (for video switching)
+  const [currentVideoId, setCurrentVideoId] = useState<string>('')
   
   // Video player state from store
   const currentTime = useAppStore((state) => state.currentTime)
@@ -99,37 +125,124 @@ export default function StandaloneLessonPage() {
   const sidebarRef = useRef<HTMLDivElement>(null)
   
   const FREE_AI_LIMIT = 3
-  const [isLoading, setIsLoading] = useState(true)
+  const [lessonLoading, setLessonLoading] = useState(false)
+  const [courseLoadingState, setCourseLoadingState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
   
-  // Load lessons on mount
+  // Reset course loading state when course ID changes
   useEffect(() => {
-    if (lessons.length === 0) {
-      loadLessons()
+    if (isCourse) {
+      setCourseLoadingState('idle')
     }
-    // Set loading to false after initial check or when lessons load
-    const timer = setTimeout(() => setIsLoading(false), 100)
-    return () => clearTimeout(timer)
-  }, [lessons.length])
-  
-  // Get the lesson
-  const lesson = lessons.find(l => l.id === lessonId)
-  
-  // Track view and fetch transcript when lesson loads
+  }, [contentId, isCourse])
+
+  // Load data based on content type
   useEffect(() => {
-    if (lesson && lesson.status === 'published') {
-      console.log('🎯 Lesson loaded:', lesson.title, 'YouTube URL:', lesson.youtubeUrl)
-      trackView(lessonId)
+    if (isStandaloneLesson) {
+      // Load lessons for standalone mode
+      if (lessons.length === 0) {
+        setLessonLoading(true)
+        loadLessons().finally(() => setLessonLoading(false))
+      }
+    } else if (isCourse) {
+      // Load course data
+      console.log('📚 Loading course data for:', contentId)
+      console.log('📚 Current course state:', currentCourse)
+      console.log('📚 Course loading state:', courseLoading)
       
-      // Fetch YouTube transcript if it's a YouTube video
-      // TODO: Implement fetchYouTubeTranscript in video-slice
-      // if (lesson.youtubeUrl) {
-      //   console.log('📺 Fetching transcript for YouTube video...')
-      //   fetchYouTubeTranscript(lesson.youtubeUrl)
-      // } else {
-      //   console.log('❌ No YouTube URL found for this lesson')
-      // }
+      // Set loading state immediately
+      setCourseLoadingState('loading')
+      loadCourseById(contentId)
     }
-  }, [lessonId, lesson?.id, lesson?.youtubeUrl])
+  }, [contentId, isStandaloneLesson, isCourse, lessons.length, loadLessons, loadCourseById])
+  
+  // Update course loading state based on store state
+  useEffect(() => {
+    if (isCourse) {
+      if (courseLoading) {
+        setCourseLoadingState('loading')
+      } else if (courseError) {
+        setCourseLoadingState('error')
+      } else if (currentCourse) {
+        setCourseLoadingState('loaded')
+      }
+    }
+  }, [isCourse, courseLoading, courseError, currentCourse])
+  
+  // Set current video for courses (from query param or first video)
+  useEffect(() => {
+    console.log('📹 Course video effect - isCourse:', isCourse, 'currentCourse:', currentCourse, 'videos:', currentCourse?.videos?.length)
+    if (isCourse && currentCourse?.videos?.length) {
+      const videoId = videoQueryParam || currentCourse.videos[0]?.id || ''
+      console.log('📹 Setting current video ID:', videoId)
+      setCurrentVideoId(videoId)
+      
+      if (videoId) {
+        console.log('📹 Loading video data for:', videoId)
+        loadStudentVideo(videoId)
+      }
+    } else if (isCourse && currentCourse && !currentCourse?.videos?.length) {
+      console.log('📹 Course loaded but no videos available:', currentCourse)
+    } else if (isCourse && !currentCourse) {
+      console.log('📹 Course not loaded yet, waiting...')
+    }
+  }, [isCourse, currentCourse, currentCourse?.videos, videoQueryParam, loadStudentVideo])
+  
+  // Video switching function for courses
+  const switchToVideo = (videoId: string) => {
+    if (isCourse) {
+      setCurrentVideoId(videoId)
+      loadStudentVideo(videoId)
+      
+      // Update URL with query param
+      const newUrl = `/learn/${contentId}?v=${videoId}`
+      router.push(newUrl, { scroll: false })
+    }
+  }
+  
+  // Handle 404 redirect for courses (only after loading is complete)
+  useEffect(() => {
+    if (isCourse && !courseLoading && courseError === 'Course not found') {
+      console.log('🚫 Redirecting to 404 - Course not found:', courseError)
+      router.push('/404')
+    }
+  }, [isCourse, courseLoading, courseError, router])
+
+  // Get the lesson (for standalone mode)
+  const lesson = isStandaloneLesson ? lessons.find(l => l.id === contentId) : null
+  
+  // Get current video data based on mode
+  const currentVideo = isCourse 
+    ? storeVideoData || currentCourse?.videos?.find(v => v.id === currentVideoId)
+    : lesson 
+      ? {
+          id: lesson.id,
+          title: lesson.title,
+          description: lesson.description,
+          videoUrl: lesson.videoUrl || lesson.youtubeUrl || '',
+          duration: lesson.duration || '10:00',
+          transcript: [],
+          timestamps: []
+        }
+      : null
+  
+  // Course video navigation
+  const currentVideoIndex = isCourse && currentCourse?.videos 
+    ? currentCourse.videos.findIndex(v => v.id === currentVideoId) 
+    : -1
+  const nextVideo = isCourse && currentCourse?.videos && currentVideoIndex < currentCourse.videos.length - 1 
+    ? currentCourse.videos[currentVideoIndex + 1] 
+    : null
+  const prevVideo = isCourse && currentCourse?.videos && currentVideoIndex > 0 
+    ? currentCourse.videos[currentVideoIndex - 1] 
+    : null
+  
+  // Track view for lessons
+  useEffect(() => {
+    if (isStandaloneLesson && lesson && lesson.status === 'published') {
+      console.log('🎯 Lesson loaded:', lesson.title, 'YouTube URL:', lesson.youtubeUrl)
+      trackView(contentId)
+    }
+  }, [isStandaloneLesson, lesson, contentId, trackView])
   
   // Handle resize
   const handleMouseMove = (e: MouseEvent) => {
@@ -209,13 +322,26 @@ export default function StandaloneLessonPage() {
     return () => document.removeEventListener('mouseleave', handleMouseLeave)
   }, [hasInteractedWithExit, user])
 
-  // Show loading state first
-  if (isLoading) {
+  // Show loading spinner for courses
+  if (isCourse && courseLoadingState === 'loading') {
     return (
-      <div className="flex min-h-screen flex-col">
-        <main className="flex-1 flex items-center justify-center">
-          <LoadingSpinner />
-        </main>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <p className="text-muted-foreground">Loading course...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show loading spinner for lessons
+  if (isStandaloneLesson && lessonLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <p className="text-muted-foreground">Loading lesson...</p>
+        </div>
       </div>
     )
   }
@@ -225,30 +351,11 @@ export default function StandaloneLessonPage() {
     return <InstructorVideoView />
   }
 
-  // Then show not found if lesson doesn't exist
-  if (!lesson) {
-    return (
-      <div className="flex min-h-screen flex-col">
-        <main className="flex-1 flex items-center justify-center">
-          <Card className="p-6">
-            <CardContent className="text-center">
-              <AlertCircle className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Lesson Not Found</h3>
-              <p className="text-muted-foreground mb-4">
-                This lesson may have been removed or is still being processed.
-              </p>
-              <Button asChild>
-                <Link href="/">Back to Home</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        </main>
-      </div>
-    )
-  }
+  
+  // Show not found if no current video (for courses)
 
-  // Check if lesson is draft
-  if (lesson.status === 'draft' && !user) {
+  // Check if lesson is draft (only for standalone lessons)
+  if (isStandaloneLesson && lesson && lesson.status === 'draft' && !user) {
     return (
       <div className="flex min-h-screen flex-col">
         <main className="flex-1 flex items-center justify-center">
@@ -271,61 +378,63 @@ export default function StandaloneLessonPage() {
 
   return (
     <div className="flex h-screen flex-col">
-      {/* Header */}
-      <div className="border-b bg-background flex-shrink-0">
-        <div className="container px-4 py-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/">
-                  <ChevronLeft className="mr-2 h-4 w-4" />
-                  Back to Home
-                </Link>
-              </Button>
-              <div>
-                <h2 className="font-semibold flex items-center gap-2">
-                  {lesson.isFree && (
-                    <Badge variant="secondary" className="text-xs">
-                      Free
-                    </Badge>
-                  )}
-                  Standalone Lesson
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  {lesson.tags.join(" • ")}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCopyLink}
-              >
-                {copiedLink ? (
-                  <>
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    Copied!
-                  </>
-                ) : (
-                  <>
-                    <Share2 className="mr-2 h-4 w-4" />
-                    Share
-                  </>
-                )}
-              </Button>
-              {lesson.ctaText && lesson.ctaLink && (
-                <Button asChild>
-                  <Link href={lesson.ctaLink}>
-                    {lesson.ctaText}
-                    <ArrowRight className="ml-2 h-4 w-4" />
+      {/* Header - Different for courses vs lessons */}
+      {isStandaloneLesson && lesson && (
+        <div className="border-b bg-background flex-shrink-0">
+          <div className="container px-4 py-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/">
+                    <ChevronLeft className="mr-2 h-4 w-4" />
+                    Back to Home
                   </Link>
                 </Button>
-              )}
+                <div>
+                  <h2 className="font-semibold flex items-center gap-2">
+                    {lesson.isFree && (
+                      <Badge variant="secondary" className="text-xs">
+                        Free
+                      </Badge>
+                    )}
+                    Standalone Lesson
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    {lesson.tags.join(" • ")}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyLink}
+                >
+                  {copiedLink ? (
+                    <>
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Share2 className="mr-2 h-4 w-4" />
+                      Share
+                    </>
+                  )}
+                </Button>
+                {lesson.ctaText && lesson.ctaLink && (
+                  <Button asChild>
+                    <Link href={lesson.ctaLink}>
+                      {lesson.ctaText}
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="flex flex-1 min-h-0">
         {/* Main Content */}
@@ -333,9 +442,10 @@ export default function StandaloneLessonPage() {
           {/* Video Player */}
           <div className="flex-1 bg-black p-4">
             <VideoPlayer
-              videoUrl={lesson.videoUrl || lesson.youtubeUrl || ''}
-              title={lesson.title}
-              transcript={[]} // Could be populated from lesson data
+              videoUrl={currentVideo?.videoUrl || ''}
+              title={currentVideo?.title || ''}
+              transcript={currentVideo?.transcript || []}
+              videoId={isCourse ? currentVideoId : contentId}
               onTimeUpdate={handleTimeUpdate}
               onPause={(time) => console.log('Paused at', time)}
               onPlay={() => console.log('Playing')}
@@ -347,23 +457,50 @@ export default function StandaloneLessonPage() {
           <div className="border-t bg-background p-6">
             <div className="mb-6">
               <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h1 className="text-2xl font-bold">{lesson.title}</h1>
-                  <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Eye className="h-4 w-4" />
-                      {lesson.views.toLocaleString()} views
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-4 w-4" />
-                      {lesson.duration || '10:00'}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Sparkles className="h-4 w-4" />
-                      {lesson.aiInteractions} AI interactions
-                    </span>
+                {isStandaloneLesson && lesson ? (
+                  <div>
+                    <h1 className="text-2xl font-bold">{lesson.title}</h1>
+                    <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Eye className="h-4 w-4" />
+                        {lesson.views.toLocaleString()} views
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-4 w-4" />
+                        {lesson.duration || '10:00'}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Sparkles className="h-4 w-4" />
+                        {lesson.aiInteractions} AI interactions
+                      </span>
+                    </div>
                   </div>
-                </div>
+                ) : isCourse && currentCourse ? (
+                  <div>
+                    <h1 className="text-2xl font-bold">{currentCourse.title}</h1>
+                    <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <User className="h-4 w-4" />
+                        {currentCourse.instructor.name}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-4 w-4" />
+                        {Math.floor(currentCourse.duration / 60)} minutes
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Play className="h-4 w-4" />
+                        {currentCourse.videos?.length || 0} videos
+                      </span>
+                    </div>
+                    {currentVideo && (
+                      <div className="mt-2 text-lg font-medium text-muted-foreground">
+                        Current: {currentVideo.title}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <h1 className="text-2xl font-bold">Course</h1>
+                )}
                 <Button
                   variant="outline"
                   onClick={() => updatePreferences({ showChatSidebar: !showChatSidebar })}
@@ -374,11 +511,96 @@ export default function StandaloneLessonPage() {
               </div>
               
               <p className="text-muted-foreground mb-4">
-                {lesson.description}
+                {currentVideo?.description}
               </p>
               
-              {/* Unlock Full Course Banner */}
-              {lesson.relatedCourseId && !user && (
+              {/* Course Video Navigation (only for courses) */}
+              {isCourse && (
+                <div className="flex items-center justify-between mb-6">
+                  <Button
+                    variant="outline"
+                    disabled={!prevVideo}
+                    className="flex items-center gap-2"
+                    onClick={() => prevVideo && switchToVideo(prevVideo.id)}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Previous Lesson
+                  </Button>
+
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Clock className="h-4 w-4" />
+                      <span>{currentVideo?.duration}</span>
+                    </div>
+                    <Badge variant="secondary">
+                      Lesson {currentVideoIndex + 1}
+                    </Badge>
+                  </div>
+
+                  <Button
+                    disabled={!nextVideo}
+                    className="flex items-center gap-2"
+                    onClick={() => nextVideo && switchToVideo(nextVideo.id)}
+                  >
+                    {nextVideo ? (
+                      <>
+                        Next Lesson
+                        <ChevronRight className="h-4 w-4" />
+                      </>
+                    ) : (
+                      <>
+                        Course Complete!
+                        <CheckCircle2 className="h-4 w-4" />
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+              
+              {/* Course Playlist (only for courses) */}
+              {isCourse && currentCourse && currentCourse.videos && (
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <BookOpen className="h-5 w-5" />
+                      Course Content
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {currentCourse.videos.map((video, index) => (
+                        <div
+                          key={video.id}
+                          className={`flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer ${
+                            video.id === currentVideoId 
+                              ? 'bg-primary/10 border border-primary/20' 
+                              : 'hover:bg-muted'
+                          }`}
+                          onClick={() => switchToVideo(video.id)}
+                        >
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-sm font-medium">
+                            {video.id === currentVideoId ? (
+                              <Play className="h-4 w-4" />
+                            ) : (
+                              index + 1
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-medium text-sm">{video.title}</p>
+                            <p className="text-xs text-muted-foreground">{video.duration}</p>
+                          </div>
+                          {index < currentVideoIndex && (
+                            <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Unlock Full Course Banner (only for lessons) */}
+              {isStandaloneLesson && lesson && lesson.relatedCourseId && !user && (
                 <Card className="mb-4 border-primary bg-primary/5">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
@@ -402,8 +624,8 @@ export default function StandaloneLessonPage() {
                 </Card>
               )}
 
-              {/* AI Features Info */}
-              {(lesson.transcriptEnabled || lesson.confusionsEnabled || lesson.segmentSelectionEnabled) && (
+              {/* AI Features Info (only for lessons) */}
+              {isStandaloneLesson && lesson && (lesson.transcriptEnabled || lesson.confusionsEnabled || lesson.segmentSelectionEnabled) && (
                 <Alert>
                   <Sparkles className="h-4 w-4" />
                   <AlertDescription>
@@ -433,23 +655,27 @@ export default function StandaloneLessonPage() {
               )}
             </div>
             
-            {/* Comments Section */}
-            <div className="mt-8">
-              <CommentsSection 
-                lessonId={lessonId}
-                user={user}
-                onSignupPrompt={() => setShowEmailCapture(true)}
-              />
-            </div>
+            {/* Comments Section (only for lessons) */}
+            {isStandaloneLesson && lesson && (
+              <div className="mt-8">
+                <CommentsSection 
+                  lessonId={contentId}
+                  user={user}
+                  onSignupPrompt={() => setShowEmailCapture(true)}
+                />
+              </div>
+            )}
             
-            {/* Related Lessons */}
-            <div className="mt-8">
-              <RelatedLessonsCarousel
-                currentLessonId={lessonId}
-                lessons={lessons}
-                title="Continue Learning"
-              />
-            </div>
+            {/* Related Lessons (only for lessons) */}
+            {isStandaloneLesson && lesson && (
+              <div className="mt-8">
+                <RelatedLessonsCarousel
+                  currentLessonId={contentId}
+                  lessons={lessons}
+                  title="Continue Learning"
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -471,8 +697,8 @@ export default function StandaloneLessonPage() {
               style={{ width: `${sidebarWidth}px` }}
             >
               <AIChatSidebar
-                courseId="lesson" // Special ID for standalone lessons
-                videoId={lessonId}
+                courseId={isCourse ? contentId : "lesson"} 
+                videoId={isCourse ? currentVideoId : contentId}
                 currentTime={currentTime}
                 onAgentTrigger={handleAgentTrigger}
               />

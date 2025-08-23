@@ -240,6 +240,18 @@ export const VideoEngine = forwardRef<VideoEngineRef, VideoEngineProps>(
       )
     }
 
+    // If no video URL is provided, show "Video not found" message
+    if (!videoUrl || videoUrl.trim() === '') {
+      return (
+        <div className="w-full h-full flex items-center justify-center bg-black">
+          <div className="text-center text-white">
+            <div className="text-xl font-medium mb-2">Video not found</div>
+            <div className="text-sm text-white/70">This video is not available</div>
+          </div>
+        </div>
+      )
+    }
+
     // Otherwise render a regular video element
     return (
       <video
