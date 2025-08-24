@@ -3,10 +3,10 @@
 import dynamic from "next/dynamic"
 import { LoadingSpinner } from "@/components/common/LoadingSpinner"
 
-// Dynamically import the NEW VideoStudio component with bulletproof architecture
+// Dynamically import the SIMPLE VideoStudio component
 const VideoStudio = dynamic(
-  () => import("@/components/studio/VideoStudioNew").then(mod => ({ 
-    default: mod.VideoStudioNew 
+  () => import("@/components/simple-studio/SimpleStudio").then(mod => ({ 
+    default: mod.SimpleStudio 
   })),
   { 
     loading: () => (
