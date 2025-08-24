@@ -35,6 +35,7 @@ export const useAuth = (): UseAuthReturn => {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<AuthError | null>(null)
   const [csrfToken, setCsrfToken] = useState<string | null>(null)
+  const [accessToken, setAccessToken] = useState<string | null>(null)
   
   // Determine auth status
   const status: AuthStatus = user ? 'authenticated' : 'unauthenticated'
@@ -95,9 +96,12 @@ export const useAuth = (): UseAuthReturn => {
       
       console.log('Login response:', response)
       
-      // Extract user data and CSRF token from response
-      if (response.data?.user) {
-        const userData = response.data.user
+      // Handle both response formats: {data: {user: ...}} or {user: ...}
+      const userData = response.data?.user || response.user
+      const responseCsrfToken = response.data?.csrf_token || response.csrf_token
+      const responseAccessToken = response.data?.access_token || response.access_token || response.session?.access_token
+      
+      if (userData) {
         
         // Map API response to User type
         const user: User = {
@@ -124,8 +128,15 @@ export const useAuth = (): UseAuthReturn => {
         setUser(user)
         
         // Store CSRF token if provided
-        if (response.data.csrf_token) {
-          setCsrfToken(response.data.csrf_token)
+        if (responseCsrfToken) {
+          setCsrfToken(responseCsrfToken)
+        }
+        
+        // Store access token if provided
+        if (responseAccessToken) {
+          setAccessToken(responseAccessToken)
+          // Also store in localStorage for persistence
+          localStorage.setItem('access_token', responseAccessToken)
         }
         
         // Store remember me preference
@@ -133,6 +144,7 @@ export const useAuth = (): UseAuthReturn => {
           localStorage.setItem('remember_me', 'true')
         } else {
           localStorage.removeItem('remember_me')
+      localStorage.removeItem('access_token')
         }
         
         return { success: true }
@@ -247,9 +259,11 @@ export const useAuth = (): UseAuthReturn => {
       
       // Clear local storage
       localStorage.removeItem('remember_me')
+      localStorage.removeItem('access_token')
       
-      // Clear CSRF token
+      // Clear tokens
       setCsrfToken(null)
+      setAccessToken(null)
       
       // Clear store state
       storeLogout()
@@ -310,13 +324,20 @@ export const useAuth = (): UseAuthReturn => {
     try {
       const response = await apiRequest<AuthResponse>('/auth/refresh', {
         method: 'POST',
-      }, csrfToken)
+      }, csrfToken, accessToken)
       
       if (response.data?.user) {
         // Update CSRF token if provided
         if (response.data?.csrf_token) {
           setCsrfToken(response.data.csrf_token)
         }
+        
+        // Update access token if provided
+        if (response.data?.access_token) {
+          setAccessToken(response.data.access_token)
+          localStorage.setItem('access_token', response.data.access_token)
+        }
+        
         return true
       }
       return false
@@ -324,14 +345,14 @@ export const useAuth = (): UseAuthReturn => {
       console.error('Token refresh failed:', err)
       return false
     }
-  }, [apiRequest, csrfToken])
+  }, [apiRequest, csrfToken, accessToken])
   
   // Get user profile function
   const getUserProfile = useCallback(async () => {
     try {
       const response = await apiRequest<AuthUserData>('/user/profile', {
         method: 'GET',
-      }, csrfToken)
+      }, csrfToken, accessToken)
       
       if (response.data) {
         const userData = response.data
@@ -363,6 +384,12 @@ export const useAuth = (): UseAuthReturn => {
       }
       return null
     } catch (err) {
+      // Handle 404 error when profile endpoint doesn't exist
+      if (err instanceof Error && err.message.includes('404')) {
+        console.warn('User profile endpoint not available on server yet')
+        return null
+      }
+      
       // Don't log 401 or authentication errors - they're expected when not authenticated
       if (err instanceof Error && 
           !err.message.includes('401') && 
@@ -372,7 +399,7 @@ export const useAuth = (): UseAuthReturn => {
       // Re-throw the error so the calling code can handle it
       throw err
     }
-  }, [setUser, apiRequest, csrfToken])
+  }, [setUser, apiRequest, csrfToken, accessToken])
   
   // Update profile function
   const updateProfile = useCallback(async (data: Partial<User> & { phone?: string; bio?: string; location?: string }) => {
@@ -397,7 +424,7 @@ export const useAuth = (): UseAuthReturn => {
             avatar_url: data.avatar,
           },
         }),
-      }, token)
+      }, token, accessToken)
       
       if (response.data) {
         // Update user in store
@@ -417,7 +444,7 @@ export const useAuth = (): UseAuthReturn => {
     } finally {
       setIsLoading(false)
     }
-  }, [user, setUser, csrfToken, fetchCsrfToken, apiRequest])
+  }, [user, setUser, csrfToken, accessToken, fetchCsrfToken, apiRequest])
   
   // Delete account function
   const deleteAccount = useCallback(async () => {
@@ -437,9 +464,11 @@ export const useAuth = (): UseAuthReturn => {
       
       // Clear local storage
       localStorage.removeItem('remember_me')
+      localStorage.removeItem('access_token')
       
-      // Clear CSRF token
+      // Clear tokens
       setCsrfToken(null)
+      setAccessToken(null)
       
       // Clear store state
       storeLogout()
@@ -516,6 +545,14 @@ export const useAuth = (): UseAuthReturn => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Only run once on mount
+
+  // Restore access token from localStorage on initialization
+  useEffect(() => {
+    const storedToken = localStorage.getItem('access_token')
+    if (storedToken) {
+      setAccessToken(storedToken)
+    }
+  }, [])
   
   // Set up token refresh interval
   useEffect(() => {

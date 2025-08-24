@@ -199,10 +199,14 @@ export default function CoursePreviewPage() {
                 {/* Instructor */}
                 {instructor && (
                   <div className="flex items-start gap-4 rounded-lg border p-4">
-                    <img
+                    <Image
                       src={instructor.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${instructor.name}`}
-                      alt={instructor.name}
-                      className="h-16 w-16 rounded-full"
+                      alt={`${instructor.name} profile picture`}
+                      width={64}
+                      height={64}
+                      priority={false}
+                      className="h-16 w-16 rounded-full object-cover"
+                      sizes="64px"
                     />
                     <div className="flex-1">
                       <h3 className="font-semibold">{instructor.name}</h3>
@@ -450,10 +454,14 @@ export default function CoursePreviewPage() {
                   <Card>
                     <CardContent className="pt-6">
                       <div className="flex items-start gap-6">
-                        <img
+                        <Image
                           src={instructor.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${instructor.name}`}
-                          alt={instructor.name}
-                          className="h-24 w-24 rounded-full"
+                          alt={`${instructor.name} profile picture`}
+                          width={96}
+                          height={96}
+                          priority={false}
+                          className="h-24 w-24 rounded-full object-cover"
+                          sizes="96px"
                         />
                         <div className="flex-1">
                           <h3 className="text-2xl font-bold mb-2">{instructor.name}</h3>

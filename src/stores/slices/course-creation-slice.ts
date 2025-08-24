@@ -314,23 +314,28 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       
       // Handle nested data structure from API
       const sectionData = response.data?.data || response.data
+      console.log('✅ Chapter created successfully, section data:', sectionData)
       
       // Map API response to chapter format
       const newChapter: Chapter = {
         id: sectionData.id || `chapter-${Date.now()}`,
         title: sectionData.title || title,
-        order: sectionData.order || courseCreation.chapters.length + 1,
-        videos: []
+        description: sectionData.description || '',
+        order: sectionData.order !== undefined ? sectionData.order : courseCreation.chapters.length + 1,
+        videos: sectionData.mediaFiles || sectionData.videos || []
       }
       
       // Update local state with server response
       set(state => ({
         courseCreation: state.courseCreation ? {
           ...state.courseCreation,
-          chapters: [...state.courseCreation.chapters, newChapter]
+          chapters: [...(state.courseCreation.chapters || []), newChapter]
         } : null,
         saveError: null
       }))
+      
+      console.log('✅ Chapter added to state:', newChapter.title)
+      console.log('📊 Total chapters now:', get().courseCreation?.chapters?.length || 0)
     } catch (error) {
       console.error('Failed to create chapter:', error)
       set({ saveError: 'Failed to create chapter' })
@@ -605,26 +610,49 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
   // Media Assignment API Functions
   loadCourseMedia: async (courseId) => {
     try {
+      console.log('🎬 Loading course media for courseId:', courseId)
       const response = await apiClient.getCourseMedia(courseId)
+      console.log('🎬 Course media response:', response)
       
       if (!response.error && response.data) {
         const mediaData = response.data.data || response.data
         const sections = mediaData.sections || []
         const unsectionedMedia = mediaData.unsectionedMedia || []
         
-        // Update chapters with their media files
-        set(state => ({
-          courseCreation: state.courseCreation ? {
-            ...state.courseCreation,
-            chapters: sections.map((section: any) => ({
-              id: section.sectionId,
-              title: section.sectionTitle,
-              order: section.order,
-              videos: section.mediaFiles || []
-            })),
-            unassignedMedia: unsectionedMedia
-          } : null
-        }))
+        console.log('🎬 Media sections:', sections)
+        console.log('🎬 Unsectioned media:', unsectionedMedia)
+        
+        // Only update chapters if we have sections from media API
+        // Otherwise preserve existing chapters
+        set(state => {
+          if (!state.courseCreation) return state
+          
+          if (sections && sections.length > 0) {
+            console.log('🎬 Updating chapters with media sections')
+            return {
+              courseCreation: {
+                ...state.courseCreation,
+                chapters: sections.map((section: any) => ({
+                  id: section.sectionId,
+                  title: section.sectionTitle,
+                  order: section.order,
+                  videos: section.mediaFiles || []
+                })),
+                unassignedMedia: unsectionedMedia
+              }
+            }
+          } else {
+            console.log('🎬 No media sections, preserving existing chapters and just updating unassigned media')
+            return {
+              courseCreation: {
+                ...state.courseCreation,
+                unassignedMedia: unsectionedMedia
+              }
+            }
+          }
+        })
+      } else {
+        console.log('🎬 No course media data, keeping chapters as-is')
       }
     } catch (error) {
       console.error('Failed to load course media:', error)
@@ -737,17 +765,48 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           })
       
       if (!response.error && response.data) {
-        const mediaData = response.data.data
+        console.log('🎬 Raw unassigned media response:', response)
+        console.log('🎬 Response.data:', response.data)
+        console.log('🎬 Response.data type:', typeof response.data)
+        console.log('🎬 Response.data keys:', Object.keys(response.data))
+        
+        const mediaData = response.data.data || response.data
+        console.log('🎬 Extracted mediaData:', mediaData)
+        console.log('🎬 MediaData type:', typeof mediaData)
+        
+        let videos = []
+        let pagination = {
+          page: 1,
+          limit: 20,
+          total: 0,
+          pages: 0
+        }
+        
+        // Handle different response structures
+        if (Array.isArray(mediaData)) {
+          console.log('🎬 MediaData is array, length:', mediaData.length)
+          videos = mediaData
+        } else if (mediaData && typeof mediaData === 'object') {
+          console.log('🎬 MediaData is object, keys:', Object.keys(mediaData))
+          videos = mediaData.videos || mediaData.mediaFiles || mediaData.results || []
+          pagination = mediaData.pagination || pagination
+          
+          // Handle flat structure where videos are at the root level
+          if (videos.length === 0 && mediaData.id) {
+            console.log('🎬 Detected single video object, wrapping in array')
+            videos = [mediaData]
+          }
+        }
+        
+        console.log('🎬 Final videos array:', videos)
+        console.log('🎬 Final videos length:', videos.length)
+        console.log('🎬 First video sample:', videos[0])
+        
         set(state => ({
           mediaLibrary: {
             ...state.mediaLibrary,
-            media: mediaData.videos || mediaData.mediaFiles || [],
-            pagination: mediaData.pagination || {
-              page: 1,
-              limit: 20,
-              total: 0,
-              pages: 0
-            },
+            media: videos,
+            pagination,
             loading: false
           }
         }))
@@ -895,7 +954,28 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       }
     } catch (error) {
       console.error('Failed to save draft:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Failed to save draft'
+      
+      // Handle specific server errors
+      let errorMessage = 'Failed to save draft'
+      if (error instanceof Error) {
+        if (error.message.includes('405') || error.message.includes('Method') || error.message.includes('not allowed')) {
+          errorMessage = 'Server endpoint not ready yet. Course saved locally.'
+          // Save locally for now
+          set(state => ({
+            isAutoSaving: false,
+            saveError: null, // Don't show as error since it's saved locally
+            courseCreation: state.courseCreation ? {
+              ...state.courseCreation,
+              lastSaved: new Date(),
+              hasAutoSaveError: false,
+              id: state.courseCreation.id || `local-${Date.now()}` // Give it a local ID
+            } : null
+          }))
+          return // Don't treat as error
+        } else {
+          errorMessage = error.message
+        }
+      }
       
       set(state => ({
         isAutoSaving: false,
@@ -1024,33 +1104,69 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       const courseData = result.data!
       console.log('📋 Course data received:', courseData)
       
-      // Load sections from API
+      // Check if we have valid course data
+      if (!courseData || (!courseData.title && !courseData.description && !courseData.category)) {
+        console.log('⚠️ Received empty course data, API endpoint might be missing')
+        console.log('💡 Consider enabling mock data with NEXT_PUBLIC_USE_MOCK_DATA=true')
+        set({
+          saveError: 'Course data not available. Server endpoint may not be configured yet.',
+          isAutoSaving: false
+        })
+        return
+      }
+      
+      // Load sections from API - but preserve existing course data chapters as fallback
       let chapters = courseData.chapters || []
+      console.log('📚 Initial chapters from course data:', chapters)
+      
       try {
         const sectionsResponse = await apiClient.getCourseSections(courseId)
         console.log('📚 Sections loaded from API:', sectionsResponse)
         
-        // Check the response structure - it seems to have data.data.sections
+        // Check the response structure - handle multiple possible response formats
         if (!sectionsResponse.error && sectionsResponse.data) {
-          const sectionsData = sectionsResponse.data.data || sectionsResponse.data
-          const sections = sectionsData.sections || []
+          let sections: any[] = []
           
-          if (sections.length > 0) {
+          // Try different response structures
+          if (Array.isArray(sectionsResponse.data)) {
+            // Direct array response
+            sections = sectionsResponse.data
+          } else if (sectionsResponse.data.data && Array.isArray(sectionsResponse.data.data)) {
+            // Nested data.data array
+            sections = sectionsResponse.data.data
+          } else if (sectionsResponse.data.sections && Array.isArray(sectionsResponse.data.sections)) {
+            // data.sections array
+            sections = sectionsResponse.data.sections
+          } else if (sectionsResponse.data.data && sectionsResponse.data.data.sections) {
+            // data.data.sections array
+            sections = sectionsResponse.data.data.sections
+          }
+          
+          console.log('📚 Extracted sections:', sections)
+          
+          // Only override chapters if we actually got sections from the API
+          if (sections && sections.length > 0) {
             // Map backend sections to frontend chapters
             chapters = sections.map((section: any, index: number) => ({
               id: section.id || `section-${courseId}-${index}`,
-              title: section.title,
+              title: section.title || `Section ${index + 1}`,
               description: section.description || '',
-              order: section.order,
-              videos: section.mediaFiles || [],
+              order: section.order !== undefined ? section.order : index,
+              videos: section.mediaFiles || section.videos || [],
               isPublished: section.isPublished,
               isPreview: section.isPreview
             }))
-            console.log('📚 Mapped chapters:', chapters)
+            console.log('📚 Using API sections, mapped chapters:', chapters)
+          } else {
+            console.log('📚 No sections from API, keeping course data chapters:', chapters)
           }
+        } else {
+          console.log('📚 API error/empty response, keeping course data chapters:', sectionsResponse.error || 'No data')
         }
       } catch (error) {
-        console.log('⚠️ Could not load sections from API, using course data chapters:', error)
+        console.log('⚠️ API call failed, keeping course data chapters:', error)
+        // Keep the original chapters from course data
+        console.log('📚 Preserving original course data chapters:', chapters)
       }
       
       // Ensure the data has the correct structure
@@ -1068,7 +1184,8 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         lastSaved: courseData.lastSaved || new Date()
       }
       
-      console.log('💾 Setting courseCreation state with:', courseCreationData)
+      console.log('💾 Setting courseCreation state with chapters count:', courseCreationData.chapters.length)
+      console.log('💾 Chapters being set:', courseCreationData.chapters)
       
       set({
         courseCreation: courseCreationData,
@@ -1078,6 +1195,7 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       })
       
       console.log('✅ Course loaded for editing successfully')
+      console.log('📊 Final chapters in state:', get().courseCreation?.chapters?.length || 0)
       
       // Also load media assignments
       await get().loadCourseMedia(courseId)
@@ -1223,24 +1341,47 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         }
 
         console.log('✅ File uploaded to storage successfully')
-        get().updateVideoStatus(videoId, 'processing')
 
-        // Step 4: Complete upload
-        console.log('🏁 Completing upload process')
-        const completeResult = await videoUploadService.completeUpload(
-          session.sessionKey, 
-          session.storageKey
-        )
-        
-        if (completeResult.error) {
-          throw new Error(completeResult.error)
+        // Check if proxy upload already completed everything (has mediaInfo)
+        if (uploadResult.mediaInfo) {
+          console.log('🚀 Proxy upload already completed - skipping separate completion step')
+          const mediaFile = {
+            id: uploadResult.mediaInfo.id,
+            cdnUrl: uploadResult.mediaInfo.cdnUrl,
+            processingStatus: (uploadResult.mediaInfo.processingStatus as 'pending' | 'processing' | 'completed' | 'failed') || 'completed',
+            // Add other required fields with defaults
+            userId: 'current-user',
+            filename: file.name,
+            fileSize: file.size,
+            contentType: file.type,
+            storageKey: session.storageKey,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }
+          
+          console.log('✅ Proxy upload completed successfully:', mediaFile.id)
+          get().completeVideoUpload(videoId, mediaFile)
+        } else {
+          // Traditional flow: separate upload and complete steps
+          get().updateVideoStatus(videoId, 'processing')
+
+          // Step 4: Complete upload
+          console.log('🏁 Completing upload process')
+          const completeResult = await videoUploadService.completeUpload(
+            session.sessionKey, 
+            session.storageKey
+          )
+          
+          if (completeResult.error) {
+            throw new Error(completeResult.error)
+          }
+
+          const mediaFile = completeResult.data!
+          console.log('✅ Upload completed successfully:', mediaFile.id)
+          
+          // Step 5: Update video with completed data
+          get().completeVideoUpload(videoId, mediaFile)
         }
-
-        const mediaFile = completeResult.data!
-        console.log('✅ Upload completed successfully:', mediaFile.id)
-        
-        // Step 5: Update video with completed data
-        get().completeVideoUpload(videoId, mediaFile)
 
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Upload failed'

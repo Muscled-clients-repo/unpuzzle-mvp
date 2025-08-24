@@ -50,7 +50,6 @@ export default function CreateCoursePage() {
     addVideosToQueue,
     updateVideoName,
     removeVideo,
-    createChapter,
     updateChapter,
     deleteChapter,
     moveVideoToChapter,
@@ -89,21 +88,46 @@ export default function CreateCoursePage() {
   // Initialize course if not exists
   useEffect(() => {
     if (!courseCreation) {
+      // Create initial chapter locally without API call
+      const initialChapter = {
+        id: `temp-chapter-${Date.now()}`,
+        title: 'Chapter 1',
+        description: '',
+        order: 1,
+        videos: []
+      }
+      
       setCourseInfo({
         title: '',
         description: '',
         category: '',
         level: 'beginner',
         price: 0,
-        chapters: [],
+        chapters: [initialChapter],
         videos: [],
         status: 'draft',
         autoSaveEnabled: false
       })
-      // Auto-create Chapter 1
-      createChapter('Chapter 1')
     }
-  }, [courseCreation, setCourseInfo, createChapter])
+  }, [courseCreation, setCourseInfo])
+
+  // Create local chapter (before course is saved)
+  const createLocalChapter = useCallback((title: string) => {
+    if (!courseCreation) return
+    
+    const newChapter = {
+      id: `temp-chapter-${Date.now()}`,
+      title,
+      description: '',
+      order: courseCreation.chapters.length + 1,
+      videos: []
+    }
+    
+    setCourseInfo({
+      ...courseCreation,
+      chapters: [...courseCreation.chapters, newChapter]
+    })
+  }, [courseCreation, setCourseInfo])
 
   // Handle file drop
   const handleFileDrop = useCallback((e: React.DragEvent) => {
@@ -484,7 +508,7 @@ export default function CreateCoursePage() {
                       Organize your videos into chapters
                     </CardDescription>
                   </div>
-                  <Button onClick={() => createChapter(`Chapter ${(courseCreation?.chapters.length || 0) + 1}`)}>
+                  <Button onClick={() => createLocalChapter(`Chapter ${(courseCreation?.chapters.length || 0) + 1}`)}>
                     <Plus className="mr-2 h-4 w-4" />
                     Add Chapter
                   </Button>

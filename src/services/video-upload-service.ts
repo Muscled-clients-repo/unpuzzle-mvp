@@ -32,8 +32,19 @@ export interface UploadSession {
   storageKey: string
   expiresIn?: number  // Optional
   useProxy?: boolean  // Flag to use proxy upload
+  use_proxy?: boolean  // Alternative flag name from backend
   proxyUrl?: string  // Proxy endpoint URL
   cdnUrl?: string  // CDN URL for the uploaded file
+  method?: string  // HTTP method for upload (PUT, POST, etc.)
+  use_signed_url?: boolean  // Flag to indicate signed URL upload
+  // Backend field names
+  session_id?: string
+  upload_id?: string
+  upload_url?: string
+  storage_url?: string
+  cdn_url?: string
+  original_session_id?: string
+  original_upload_url?: string
 }
 
 export interface UploadProgress {
@@ -46,6 +57,12 @@ export interface UploadProgress {
 export interface ServiceResult<T> {
   data?: T
   error?: string
+  mediaInfo?: {
+    id: string
+    uploadId: string
+    cdnUrl: string
+    processingStatus: string
+  }
 }
 
 export interface MediaFilters {
@@ -99,8 +116,13 @@ export class VideoUploadService {
       filename: file.name,
       fileSize: file.size,
       contentType: file.type,
-      courseId
+      courseId,
+      // Add fields that backend might expect
+      storage_url: `videos/${courseId || 'default'}/${Date.now()}_${file.name}`,
+      use_proxy: true  // Enable proxy upload to avoid CORS issues
     }
+    
+    console.log('📦 Upload initiation payload:', JSON.stringify(payload, null, 2))
     
     try {
       const response = await apiClient.post<UploadSession>('/api/v1/media/upload/initiate', payload)
@@ -127,20 +149,45 @@ export class VideoUploadService {
       // Handle nested response structure
       let sessionData = response.data
       
-      // Check if the data is nested (backend returns {data: {...}, ok: true})
-      if (sessionData && 'data' in sessionData && 'ok' in sessionData) {
-        console.log('📦 Detected nested response structure')
+      // Check if the data is nested (backend returns {data: {...}, ok: true} or {data: {...}, success: true})
+      if (sessionData && 'data' in sessionData && ('ok' in sessionData || 'success' in sessionData)) {
+        console.log('📦 Detected nested response structure with success/ok wrapper')
         sessionData = sessionData.data
       }
       
-      // Auto-detect proxy upload if useProxy flag is present
-      if (sessionData && sessionData.useProxy) {
-        console.log('🔄 Backend requested proxy upload (CORS workaround)')
+      // Map backend field names to frontend expectations
+      if (sessionData && sessionData.session_id && !sessionData.sessionKey) {
+        console.log('🔧 Mapping backend field names to frontend format')
+        sessionData = {
+          ...sessionData,
+          sessionKey: sessionData.session_id,
+          uploadUrl: sessionData.upload_url,
+          cdnUrl: sessionData.cdn_url,
+          storageKey: sessionData.storage_url || `videos/user/${sessionData.session_id}`, // fallback storage key
+          // Keep original fields for reference
+          original_session_id: sessionData.session_id,
+          original_upload_url: sessionData.upload_url
+        } as UploadSession
+        console.log('🔧 Mapped sessionKey:', sessionData.sessionKey)
+        console.log('🔧 Mapped uploadUrl:', sessionData.uploadUrl)
+        console.log('🔧 Mapped storageKey:', sessionData.storageKey)
+      }
+      
+      // Auto-detect proxy upload if useProxy flag is present or if we requested it
+      if (sessionData && (sessionData.useProxy || sessionData.use_proxy)) {
+        console.log('🔄 Backend configured for proxy upload (CORS workaround)')
+        sessionData.useProxy = true
+        sessionData.proxyUrl = sessionData.proxyUrl || '/api/v1/media/upload/proxy'
         console.log('🌐 Proxy endpoint:', sessionData.proxyUrl)
       }
-      // Auto-detect B2 native if headers are present but b2_native flag is missing
-      else if (sessionData && sessionData.headers && !sessionData.b2_native) {
-        console.log('🔄 Auto-detected B2 native upload (headers present)')
+      // Auto-detect upload method based on the response structure
+      else if (sessionData && sessionData.headers && sessionData.method === 'PUT' && sessionData.uploadUrl) {
+        console.log('🔄 Auto-detected signed URL upload (PUT method with headers)')
+        sessionData.use_signed_url = true
+      }
+      // Auto-detect B2 native if headers are present but no uploadUrl (direct B2 upload)
+      else if (sessionData && sessionData.headers && !sessionData.uploadUrl && !sessionData.b2_native) {
+        console.log('🔄 Auto-detected B2 native upload (headers present, no uploadUrl)')
         sessionData.b2_native = true
       }
       
@@ -195,6 +242,11 @@ export class VideoUploadService {
       console.log('🔄 Using proxy upload method')
       return this.uploadFileViaProxy(session, file, onProgress)
     }
+    // Check if this is a signed URL upload (PUT method with headers)
+    else if (session.use_signed_url && session.uploadUrl && session.method === 'PUT') {
+      console.log('🔗 Using signed URL upload method (PUT)')
+      return this.uploadFileSignedUrl(session, file, onProgress)
+    }
     // Check if this is a B2 native upload
     else if (session.b2_native && session.headers) {
       console.log('🚀 Using B2 native upload method')
@@ -240,14 +292,31 @@ export class VideoUploadService {
               const response = JSON.parse(xhr.responseText)
               console.log('📋 Proxy upload response:', response)
               
-              if (response.ok && response.data) {
+              if (response.success || (response.ok && response.data)) {
                 console.log('✅ File uploaded successfully via proxy')
-                console.log('📁 File ID:', response.data.fileId)
-                console.log('📏 File Size:', response.data.size)
-                resolve({ data: undefined })
+                console.log('📁 Media File ID:', response.media_file_id || response.data?.fileId)
+                console.log('📁 Upload ID:', response.upload_id)
+                console.log('🌐 CDN URL:', response.cdn_url)
+                console.log('⚙️ Processing Status:', response.processing_status)
+                
+                // Store the media file info for later use
+                if (response.media_file_id) {
+                  // Create a temporary property to pass media info to the complete upload step
+                  resolve({ 
+                    data: undefined,
+                    mediaInfo: {
+                      id: response.media_file_id,
+                      uploadId: response.upload_id,
+                      cdnUrl: response.cdn_url,
+                      processingStatus: response.processing_status
+                    }
+                  })
+                } else {
+                  resolve({ data: undefined })
+                }
               } else {
                 console.error('❌ Proxy upload returned error:', response)
-                resolve({ error: response.error || 'Proxy upload failed' })
+                resolve({ error: response.error || response.message || 'Proxy upload failed' })
               }
             } catch (e) {
               console.log('📝 Proxy upload response (non-JSON):', xhr.responseText)
@@ -394,6 +463,74 @@ export class VideoUploadService {
     })
   }
 
+  // Signed URL upload method (PUT request with headers)
+  private async uploadFileSignedUrl(
+    session: UploadSession,
+    file: File,
+    onProgress?: (progress: number) => void
+  ): Promise<ServiceResult<void>> {
+    console.log('🔗 Signed URL upload to:', session.uploadUrl)
+    console.log('🔗 Method:', session.method)
+    console.log('📝 Headers:', session.headers)
+    
+    return new Promise((resolve) => {
+      try {
+        const xhr = new XMLHttpRequest()
+        
+        // Track upload progress
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable && onProgress) {
+            const progress = Math.round((event.loaded / event.total) * 100)
+            console.log(`📊 Signed URL Upload progress: ${progress}%`)
+            onProgress(progress)
+          }
+        }
+        
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            console.log('✅ Signed URL file upload successful')
+            resolve({ data: undefined })
+          } else {
+            console.error('❌ Signed URL upload failed:', xhr.status, xhr.statusText)
+            console.error('Response:', xhr.responseText)
+            resolve({ error: `Signed URL upload failed with status ${xhr.status}` })
+          }
+        }
+        
+        xhr.onerror = () => {
+          console.error('❌ Signed URL upload network error')
+          resolve({ error: 'Network error during signed URL upload' })
+        }
+        
+        xhr.ontimeout = () => {
+          console.error('❌ Signed URL upload timeout')
+          resolve({ error: 'Signed URL upload timeout' })
+        }
+        
+        // Open connection with the specified method (usually PUT)
+        xhr.open(session.method || 'PUT', session.uploadUrl || '')
+        
+        // Set headers from the session
+        if (session.headers) {
+          Object.entries(session.headers).forEach(([key, value]) => {
+            xhr.setRequestHeader(key, value)
+            console.log(`📝 Set header ${key}: ${value}`)
+          })
+        }
+        
+        xhr.timeout = 30 * 60 * 1000 // 30 minutes timeout
+        
+        // Send the raw file data (not FormData for signed URL uploads)
+        console.log('📤 Sending raw file data via signed URL...')
+        xhr.send(file)
+        
+      } catch (error) {
+        console.error('❌ Signed URL upload preparation error:', error)
+        resolve({ error: error instanceof Error ? error.message : 'Failed to prepare signed URL upload' })
+      }
+    })
+  }
+
   // S3-style FormData upload (original method)
   private uploadFileS3Style(
     session: UploadSession,
@@ -455,6 +592,21 @@ export class VideoUploadService {
 
   async completeUpload(sessionKey: string, storageKey: string): Promise<ServiceResult<MediaFile>> {
     console.log('🏁 Completing upload:', { sessionKey, storageKey })
+    console.log('🔍 sessionKey type:', typeof sessionKey, 'value:', sessionKey)
+    console.log('🔍 storageKey type:', typeof storageKey, 'value:', storageKey)
+    
+    // Validate inputs
+    if (!sessionKey || typeof sessionKey !== 'string') {
+      const error = 'Invalid sessionKey: ' + JSON.stringify(sessionKey)
+      console.error('❌ ' + error)
+      return { error }
+    }
+    
+    if (!storageKey || typeof storageKey !== 'string') {
+      const error = 'Invalid storageKey: ' + JSON.stringify(storageKey)
+      console.error('❌ ' + error)
+      return { error }
+    }
     
     // Mock data support
     if (useMockData) {
@@ -486,11 +638,21 @@ export class VideoUploadService {
       return { data: mockMediaFile }
     }
     
+    // Map frontend field names back to backend expectations
+    const payload = {
+      sessionKey,  // Keep frontend name for now
+      storageKey,  // Keep frontend name for now
+      session_id: sessionKey, // Add backend expected name
+      upload_id: sessionKey   // Also try upload_id in case backend expects it
+    }
+    
+    console.log('📦 Request payload:', JSON.stringify(payload, null, 2))
+    console.log('📦 Payload stringified length:', JSON.stringify(payload).length)
+    
     try {
-      const response = await apiClient.post<MediaFile>('/api/v1/media/upload/complete', {
-        sessionKey,
-        storageKey
-      })
+      const response = await apiClient.post<MediaFile>('/api/v1/media/upload/complete', payload)
+      
+      console.log('📡 Complete upload response:', response)
       
       if (response.error) {
         console.error('❌ Upload completion failed:', response.error)

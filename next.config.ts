@@ -1,4 +1,9 @@
 import type { NextConfig } from "next";
+import bundleAnalyzer from '@next/bundle-analyzer';
+
+const withBundleAnalyzer = bundleAnalyzer({
+  enabled: process.env.ANALYZE === 'true',
+});
 
 const nextConfig: NextConfig = {
   images: {
@@ -28,6 +33,15 @@ const nextConfig: NextConfig = {
     config.watchOptions = {
       ignored: ['**/node_modules/**', '**/.git/**', '**/.next/**', '**/nh-logs/**'],
     };
+    
+    // Optimize bundle with tree-shaking
+    config.optimization = {
+      ...config.optimization,
+      usedExports: true,
+      providedExports: true,
+      sideEffects: false,
+    };
+    
     return config;
   },
   // Turbopack configuration (now stable, no longer experimental)
@@ -38,4 +52,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withBundleAnalyzer(nextConfig);

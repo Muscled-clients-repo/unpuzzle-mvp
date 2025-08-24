@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
+import NextImage from 'next/image'
 import { Loader2, Search, Video, Music, FileText, Image, Play, X, FolderOpen } from 'lucide-react'
 import { useAppStore } from '@/stores/app-store'
 import { cn } from '@/lib/utils'
@@ -204,12 +205,14 @@ function MediaCard({ media, isSelected, onToggle }: { media: any, isSelected: bo
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <h4 className="font-medium truncate">{media.title || media.originalFilename}</h4>
+              <h4 className="font-medium truncate">
+                {media.title || media.originalFilename || media.filename || 'Untitled'}
+              </h4>
               <div className="flex items-center gap-2 mt-1">
-                {getFileIcon(media.fileType)}
+                {getFileIcon(media.fileType || 'video')}
                 <span className="text-sm text-gray-500">
-                  {media.fileSizeFormatted || formatFileSize(media.fileSize)}
-                  {media.durationFormatted && ` • ${media.durationFormatted}`}
+                  {media.fileSizeFormatted || formatFileSize(media.fileSize || media.file_size || 0)}
+                  {(media.durationFormatted || media.duration) && ` • ${media.durationFormatted || media.duration}`}
                 </span>
               </div>
               {media.resolution && (
@@ -219,12 +222,16 @@ function MediaCard({ media, isSelected, onToggle }: { media: any, isSelected: bo
               )}
             </div>
             
-            {media.thumbnailUrl && (
+            {(media.thumbnailUrl || media.thumbnail_url) && (
               <div className="relative ml-2">
-                <img
-                  src={media.thumbnailUrl}
-                  alt={media.title}
+                <NextImage
+                  src={media.thumbnailUrl || media.thumbnail_url}
+                  alt={`${media.title || media.filename || 'Media'} thumbnail`}
+                  width={80}
+                  height={80}
+                  priority={false}
                   className="w-20 h-20 object-cover rounded"
+                  sizes="80px"
                 />
                 {media.fileType === 'video' && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 hover:opacity-100 transition-opacity rounded">
@@ -235,9 +242,9 @@ function MediaCard({ media, isSelected, onToggle }: { media: any, isSelected: bo
             )}
           </div>
           
-          {media.processingStatus && media.processingStatus !== 'completed' && (
-            <Badge variant={media.processingStatus === 'failed' ? 'destructive' : 'secondary'} className="mt-2">
-              {media.processingStatus}
+          {(media.processingStatus || media.processing_status) && (media.processingStatus || media.processing_status) !== 'completed' && (
+            <Badge variant={(media.processingStatus || media.processing_status) === 'failed' ? 'destructive' : 'secondary'} className="mt-2">
+              {media.processingStatus || media.processing_status}
             </Badge>
           )}
         </div>

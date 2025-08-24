@@ -60,6 +60,7 @@ export interface AuthUserData {
 export interface AuthResponse {
   user?: AuthUserData
   csrf_token?: string
+  access_token?: string
 }
 
 export interface CsrfTokenResponse {

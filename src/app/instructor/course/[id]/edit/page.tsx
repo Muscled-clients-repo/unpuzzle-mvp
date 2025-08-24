@@ -114,7 +114,7 @@ export default function EditCoursePage() {
     completeVideoUpload(videoId, mediaFile)
     
     // Auto-assign to selected or first chapter
-    const targetChapterId = selectedChapterId || courseCreation?.chapters[0]?.id
+    const targetChapterId = selectedChapterId || courseCreation?.chapters?.[0]?.id
     if (targetChapterId && mediaFile.id) {
       setAssigningMediaId(videoId)
       try {
@@ -190,7 +190,7 @@ export default function EditCoursePage() {
   const handleAddChapter = async () => {
     setIsCreatingChapter(true)
     try {
-      const chapterNumber = (courseCreation?.chapters.length || 0) + 1
+      const chapterNumber = (courseCreation?.chapters?.length || 0) + 1
       await createChapter(`Chapter ${chapterNumber}`)
     } finally {
       setIsCreatingChapter(false)
@@ -438,7 +438,7 @@ export default function EditCoursePage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {courseCreation.chapters.length === 0 ? (
+                {(!courseCreation.chapters || courseCreation.chapters.length === 0) ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Video className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No chapters yet. Add your first chapter to get started.</p>
@@ -506,7 +506,7 @@ export default function EditCoursePage() {
                         
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span>{chapter.videos.length} videos</span>
+                            <span>{chapter.videos?.length || 0} videos</span>
                             {chapter.duration && <span>{chapter.duration}</span>}
                           </div>
                           <Button
@@ -525,7 +525,7 @@ export default function EditCoursePage() {
                           <div className="mt-4 space-y-2">
                             <h5 className="text-sm font-medium text-gray-700">Videos in this chapter:</h5>
                             <div className="space-y-2">
-                              {chapter.videos.map((video: any, videoIndex: number) => (
+                              {chapter.videos?.map((video: any, videoIndex: number) => (
                                 <div key={video.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
                                   <div className="flex items-center gap-2">
                                     <span className="text-sm text-gray-500">{videoIndex + 1}.</span>
@@ -574,14 +574,14 @@ export default function EditCoursePage() {
                     <div className="flex items-center gap-2">
                       <Label htmlFor="chapter-select" className="text-sm">Auto-assign to:</Label>
                       <Select
-                        value={selectedChapterId || courseCreation.chapters[0]?.id}
+                        value={selectedChapterId || courseCreation.chapters?.[0]?.id}
                         onValueChange={setSelectedChapterId}
                       >
                         <SelectTrigger id="chapter-select" className="w-[200px]">
                           <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {courseCreation.chapters.map((chapter) => (
+                        {courseCreation.chapters?.map((chapter) => (
                           <SelectItem key={chapter.id} value={chapter.id}>
                             {chapter.title}
                           </SelectItem>
@@ -591,7 +591,7 @@ export default function EditCoursePage() {
                   </div>
                   <Button
                     variant="outline"
-                    onClick={() => openMediaLibrary(selectedChapterId || courseCreation.chapters[0]?.id)}
+                    onClick={() => openMediaLibrary(selectedChapterId || courseCreation.chapters?.[0]?.id)}
                     className="flex items-center gap-2"
                   >
                     <FolderOpen className="h-4 w-4" />
@@ -627,7 +627,7 @@ export default function EditCoursePage() {
               />
               
               {/* Upload Queue */}
-              {uploadQueue.length > 0 && (
+              {uploadQueue && uploadQueue.length > 0 && (
                 <div className="mt-6 space-y-4">
                   <div className="flex items-center justify-between">
                     <h4 className="font-medium">Upload Queue ({uploadQueue.length})</h4>
@@ -636,17 +636,17 @@ export default function EditCoursePage() {
                       size="sm"
                       onClick={() => {
                         uploadQueue
-                          .filter(v => v.status === 'error')
-                          .forEach(v => retryFailedUpload(v.id))
+                          ?.filter(v => v.status === 'error')
+                          ?.forEach(v => retryFailedUpload(v.id))
                       }}
-                      disabled={!uploadQueue.some(v => v.status === 'error')}
+                      disabled={!uploadQueue?.some(v => v.status === 'error')}
                     >
                       <RefreshCcw className="h-4 w-4 mr-2" />
                       Retry Failed
                     </Button>
                   </div>
                   
-                  {uploadQueue.map((video) => (
+                  {uploadQueue?.map((video) => (
                     <div key={video.id} className="border rounded-lg p-4">
                       <div className="flex items-start justify-between">
                         <div className="flex items-start gap-3 flex-1">

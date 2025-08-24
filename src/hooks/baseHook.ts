@@ -20,7 +20,8 @@ export const useApiRequest = () => {
   const apiRequest = useCallback(async <T = unknown>(
     endpoint: string,
     options: RequestInit = {},
-    csrfToken?: string | null
+    csrfToken?: string | null,
+    accessToken?: string | null
   ): Promise<ApiResponse<T>> => {
     const url = `${API_BASE_URL}${API_VERSION}${endpoint}`
     
@@ -31,6 +32,7 @@ export const useApiRequest = () => {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         ...(csrfToken && { 'X-CSRF-Token': csrfToken }),
+        ...(accessToken && { 'Authorization': `Bearer ${accessToken}` }),
         ...options.headers,
       },
       ...options,
@@ -61,6 +63,12 @@ export const useApiRequest = () => {
         
         // Include more details in the error
         const errorMessage = errorData.message || errorData.error || errorData.detail || `HTTP error! status: ${response.status}`
+        
+        // Special handling for 401 Unauthorized - likely missing or invalid token
+        if (response.status === 401) {
+          throw new Error(errorMessage || 'Authentication required')
+        }
+        
         throw new Error(errorMessage)
       }
       

@@ -563,7 +563,7 @@ export class InstructorCourseService {
     }
 
     console.log('📡 Making API call to get course:', courseId)
-    const response = await apiClient.get<Course>(`/api/v1/instructor/courses/${courseId}`)
+    const response = await apiClient.get<any>(`/api/v1/instructor/courses/${courseId}`)
     console.log('📨 API response:', response)
     
     if (response.error) {
@@ -577,21 +577,22 @@ export class InstructorCourseService {
     }
 
     // Transform API Course to CourseCreationData format
-    const course = response.data
+    // Handle nested data structure from server
+    const course = response.data?.data || response.data
     console.log('🔄 Transforming course data:', course)
     
     const courseCreationData = {
       id: course.id,
       title: course.title || '',
       description: course.description || '',
-      category: course.tags?.[0] || '',
+      category: course.category?.slug || course.tags?.[0] || '',
       level: course.difficulty || 'beginner',
-      price: course.price || 0,
-      chapters: [], // Will be loaded separately if needed
+      price: parseFloat(course.price) || 0,
+      chapters: course.sections || [], // Sections are chapters
       videos: course.videos || [],
-      status: course.isPublished ? 'published' : 'draft',
+      status: course.is_published ? 'published' : 'draft',
       autoSaveEnabled: false,
-      lastSaved: course.updatedAt ? new Date(course.updatedAt) : new Date()
+      lastSaved: course.updated_at ? new Date(course.updated_at) : new Date()
     }
     
     console.log('✅ Transformed course data:', courseCreationData)

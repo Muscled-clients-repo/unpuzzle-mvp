@@ -63,7 +63,24 @@ class ApiClient {
       return { status: 200 } as ApiResponse<T>
     }
     
+    // Add debugging for upload completion endpoint
+    if (endpoint.includes('/media/upload/complete')) {
+      console.log('🌐 API Client - POST to:', endpoint)
+      console.log('🌐 API Client - Body type:', typeof body)
+      console.log('🌐 API Client - Body value:', body)
+      console.log('🌐 API Client - Body stringified:', JSON.stringify(body))
+      console.log('🌐 API Client - Body stringified length:', JSON.stringify(body).length)
+    }
+    
     try {
+      const requestBody = body ? JSON.stringify(body) : undefined
+      
+      // More debugging for the specific endpoint
+      if (endpoint.includes('/media/upload/complete')) {
+        console.log('🌐 API Client - Final request body:', requestBody)
+        console.log('🌐 API Client - Request body length:', requestBody?.length || 0)
+      }
+      
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         method: 'POST',
         headers: {
@@ -72,8 +89,13 @@ class ApiClient {
         },
         credentials: 'include',
         mode: 'cors', // Explicitly set CORS mode
-        body: body ? JSON.stringify(body) : undefined,
+        body: requestBody,
       })
+      
+      if (endpoint.includes('/media/upload/complete')) {
+        console.log('🌐 API Client - Response status:', response.status)
+        console.log('🌐 API Client - Response headers:', Object.fromEntries(response.headers.entries()))
+      }
       
       if (!response.ok) {
         // Handle 401 Unauthorized errors
@@ -84,12 +106,21 @@ class ApiClient {
         }
         
         const error = await response.text()
+        
+        if (endpoint.includes('/media/upload/complete')) {
+          console.log('🌐 API Client - Error response text:', error)
+        }
+        
         return { error, status: response.status }
       }
       
       const data = await response.json()
       return { data, status: response.status }
     } catch (error) {
+      if (endpoint.includes('/media/upload/complete')) {
+        console.error('🌐 API Client - Fetch error:', error)
+      }
+      
       return { 
         error: error instanceof Error ? error.message : 'Network error', 
         status: 500 
