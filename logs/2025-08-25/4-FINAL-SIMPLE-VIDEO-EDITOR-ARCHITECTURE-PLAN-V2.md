@@ -37,7 +37,8 @@ The original Simple Architecture Plan was created before understanding actual fe
 ├── VirtualTimelineEngine.ts    # Playbook engine
 ├── useVideoEditor.ts           # Main state hook
 ├── useKeyboardShortcuts.ts     # Keyboard handling
-└── useRecording.ts             # Recording operations
+├── useRecording.ts             # Recording operations
+└── HistoryManager.ts           # Undo/redo operations
 ```
 
 ### UI Components
@@ -77,13 +78,15 @@ The original Simple Architecture Plan was created before understanding actual fe
 
 ### 2. Scope-Based Integration Strategy
 - **Focused concerns**: Separate hooks for distinct responsibilities (recording, keyboard shortcuts)
-- **Editor state**: Integrate into useVideoEditor.ts (history, clip management)
+- **Editor state**: Integrate into useVideoEditor.ts (clip management)
+- **History operations**: Separate HistoryManager class for focused responsibility
 - **Reusable UI**: Separate components (TimelineControls)
 
-### 3. History Management Integration
-- History logic stays within useVideoEditor.ts (editor-specific operations)
-- Simple stack-based implementation
-- No separate HistoryManager class
+### 3. History Management Separation
+- History logic separated in HistoryManager.ts for focused responsibility
+- Clean API integration with useVideoEditor hook
+- Testable and maintainable in isolation
+- Simple stack-based implementation with clear boundaries
 
 ### 4. Keyboard Shortcuts Separation
 - Separate hook for app-wide reusability
@@ -138,7 +141,7 @@ The original Simple Architecture Plan was created before understanding actual fe
 ### Phase 1: File Consolidation
 - Keep Timeline.tsx and TimelineControls.tsx separate (different responsibilities)
 - Keep useRecording.ts separate (focused responsibility)
-- Consolidate history management into useVideoEditor.ts
+- Keep HistoryManager.ts separate for focused responsibility and testability
 
 ### Phase 2: Component Simplification
 - Break down large functions
