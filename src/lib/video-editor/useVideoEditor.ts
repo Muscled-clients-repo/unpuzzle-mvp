@@ -2,8 +2,9 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { Clip, FPS } from './types'
-import { timeToFrame, frameToTime } from './utils'
+import { frameToTime } from './utils'
 import { VirtualTimelineEngine, TimelineSegment } from './VirtualTimelineEngine'
+import { useRecording } from './useRecording'
 
 export function useVideoEditor() {
   // State
@@ -11,14 +12,10 @@ export function useVideoEditor() {
   const [currentFrame, setCurrentFrame] = useState(0)
   const [visualFrame, setVisualFrame] = useState(0) // Throttled frame for smooth UI
   const [isPlaying, setIsPlaying] = useState(false)
-  const [isRecording, setIsRecording] = useState(false)
   const [totalFrames, setTotalFrames] = useState(0)
   
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const recordingStartTimeRef = useRef<number>(0)
-  const chunksRef = useRef<Blob[]>([])
   const engineRef = useRef<VirtualTimelineEngine | null>(null)
   const lastVisualUpdateRef = useRef<number>(0)
 
@@ -71,6 +68,21 @@ export function useVideoEditor() {
     engineRef.current.setSegments(segments)
   }, [clips])
   
+  // Recording hook integration
+  const handleClipCreated = useCallback((clip: Clip) => {
+    setClips(prev => [...prev, clip])
+  }, [])
+  
+  const handleTotalFramesUpdate = useCallback((frames: number) => {
+    setTotalFrames(frames)
+  }, [])
+  
+  const { isRecording, startRecording, stopRecording } = useRecording({
+    totalFrames,
+    onClipCreated: handleClipCreated,
+    onTotalFramesUpdate: handleTotalFramesUpdate
+  })
+  
   // Find clip at given frame (kept for compatibility)
   const getCurrentClip = useCallback((frame: number): Clip | null => {
     return clips.find(clip => 
@@ -79,69 +91,6 @@ export function useVideoEditor() {
     ) || null
   }, [clips])
 
-  // Start recording
-  const startRecording = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: false
-      })
-      
-      const recorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm'
-      })
-      
-      chunksRef.current = []
-      
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunksRef.current.push(e.data)
-        }
-      }
-      
-      recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'video/webm' })
-        const url = URL.createObjectURL(blob)
-        
-        // Calculate duration in frames
-        const recordingSeconds = (Date.now() - recordingStartTimeRef.current) / 1000
-        const durationFrames = timeToFrame(recordingSeconds)
-        
-        // Create new clip at end of timeline
-        const newClip: Clip = {
-          id: `clip-${Date.now()}`,
-          url,
-          startFrame: totalFrames,
-          durationFrames,
-          sourceInFrame: 0,
-          sourceOutFrame: durationFrames
-        }
-        
-        setClips(prev => [...prev, newClip])
-        setTotalFrames(prev => prev + durationFrames)
-        setIsRecording(false)
-        
-        // Stop all tracks
-        stream.getTracks().forEach(track => track.stop())
-      }
-      
-      recorder.start()
-      recordingStartTimeRef.current = Date.now()
-      mediaRecorderRef.current = recorder
-      setIsRecording(true)
-      
-    } catch (error) {
-      console.error('Failed to start recording:', error)
-      setIsRecording(false)
-    }
-  }, [totalFrames])
-
-  // Stop recording
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop()
-    }
-  }, [])
 
   // Play/Pause using virtual timeline
   const play = useCallback(() => {

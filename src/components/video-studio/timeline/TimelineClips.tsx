@@ -91,9 +91,9 @@ export function TimelineClips({
           return (
             <div
               key={clip.id}
-              className={`absolute h-16 rounded cursor-move transition-all ${
+              className={`absolute h-16 rounded cursor-move ${
                 isSelected 
-                  ? 'ring-2 ring-blue-500 shadow-lg z-20' 
+                  ? 'ring-2 ring-yellow-500 shadow-lg z-20' 
                   : 'hover:ring-1 hover:ring-gray-400'
               } ${draggedClipId === clip.id ? 'opacity-50' : ''}`}
               style={{
