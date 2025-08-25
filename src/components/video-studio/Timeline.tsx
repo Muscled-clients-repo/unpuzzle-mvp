@@ -1,51 +1,54 @@
 'use client'
 
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { FPS } from '@/lib/video-editor/types'
+import { Clip, Track, FPS } from '@/lib/video-editor/types'
 import { TimelineControls } from './timeline/TimelineControls'
 import { TimelineRuler } from './timeline/TimelineRuler'
 import { TimelineClips } from './timeline/TimelineClips'
 import { TimelineScrubber } from './timeline/TimelineScrubber'
 
 interface TimelineProps {
-  clips: Array<{
-    id: string
-    startFrame: number
-    durationFrames: number
-    originalDurationFrames?: number
-    sourceInFrame?: number
-    sourceOutFrame?: number
-  }>
+  clips: Clip[]
+  tracks: Track[]
   currentFrame: number
   totalFrames: number
   isPlaying?: boolean
   onPause?: () => void
   onSeekToFrame: (frame: number, immediate?: boolean) => void
   selectedClipId: string | null
+  selectedTrackIndex: number | null
   onSelectClip: (clipId: string | null) => void
+  onSelectTrack: (trackIndex: number | null) => void
   onMoveClip?: (clipId: string, newStartFrame: number) => void
   onMoveClipComplete?: () => void
+  onMoveClipToTrack?: (clipId: string, newTrackIndex: number) => void
   onTrimClipStart?: (clipId: string, newStartOffset: number) => void
   onTrimClipStartComplete?: () => void
   onTrimClipEnd?: (clipId: string, newEndOffset: number) => void
   onTrimClipEndComplete?: () => void
+  onAddTrack?: () => void
 }
 
 export function Timeline({ 
-  clips, 
+  clips,
+  tracks,
   currentFrame, 
   totalFrames,
   isPlaying = false,
   onPause,
   onSeekToFrame, 
-  selectedClipId, 
-  onSelectClip, 
+  selectedClipId,
+  selectedTrackIndex,
+  onSelectClip,
+  onSelectTrack,
   onMoveClip,
   onMoveClipComplete,
+  onMoveClipToTrack,
   onTrimClipStart,
   onTrimClipStartComplete,
   onTrimClipEnd,
-  onTrimClipEndComplete
+  onTrimClipEndComplete,
+  onAddTrack
 }: TimelineProps) {
   const [zoomLevel, setZoomLevel] = useState(1) // 1 = 100%, 2 = 200%, etc.
   const [isDraggingScrubber, setIsDraggingScrubber] = useState(false)
@@ -71,18 +74,20 @@ export function Timeline({
   const handleRulerMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
     const x = e.clientX - rect.left - 70
-    if (x < 0) return
+    
+    // If clicking in the corner area (x < 0), treat it as clicking at position 0
+    const clickPosition = Math.max(0, x)
     
     // Pause playback if playing when starting to drag
     if (isPlaying && onPause) {
       onPause()
     }
     
-    // Start dragging from anywhere on the ruler
+    // Start dragging from anywhere on the ruler (including corner)
     setIsDraggingScrubber(true)
     
     // Immediately move scrubber to clicked position (immediate = true for click)
-    const clickedFrame = Math.round((x / pixelsPerSecond) * FPS)
+    const clickedFrame = Math.round((clickPosition / pixelsPerSecond) * FPS)
     const maxFrame = totalSeconds * FPS
     onSeekToFrame(Math.min(Math.max(0, clickedFrame), maxFrame), true)
   }
@@ -213,16 +218,18 @@ export function Timeline({
         maxZoom={maxZoom}
         onZoomChange={setZoomLevel}
         clipCount={clips.length}
+        trackCount={tracks.length}
+        onAddTrack={onAddTrack}
       />
       
       <div 
-        className="flex-1 relative overflow-x-auto overflow-y-hidden" 
+        className="flex-1 relative overflow-x-auto overflow-y-auto" 
         ref={scrollContainerRef}
         data-timeline-scroll="true"
       >
         <div 
           className="relative select-none"
-          style={{ width: timelineWidth, height: '100%' }}
+          style={{ width: timelineWidth, minHeight: '100%' }}
         >
           <TimelineRuler
             pixelsPerSecond={pixelsPerSecond}
@@ -234,12 +241,16 @@ export function Timeline({
           
           <TimelineClips
             clips={clips}
+            tracks={tracks}
             pixelsPerSecond={pixelsPerSecond}
             selectedClipId={selectedClipId}
+            selectedTrackIndex={selectedTrackIndex}
             currentFrame={currentFrame}
             onSelectClip={onSelectClip}
+            onSelectTrack={onSelectTrack}
             onMoveClip={onMoveClip}
             onMoveClipComplete={onMoveClipComplete}
+            onMoveClipToTrack={onMoveClipToTrack}
             onTrimClipStart={onTrimClipStart}
             onTrimClipStartComplete={onTrimClipStartComplete}
             onTrimClipEnd={onTrimClipEnd}

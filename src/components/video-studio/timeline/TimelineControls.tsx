@@ -1,6 +1,6 @@
 'use client'
 
-import { Minus, Plus } from 'lucide-react'
+import { Minus, Plus, Layers, Film, Music } from 'lucide-react'
 
 interface TimelineControlsProps {
   zoomLevel: number
@@ -8,6 +8,8 @@ interface TimelineControlsProps {
   maxZoom: number
   onZoomChange: (zoom: number) => void
   clipCount: number
+  trackCount?: number
+  onAddTrack?: (type: 'video' | 'audio') => void
 }
 
 export function TimelineControls({ 
@@ -15,7 +17,9 @@ export function TimelineControls({
   minZoom, 
   maxZoom, 
   onZoomChange,
-  clipCount 
+  clipCount,
+  trackCount = 2,
+  onAddTrack
 }: TimelineControlsProps) {
   const handleZoomIn = () => {
     onZoomChange(Math.min(maxZoom, zoomLevel + 0.1))
@@ -29,7 +33,33 @@ export function TimelineControls({
   
   return (
     <div className="h-8 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-2">
-      <span className="text-xs text-gray-400">Timeline ({clipCount} clips)</span>
+      <div className="flex items-center gap-3">
+        <span className="text-xs text-gray-400">Timeline ({clipCount} clips)</span>
+        <div className="flex items-center gap-1">
+          <Layers className="h-3 w-3 text-gray-400" />
+          <span className="text-xs text-gray-400">{trackCount} tracks</span>
+          {onAddTrack && (
+            <div className="flex items-center gap-1 ml-2">
+              <button
+                onClick={() => onAddTrack('video')}
+                className="text-gray-400 hover:text-white p-0.5 rounded hover:bg-gray-700 flex items-center gap-1"
+                title="Add video track"
+              >
+                <Plus className="h-3 w-3" />
+                <Film className="h-3 w-3" />
+              </button>
+              <button
+                onClick={() => onAddTrack('audio')}
+                className="text-gray-400 hover:text-white p-0.5 rounded hover:bg-gray-700 flex items-center gap-1"
+                title="Add audio track"
+              >
+                <Plus className="h-3 w-3" />
+                <Music className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
       <div className="flex items-center gap-2">
         <button 
           onClick={handleZoomOut}

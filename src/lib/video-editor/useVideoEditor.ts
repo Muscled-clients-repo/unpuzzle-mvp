@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { Clip, FPS } from './types'
+import { Clip, Track, FPS } from './types'
 import { frameToTime } from './utils'
 import { VirtualTimelineEngine, TimelineSegment } from './VirtualTimelineEngine'
 import { useRecording } from './useRecording'
@@ -10,6 +10,12 @@ import { HistoryManager } from './HistoryManager'
 export function useVideoEditor() {
   // State
   const [clips, setClips] = useState<Clip[]>([])
+  const [tracks, setTracks] = useState<Track[]>([
+    { id: 'track-0', index: 0, name: 'V1', type: 'video', visible: true, locked: false },
+    { id: 'track-1', index: 1, name: 'A1', type: 'audio', visible: true, locked: false }
+  ])
+  const [selectedClipId, setSelectedClipId] = useState<string | null>(null)
+  const [selectedTrackIndex, setSelectedTrackIndex] = useState<number | null>(null)
   const [currentFrame, setCurrentFrame] = useState(0)
   const [visualFrame, setVisualFrame] = useState(0) // Throttled frame for smooth UI
   const [isPlaying, setIsPlaying] = useState(false)
@@ -113,6 +119,10 @@ export function useVideoEditor() {
   
   const { isRecording, startRecording, stopRecording } = useRecording({
     totalFrames,
+    selectedClipId,
+    selectedTrackIndex,
+    clips,
+    tracks,
     onClipCreated: handleClipCreated,
     onTotalFramesUpdate: handleTotalFramesUpdate
   })
@@ -371,6 +381,54 @@ export function useVideoEditor() {
   const canRedo = useCallback(() => historyRef.current.canRedo(), [])
 
   // No longer need video event listeners - virtual timeline handles everything!
+  
+  // Track management functions
+  const addTrack = useCallback((type: 'video' | 'audio' = 'video') => {
+    setTracks(prev => {
+      // Find the highest existing index to ensure unique indices
+      const maxIndex = prev.reduce((max, track) => Math.max(max, track.index), -1)
+      const newIndex = maxIndex + 1
+      
+      // Count how many tracks of this type exist
+      const existingCount = prev.filter(t => t.type === type).length
+      const trackNumber = existingCount + 1
+      
+      const newTrack: Track = {
+        id: `track-${newIndex}`,
+        index: newIndex,
+        name: type === 'video' ? `V${trackNumber}` : `A${trackNumber}`,
+        type,
+        visible: true,
+        locked: false
+      }
+      
+      // Sort tracks: video tracks first, then audio tracks
+      // Within each type, maintain their order
+      const updatedTracks = [...prev, newTrack]
+      return updatedTracks.sort((a, b) => {
+        // First sort by type (video before audio)
+        if (a.type === 'video' && b.type === 'audio') return -1
+        if (a.type === 'audio' && b.type === 'video') return 1
+        // Then sort by index within the same type
+        return a.index - b.index
+      })
+    })
+  }, [])
+  
+  const removeTrack = useCallback((trackIndex: number) => {
+    // Don't allow removing if only one track remains
+    if (tracks.length <= 1) return
+    
+    setTracks(prev => prev.filter(t => t.index !== trackIndex))
+    // Also remove clips from this track
+    setClipsWithRef(prev => prev.filter(c => c.trackIndex !== trackIndex))
+  }, [tracks.length])
+  
+  const moveClipToTrack = useCallback((clipId: string, newTrackIndex: number) => {
+    setClipsWithRef(prev => prev.map(clip => 
+      clip.id === clipId ? { ...clip, trackIndex: newTrackIndex } : clip
+    ))
+  }, [])
 
   // Cleanup blob URLs only on unmount
   useEffect(() => {
@@ -383,6 +441,11 @@ export function useVideoEditor() {
   return {
     // State
     clips,
+    tracks,
+    selectedClipId,
+    setSelectedClipId,
+    selectedTrackIndex,
+    setSelectedTrackIndex,
     currentFrame,      // Precise frame for editing operations
     visualFrame,       // Throttled frame for smooth UI
     isPlaying,
@@ -404,6 +467,11 @@ export function useVideoEditor() {
     moveClip,
     moveClipComplete,
     deleteClip,
+    
+    // Track management
+    addTrack,
+    removeTrack,
+    moveClipToTrack,
     
     // Undo/Redo
     undo,

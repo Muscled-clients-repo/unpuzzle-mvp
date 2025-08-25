@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useVideoEditor } from '@/lib/video-editor/useVideoEditor'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Play, Pause, Circle, Square, Undo2, Redo2 } from 'lucide-react'
@@ -11,7 +11,100 @@ import { formatFrame } from './formatters'
 
 export function VideoStudio() {
   const editor = useVideoEditor()
-  const [selectedClipId, setSelectedClipId] = useState<string | null>(null)
+  const [topSectionHeight, setTopSectionHeight] = useState(65) // Default to 65%
+  const [leftPanelWidth, setLeftPanelWidth] = useState(20) // Default to 20%
+  const [recordingDuration, setRecordingDuration] = useState(0)
+  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const isDraggingRef = useRef(false)
+  const isDraggingHorizontalRef = useRef(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  
+  // Handle vertical resizing (between preview and bottom panels)
+  const handleVerticalResizeMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    isDraggingRef.current = true
+    
+    const startY = e.clientY
+    const startHeight = topSectionHeight
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current || !containerRef.current) return
+      
+      const containerHeight = containerRef.current.offsetHeight
+      const deltaY = e.clientY - startY
+      const deltaPercent = (deltaY / containerHeight) * 100
+      const newHeight = Math.min(Math.max(20, startHeight + deltaPercent), 80) // Clamp between 20% and 80%
+      
+      setTopSectionHeight(newHeight)
+    }
+    
+    const handleMouseUp = () => {
+      isDraggingRef.current = false
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+    
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }
+  
+  // Handle horizontal resizing (between left panels and right panels)
+  const handleHorizontalResizeMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    isDraggingHorizontalRef.current = true
+    
+    const startX = e.clientX
+    const startWidth = leftPanelWidth
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingHorizontalRef.current || !containerRef.current) return
+      
+      const containerWidth = containerRef.current.offsetWidth
+      const deltaX = e.clientX - startX
+      const deltaPercent = (deltaX / containerWidth) * 100
+      const newWidth = Math.min(Math.max(10, startWidth + deltaPercent), 40) // Clamp between 10% and 40%
+      
+      setLeftPanelWidth(newWidth)
+    }
+    
+    const handleMouseUp = () => {
+      isDraggingHorizontalRef.current = false
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+    
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }
+  
+  // Handle recording timer
+  useEffect(() => {
+    if (editor.isRecording) {
+      setRecordingDuration(0)
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1)
+      }, 1000)
+    } else {
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current)
+        recordingIntervalRef.current = null
+      }
+      setRecordingDuration(0)
+    }
+    
+    return () => {
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current)
+      }
+    }
+  }, [editor.isRecording])
+  
+  // Format recording duration
+  const formatRecordingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
   
   // Prevent browser back/forward navigation on horizontal swipe
   useEffect(() => {
@@ -40,7 +133,7 @@ export function VideoStudio() {
   // Handle delete with selection clearing
   const handleDeleteClip = (clipId: string) => {
     editor.deleteClip(clipId)
-    setSelectedClipId(null) // Clear selection after deletion
+    editor.setSelectedClipId(null) // Clear selection after deletion
   }
   
   // Use keyboard shortcuts hook
@@ -56,7 +149,7 @@ export function VideoStudio() {
     clips: editor.clips,
     splitClip: editor.splitClip,
     seekToFrame: editor.seekToFrame,
-    selectedClipId,
+    selectedClipId: editor.selectedClipId,
     deleteClip: handleDeleteClip
   })
   
@@ -72,28 +165,6 @@ export function VideoStudio() {
           <span className="text-xs text-gray-500">Simple Architecture</span>
         </div>
         <div className="flex items-center gap-2">
-          {/* Undo/Redo Buttons */}
-          <Button 
-            size="sm"
-            variant="ghost"
-            onClick={editor.undo}
-            disabled={!editor.canUndo()}
-            title="Undo (Cmd/Ctrl+Z)"
-          >
-            <Undo2 className="h-4 w-4" />
-          </Button>
-          <Button 
-            size="sm"
-            variant="ghost"
-            onClick={editor.redo}
-            disabled={!editor.canRedo()}
-            title="Redo (Cmd/Ctrl+Shift+Z)"
-          >
-            <Redo2 className="h-4 w-4" />
-          </Button>
-          
-          <div className="w-px h-6 bg-gray-700 mx-1" /> {/* Separator */}
-          
           {/* Recording Controls in Header */}
           {!editor.isRecording ? (
             <Button 
@@ -105,14 +176,20 @@ export function VideoStudio() {
               Record
             </Button>
           ) : (
-            <Button 
-              size="sm"
-              onClick={editor.stopRecording}
-              className="bg-gray-600 hover:bg-gray-700"
-            >
-              <Square className="h-3 w-3 mr-1" />
-              Stop
-            </Button>
+            <div className="flex items-center gap-2">
+              <span className="text-red-500 font-semibold text-sm animate-pulse flex items-center gap-1">
+                <Circle className="h-3 w-3 fill-red-500" />
+                {formatRecordingTime(recordingDuration)}
+              </span>
+              <Button 
+                size="sm"
+                onClick={editor.stopRecording}
+                className="bg-gray-600 hover:bg-gray-700"
+              >
+                <Square className="h-3 w-3 mr-1" />
+                Stop
+              </Button>
+            </div>
           )}
           <Button size="sm" variant="ghost">Save Project</Button>
           <Button size="sm" className="bg-blue-600 hover:bg-blue-700">Export</Button>
@@ -120,11 +197,11 @@ export function VideoStudio() {
       </div>
       
       {/* Main 4-Panel Layout */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top Section - 65% height (Script + Preview) */}
-        <div className="flex" style={{ height: '65%' }}>
-          {/* AI Script Panel - 20% width */}
-          <div className="bg-gray-800 border-r border-gray-700 overflow-auto" style={{ width: '20%' }}>
+      <div className="flex-1 flex flex-col overflow-hidden" ref={containerRef}>
+        {/* Top Section - Dynamic height (Script + Preview) */}
+        <div className="flex" style={{ height: `${topSectionHeight}%` }}>
+          {/* AI Script Panel - Dynamic width */}
+          <div className="bg-gray-800 overflow-auto" style={{ width: `${leftPanelWidth}%` }}>
             <div className="p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-gray-300">AI Script</h3>
@@ -141,8 +218,18 @@ export function VideoStudio() {
             </div>
           </div>
           
-          {/* Preview Panel - 80% width */}
-          <div className="flex-1 bg-black flex flex-col overflow-hidden" style={{ width: '80%' }}>
+          {/* Horizontal Resize Handle */}
+          <div 
+            className="w-1 bg-gray-700 cursor-ew-resize hover:bg-gray-600 transition-colors relative group"
+            onMouseDown={handleHorizontalResizeMouseDown}
+          >
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-1 h-12 bg-gray-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+          </div>
+          
+          {/* Preview Panel - Dynamic width */}
+          <div className="flex-1 bg-black flex flex-col overflow-hidden" style={{ width: `${100 - leftPanelWidth}%` }}>
             {/* Video Preview Area */}
             <div className="flex-1 flex items-center justify-center relative overflow-hidden">
               <video 
@@ -194,10 +281,20 @@ export function VideoStudio() {
           </div>
         </div>
         
-        {/* Bottom Section - 35% height (Assets + Timeline) */}
-        <div className="flex border-t border-gray-700" style={{ height: '35%' }}>
-          {/* Assets Panel - 20% width */}
-          <div className="bg-gray-800 border-r border-gray-700 overflow-auto" style={{ width: '20%' }}>
+        {/* Vertical Resize Handle */}
+        <div 
+          className="relative h-1 bg-gray-700 cursor-ns-resize hover:bg-gray-600 transition-colors group"
+          onMouseDown={handleVerticalResizeMouseDown}
+        >
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-12 h-1 bg-gray-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+        </div>
+        
+        {/* Bottom Section - Dynamic height (Assets + Timeline) */}
+        <div className="flex flex-1" style={{ height: `${100 - topSectionHeight}%` }}>
+          {/* Assets Panel - Dynamic width */}
+          <div className="bg-gray-800 overflow-auto" style={{ width: `${leftPanelWidth}%` }}>
             <div className="p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-gray-300">Assets</h3>
@@ -220,23 +317,38 @@ export function VideoStudio() {
             </div>
           </div>
           
-          {/* Timeline Panel - 80% width */}
-          <div className="flex-1 overflow-hidden" style={{ width: '80%' }}>
+          {/* Horizontal Resize Handle (for bottom section) */}
+          <div 
+            className="w-1 bg-gray-700 cursor-ew-resize hover:bg-gray-600 transition-colors relative group"
+            onMouseDown={handleHorizontalResizeMouseDown}
+          >
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-1 h-12 bg-gray-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+          </div>
+          
+          {/* Timeline Panel - Dynamic width */}
+          <div className="flex-1 overflow-hidden" style={{ width: `${100 - leftPanelWidth}%` }}>
             <Timeline 
               clips={editor.clips}
+              tracks={editor.tracks}
               currentFrame={editor.visualFrame}  // Use throttled frame for smooth visuals
               totalFrames={editor.totalFrames}
               isPlaying={editor.isPlaying}
               onPause={editor.pause}
               onSeekToFrame={editor.seekToFrame}
-              selectedClipId={selectedClipId}
-              onSelectClip={setSelectedClipId}
+              selectedClipId={editor.selectedClipId}
+              selectedTrackIndex={editor.selectedTrackIndex}
+              onSelectClip={editor.setSelectedClipId}
+              onSelectTrack={editor.setSelectedTrackIndex}
               onMoveClip={editor.moveClip}
               onMoveClipComplete={editor.moveClipComplete}
+              onMoveClipToTrack={editor.moveClipToTrack}
               onTrimClipStart={editor.trimClipStart}
               onTrimClipStartComplete={editor.trimClipStartComplete}
               onTrimClipEnd={editor.trimClipEnd}
               onTrimClipEndComplete={editor.trimClipEndComplete}
+              onAddTrack={editor.addTrack}
             />
           </div>
         </div>
