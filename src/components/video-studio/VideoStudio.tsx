@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useVideoEditor } from '@/lib/video-editor/useVideoEditor'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Play, Pause, Circle, Square, Undo2, Redo2, X, Maximize } from 'lucide-react'
@@ -19,7 +19,7 @@ export function VideoStudio() {
   const isDraggingRef = useRef(false)
   const isDraggingHorizontalRef = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
-  const videoContainerRef = useRef<HTMLDivElement>(null)
+  const videoPreviewRef = useRef<HTMLDivElement>(null)
   
   // Handle vertical resizing (between preview and bottom panels)
   const handleVerticalResizeMouseDown = (e: React.MouseEvent) => {
@@ -109,23 +109,29 @@ export function VideoStudio() {
   }
   
   // Handle view mode changes
-  const handleFullTab = () => {
-    setViewMode(viewMode === 'fullTab' ? 'normal' : 'fullTab')
-  }
+  const handleFullTab = useCallback(() => {
+    setViewMode(prev => prev === 'fullTab' ? 'normal' : 'fullTab')
+  }, [])
   
-  const handleFullScreen = async () => {
-    if (viewMode === 'fullScreen') {
+  const handleFullScreen = useCallback(async () => {
+    // Check if we're actually in fullscreen, not just our viewMode state
+    if (document.fullscreenElement) {
       if (document.exitFullscreen) {
         await document.exitFullscreen()
       }
       setViewMode('normal')
     } else {
-      if (videoContainerRef.current?.requestFullscreen) {
-        await videoContainerRef.current.requestFullscreen()
+      // Use the video preview container for fullscreen
+      if (videoPreviewRef.current?.requestFullscreen) {
+        try {
+          await videoPreviewRef.current.requestFullscreen()
+          setViewMode('fullScreen')
+        } catch (error) {
+          console.error('Failed to enter fullscreen:', error)
+        }
       }
-      setViewMode('fullScreen')
     }
-  }
+  }, [])
   
   // Handle keyboard shortcuts for view modes
   useEffect(() => {
@@ -148,7 +154,7 @@ export function VideoStudio() {
     
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [viewMode])
+  }, [handleFullScreen, handleFullTab])
   
   // Handle fullscreen change events
   useEffect(() => {
@@ -168,55 +174,57 @@ export function VideoStudio() {
     if (!videoElement) return
     
     const updateVideoPosition = () => {
-      if (viewMode === 'normal') {
-        // Move video to preview container
+      if (viewMode === 'normal' || viewMode === 'fullScreen') {
+        // Both normal and fullScreen modes - keep video in preview container
         const previewContainer = document.getElementById('video-preview-container')
         if (previewContainer) {
-          videoElement.className = `${editor.clips.length > 0 ? 'block' : 'hidden'} max-w-full max-h-full object-contain`
-          videoElement.style.cssText = `
-            position: relative;
-            inset: auto;
-            width: auto;
-            height: auto;
-            transform: none;
-            z-index: auto;
-          `
+          if (viewMode === 'fullScreen') {
+            // In fullscreen, make video fill the entire container
+            videoElement.className = `${editor.clips.length > 0 ? 'block' : 'hidden'} w-full h-full object-contain`
+            videoElement.style.cssText = `
+              position: absolute;
+              inset: 0;
+              width: 100%;
+              height: 100%;
+              transform: none;
+              z-index: auto;
+              object-fit: contain;
+            `
+          } else {
+            // Normal mode - centered in container
+            videoElement.className = `${editor.clips.length > 0 ? 'block' : 'hidden'} max-w-full max-h-full object-contain`
+            videoElement.style.cssText = `
+              position: relative;
+              inset: auto;
+              width: auto;
+              height: auto;
+              transform: none;
+              z-index: auto;
+            `
+          }
           videoElement.controls = false
           
-          // Always move to preview container for normal mode
+          // Always move to preview container for these modes
           if (videoElement.parentNode !== previewContainer) {
             previewContainer.appendChild(videoElement)
           }
         }
       } else {
-        // Move video to document body for fixed positioning
+        // fullTab mode - Move video to document body for fixed positioning
         videoElement.className = `${editor.clips.length > 0 ? 'block' : 'hidden'} fixed object-contain`
-        if (viewMode === 'fullScreen') {
-          videoElement.style.cssText = `
-            position: fixed;
-            inset: 0;
-            width: 100vw;
-            height: 100vh;
-            transform: none;
-            z-index: 50;
-            object-fit: contain;
-          `
-        } else {
-          // fullTab mode - leave space for controls at bottom
-          videoElement.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 64px;
-            width: 100vw;
-            height: calc(100vh - 64px);
-            transform: none;
-            z-index: 30;
-            object-fit: contain;
-          `
-        }
-        videoElement.controls = viewMode === 'fullScreen'
+        videoElement.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 64px;
+          width: 100vw;
+          height: calc(100vh - 64px);
+          transform: none;
+          z-index: 30;
+          object-fit: contain;
+        `
+        videoElement.controls = false
         
         if (videoElement.parentNode !== document.body) {
           document.body.appendChild(videoElement)
@@ -326,7 +334,7 @@ export function VideoStudio() {
         className="hidden"
       />
 
-      {/* Full Tab View Controls */}
+      {/* Full Tab View Controls (outside preview container) */}
       {viewMode === 'fullTab' && (
         <div className="fixed inset-0 z-50 pointer-events-none">
           <div className="absolute top-4 right-4 flex gap-2 z-10 pointer-events-auto">
@@ -359,45 +367,64 @@ export function VideoStudio() {
             </div>
           )}
           
-          {/* Playback controls at bottom */}
-          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gray-900 bg-opacity-75 flex items-center justify-center gap-4 pointer-events-auto">
-            {!editor.isPlaying ? (
-              <Button 
-                size="sm"
-                onClick={editor.play}
-                variant="ghost"
-                className="text-white hover:bg-gray-800"
+          {/* Playback controls and timeline at bottom */}
+          <div className="absolute bottom-0 left-0 right-0 bg-gray-900 bg-opacity-90 pointer-events-auto">
+            {/* Timeline seeker bar */}
+            <div className="px-4 py-2">
+              <div 
+                className="relative h-2 bg-gray-700 rounded-full cursor-pointer hover:h-3 transition-all"
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  const x = e.clientX - rect.left
+                  const percent = x / rect.width
+                  const frame = Math.round(percent * editor.totalFrames)
+                  editor.seekToFrame(frame, true)
+                }}
               >
-                <Play className="h-5 w-5" />
-              </Button>
-            ) : (
-              <Button 
-                size="sm"
-                onClick={editor.pause}
-                variant="ghost"
-                className="text-white hover:bg-gray-800"
-              >
-                <Pause className="h-5 w-5" />
-              </Button>
-            )}
-            <span className="text-sm text-gray-300 font-mono">
-              {formatFrame(editor.currentFrame)} / {formatFrame(editor.totalFrames)}
-            </span>
+                {/* Progress bar */}
+                <div 
+                  className="absolute inset-y-0 left-0 bg-blue-500 rounded-full"
+                  style={{ width: `${(editor.currentFrame / Math.max(1, editor.totalFrames)) * 100}%` }}
+                />
+                {/* Scrubber handle */}
+                <div 
+                  className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-lg"
+                  style={{ left: `${(editor.currentFrame / Math.max(1, editor.totalFrames)) * 100}%`, marginLeft: '-8px' }}
+                />
+              </div>
+            </div>
+            
+            {/* Controls */}
+            <div className="h-12 flex items-center justify-center gap-4 pb-2">
+              {!editor.isPlaying ? (
+                <Button 
+                  size="sm"
+                  onClick={editor.play}
+                  variant="ghost"
+                  className="text-white hover:bg-gray-800"
+                >
+                  <Play className="h-5 w-5" />
+                </Button>
+              ) : (
+                <Button 
+                  size="sm"
+                  onClick={editor.pause}
+                  variant="ghost"
+                  className="text-white hover:bg-gray-800"
+                >
+                  <Pause className="h-5 w-5" />
+                </Button>
+              )}
+              <span className="text-sm text-gray-300 font-mono">
+                {formatFrame(editor.currentFrame)} / {formatFrame(editor.totalFrames)}
+              </span>
+            </div>
           </div>
         </div>
       )}
-      
-      {/* Full Screen View Container */}
-      {viewMode === 'fullScreen' && (
-        <div 
-          ref={videoContainerRef}
-          className="fixed inset-0 z-50 bg-black flex items-center justify-center"
-        >
-          {/* Single video element is positioned with CSS */}
-        </div>
-      )}
-      {/* Header - Fixed height */}
-      <div className="h-14 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 flex-shrink-0">
+      {/* Header - Fixed height - Hide in fullTab mode */}
+      {viewMode !== 'fullTab' && (
+        <div className="h-14 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 flex-shrink-0">
         <div className="flex items-center gap-4">
           <Link href="/instructor" className="text-gray-400 hover:text-white">
             <ArrowLeft className="h-5 w-5" />
@@ -435,8 +462,10 @@ export function VideoStudio() {
           <Button size="sm" className="bg-blue-600 hover:bg-blue-700">Export</Button>
         </div>
       </div>
+      )}
       
-      {/* Main 4-Panel Layout */}
+      {/* Main 4-Panel Layout - Hide in fullTab mode */}
+      {viewMode !== 'fullTab' && (
       <div className="flex-1 flex flex-col overflow-hidden" ref={containerRef}>
         {/* Top Section - Dynamic height (Script + Preview) */}
         <div className="flex" style={{ height: `${topSectionHeight}%` }}>
@@ -471,7 +500,7 @@ export function VideoStudio() {
           {/* Preview Panel - Dynamic width */}
           <div className="flex-1 bg-black flex flex-col overflow-hidden" style={{ width: `${100 - leftPanelWidth}%` }}>
             {/* Video Preview Area */}
-            <div className="flex-1 flex items-center justify-center relative overflow-hidden" id="video-preview-container">
+            <div ref={videoPreviewRef} className="flex-1 flex items-center justify-center relative overflow-hidden" id="video-preview-container">
               <div className={`text-gray-500 text-center ${editor.clips.length > 0 ? 'hidden' : ''}`}>
                 <div className="mb-4">
                   <svg className="w-16 h-16 mx-auto opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -481,6 +510,78 @@ export function VideoStudio() {
                 <p className="text-lg mb-1">Video Preview</p>
                 <p className="text-sm text-gray-600">Click "Record" to begin</p>
               </div>
+              
+              {/* Fullscreen mode controls - rendered inside the preview container */}
+              {viewMode === 'fullScreen' && (
+                <>
+                  {/* Exit button */}
+                  <div className="absolute top-4 right-4 flex gap-2 z-10">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleFullScreen}
+                      className="text-white hover:bg-gray-800 bg-gray-900 bg-opacity-50"
+                      title="Exit Full Screen (Shift+F or Esc)"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  
+                  {/* Timeline and controls at bottom */}
+                  <div className="absolute bottom-0 left-0 right-0 bg-gray-900 bg-opacity-90">
+                    {/* Timeline seeker bar */}
+                    <div className="px-4 py-2">
+                      <div 
+                        className="relative h-2 bg-gray-700 rounded-full cursor-pointer hover:h-3 transition-all"
+                        onClick={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect()
+                          const x = e.clientX - rect.left
+                          const percent = x / rect.width
+                          const frame = Math.round(percent * editor.totalFrames)
+                          editor.seekToFrame(frame, true)
+                        }}
+                      >
+                        {/* Progress bar */}
+                        <div 
+                          className="absolute inset-y-0 left-0 bg-blue-500 rounded-full"
+                          style={{ width: `${(editor.currentFrame / Math.max(1, editor.totalFrames)) * 100}%` }}
+                        />
+                        {/* Scrubber handle */}
+                        <div 
+                          className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-lg"
+                          style={{ left: `${(editor.currentFrame / Math.max(1, editor.totalFrames)) * 100}%`, marginLeft: '-8px' }}
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Controls */}
+                    <div className="h-12 flex items-center justify-center gap-4 pb-2">
+                      {!editor.isPlaying ? (
+                        <Button 
+                          size="sm"
+                          onClick={editor.play}
+                          variant="ghost"
+                          className="text-white hover:bg-gray-800"
+                        >
+                          <Play className="h-5 w-5" />
+                        </Button>
+                      ) : (
+                        <Button 
+                          size="sm"
+                          onClick={editor.pause}
+                          variant="ghost"
+                          className="text-white hover:bg-gray-800"
+                        >
+                          <Pause className="h-5 w-5" />
+                        </Button>
+                      )}
+                      <span className="text-sm text-gray-300 font-mono">
+                        {formatFrame(editor.currentFrame)} / {formatFrame(editor.totalFrames)}
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
             
             {/* Playback Controls */}
@@ -582,6 +683,7 @@ export function VideoStudio() {
           </div>
         </div>
       </div>
+      )}
     </div>
   )
 }
