@@ -20,6 +20,27 @@ export function useVideoEditor() {
   const engineRef = useRef<VirtualTimelineEngine | null>(null)
   const lastVisualUpdateRef = useRef<number>(0)
   const historyRef = useRef<HistoryManager>(new HistoryManager())
+  
+  // Refs for current state to avoid stale closures in callbacks
+  const clipsRef = useRef<Clip[]>([])
+  const totalFramesRef = useRef<number>(0)
+  
+  // Custom setters that update refs synchronously
+  const setClipsWithRef = useCallback((newClips: Clip[] | ((prev: Clip[]) => Clip[])) => {
+    setClips(prev => {
+      const updated = typeof newClips === 'function' ? newClips(prev) : newClips
+      clipsRef.current = updated // Update ref synchronously
+      return updated
+    })
+  }, [])
+  
+  const setTotalFramesWithRef = useCallback((newFrames: number | ((prev: number) => number)) => {
+    setTotalFrames(prev => {
+      const updated = typeof newFrames === 'function' ? newFrames(prev) : newFrames
+      totalFramesRef.current = updated // Update ref synchronously
+      return updated
+    })
+  }, [])
 
   // Initialize virtual timeline engine
   useEffect(() => {
@@ -77,17 +98,17 @@ export function useVideoEditor() {
   
   // Recording hook integration
   const handleClipCreated = useCallback((clip: Clip) => {
-    setClips(prev => {
+    setClipsWithRef(prev => {
       const newClips = [...prev, clip]
       // Save history immediately when adding a clip
-      historyRef.current.saveState(newClips, Math.max(totalFrames, clip.startFrame + clip.durationFrames), 'Add recording')
+      historyRef.current.saveState(newClips, Math.max(totalFramesRef.current, clip.startFrame + clip.durationFrames), 'Add recording')
       return newClips
     })
-    setTotalFrames(prev => Math.max(prev, clip.startFrame + clip.durationFrames))
-  }, [totalFrames])
+    setTotalFramesWithRef(prev => Math.max(prev, clip.startFrame + clip.durationFrames))
+  }, [])
   
   const handleTotalFramesUpdate = useCallback((frames: number) => {
-    setTotalFrames(frames)
+    setTotalFramesWithRef(frames)
   }, [])
   
   const { isRecording, startRecording, stopRecording } = useRecording({
@@ -150,7 +171,7 @@ export function useVideoEditor() {
   
   // Move clip to new position (live update during drag)
   const moveClip = useCallback((clipId: string, newStartFrame: number) => {
-    setClips(prevClips => {
+    setClipsWithRef(prevClips => {
       const clipIndex = prevClips.findIndex(c => c.id === clipId)
       if (clipIndex === -1) return prevClips
       
@@ -165,7 +186,7 @@ export function useVideoEditor() {
       
       // Update totalFrames if clip extends beyond current total
       const clipEndFrame = newStartFrame + clip.durationFrames
-      setTotalFrames(prev => Math.max(prev, clipEndFrame))
+      setTotalFramesWithRef(prev => Math.max(prev, clipEndFrame))
       
       return newClips
     })
@@ -174,19 +195,19 @@ export function useVideoEditor() {
   // Move clip complete (save history on drag end)  
   const moveClipComplete = useCallback(() => {
     // Just save the current state - the move has already been applied
-    historyRef.current.saveState(clips, totalFrames, 'Move clip')
-  }, [clips, totalFrames])
+    historyRef.current.saveState(clipsRef.current, totalFramesRef.current, 'Move clip')
+  }, [])
   
   // Delete a clip by ID (saves history immediately - not a drag operation)
   const deleteClip = useCallback((clipId: string) => {
-    setClips(prevClips => {
+    setClipsWithRef(prevClips => {
       const updatedClips = prevClips.filter(c => c.id !== clipId)
       
       // Recalculate total frames after deletion
       const newTotalFrames = updatedClips.reduce((max, clip) => 
         Math.max(max, clip.startFrame + clip.durationFrames), 0
       )
-      setTotalFrames(newTotalFrames)
+      setTotalFramesWithRef(newTotalFrames)
       
       // Save history immediately for delete (not a continuous operation)
       historyRef.current.saveState(updatedClips, newTotalFrames, 'Delete clip')
@@ -203,7 +224,7 @@ export function useVideoEditor() {
   
   // Trim the start of a clip (live update during drag)
   const trimClipStart = useCallback((clipId: string, newStartOffset: number) => {
-    setClips(prevClips => {
+    setClipsWithRef(prevClips => {
       const clipIndex = prevClips.findIndex(c => c.id === clipId)
       if (clipIndex === -1) return prevClips
       
@@ -236,12 +257,12 @@ export function useVideoEditor() {
   // Trim start complete (save history on drag end)
   const trimClipStartComplete = useCallback(() => {
     // Just save the current state - the trim has already been applied
-    historyRef.current.saveState(clips, totalFrames, 'Trim clip start')
-  }, [clips, totalFrames])
+    historyRef.current.saveState(clipsRef.current, totalFramesRef.current, 'Trim clip start')
+  }, [])
   
   // Trim the end of a clip (live update during drag)
   const trimClipEnd = useCallback((clipId: string, newEndOffset: number) => {
-    setClips(prevClips => {
+    setClipsWithRef(prevClips => {
       const clipIndex = prevClips.findIndex(c => c.id === clipId)
       if (clipIndex === -1) return prevClips
       
@@ -273,12 +294,12 @@ export function useVideoEditor() {
   // Trim end complete (save history on drag end)
   const trimClipEndComplete = useCallback(() => {
     // Just save the current state - the trim has already been applied
-    historyRef.current.saveState(clips, totalFrames, 'Trim clip end')
-  }, [clips, totalFrames])
+    historyRef.current.saveState(clipsRef.current, totalFramesRef.current, 'Trim clip end')
+  }, [])
   
   // Split clip at specific frame (saves history immediately - not a drag operation)
   const splitClip = useCallback((clipId: string, splitFrame: number) => {
-    setClips(prevClips => {
+    setClipsWithRef(prevClips => {
       const clipIndex = prevClips.findIndex(c => c.id === clipId)
       if (clipIndex === -1) return prevClips
       
@@ -321,18 +342,18 @@ export function useVideoEditor() {
       newClips.splice(clipIndex, 1, firstClip, secondClip)
       
       // Save history immediately for split (not a continuous operation)
-      historyRef.current.saveState(newClips, totalFrames, 'Split clip')
+      historyRef.current.saveState(newClips, totalFramesRef.current, 'Split clip')
       
       return newClips
     })
-  }, [totalFrames])
+  }, [])
 
   // Undo function
   const undo = useCallback(() => {
     const previousState = historyRef.current.undo()
     if (previousState) {
-      setClips(previousState.clips)
-      setTotalFrames(previousState.totalFrames)
+      setClipsWithRef(previousState.clips)
+      setTotalFramesWithRef(previousState.totalFrames)
     }
   }, [])
   
@@ -340,8 +361,8 @@ export function useVideoEditor() {
   const redo = useCallback(() => {
     const nextState = historyRef.current.redo()
     if (nextState) {
-      setClips(nextState.clips)
-      setTotalFrames(nextState.totalFrames)
+      setClipsWithRef(nextState.clips)
+      setTotalFramesWithRef(nextState.totalFrames)
     }
   }, [])
   
