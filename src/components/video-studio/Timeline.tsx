@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { FPS } from '@/lib/video-editor/types'
 import { Minus, Plus } from 'lucide-react'
 
-interface SimpleTimelineProps {
+interface TimelineProps {
   clips: Array<{
     id: string
     startFrame: number
@@ -18,7 +18,7 @@ interface SimpleTimelineProps {
   onMoveClip?: (clipId: string, newStartFrame: number) => void
 }
 
-export function SimpleTimeline({ 
+export function Timeline({ 
   clips, 
   currentFrame, 
   totalFrames, 
@@ -26,7 +26,7 @@ export function SimpleTimeline({
   selectedClipId, 
   onSelectClip, 
   onMoveClip 
-}: SimpleTimelineProps) {
+}: TimelineProps) {
   const [draggedClipId, setDraggedClipId] = useState<string | null>(null)
   const [dragOffset, setDragOffset] = useState(0)
   const [zoomLevel, setZoomLevel] = useState(1) // 1 = 100%, 2 = 200%, etc.

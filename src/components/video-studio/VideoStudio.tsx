@@ -5,11 +5,11 @@ import { useVideoEditor } from '@/lib/video-editor/useVideoEditor'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Play, Pause, Circle, Square } from 'lucide-react'
 import Link from 'next/link'
-import { SimpleTimeline } from './SimpleTimeline'
+import { Timeline } from './Timeline'
 import { useKeyboardShortcuts } from './useKeyboardShortcuts'
 import { formatFrame } from './formatters'
 
-export function SimpleStudio() {
+export function VideoStudio() {
   const editor = useVideoEditor()
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null)
   
@@ -196,7 +196,7 @@ export function SimpleStudio() {
           
           {/* Timeline Panel - 80% width */}
           <div className="flex-1 overflow-hidden" style={{ width: '80%' }}>
-            <SimpleTimeline 
+            <Timeline 
               clips={editor.clips}
               currentFrame={editor.visualFrame}  // Use throttled frame for smooth visuals
               totalFrames={editor.totalFrames}
