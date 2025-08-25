@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import { Clip, Track, FPS, DEFAULT_TRACK_HEIGHT } from '@/lib/video-editor/types'
+import { frameToPixel, pixelToFrame, getClipLeftPosition, getClipWidth, getSnappedPosition, getSnapTargets, findTrackFromElement, getNextTrackIndex, findTrackByIndex, getClipsForTrack } from '@/lib/video-editor/utils'
 import { Film, Music, Volume2, VolumeX } from 'lucide-react'
 
 interface TimelineClipsProps {
@@ -95,7 +96,7 @@ export function TimelineClips({
       }
       
       const deltaX = e.clientX - (dragStartPosRef.current?.x ?? e.clientX)
-      const deltaFrames = Math.round((deltaX / pixelsPerSecond) * FPS)
+      const deltaFrames = pixelToFrame(deltaX, pixelsPerSecond) - pixelToFrame(0, pixelsPerSecond)
       
       if (dragMode === 'move' && onMoveClip) {
         // Get the timeline container for proper coordinate calculation
@@ -104,28 +105,21 @@ export function TimelineClips({
         
         const rect = timelineContainer.getBoundingClientRect()
         const x = e.clientX - rect.left - dragOffset - 70
-        let newStartFrame = Math.round(Math.max(0, x / pixelsPerSecond) * FPS)
+        let newStartFrame = Math.max(0, pixelToFrame(x, pixelsPerSecond))
         
         // Magnetic effect: snap to scrubber, whole seconds, and clip edges
-        const magneticRangeFrames = 3
+        const snapTargets = getSnapTargets(clips, currentFrame, clip.id)
         
-        // 1. Snap to scrubber position
-        if (Math.abs(newStartFrame - currentFrame) <= magneticRangeFrames) {
-          newStartFrame = currentFrame
-        } else if (Math.abs((newStartFrame + clip.durationFrames) - currentFrame) <= magneticRangeFrames) {
-          newStartFrame = currentFrame - clip.durationFrames
-        }
-        // 2. Snap to whole seconds
-        else {
-          const nearestSecondFrame = Math.round(newStartFrame / FPS) * FPS
-          if (Math.abs(newStartFrame - nearestSecondFrame) <= magneticRangeFrames) {
-            newStartFrame = nearestSecondFrame
-          }
-          // Also check if clip end would snap to a whole second
+        // Check snap for clip start position
+        const snappedStart = getSnappedPosition(newStartFrame, snapTargets)
+        if (snappedStart !== newStartFrame) {
+          newStartFrame = snappedStart
+        } else {
+          // Check snap for clip end position
           const clipEndFrame = newStartFrame + clip.durationFrames
-          const nearestEndSecondFrame = Math.round(clipEndFrame / FPS) * FPS
-          if (Math.abs(clipEndFrame - nearestEndSecondFrame) <= magneticRangeFrames) {
-            newStartFrame = nearestEndSecondFrame - clip.durationFrames
+          const snappedEnd = getSnappedPosition(clipEndFrame, snapTargets)
+          if (snappedEnd !== clipEndFrame) {
+            newStartFrame = snappedEnd - clip.durationFrames
           }
         }
         
@@ -168,8 +162,8 @@ export function TimelineClips({
               const targetTrackIndex = parseInt(trackEl.getAttribute('data-track-index') || '0')
               
               // Check if target track is compatible (video clips can only go to video tracks)
-              const targetTrack = tracks.find(t => t.index === targetTrackIndex)
-              const draggedClipTrack = tracks.find(t => t.index === clip.trackIndex)
+              const targetTrack = findTrackByIndex(tracks, targetTrackIndex)
+              const draggedClipTrack = findTrackByIndex(tracks, clip.trackIndex)
               
               if (targetTrack && draggedClipTrack && 
                   targetTrack.type === 'audio' && draggedClipTrack.type === 'video') {
@@ -197,8 +191,8 @@ export function TimelineClips({
             
             if (targetTrackElement) {
               const targetTrackIndex = parseInt(targetTrackElement.getAttribute('data-track-index') || '0')
-              const targetTrack = tracks.find(t => t.index === targetTrackIndex)
-              const draggedClipTrack = tracks.find(t => t.index === clip.trackIndex)
+              const targetTrack = findTrackByIndex(tracks, targetTrackIndex)
+              const draggedClipTrack = findTrackByIndex(tracks, clip.trackIndex)
               
               // Hide preview only if hovering over compatible track
               if (targetTrack && draggedClipTrack && targetTrack.type === draggedClipTrack.type) {
@@ -209,7 +203,7 @@ export function TimelineClips({
           
           // Check if dragging below video tracks to create new video track
           if (!foundExistingTrack && trackElements.length > 0) {
-            const draggedClipTrack = tracks.find(t => t.index === clip.trackIndex)
+            const draggedClipTrack = findTrackByIndex(tracks, clip.trackIndex)
             
             // Only allow creating new video tracks from video clips
             if (draggedClipTrack?.type === 'video') {
@@ -266,11 +260,11 @@ export function TimelineClips({
       } else if (dragMode === 'trim-start' && onTrimClipStart) {
         let newInFrame = Math.max(0, dragStartFrameRef.current + deltaFrames)
         
-        const magneticRangeFrames = 3
         const scrubberOffsetInClip = currentFrame - clip.startFrame
         
-        if (Math.abs(newInFrame - scrubberOffsetInClip) <= magneticRangeFrames && scrubberOffsetInClip >= 0) {
-          newInFrame = scrubberOffsetInClip
+        if (scrubberOffsetInClip >= 0) {
+          const snappedInFrame = getSnappedPosition(newInFrame, [scrubberOffsetInClip])
+          newInFrame = snappedInFrame
         }
         
         onTrimClipStart(clip.id, newInFrame)
@@ -278,12 +272,12 @@ export function TimelineClips({
       } else if (dragMode === 'trim-end' && onTrimClipEnd) {
         let newOutFrame = Math.max(1, dragStartFrameRef.current + deltaFrames)
         
-        const magneticRangeFrames = 3
         const scrubberOffsetInClip = currentFrame - clip.startFrame
         const scrubberOutFrame = (clip.sourceInFrame ?? 0) + scrubberOffsetInClip
         
-        if (Math.abs(newOutFrame - scrubberOutFrame) <= magneticRangeFrames && scrubberOffsetInClip >= 0) {
-          newOutFrame = scrubberOutFrame
+        if (scrubberOffsetInClip >= 0) {
+          const snappedOutFrame = getSnappedPosition(newOutFrame, [scrubberOutFrame])
+          newOutFrame = snappedOutFrame
         }
         
         onTrimClipEnd(clip.id, newOutFrame)
@@ -490,8 +484,8 @@ export function TimelineClips({
                   <div
                     className="absolute h-16 rounded opacity-80"
                     style={{
-                      left: (previewClipPosition / FPS) * pixelsPerSecond + 70,
-                      width: (draggedClipRef.current?.durationFrames || 0) / FPS * pixelsPerSecond,
+                      left: frameToPixel(previewClipPosition, pixelsPerSecond) + 70,
+                      width: frameToPixel(draggedClipRef.current?.durationFrames || 0, pixelsPerSecond),
                       background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
                       top: '50%',
                       transform: 'translateY(-50%)',
@@ -554,10 +548,10 @@ export function TimelineClips({
           </div>
           
           {/* Render clips for this track */}
-          {clips.filter(clip => clip.trackIndex === track.index).map((clip) => {
+          {getClipsForTrack(clips, track.index).map((clip) => {
           const isSelected = clip.id === selectedClipId
-          const clipX = (clip.startFrame / FPS) * pixelsPerSecond
-          const clipWidth = (clip.durationFrames / FPS) * pixelsPerSecond
+          const clipX = getClipLeftPosition(clip, pixelsPerSecond)
+          const clipWidth = getClipWidth(clip, pixelsPerSecond)
           
           // Calculate trim indicators
           const originalDuration = clip.originalDurationFrames ?? clip.durationFrames
@@ -664,8 +658,8 @@ export function TimelineClips({
             <div
               className="absolute h-16 rounded opacity-80"
               style={{
-                left: (previewClipPosition / FPS) * pixelsPerSecond + 70,
-                width: (draggedClipRef.current?.durationFrames || 0) / FPS * pixelsPerSecond,
+                left: frameToPixel(previewClipPosition, pixelsPerSecond) + 70,
+                width: frameToPixel(draggedClipRef.current?.durationFrames || 0, pixelsPerSecond),
                 background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
                 top: '50%',
                 transform: 'translateY(-50%)',
