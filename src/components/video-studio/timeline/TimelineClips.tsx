@@ -89,10 +89,22 @@ export function TimelineClips({
       // It was a drag - call the complete callback to save history
       if (dragMode === 'move' && onMoveClipComplete) {
         onMoveClipComplete()
+        // Keep the moved clip selected
+        if (clipId !== selectedClipId) {
+          onSelectClip(clipId)
+        }
       } else if (dragMode === 'trim-start' && onTrimClipStartComplete) {
         onTrimClipStartComplete()
+        // Keep the trimmed clip selected
+        if (clipId !== selectedClipId) {
+          onSelectClip(clipId)
+        }
       } else if (dragMode === 'trim-end' && onTrimClipEndComplete) {
         onTrimClipEndComplete()
+        // Keep the trimmed clip selected
+        if (clipId !== selectedClipId) {
+          onSelectClip(clipId)
+        }
       }
     }
     
@@ -158,10 +170,21 @@ export function TimelineClips({
     }
   }
   
+  // Handle clicking on empty timeline area to deselect clips
+  const handleContainerClick = (e: React.MouseEvent) => {
+    // Only deselect if clicking directly on the container, not on a clip
+    if (e.target === e.currentTarget) {
+      onSelectClip(null)
+    }
+  }
+  
   return (
     <div className="relative" style={{ height: 'calc(100% - 40px)' }}>
       {/* Video Track 1 */}
-      <div className="h-20 border-b border-gray-800 relative flex items-center">
+      <div 
+        className="h-20 border-b border-gray-800 relative flex items-center"
+        onClick={handleContainerClick}
+      >
         <div className="absolute left-2 text-xs text-gray-400 z-10" style={{ width: '60px' }}>
           Video 1
         </div>
