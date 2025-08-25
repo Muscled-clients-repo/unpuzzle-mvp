@@ -12,23 +12,40 @@ interface TimelineProps {
     id: string
     startFrame: number
     durationFrames: number
+    originalDurationFrames?: number
+    sourceInFrame?: number
+    sourceOutFrame?: number
   }>
   currentFrame: number
   totalFrames: number
-  onSeekToFrame: (frame: number) => void
+  isPlaying?: boolean
+  onPause?: () => void
+  onSeekToFrame: (frame: number, immediate?: boolean) => void
   selectedClipId: string | null
   onSelectClip: (clipId: string | null) => void
   onMoveClip?: (clipId: string, newStartFrame: number) => void
+  onMoveClipComplete?: () => void
+  onTrimClipStart?: (clipId: string, newStartOffset: number) => void
+  onTrimClipStartComplete?: () => void
+  onTrimClipEnd?: (clipId: string, newEndOffset: number) => void
+  onTrimClipEndComplete?: () => void
 }
 
 export function Timeline({ 
   clips, 
   currentFrame, 
-  totalFrames, 
+  totalFrames,
+  isPlaying = false,
+  onPause,
   onSeekToFrame, 
   selectedClipId, 
   onSelectClip, 
-  onMoveClip 
+  onMoveClip,
+  onMoveClipComplete,
+  onTrimClipStart,
+  onTrimClipStartComplete,
+  onTrimClipEnd,
+  onTrimClipEndComplete
 }: TimelineProps) {
   const [zoomLevel, setZoomLevel] = useState(1) // 1 = 100%, 2 = 200%, etc.
   const [isDraggingScrubber, setIsDraggingScrubber] = useState(false)
@@ -56,18 +73,23 @@ export function Timeline({
     const x = e.clientX - rect.left - 70
     if (x < 0) return
     
-    const scrubberX = (currentFrame / FPS) * pixelsPerSecond
-    const magneticRange = 15
-    
-    // Only start dragging if clicking near the scrubber
-    if (Math.abs(x - scrubberX) <= magneticRange) {
-      setIsDraggingScrubber(true)
+    // Pause playback if playing when starting to drag
+    if (isPlaying && onPause) {
+      onPause()
     }
+    
+    // Start dragging from anywhere on the ruler
+    setIsDraggingScrubber(true)
+    
+    // Immediately move scrubber to clicked position (immediate = true for click)
+    const clickedFrame = Math.round((x / pixelsPerSecond) * FPS)
+    const maxFrame = totalSeconds * FPS
+    onSeekToFrame(Math.min(Math.max(0, clickedFrame), maxFrame), true)
   }
   
   const handleRulerClick = (frame: number) => {
-    const maxFrame = totalSeconds * FPS
-    onSeekToFrame(Math.min(frame, maxFrame))
+    // This is now handled by mouseDown
+    // Keep empty to prevent double-seeking
   }
   
   // Handle scrubber dragging
@@ -81,7 +103,7 @@ export function Timeline({
       const x = (e.clientX - rect.left + container.scrollLeft - 70) / pixelsPerSecond
       const frame = Math.round(Math.max(0, x) * FPS)
       const maxFrame = totalSeconds * FPS
-      onSeekToFrame(Math.min(frame, maxFrame))
+      onSeekToFrame(Math.min(frame, maxFrame), false) // debounced for dragging
     }
     
     const handleGlobalMouseUp = () => setIsDraggingScrubber(false)
@@ -214,8 +236,15 @@ export function Timeline({
             clips={clips}
             pixelsPerSecond={pixelsPerSecond}
             selectedClipId={selectedClipId}
+            currentFrame={currentFrame}
             onSelectClip={onSelectClip}
             onMoveClip={onMoveClip}
+            onMoveClipComplete={onMoveClipComplete}
+            onTrimClipStart={onTrimClipStart}
+            onTrimClipStartComplete={onTrimClipStartComplete}
+            onTrimClipEnd={onTrimClipEnd}
+            onTrimClipEndComplete={onTrimClipEndComplete}
+            onSeekToFrame={onSeekToFrame}
           />
           
           <TimelineScrubber

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useVideoEditor } from '@/lib/video-editor/useVideoEditor'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Play, Pause, Circle, Square } from 'lucide-react'
+import { ArrowLeft, Play, Pause, Circle, Square, Undo2, Redo2 } from 'lucide-react'
 import Link from 'next/link'
 import { Timeline } from './Timeline'
 import { useKeyboardShortcuts } from './useKeyboardShortcuts'
@@ -48,6 +48,10 @@ export function VideoStudio() {
     isPlaying: editor.isPlaying,
     play: editor.play,
     pause: editor.pause,
+    undo: editor.undo,
+    redo: editor.redo,
+    canUndo: editor.canUndo,
+    canRedo: editor.canRedo,
     currentFrame: editor.currentFrame,
     clips: editor.clips,
     splitClip: editor.splitClip,
@@ -68,6 +72,28 @@ export function VideoStudio() {
           <span className="text-xs text-gray-500">Simple Architecture</span>
         </div>
         <div className="flex items-center gap-2">
+          {/* Undo/Redo Buttons */}
+          <Button 
+            size="sm"
+            variant="ghost"
+            onClick={editor.undo}
+            disabled={!editor.canUndo()}
+            title="Undo (Cmd/Ctrl+Z)"
+          >
+            <Undo2 className="h-4 w-4" />
+          </Button>
+          <Button 
+            size="sm"
+            variant="ghost"
+            onClick={editor.redo}
+            disabled={!editor.canRedo()}
+            title="Redo (Cmd/Ctrl+Shift+Z)"
+          >
+            <Redo2 className="h-4 w-4" />
+          </Button>
+          
+          <div className="w-px h-6 bg-gray-700 mx-1" /> {/* Separator */}
+          
           {/* Recording Controls in Header */}
           {!editor.isRecording ? (
             <Button 
@@ -200,10 +226,17 @@ export function VideoStudio() {
               clips={editor.clips}
               currentFrame={editor.visualFrame}  // Use throttled frame for smooth visuals
               totalFrames={editor.totalFrames}
+              isPlaying={editor.isPlaying}
+              onPause={editor.pause}
               onSeekToFrame={editor.seekToFrame}
               selectedClipId={selectedClipId}
               onSelectClip={setSelectedClipId}
               onMoveClip={editor.moveClip}
+              onMoveClipComplete={editor.moveClipComplete}
+              onTrimClipStart={editor.trimClipStart}
+              onTrimClipStartComplete={editor.trimClipStartComplete}
+              onTrimClipEnd={editor.trimClipEnd}
+              onTrimClipEndComplete={editor.trimClipEndComplete}
             />
           </div>
         </div>

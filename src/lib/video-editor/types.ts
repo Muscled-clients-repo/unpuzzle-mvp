@@ -4,6 +4,7 @@ export interface Clip {
   url: string              // Blob URL from recording
   startFrame: number       // Position on timeline (frames)
   durationFrames: number   // Clip length (frames)
+  originalDurationFrames?: number // Original full duration before any trims
   sourceInFrame?: number   // Start frame within source video (for trims)
   sourceOutFrame?: number  // End frame within source video (for trims)
   thumbnailUrl?: string    // Optional preview

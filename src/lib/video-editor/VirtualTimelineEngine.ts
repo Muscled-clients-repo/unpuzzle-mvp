@@ -109,7 +109,7 @@ export class VirtualTimelineEngine {
             // Ignore pause errors
           })
         }
-        // Clear the video display by removing src
+        // Clear the video display
         this.videoElement.src = ''
         this.currentSegment = null
       }
@@ -117,17 +117,30 @@ export class VirtualTimelineEngine {
     }
     
     // Check if we need to switch segments
-    if (targetSegment !== this.currentSegment) {
-      this.loadSegment(targetSegment)
-      return
+    // Compare by ID to handle trim updates without reloading
+    const isNewSegment = !this.currentSegment || this.currentSegment.id !== targetSegment.id
+    const isDifferentVideo = !this.currentSegment || this.currentSegment.sourceUrl !== targetSegment.sourceUrl
+    
+    if (isNewSegment || isDifferentVideo) {
+      if (isDifferentVideo) {
+        // Different video file - need to load it
+        this.loadSegment(targetSegment)
+        return
+      }
+      // Same video file but different segment - just update reference
+      this.currentSegment = targetSegment
+    } else {
+      // Same segment ID - just update the reference to get new boundaries
+      // This handles trim operations without any video reload
+      this.currentSegment = targetSegment
     }
     
-    // Calculate position within segment
+    // Calculate the actual frame we want to show in the source video
     const frameInSegment = this.currentFrame - targetSegment.startFrame
     const sourceFrame = targetSegment.sourceInFrame + frameInSegment
     
-    // Check if we've exceeded the segment's out point
-    if (sourceFrame >= targetSegment.sourceOutFrame) {
+    // Check if we've exceeded the segment's logical out point (for playback control)
+    if (this.isPlaying && sourceFrame >= targetSegment.sourceOutFrame) {
       // Move to next segment or pause
       const nextFrame = targetSegment.endFrame
       if (nextFrame < this.totalFrames) {
@@ -138,13 +151,15 @@ export class VirtualTimelineEngine {
       return
     }
     
-    // Sync video position if drift is too large
+    // Always show the exact frame requested (no boundary restrictions for preview)
+    // This allows smooth scrubbing when extending edges
     const targetTime = sourceFrame / this.fps
     const currentTime = this.videoElement.currentTime
     const drift = Math.abs(currentTime - targetTime)
     
-    // Only seek if drift exceeds threshold (0.1 seconds)
-    if (drift > 0.1) {
+    // Always seek immediately when paused (for trimming preview)
+    // Only use threshold when playing to avoid stuttering
+    if (!this.isPlaying || drift > 0.1) {
       this.videoElement.currentTime = targetTime
     }
     
@@ -162,19 +177,22 @@ export class VirtualTimelineEngine {
     
     this.currentSegment = segment
     
-    // Load new video if needed
+    // Load new video if needed - keep full video loaded, not just trimmed portion
     if (this.videoElement.src !== segment.sourceUrl) {
       this.videoElement.src = segment.sourceUrl
       
-      // When video loads, seek to correct position and play
+      // When video loads, seek to correct position
       this.videoElement.onloadedmetadata = () => {
         if (!this.videoElement || !this.currentSegment) return
         
+        // Calculate where we should be in the source video
         const frameInSegment = this.currentFrame - this.currentSegment.startFrame
         const sourceFrame = this.currentSegment.sourceInFrame + frameInSegment
         const sourceTime = sourceFrame / this.fps
         
+        // Seek to the calculated position
         this.videoElement.currentTime = sourceTime
+        
         if (this.isPlaying) {
           this.videoElement.play().catch(() => {
             // Ignore play errors
@@ -182,13 +200,18 @@ export class VirtualTimelineEngine {
         }
       }
     } else {
-      // Same video, just seek
+      // Same video already loaded - just seek to the right position
+      // This is the key: we always keep the full video loaded
+      // and just seek within it based on the logical trim boundaries
+      
       const frameInSegment = this.currentFrame - segment.startFrame
       const sourceFrame = segment.sourceInFrame + frameInSegment
       const sourceTime = sourceFrame / this.fps
       
+      // Direct seek - the video has the full content buffered
       this.videoElement.currentTime = sourceTime
-      if (this.isPlaying) {
+      
+      if (this.isPlaying && this.videoElement.paused) {
         this.videoElement.play().catch(() => {
           // Ignore play errors
         })

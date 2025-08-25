@@ -54,6 +54,7 @@ export function useRecording({
           url,
           startFrame: totalFrames,
           durationFrames,
+          originalDurationFrames: durationFrames, // Store original duration
           sourceInFrame: 0,
           sourceOutFrame: durationFrames
         }
