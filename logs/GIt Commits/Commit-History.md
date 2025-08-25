@@ -6,6 +6,66 @@
 
 ---
 
+#### Commit: `e2cf8e2`
+**Date:** 2025-08-24  
+**Branch:** video-editor-attempt-2  
+**Message:** refactor: Major architecture cleanup - Remove broken CQRS components
+
+**Details:**
+- **Architecture Cleanup:**
+  - Deleted 1,450+ lines of broken/unused code
+  - Removed all CQRS infrastructure (commands, queries, services)
+  - Deleted broken studio components referencing non-existent patterns
+  - Renamed simple-studio to video-studio for clarity
+  - Consolidated to single Virtual Timeline architecture
+  
+- **Code Reduction:**
+  - Achieved 70% codebase reduction (2,049 → 599 lines)
+  - Now fully compliant with architecture plan
+  - 11 files changed, 317 insertions(+), 821 deletions(-)
+  - Net reduction of 504 lines
+  
+- **Files Deleted:**
+  - `src/components/studio/` (entire directory)
+  - `src/lib/video-editor/commands/`
+  - `src/lib/video-editor/queries/`
+  - `src/lib/video-editor/services/`
+  - `src/lib/video-editor/state-machine/`
+  
+- **Files Renamed:**
+  - `simple-studio/SimpleStudio.tsx` → `video-studio/VideoStudio.tsx`
+  - `simple-studio/SimpleTimeline.tsx` → `video-studio/Timeline.tsx`
+
+---
+
+#### Commit: `96eb1fb`
+**Date:** 2025-08-24  
+**Branch:** video-editor-attempt-2  
+**Message:** feat: Add dynamic timeline extension and professional zoom controls
+
+---
+
+#### Commit: `3b37126`
+**Date:** 2025-08-24  
+**Branch:** video-editor-attempt-2  
+**Message:** fix: Timeline editor ruler needs improvements but other issues are fixed
+
+---
+
+#### Commit: `ab74b4d`
+**Date:** 2025-08-24  
+**Branch:** video-editor-attempt-2  
+**Message:** feat: Complete video editor timeline enhancements and bug fixes
+
+---
+
+#### Commit: `959f208`
+**Date:** 2025-08-23  
+**Branch:** video-editor-attempt-2  
+**Message:** feat: Implement bulletproof video editor architecture with XState v5
+
+---
+
 #### Commit: `32f6713`
 **Date:** 2025-08-12  
 **Message:** docs: add comprehensive route and component analysis documentation
@@ -310,8 +370,9 @@
 ## Branch Information
 
 **Main Branch:** `main`  
-**Current HEAD:** `94e7646`  
-**Remote:** `origin/main` (https://github.com/muscled-clients/unpuzzle-mvp.git)
+**Current Branch:** `video-editor-attempt-2`  
+**Current HEAD:** `e2cf8e2`  
+**Remote:** `origin/video-editor-attempt-2` (https://github.com/Muscled-clients-repo/unpuzzle-mvp.git)
 
 ## Stats Summary
 
