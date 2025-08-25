@@ -460,35 +460,89 @@ export function useVideoEditor() {
   // No longer need video event listeners - virtual timeline handles everything!
   
   // Track management functions
-  const addTrack = useCallback((type: 'video' | 'audio' = 'video') => {
+  const addTrack = useCallback((type: 'video' | 'audio' = 'video', position?: 'above' | 'between' | 'below') => {
     setTracks(prev => {
-      // Find the highest existing index to ensure unique indices
-      const maxIndex = prev.reduce((max, track) => Math.max(max, track.index), -1)
-      const newIndex = maxIndex + 1
+      // Get video and audio tracks separately, sorted by index
+      const videoTracks = prev.filter(t => t.type === 'video').sort((a, b) => a.index - b.index)
+      const audioTracks = prev.filter(t => t.type === 'audio').sort((a, b) => a.index - b.index)
       
-      // Count how many tracks of this type exist
-      const existingCount = prev.filter(t => t.type === type).length
-      const trackNumber = existingCount + 1
+      let newTracks: Track[]
       
-      const newTrack: Track = {
-        id: `track-${newIndex}`,
-        index: newIndex,
-        name: type === 'video' ? `V${trackNumber}` : `A${trackNumber}`,
-        type,
-        visible: true,
-        locked: false,
-        ...(type === 'audio' ? { muted: false } : {})
+      // Insert new track based on position
+      if (position === 'between' || !position) {
+        // Insert between video and audio tracks (for video tracks) or at appropriate position
+        if (type === 'video') {
+          newTracks = [videoTracks, audioTracks].flat()
+          // Insert new video track at the end of video tracks (before audio)
+          const insertIndex = videoTracks.length
+          newTracks.splice(insertIndex, 0, { 
+            id: `track-temp`,
+            index: -1,
+            name: '',
+            type, 
+            visible: true, 
+            locked: false
+          })
+        } else {
+          // Insert audio track at the end
+          newTracks = [...videoTracks, ...audioTracks, { 
+            id: `track-temp`,
+            index: -1,
+            name: '',
+            type, 
+            visible: true, 
+            locked: false,
+            muted: false
+          }]
+        }
+      } else {
+        // Default case (below)
+        if (type === 'video') {
+          newTracks = [videoTracks, audioTracks].flat()
+          const insertIndex = videoTracks.length
+          newTracks.splice(insertIndex, 0, { 
+            id: `track-temp`,
+            index: -1,
+            name: '',
+            type, 
+            visible: true, 
+            locked: false
+          })
+        } else {
+          newTracks = [...videoTracks, ...audioTracks, { 
+            id: `track-temp`,
+            index: -1,
+            name: '',
+            type, 
+            visible: true, 
+            locked: false,
+            muted: false
+          }]
+        }
       }
       
-      // Sort tracks: video tracks first, then audio tracks
-      // Within each type, maintain their order
-      const updatedTracks = [...prev, newTrack]
-      return updatedTracks.sort((a, b) => {
-        // First sort by type (video before audio)
-        if (a.type === 'video' && b.type === 'audio') return -1
-        if (a.type === 'audio' && b.type === 'video') return 1
-        // Then sort by index within the same type
-        return a.index - b.index
+      // Reassign indices and names based on the new order
+      let videoCount = 0
+      let audioCount = 0
+      
+      return newTracks.map((track, index) => {
+        if (track.type === 'video') {
+          videoCount++
+          return {
+            ...track,
+            id: track.id === 'track-temp' ? `track-${Date.now()}-${index}` : track.id,
+            index,
+            name: `V${videoCount}`
+          }
+        } else {
+          audioCount++
+          return {
+            ...track,
+            id: track.id === 'track-temp' ? `track-${Date.now()}-${index}` : track.id,
+            index,
+            name: `A${audioCount}`
+          }
+        }
       })
     })
   }, [])

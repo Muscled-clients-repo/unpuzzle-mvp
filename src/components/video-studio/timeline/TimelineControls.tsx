@@ -9,7 +9,7 @@ interface TimelineControlsProps {
   onZoomChange: (zoom: number) => void
   clipCount: number
   trackCount?: number
-  onAddTrack?: (type: 'video' | 'audio') => void
+  onAddTrack?: (type: 'video' | 'audio', position?: 'above' | 'between' | 'below') => void
 }
 
 export function TimelineControls({ 

@@ -66,7 +66,6 @@ export function useRecording({
             const track = tracks.find(t => t.index === selectedClip.trackIndex)
             if (track && track.type === 'video') {
               targetTrackIndex = selectedClip.trackIndex
-              console.log(`Recording to track ${targetTrackIndex} from selected clip ${selectedClipId}`)
             }
           }
         }
@@ -75,13 +74,11 @@ export function useRecording({
           const track = tracks.find(t => t.index === selectedTrackIndex)
           if (track && track.type === 'video') {
             targetTrackIndex = selectedTrackIndex
-            console.log(`Recording to selected track index: ${targetTrackIndex} (${track.name})`)
           } else if (track && track.type === 'audio') {
             // If audio track is selected, find first video track
             const firstVideoTrack = tracks.find(t => t.type === 'video')
             if (firstVideoTrack) {
               targetTrackIndex = firstVideoTrack.index
-              console.log(`Selected track is audio, recording to first video track: ${firstVideoTrack.name}`)
             }
           }
         }
@@ -90,11 +87,9 @@ export function useRecording({
           const firstVideoTrack = tracks.find(t => t.type === 'video')
           if (firstVideoTrack) {
             targetTrackIndex = firstVideoTrack.index
-            console.log(`Recording to default video track: ${firstVideoTrack.name}`)
           }
         }
         
-        console.log(`Final target track index: ${targetTrackIndex}`)
         
         // Create new clip at end of timeline
         const newClip: Clip = {
@@ -122,7 +117,20 @@ export function useRecording({
       setIsRecording(true)
       
     } catch (error) {
-      console.error('Failed to start recording:', error)
+      // Handle different error types appropriately
+      if (error instanceof DOMException) {
+        if (error.name === 'NotAllowedError') {
+          // User canceled the screen selection dialog - this is normal behavior
+        } else if (error.name === 'NotFoundError') {
+          console.error('No screen capture source available')
+        } else if (error.name === 'NotReadableError') {
+          console.error('Screen capture source is not readable')
+        } else {
+          console.error('Screen capture error:', error.name, error.message)
+        }
+      } else {
+        console.error('Failed to start recording:', error)
+      }
       setIsRecording(false)
     }
   }, [totalFrames, selectedClipId, selectedTrackIndex, clips, tracks, onClipCreated, onTotalFramesUpdate])

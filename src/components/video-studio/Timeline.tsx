@@ -26,7 +26,7 @@ interface TimelineProps {
   onTrimClipStartComplete?: () => void
   onTrimClipEnd?: (clipId: string, newEndOffset: number) => void
   onTrimClipEndComplete?: () => void
-  onAddTrack?: () => void
+  onAddTrack?: (type: 'video' | 'audio', position?: 'above' | 'between' | 'below') => void
   onToggleTrackMute?: (trackIndex: number) => void
 }
 
@@ -275,6 +275,7 @@ export function Timeline({
             onTrimClipEndComplete={onTrimClipEndComplete}
             onSeekToFrame={onSeekToFrame}
             onToggleTrackMute={onToggleTrackMute}
+            onAddTrack={onAddTrack}
           />
           
           <TimelineScrubber

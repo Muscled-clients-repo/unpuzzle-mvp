@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { Clip, Track, FPS, DEFAULT_TRACK_HEIGHT } from '@/lib/video-editor/types'
 import { Film, Music, Volume2, VolumeX } from 'lucide-react'
 
@@ -22,6 +22,7 @@ interface TimelineClipsProps {
   onTrimClipEndComplete?: () => void
   onSeekToFrame?: (frame: number) => void
   onToggleTrackMute?: (trackIndex: number) => void
+  onAddTrack?: (type: 'video' | 'audio', position?: 'above' | 'between' | 'below') => void
 }
 
 export function TimelineClips({ 
@@ -41,16 +42,41 @@ export function TimelineClips({
   onTrimClipEnd,
   onTrimClipEndComplete,
   onSeekToFrame,
-  onToggleTrackMute
+  onToggleTrackMute,
+  onAddTrack
 }: TimelineClipsProps) {
   const [draggedClipId, setDraggedClipId] = useState<string | null>(null)
   const [dragOffset, setDragOffset] = useState(0)
   const [dragMode, setDragMode] = useState<'move' | 'trim-start' | 'trim-end' | null>(null)
+  const [showNewTrackPreview, setShowNewTrackPreview] = useState(false)
+  const [previewTrackType, setPreviewTrackType] = useState<'video' | 'audio'>('video')
+  const [previewPosition, setPreviewPosition] = useState<'above' | 'between' | 'below'>('below')
+  const [previewClipPosition, setPreviewClipPosition] = useState<number>(0) // Frame position for clip in preview track
+  const lastPreviewStateRef = useRef<{show: boolean, type: 'video' | 'audio', position: 'above' | 'between' | 'below'}>({
+    show: false, type: 'video', position: 'below'
+  })
   const dragStartPosRef = useRef<{x: number, y: number} | null>(null)
   const dragStartFrameRef = useRef<number>(0)
   const lastUpdateTimeRef = useRef<number>(0)
   const throttleMs = 100 // 100ms = 10 updates per second
   const draggedClipRef = useRef<Clip | null>(null)
+  
+  // Helper function to update preview state only when necessary
+  const updatePreviewState = (shouldShow: boolean, type: 'video' | 'audio' = 'video', position: 'above' | 'between' | 'below' = 'below') => {
+    const lastState = lastPreviewStateRef.current
+    const stateChanged = lastState.show !== shouldShow || 
+                        lastState.type !== type || 
+                        lastState.position !== position
+    
+    if (stateChanged) {
+      lastPreviewStateRef.current = { show: shouldShow, type, position }
+      setShowNewTrackPreview(shouldShow)
+      if (shouldShow) {
+        setPreviewTrackType(type)
+        setPreviewPosition(position)
+      }
+    }
+  }
   
   // Handle global pointer events for drag operations
   useEffect(() => {
@@ -103,32 +129,137 @@ export function TimelineClips({
           }
         }
         
-        onMoveClip(clip.id, newStartFrame)
+        // Store the calculated position for preview track rendering
+        setPreviewClipPosition(newStartFrame)
         
-        // Update vertical position (track change)
+        // Only update clip position if not showing preview track
+        if (!showNewTrackPreview) {
+          onMoveClip(clip.id, newStartFrame)
+        }
+        
+        // Update vertical position (track change and new track preview)
         if (onMoveClipToTrack) {
-          const trackElements = document.querySelectorAll('[data-track-index]')
+          // Check if mouse is over a preview track first
+          const previewTrackElements = document.querySelectorAll('[data-preview-track="true"]')
+          let isOverPreviewTrack = false
           
+          for (const previewEl of previewTrackElements) {
+            const previewRect = previewEl.getBoundingClientRect()
+            if (e.clientY >= previewRect.top && e.clientY <= previewRect.bottom) {
+              isOverPreviewTrack = true
+              break
+            }
+          }
+          
+          // If over preview track, just maintain current preview state and return
+          if (isOverPreviewTrack) {
+            return
+          }
+          
+          // Only query actual track elements, not preview tracks
+          const trackElements = document.querySelectorAll('[data-track-index]:not([data-preview-track])')
+          let foundExistingTrack = false
+          
+          // Check if dragging over existing tracks
           for (const trackEl of trackElements) {
             const trackRect = trackEl.getBoundingClientRect()
             if (e.clientY >= trackRect.top && e.clientY <= trackRect.bottom) {
+              foundExistingTrack = true
               const targetTrackIndex = parseInt(trackEl.getAttribute('data-track-index') || '0')
               
               // Check if target track is compatible (video clips can only go to video tracks)
               const targetTrack = tracks.find(t => t.index === targetTrackIndex)
-              if (targetTrack && targetTrack.type === 'audio') {
-                // Don't allow video clips to be moved to audio tracks
-                console.log('Cannot move video clip to audio track')
-                break
-              }
+              const draggedClipTrack = tracks.find(t => t.index === clip.trackIndex)
               
-              if (targetTrackIndex !== clip.trackIndex) {
-                console.log(`Moving clip from track ${clip.trackIndex} to track ${targetTrackIndex}`)
-                onMoveClipToTrack(clip.id, targetTrackIndex)
-                // Update the ref so we have the latest track index
-                draggedClipRef.current = { ...clip, trackIndex: targetTrackIndex }
+              if (targetTrack && draggedClipTrack && 
+                  targetTrack.type === 'audio' && draggedClipTrack.type === 'video') {
+                // Video clip over audio track - show V2 preview between video and audio tracks
+                updatePreviewState(true, 'video', 'between')
                 break
+              } else if (targetTrack && targetTrack.type === draggedClipTrack?.type) {
+                // Compatible track types - allow normal move
+                if (targetTrackIndex !== clip.trackIndex) {
+                  onMoveClipToTrack(clip.id, targetTrackIndex)
+                  // Update the ref so we have the latest track index
+                  draggedClipRef.current = { ...clip, trackIndex: targetTrackIndex }
+                  break
+                }
               }
+            }
+          }
+          
+          // Hide preview only if over compatible existing track
+          if (foundExistingTrack && showNewTrackPreview) {
+            const targetTrackElement = Array.from(trackElements).find(trackEl => {
+              const trackRect = trackEl.getBoundingClientRect()
+              return e.clientY >= trackRect.top && e.clientY <= trackRect.bottom
+            })
+            
+            if (targetTrackElement) {
+              const targetTrackIndex = parseInt(targetTrackElement.getAttribute('data-track-index') || '0')
+              const targetTrack = tracks.find(t => t.index === targetTrackIndex)
+              const draggedClipTrack = tracks.find(t => t.index === clip.trackIndex)
+              
+              // Hide preview only if hovering over compatible track
+              if (targetTrack && draggedClipTrack && targetTrack.type === draggedClipTrack.type) {
+                updatePreviewState(false)
+              }
+            }
+          }
+          
+          // Check if dragging below video tracks to create new video track
+          if (!foundExistingTrack && trackElements.length > 0) {
+            const draggedClipTrack = tracks.find(t => t.index === clip.trackIndex)
+            
+            // Only allow creating new video tracks from video clips
+            if (draggedClipTrack?.type === 'video') {
+              // Find all video tracks and get the last one
+              const videoTracks = tracks.filter(t => t.type === 'video').sort((a, b) => a.index - b.index)
+              
+              if (videoTracks.length > 0) {
+                const lastVideoTrack = videoTracks[videoTracks.length - 1]
+                
+                // Find the DOM element for the last video track
+                const lastVideoTrackElement = Array.from(trackElements).find(el => 
+                  parseInt(el.getAttribute('data-track-index') || '0') === lastVideoTrack.index
+                )
+                
+                if (lastVideoTrackElement) {
+                  const lastVideoRect = lastVideoTrackElement.getBoundingClientRect()
+                  // Add small buffer to make it easier to trigger
+                  const draggedBelowLastVideo = e.clientY > (lastVideoRect.bottom - 10)
+                  
+                  if (draggedBelowLastVideo) {
+                    // Check if we're not over an audio track
+                    const audioTracks = tracks.filter(t => t.type === 'audio')
+                    let overAudioTrack = false
+                    
+                    for (const audioTrack of audioTracks) {
+                      const audioTrackElement = Array.from(trackElements).find(el => 
+                        parseInt(el.getAttribute('data-track-index') || '0') === audioTrack.index
+                      )
+                      if (audioTrackElement) {
+                        const audioRect = audioTrackElement.getBoundingClientRect()
+                        if (e.clientY >= audioRect.top && e.clientY <= audioRect.bottom) {
+                          overAudioTrack = true
+                          break
+                        }
+                      }
+                    }
+                    
+                    if (!overAudioTrack) {
+                      updatePreviewState(true, 'video', 'below')
+                    } else {
+                      updatePreviewState(false)
+                    }
+                  } else {
+                    updatePreviewState(false)
+                  }
+                }
+              }
+            } else {
+              // Audio clips or other types - hide preview
+              updatePreviewState(false)
             }
           }
         }
@@ -174,6 +305,60 @@ export function TimelineClips({
         onSelectClip(draggedClipId === selectedClipId ? null : draggedClipId)
         onSelectTrack(null)
       } else if (wasDrag) {
+        // Handle new track creation if dropping on preview
+        if (dragMode === 'move' && showNewTrackPreview && onAddTrack && onMoveClipToTrack && draggedClipId) {
+          
+          // Get the clip being dragged
+          const draggedClip = draggedClipRef.current
+          if (!draggedClip) return
+          
+          // Use the preview clip position that was calculated during drag
+          const dropStartFrame = previewClipPosition
+          
+          // Store current track indices to find the new one
+          const currentTrackIndices = tracks.map(t => t.index)
+          
+          // Create the new track
+          onAddTrack(previewTrackType, previewPosition)
+          
+          // Wait for track creation, then move clip to the newly created track
+          setTimeout(() => {
+            // The new video track will have been inserted at the end of video tracks
+            // Find all video tracks and get the one with the highest index
+            const videoTracks = tracks.filter(t => t.type === 'video')
+            const maxVideoTrackIndex = Math.max(...videoTracks.map(t => t.index))
+            
+            // But we need to get the updated tracks after the new one was added
+            // Since we can't access the updated tracks state here, let's find it from DOM
+            const trackElements = document.querySelectorAll('[data-track-index]')
+            let highestVideoTrackIndex = -1
+            
+            for (const trackEl of trackElements) {
+              const trackIndex = parseInt(trackEl.getAttribute('data-track-index') || '0')
+              
+              // Check if this track has a video track label (V1, V2, etc.)
+              const trackLabels = trackEl.querySelectorAll('.text-gray-400')
+              for (const label of trackLabels) {
+                if (label.textContent && label.textContent.match(/^V\d+$/)) {
+                  highestVideoTrackIndex = Math.max(highestVideoTrackIndex, trackIndex)
+                  break
+                }
+              }
+            }
+            
+            
+            if (highestVideoTrackIndex >= 0) {
+              
+              // Move clip to the new video track
+              onMoveClipToTrack(draggedClipId, highestVideoTrackIndex)
+              
+              // Position the clip at the drop location
+              onMoveClip?.(draggedClipId, dropStartFrame)
+            } else {
+            }
+          }, 200)
+        }
+        
         // It was a drag - call the complete callback to save history
         if (dragMode === 'move' && onMoveClipComplete) {
           onMoveClipComplete()
@@ -197,6 +382,10 @@ export function TimelineClips({
       dragStartPosRef.current = null
       setDraggedClipId(null)
       setDragMode(null)
+      setShowNewTrackPreview(false)
+      setPreviewPosition('below')
+      setPreviewClipPosition(0)
+      lastPreviewStateRef.current = { show: false, type: 'video', position: 'below' }
       draggedClipRef.current = null
     }
     
@@ -215,6 +404,11 @@ export function TimelineClips({
     pixelsPerSecond, 
     currentFrame,
     selectedClipId,
+    tracks,
+    showNewTrackPreview,
+    previewTrackType,
+    previewPosition,
+    previewClipPosition,
     onMoveClip,
     onMoveClipComplete,
     onMoveClipToTrack,
@@ -223,7 +417,8 @@ export function TimelineClips({
     onTrimClipEnd,
     onTrimClipEndComplete,
     onSelectClip,
-    onSelectTrack
+    onSelectTrack,
+    onAddTrack
   ])
   
   const handleClipPointerDown = (clip: Clip, e: React.PointerEvent, mode: 'move' | 'trim-start' | 'trim-end') => {
@@ -254,7 +449,6 @@ export function TimelineClips({
   const handleTrackClick = (trackIndex: number, e: React.MouseEvent) => {
     // Only handle if clicking directly on the track, not on a clip
     if (e.target === e.currentTarget) {
-      console.log('Track clicked, selecting track index:', trackIndex)
       onSelectClip(null) // Deselect any selected clip
       onSelectTrack(trackIndex) // Select this track
     }
@@ -262,12 +456,60 @@ export function TimelineClips({
   
   return (
     <div className="relative" style={{ minHeight: 'calc(100% - 32px)' }} data-timeline-clips-container>
-      {/* Render all tracks */}
-      {tracks.map((track) => (
-        <div 
-          key={track.id}
-          data-track-index={track.index}
-          className={`border-b border-gray-800 relative flex items-center cursor-pointer transition-colors ${
+      {/* Render all tracks with preview track inserted in correct position */}
+      {tracks.map((track, index) => {
+        // Check if we should insert preview track before this track (between video and audio)
+        const shouldInsertPreviewBetween = showNewTrackPreview && 
+          previewPosition === 'between' &&
+          previewTrackType === 'video' && 
+          track.type === 'audio' && 
+          index === tracks.findIndex(t => t.type === 'audio')
+        
+        return (
+          <React.Fragment key={track.id}>
+            {/* Insert preview track between video and audio tracks */}
+            {shouldInsertPreviewBetween && (
+              <div 
+                className="border-b border-gray-600 border-dashed relative flex items-center bg-gray-800 bg-opacity-30 transition-all duration-200"
+                style={{ height: `${DEFAULT_TRACK_HEIGHT}px` }}
+                data-preview-track="true"
+              >
+                <div className="absolute left-2 z-10 flex flex-col items-center" style={{ width: '60px' }}>
+                  <div className="text-xs text-gray-400 flex items-center gap-1 opacity-75">
+                    <Film className="h-3 w-3" />
+                    V{tracks.filter(t => t.type === 'video').length + 1}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">(new)</div>
+                </div>
+                
+                {/* Dotted line to indicate it's a preview */}
+                <div className="absolute inset-0 border-2 border-yellow-400 border-dashed opacity-50 rounded"></div>
+                
+                {/* Show dragged clip in preview track position */}
+                {draggedClipId && dragMode === 'move' && (
+                  <div
+                    className="absolute h-16 rounded opacity-80"
+                    style={{
+                      left: (previewClipPosition / FPS) * pixelsPerSecond + 70,
+                      width: (draggedClipRef.current?.durationFrames || 0) / FPS * pixelsPerSecond,
+                      background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      border: '2px solid #fbbf24'
+                    }}
+                  >
+                    <div className="p-1 text-xs text-white truncate select-none pointer-events-none">
+                      Moving to V{tracks.filter(t => t.type === 'video').length + 1}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* Render the actual track */}
+            <div 
+              data-track-index={track.index}
+              className={`border-b border-gray-800 relative flex items-center cursor-pointer transition-colors ${
             selectedTrackIndex === track.index && !selectedClipId 
               ? 'bg-gray-800 bg-opacity-50' 
               : 'hover:bg-gray-800 hover:bg-opacity-25'
@@ -280,7 +522,6 @@ export function TimelineClips({
               className="text-xs text-gray-400 cursor-pointer hover:text-white transition-colors flex items-center gap-1" 
               onClick={(e) => {
                 e.stopPropagation() // Prevent triggering the track container click
-                console.log('Track label clicked, selecting track index:', track.index)
                 onSelectClip(null) // Deselect any clip
                 onSelectTrack(track.index) // Select this track
               }}
@@ -341,7 +582,7 @@ export function TimelineClips({
                 isSelected 
                   ? 'ring-2 ring-yellow-500 shadow-lg z-[5]' 
                   : 'hover:ring-1 hover:ring-gray-400'
-              } ${draggedClipId === clip.id && dragMode === 'move' ? 'opacity-50' : ''}`}
+              } ${draggedClipId === clip.id && dragMode === 'move' && showNewTrackPreview ? 'opacity-20' : draggedClipId === clip.id && dragMode === 'move' ? 'opacity-50' : ''}`}
               style={{
                 left: clipX + 70,
                 width: clipWidth,
@@ -395,8 +636,49 @@ export function TimelineClips({
             </div>
           )
           })}
+          </div>
+          </React.Fragment>
+        )
+      })}
+      
+      {/* Preview track for new track creation (at the end) */}
+      {showNewTrackPreview && previewPosition === 'below' && (
+        <div 
+          className="border-b border-gray-600 border-dashed relative flex items-center bg-gray-800 bg-opacity-30 transition-all duration-200"
+          style={{ height: `${DEFAULT_TRACK_HEIGHT}px` }}
+          data-preview-track="true"
+        >
+          <div className="absolute left-2 z-10 flex flex-col items-center" style={{ width: '60px' }}>
+            <div className="text-xs text-gray-400 flex items-center gap-1 opacity-75">
+              {previewTrackType === 'video' ? <Film className="h-3 w-3" /> : <Music className="h-3 w-3" />}
+              {previewTrackType === 'video' ? `V${tracks.filter(t => t.type === 'video').length + 1}` : `A${tracks.filter(t => t.type === 'audio').length + 1}`}
+            </div>
+            <div className="text-xs text-gray-500 mt-1">(new)</div>
+          </div>
+          
+          {/* Dotted line to indicate it's a preview */}
+          <div className="absolute inset-0 border-2 border-yellow-400 border-dashed opacity-50 rounded"></div>
+          
+          {/* Show dragged clip in preview track position */}
+          {draggedClipId && dragMode === 'move' && (
+            <div
+              className="absolute h-16 rounded opacity-80"
+              style={{
+                left: (previewClipPosition / FPS) * pixelsPerSecond + 70,
+                width: (draggedClipRef.current?.durationFrames || 0) / FPS * pixelsPerSecond,
+                background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                border: '2px solid #fbbf24'
+              }}
+            >
+              <div className="p-1 text-xs text-white truncate select-none pointer-events-none">
+                Moving to {previewTrackType === 'video' ? `V${tracks.filter(t => t.type === 'video').length + 1}` : `A${tracks.filter(t => t.type === 'audio').length + 1}`}
+              </div>
+            </div>
+          )}
         </div>
-      ))}
+      )}
     </div>
   )
 }
