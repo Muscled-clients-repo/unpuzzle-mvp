@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useAuth } from "@/hooks"
+import { useAppStore } from "@/stores/app-store"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -27,10 +27,12 @@ import {
 } from "lucide-react"
 
 export default function LoginPage() {
-  const { login, isLoading, error: authError, redirectToDashboard, user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
   const returnUrl = searchParams.get('returnUrl')
+  
+  // Get auth functions from Zustand store
+  const { login, profile, isAuthenticated } = useAppStore()
   
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -39,30 +41,45 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const [sessionExpiredMessage, setSessionExpiredMessage] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
     setSuccess("")
+    setIsLoading(true)
 
-    const result = await login({
-      email,
-      password,
-      rememberMe
-    })
+    try {
+      const result = await login(email, password)
 
-    if (result.success) {
-      setSuccess("Login successful! Redirecting...")
-      setTimeout(() => {
-        // If we have a return URL, go there instead of dashboard
-        if (returnUrl) {
-          router.push(decodeURIComponent(returnUrl))
-        } else {
-          redirectToDashboard()
-        }
-      }, 1500)
-    } else {
-      setError(result.error?.message || "Invalid email or password. Please try again.")
+      if (result.success) {
+        setSuccess("Login successful! Redirecting...")
+        
+        // Get the user's role to determine redirect
+        const userRole = profile?.role
+        
+        setTimeout(() => {
+          // If we have a return URL, go there instead of dashboard
+          if (returnUrl) {
+            router.push(decodeURIComponent(returnUrl))
+          } else {
+            // Redirect based on role
+            if (userRole === 'instructor') {
+              router.push('/instructor')
+            } else if (userRole === 'admin') {
+              router.push('/admin')
+            } else {
+              router.push('/student')
+            }
+          }
+        }, 1500)
+      } else {
+        setError(result.error || "Invalid email or password. Please try again.")
+      }
+    } catch (err) {
+      setError("An unexpected error occurred. Please try again.")
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -75,16 +92,23 @@ export default function LoginPage() {
     }
   }, [])
 
-  // Redirect if already logged in (after initial auth check completes)
+  // Redirect if already logged in
   useEffect(() => {
-    if (user && !isLoading) {
+    if (isAuthenticated()) {
       if (returnUrl) {
         router.push(decodeURIComponent(returnUrl))
       } else {
-        redirectToDashboard()
+        // Redirect based on role
+        if (profile?.role === 'instructor') {
+          router.push('/instructor')
+        } else if (profile?.role === 'admin') {
+          router.push('/admin')
+        } else {
+          router.push('/student')
+        }
       }
     }
-  }, [user, isLoading, redirectToDashboard, returnUrl, router])
+  }, [isAuthenticated, profile, returnUrl, router])
 
 
   const features = [
@@ -147,10 +171,10 @@ export default function LoginPage() {
                   <AlertDescription>{sessionExpiredMessage}</AlertDescription>
                 </Alert>
               )}
-              {(error || authError) && (
+              {error && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error || authError?.message}</AlertDescription>
+                  <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
               {success && (

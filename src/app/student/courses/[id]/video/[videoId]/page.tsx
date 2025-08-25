@@ -251,7 +251,7 @@ export default function VideoPlayerPage() {
                     className="flex items-center gap-2"
                   >
                     {prevVideo ? (
-                      <Link href={`/student/course/${courseId}/video/${prevVideo.id}`}>
+                      <Link href={`/student/courses/${courseId}/video/${prevVideo.id}`}>
                         <ChevronLeft className="h-4 w-4" />
                         Previous Lesson
                       </Link>
@@ -279,7 +279,7 @@ export default function VideoPlayerPage() {
                     className="flex items-center gap-2"
                   >
                     {nextVideo ? (
-                      <Link href={`/student/course/${courseId}/video/${nextVideo.id}`}>
+                      <Link href={`/student/courses/${courseId}/video/${nextVideo.id}`}>
                         Next Lesson
                         <ChevronRight className="h-4 w-4" />
                       </Link>
@@ -307,7 +307,7 @@ export default function VideoPlayerPage() {
                       {course.videos.map((video, index) => (
                       <Link
                         key={video.id}
-                        href={`/student/course/${courseId}/video/${video.id}`}
+                        href={`/student/courses/${courseId}/video/${video.id}`}
                         className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
                           video.id === videoId 
                             ? 'bg-primary/10 border border-primary/20' 

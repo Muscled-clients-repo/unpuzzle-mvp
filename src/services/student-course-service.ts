@@ -394,27 +394,13 @@ export class StudentCourseService {
         isFree: apiCourse.isFree,
         createdAt: apiCourse.createdAt,
         updatedAt: apiCourse.updatedAt,
-        // Transform sections and mediaFiles to videos array
-        videos: (apiCourse.sections || []).flatMap((section: any) => 
-          (section.mediaFiles || []).map((media: any, index: number) => ({
-            id: media.id,
-            courseId: apiCourse.id,
-            title: media.title || `Video ${index + 1}`,
-            description: media.description || '',
-            duration: media.duration || 0,
-            order: media.order || index,
-            videoUrl: media.url || media.fileUrl || '',
-            thumbnailUrl: media.thumbnailUrl || '',
-            transcript: [],
-            createdAt: media.createdAt,
-            updatedAt: media.updatedAt
-          }))
-        ),
+        // Keep original videos array for backward compatibility (but get videos from sections)
+        videos: [],
         sections: apiCourse.sections || []
       }
       
       console.log('✅ Transformed course:', transformedCourse)
-      console.log('📹 Videos found:', transformedCourse.videos.length)
+      console.log('📊 Sections found:', transformedCourse.sections.length)
       
       return { data: transformedCourse }
     } catch (error) {

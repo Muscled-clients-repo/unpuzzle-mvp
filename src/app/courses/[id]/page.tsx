@@ -28,8 +28,8 @@ import {
   ShoppingCart
 } from "lucide-react"
 import { useAppStore } from "@/stores/app-store"
-import { LoadingSpinner } from "@/components/common"
 import { ErrorFallback } from "@/components/common"
+import { CourseDetailsSkeleton } from "@/components/common/CourseCardSkeleton"
 import { EnrollmentDialog } from "@/components/enrollment/EnrollmentDialog"
 import { CourseReviews } from "@/components/course/course-reviews"
 
@@ -41,31 +41,31 @@ export default function CoursePreviewPage() {
   // State for enrollment dialog
   const [showEnrollDialog, setShowEnrollDialog] = useState(false)
   
-  // Use both student-course-slice and public-course-slice for course data
+  // Use the public course slice for fetching course data
   const { 
     enrolledCourses,
-    currentCourse,
-    loadCourseById,
     loadEnrolledCourses,
-    loading,
-    error,
-    // Public course data
     currentCourse: publicCourse,
     loadCourseById: loadPublicCourse,
-    loadingCourse: loadingPublicCourse
+    loadingCourse: loadingPublicCourse,
+    error
   } = useAppStore()
   
   // Load course data
   useEffect(() => {
-    loadCourseById(courseId) // Load specific course details for enrolled students
     loadPublicCourse(courseId) // Load public course details
     loadEnrolledCourses('guest') // Check if user is already enrolled
-  }, [courseId, loadCourseById, loadPublicCourse, loadEnrolledCourses])
+  }, [courseId, loadPublicCourse, loadEnrolledCourses])
   
-  // Use public course data as fallback if student course is not available
-  const course = currentCourse || publicCourse
+  // Use public course data
+  const course = publicCourse
   const instructor = course?.instructor
-  const isLoadingCourse = loading || loadingPublicCourse
+  const isLoadingCourse = loadingPublicCourse
+  
+  // Debug logging
+  console.log('🔍 Course data:', course)
+  console.log('👨‍🏫 Instructor data:', instructor)
+  console.log('📝 Instructor name:', instructor?.name)
   
   // Check enrollment status using new store
   const isEnrolled = enrolledCourses.some(c => c.id === courseId)
@@ -73,12 +73,53 @@ export default function CoursePreviewPage() {
   // Handle enrollment success
   const handleEnrollSuccess = () => {
     setShowEnrollDialog(false)
-    router.push(`/student/course/${courseId}`)
+    router.push(`/student/courses/${courseId}`)
   }
   
-  if (isLoadingCourse) return <LoadingSpinner />
+  if (isLoadingCourse) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <Header />
+        <main className="flex-1 pt-16">
+          <CourseDetailsSkeleton />
+        </main>
+        <Footer />
+      </div>
+    )
+  }
   
-  if (error) return <ErrorFallback error={error} />
+  if (error) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="text-center max-w-md">
+            <h1 className="text-2xl font-bold mb-4">
+              {error === 'Course not found' ? 'Course Not Found' : 'Unable to Load Course'}
+            </h1>
+            <p className="text-muted-foreground mb-6">
+              {error === 'Course not found' 
+                ? 'This course doesn\'t exist or has been removed.' 
+                : error === 'Authentication required'
+                ? 'Please sign in to access this course.'
+                : 'There was a problem loading this course. Please try again.'}
+            </p>
+            <div className="flex gap-3 justify-center">
+              <Button asChild variant="outline">
+                <Link href="/courses">Browse All Courses</Link>
+              </Button>
+              {error !== 'Course not found' && (
+                <Button onClick={() => window.location.reload()}>
+                  Try Again
+                </Button>
+              )}
+            </div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    )
+  }
   
   if (!course) {
     return (
@@ -86,7 +127,10 @@ export default function CoursePreviewPage() {
         <Header />
         <main className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <h1 className="text-2xl font-bold mb-4">Course Not Found</h1>
+            <h1 className="text-2xl font-bold mb-4">Course Not Available</h1>
+            <p className="text-muted-foreground mb-6">
+              This course is currently unavailable.
+            </p>
             <Button asChild>
               <Link href="/courses">Browse All Courses</Link>
             </Button>
@@ -200,8 +244,8 @@ export default function CoursePreviewPage() {
                 {instructor && (
                   <div className="flex items-start gap-4 rounded-lg border p-4">
                     <Image
-                      src={instructor.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${instructor.name}`}
-                      alt={`${instructor.name} profile picture`}
+                      src={instructor.avatar || `https://api.dicebear.com/7.x/avataaars/png?seed=${instructor.name || 'instructor'}`}
+                      alt={`${instructor.name || 'Instructor'} profile picture`}
                       width={64}
                       height={64}
                       priority={false}
@@ -209,7 +253,7 @@ export default function CoursePreviewPage() {
                       sizes="64px"
                     />
                     <div className="flex-1">
-                      <h3 className="font-semibold">{instructor.name}</h3>
+                      <h3 className="font-semibold">{instructor.name || 'Unknown Instructor'}</h3>
                       <p className="text-sm text-muted-foreground mb-2">Experienced instructor</p>
                       <div className="flex items-center gap-4 text-sm">
                         <div className="flex items-center gap-1">
@@ -264,7 +308,7 @@ export default function CoursePreviewPage() {
                     <div className="space-y-3">
                       {isEnrolled ? (
                         <Button className="w-full" size="lg" asChild>
-                          <Link href={`/learn/${courseId}`}>
+                          <Link href={`/student/courses/learn/${courseId}`}>
                             <CheckCircle2 className="mr-2 h-5 w-5" />
                             Continue Learning
                           </Link>
@@ -455,8 +499,8 @@ export default function CoursePreviewPage() {
                     <CardContent className="pt-6">
                       <div className="flex items-start gap-6">
                         <Image
-                          src={instructor.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${instructor.name}`}
-                          alt={`${instructor.name} profile picture`}
+                          src={instructor.avatar || `https://api.dicebear.com/7.x/avataaars/png?seed=${instructor.name || 'instructor'}`}
+                          alt={`${instructor.name || 'Instructor'} profile picture`}
                           width={96}
                           height={96}
                           priority={false}
@@ -464,7 +508,7 @@ export default function CoursePreviewPage() {
                           sizes="96px"
                         />
                         <div className="flex-1">
-                          <h3 className="text-2xl font-bold mb-2">{instructor.name}</h3>
+                          <h3 className="text-2xl font-bold mb-2">{instructor.name || 'Unknown Instructor'}</h3>
                           <p className="text-muted-foreground mb-4">Experienced instructor with expertise in modern development</p>
                           
                           <div className="grid gap-4 sm:grid-cols-3 mb-6">

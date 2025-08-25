@@ -30,7 +30,7 @@ export default function CourseAnalyticsPageClean() {
 
   const handleViewVideoDetails = (videoId: string) => {
     // Navigate to video page in instructor mode with analytics context
-    router.push(`/learn/${videoId}?instructor=true&from=analytics&courseId=${courseId}`)
+    router.push(`/student/courses/learn/${videoId}?instructor=true&from=analytics&courseId=${courseId}`)
   }
 
   useEffect(() => {

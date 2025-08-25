@@ -133,7 +133,7 @@ export default function InstructorEngagementPage() {
 
   const handleReviewJourney = (studentId: string, videoId: string) => {
     // Navigate to video page with student context
-    router.push(`/learn/${videoId}?instructor=true&student=${studentId}`)
+    router.push(`/student/courses/learn/${videoId}?instructor=true&student=${studentId}`)
   }
 
   return (

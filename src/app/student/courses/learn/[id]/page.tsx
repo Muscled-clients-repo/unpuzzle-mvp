@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { useParams, useSearchParams, useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import { useAppStore } from "@/stores/app-store"
-import { LoadingSpinner } from "@/components/common/LoadingSpinner"
+import { StudentLearnPageSkeleton, ChapterVideosSkeleton } from "@/components/common/CourseCardSkeleton"
 import { InstructorVideoView } from "@/components/video/views/InstructorVideoView"
+import { apiClient } from "@/lib/api-client"
 
 // Dynamically import the VideoPlayer component with loading fallback
 const VideoPlayer = dynamic(
@@ -15,7 +16,7 @@ const VideoPlayer = dynamic(
   { 
     loading: () => (
       <div className="aspect-video bg-black rounded-lg flex items-center justify-center">
-        <LoadingSpinner />
+        <div className="w-16 h-16 bg-gray-700 rounded-full animate-pulse" />
       </div>
     ),
     ssr: false // Disable SSR for video player as it uses browser APIs
@@ -30,7 +31,7 @@ const AIChatSidebar = dynamic(
   { 
     loading: () => (
       <div className="h-full flex items-center justify-center bg-background">
-        <LoadingSpinner />
+        <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse" />
       </div>
     ),
     ssr: false
@@ -80,7 +81,7 @@ export default function StandaloneLessonPage() {
   const isInstructorMode = searchParams.get('instructor') === 'true'
   
   // Check for video query param (course deep linking)
-  const videoQueryParam = searchParams.get('v')
+  const videoQueryParam = searchParams.get('video') || searchParams.get('v')
   
   // Detect if this is a course or standalone lesson
   const isStandaloneLesson = contentId === 'lesson'
@@ -108,6 +109,11 @@ export default function StandaloneLessonPage() {
   // State for current video in course (for video switching)
   const [currentVideoId, setCurrentVideoId] = useState<string>('')
   
+  // State for lazy loading section videos
+  const [sectionVideos, setSectionVideos] = useState<{[sectionId: string]: any[]}>({})
+  const [loadingSections, setLoadingSections] = useState<{[sectionId: string]: boolean}>({})
+  const loadedSectionsRef = useRef<Set<string>>(new Set())
+  
   // Video player state from store
   const currentTime = useAppStore((state) => state.currentTime)
   const showChatSidebar = useAppStore((state) => state.preferences.showChatSidebar)
@@ -128,12 +134,82 @@ export default function StandaloneLessonPage() {
   const [lessonLoading, setLessonLoading] = useState(false)
   const [courseLoadingState, setCourseLoadingState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
   
+  // Get sections from current course
+  const sections = useMemo(() => currentCourse?.sections || [], [currentCourse?.sections])
+  
   // Reset course loading state when course ID changes
   useEffect(() => {
     if (isCourse) {
       setCourseLoadingState('idle')
+      // Reset section videos when course changes
+      loadedSectionsRef.current.clear()
+      setSectionVideos({})
+      setLoadingSections({})
     }
   }, [contentId, isCourse])
+  
+  // Load section videos lazily in background
+  useEffect(() => {
+    if (!currentCourse || !sections.length) return
+
+    const loadSectionVideos = async () => {
+      for (const section of sections) {
+        // Skip if already loaded or loading
+        if (loadedSectionsRef.current.has(section.id)) continue
+
+        loadedSectionsRef.current.add(section.id)
+        setLoadingSections(prev => ({ ...prev, [section.id]: true }))
+
+        try {
+          const response = await apiClient.get(`/api/v1/sections/${section.id}/media/`)
+          
+          if (response.status === 200 && response.data) {
+            const responseData = response.data as any
+            let videos: any[] = []
+            
+            // Handle nested response structure {success: true, data: {...}}
+            const data = responseData.data || responseData
+            
+            // Handle different response formats
+            if (Array.isArray(data)) {
+              videos = data
+            } else if (data.results && Array.isArray(data.results)) {
+              videos = data.results
+            } else if (data.mediaFiles && Array.isArray(data.mediaFiles)) {
+              videos = data.mediaFiles
+            } else if (data.videos && Array.isArray(data.videos)) {
+              videos = data.videos
+            } else if (data.media && Array.isArray(data.media)) {
+              videos = data.media
+            } else {
+              // Try to find any array in the data as fallback
+              for (const key of Object.keys(data)) {
+                if (Array.isArray(data[key])) {
+                  videos = data[key]
+                  break
+                }
+              }
+            }
+            
+            
+            setSectionVideos(prev => ({
+              ...prev, 
+              [section.id]: videos
+            }))
+          }
+        } catch (error) {
+          console.error(`Failed to load videos for section ${section.id}:`, error)
+          // Remove from loaded set on error so it can be retried
+          loadedSectionsRef.current.delete(section.id)
+        } finally {
+          setLoadingSections(prev => ({ ...prev, [section.id]: false }))
+        }
+      }
+    }
+
+    loadSectionVideos()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentCourse?.id, sections.length])
 
   // Load data based on content type
   useEffect(() => {
@@ -168,24 +244,29 @@ export default function StandaloneLessonPage() {
     }
   }, [isCourse, courseLoading, courseError, currentCourse])
   
-  // Set current video for courses (from query param or first video)
+  // Set current video for courses (from query param or first video from sections)
   useEffect(() => {
-    console.log('📹 Course video effect - isCourse:', isCourse, 'currentCourse:', currentCourse, 'videos:', currentCourse?.videos?.length)
-    if (isCourse && currentCourse?.videos?.length) {
-      const videoId = videoQueryParam || currentCourse.videos[0]?.id || ''
-      console.log('📹 Setting current video ID:', videoId)
-      setCurrentVideoId(videoId)
+    if (isCourse && sections.length > 0) {
+      let videoId = videoQueryParam || ''
       
-      if (videoId) {
-        console.log('📹 Loading video data for:', videoId)
+      // If no video param, find the first video from sections
+      if (!videoId) {
+        for (const section of sections) {
+          const videos = sectionVideos[section.id] || section.mediaFiles || []
+          if (videos.length > 0) {
+            videoId = videos[0].id
+            break
+          }
+        }
+      }
+      
+      console.log('📹 Setting current video ID:', videoId)
+      if (videoId && videoId !== currentVideoId) {
+        setCurrentVideoId(videoId)
         loadStudentVideo(videoId)
       }
-    } else if (isCourse && currentCourse && !currentCourse?.videos?.length) {
-      console.log('📹 Course loaded but no videos available:', currentCourse)
-    } else if (isCourse && !currentCourse) {
-      console.log('📹 Course not loaded yet, waiting...')
     }
-  }, [isCourse, currentCourse, currentCourse?.videos, videoQueryParam, loadStudentVideo])
+  }, [isCourse, sections, sectionVideos, videoQueryParam, currentVideoId, loadStudentVideo])
   
   // Video switching function for courses
   const switchToVideo = (videoId: string) => {
@@ -193,8 +274,8 @@ export default function StandaloneLessonPage() {
       setCurrentVideoId(videoId)
       loadStudentVideo(videoId)
       
-      // Update URL with query param
-      const newUrl = `/learn/${contentId}?v=${videoId}`
+      // Update URL with query param  
+      const newUrl = `/student/courses/learn/${contentId}?video=${videoId}`
       router.push(newUrl, { scroll: false })
     }
   }
@@ -211,30 +292,67 @@ export default function StandaloneLessonPage() {
   const lesson = isStandaloneLesson ? lessons.find(l => l.id === contentId) : null
   
   // Get current video data based on mode
-  const currentVideo = isCourse 
-    ? storeVideoData || currentCourse?.videos?.find(v => v.id === currentVideoId)
-    : lesson 
-      ? {
-          id: lesson.id,
-          title: lesson.title,
-          description: lesson.description,
-          videoUrl: lesson.videoUrl || lesson.youtubeUrl || '',
-          duration: lesson.duration || '10:00',
-          transcript: [],
-          timestamps: []
+  const currentVideo = useMemo(() => {
+    if (!isCourse) {
+      // Standalone lesson mode
+      return lesson ? {
+        id: lesson.id,
+        title: lesson.title,
+        description: lesson.description,
+        videoUrl: lesson.videoUrl || lesson.youtubeUrl || '',
+        duration: lesson.duration || '10:00',
+        transcript: [],
+        timestamps: []
+      } : null
+    }
+    
+    // Course mode - find video from sections
+    if (currentVideoId && sections.length > 0) {
+      for (const section of sections) {
+        const videos = sectionVideos[section.id] || []
+        const video = videos.find(v => v.id === currentVideoId)
+        if (video) {
+          
+          return {
+            id: video.id,
+            title: video.title || video.filename || 'Untitled Video',
+            description: video.description || '',
+            videoUrl: video.cdn_url || video.url || video.file_url || '',
+            duration: video.duration ? `${Math.floor(video.duration / 60)}:${(video.duration % 60).toString().padStart(2, '0')}` : '10:00',
+            transcript: storeVideoData?.transcript || [],
+            timestamps: storeVideoData?.timestamps || [],
+            // Keep the original video object for debugging
+            _raw: video
+          }
         }
-      : null
+      }
+    }
+    
+    // Fallback to store data if available
+    return storeVideoData
+  }, [isCourse, currentVideoId, sections, sectionVideos, lesson, storeVideoData])
   
-  // Course video navigation
-  const currentVideoIndex = isCourse && currentCourse?.videos 
-    ? currentCourse.videos.findIndex(v => v.id === currentVideoId) 
-    : -1
-  const nextVideo = isCourse && currentCourse?.videos && currentVideoIndex < currentCourse.videos.length - 1 
-    ? currentCourse.videos[currentVideoIndex + 1] 
-    : null
-  const prevVideo = isCourse && currentCourse?.videos && currentVideoIndex > 0 
-    ? currentCourse.videos[currentVideoIndex - 1] 
-    : null
+  // Course video navigation with sections
+  const { currentVideoIndex, nextVideo, prevVideo } = useMemo(() => {
+    if (!isCourse || !currentVideoId || sections.length === 0) {
+      return { currentVideoIndex: -1, nextVideo: null, prevVideo: null }
+    }
+    
+    // Flatten all videos from sections in order
+    const allVideos: any[] = []
+    for (const section of sections) {
+      const videos = sectionVideos[section.id] || []
+      allVideos.push(...videos)
+    }
+    
+    const index = allVideos.findIndex(v => v.id === currentVideoId)
+    
+    return {
+      currentVideoIndex: index,
+      nextVideo: index >= 0 && index < allVideos.length - 1 ? allVideos[index + 1] : null,
+      prevVideo: index > 0 ? allVideos[index - 1] : null
+    }
+  }, [isCourse, currentVideoId, sections, sectionVideos])
   
   // Track view for lessons
   useEffect(() => {
@@ -322,28 +440,9 @@ export default function StandaloneLessonPage() {
     return () => document.removeEventListener('mouseleave', handleMouseLeave)
   }, [hasInteractedWithExit, user])
 
-  // Show loading spinner for courses
-  if (isCourse && courseLoadingState === 'loading') {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="flex flex-col items-center space-y-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          <p className="text-muted-foreground">Loading course...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Show loading spinner for lessons
-  if (isStandaloneLesson && lessonLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="flex flex-col items-center space-y-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          <p className="text-muted-foreground">Loading lesson...</p>
-        </div>
-      </div>
-    )
+  // Show skeleton loader for courses and lessons
+  if ((isCourse && courseLoadingState === 'loading') || (isStandaloneLesson && lessonLoading)) {
+    return <StudentLearnPageSkeleton />
   }
   
   // Handle instructor mode
@@ -479,10 +578,12 @@ export default function StandaloneLessonPage() {
                   <div>
                     <h1 className="text-2xl font-bold">{currentCourse.title}</h1>
                     <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <User className="h-4 w-4" />
-                        {currentCourse.instructor.name}
-                      </span>
+                      {currentCourse.instructor && (
+                        <span className="flex items-center gap-1">
+                          <User className="h-4 w-4" />
+                          {currentCourse.instructor.name}
+                        </span>
+                      )}
                       <span className="flex items-center gap-1">
                         <Clock className="h-4 w-4" />
                         {Math.floor(currentCourse.duration / 60)} minutes
@@ -557,46 +658,92 @@ export default function StandaloneLessonPage() {
                 </div>
               )}
               
-              {/* Course Playlist (only for courses) */}
-              {isCourse && currentCourse && currentCourse.videos && (
-                <Card className="mb-6">
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <BookOpen className="h-5 w-5" />
-                      Course Content
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                      {currentCourse.videos.map((video, index) => (
-                        <div
-                          key={video.id}
-                          className={`flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer ${
-                            video.id === currentVideoId 
-                              ? 'bg-primary/10 border border-primary/20' 
-                              : 'hover:bg-muted'
-                          }`}
-                          onClick={() => switchToVideo(video.id)}
-                        >
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-sm font-medium">
-                            {video.id === currentVideoId ? (
-                              <Play className="h-4 w-4" />
-                            ) : (
-                              index + 1
-                            )}
-                          </div>
-                          <div className="flex-1">
-                            <p className="font-medium text-sm">{video.title}</p>
-                            <p className="text-xs text-muted-foreground">{video.duration}</p>
-                          </div>
-                          {index < currentVideoIndex && (
-                            <CheckCircle2 className="h-4 w-4 text-green-500" />
+              {/* Course Sections and Videos (only for courses) */}
+              {isCourse && currentCourse && sections.length > 0 && (
+                <div className="mb-6 space-y-4">
+                  <h2 className="text-xl font-bold flex items-center gap-2">
+                    <BookOpen className="h-5 w-5" />
+                    Course Content
+                  </h2>
+                  
+                  {sections.map((section, sectionIndex) => (
+                    <Card key={section.id} className="overflow-hidden">
+                      <CardHeader className="bg-muted/50 py-3">
+                        <CardTitle className="text-base">
+                          {section.title || `Chapter ${sectionIndex + 1}`}
+                        </CardTitle>
+                        {section.description && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {section.description}
+                          </p>
+                        )}
+                      </CardHeader>
+                      
+                      <CardContent className="p-0">
+                        <div className="space-y-0">
+                          {loadingSections[section.id] ? (
+                            <ChapterVideosSkeleton count={2} />
+                          ) : sectionVideos[section.id] && Array.isArray(sectionVideos[section.id]) ? (
+                            sectionVideos[section.id].map((media, mediaIndex: number) => {
+                              const isCurrentVideo = media.id === currentVideoId
+                              const isCompleted = false // TODO: Track completion
+                              
+                              return (
+                                <div
+                                  key={media.id}
+                                  className={`flex items-center gap-3 p-3 transition-colors cursor-pointer border-b last:border-b-0 ${
+                                    isCurrentVideo 
+                                      ? 'bg-primary/10 border-l-2 border-l-primary' 
+                                      : 'hover:bg-muted'
+                                  }`}
+                                  onClick={() => switchToVideo(media.id)}
+                                >
+                                  <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm ${
+                                    isCurrentVideo 
+                                      ? 'bg-primary text-primary-foreground' 
+                                      : isCompleted
+                                      ? 'bg-green-100 dark:bg-green-950'
+                                      : 'bg-muted'
+                                  }`}>
+                                    {isCurrentVideo ? (
+                                      <Play className="h-4 w-4" />
+                                    ) : isCompleted ? (
+                                      <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                                    ) : (
+                                      <span className="font-medium">{mediaIndex + 1}</span>
+                                    )}
+                                  </div>
+                                  
+                                  <div className="flex-1">
+                                    <p className="font-medium text-sm">
+                                      {media.title || media.filename || 'Untitled Video'}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {media.duration ? `${Math.floor(media.duration / 60)} min` : '~10 min'}
+                                    </p>
+                                  </div>
+                                  
+                                  {isCurrentVideo && (
+                                    <Badge variant="default" className="text-xs">
+                                      Playing
+                                    </Badge>
+                                  )}
+                                  {isCompleted && !isCurrentVideo && (
+                                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                  )}
+                                </div>
+                              )
+                            })
+                          ) : (
+                            <div className="p-3 text-center text-sm text-muted-foreground">
+                              No videos in this section
+                            </div>
                           )}
                         </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               )}
 
               {/* Unlock Full Course Banner (only for lessons) */}

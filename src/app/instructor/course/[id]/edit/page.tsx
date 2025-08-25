@@ -33,7 +33,9 @@ import {
   FileVideo,
   RefreshCcw,
   Clock,
-  FolderOpen
+  FolderOpen,
+  ChevronDown,
+  ChevronRight
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { MediaLibraryModal } from "./components/MediaLibraryModal"
@@ -65,7 +67,9 @@ export default function EditCoursePage() {
     completeVideoUpload,
     openMediaLibrary,
     closeMediaLibrary,
-    mediaLibrary
+    mediaLibrary,
+    loadChapterMedia,
+    chapterMediaState
   } = useAppStore()
 
   const [activeTab, setActiveTab] = useState("info")
@@ -77,6 +81,7 @@ export default function EditCoursePage() {
   const [hasChanges, setHasChanges] = useState<Record<string, boolean>>({})
   const [assigningMediaId, setAssigningMediaId] = useState<string | null>(null)
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null)
+  const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set())
   
   // Video upload refs and handlers
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -244,6 +249,32 @@ export default function EditCoursePage() {
         setDeletingChapterId(null)
       }
     }
+  }
+  
+  const handleToggleChapter = async (chapterId: string) => {
+    console.log('🔄 Toggling chapter:', chapterId)
+    const newExpanded = new Set(expandedChapters)
+    
+    if (expandedChapters.has(chapterId)) {
+      // Collapse chapter
+      console.log('📦 Collapsing chapter:', chapterId)
+      newExpanded.delete(chapterId)
+    } else {
+      // Expand chapter and lazy load media if not loaded
+      console.log('📂 Expanding chapter:', chapterId)
+      newExpanded.add(chapterId)
+      
+      // Trigger lazy load if not loaded yet
+      if (!chapterMediaState?.[chapterId]?.loaded && !chapterMediaState?.[chapterId]?.loading) {
+        console.log('🎬 Loading media for chapter:', chapterId)
+        await loadChapterMedia(courseId, chapterId)
+      } else {
+        console.log('✅ Media already loaded for chapter:', chapterId)
+      }
+    }
+    
+    setExpandedChapters(newExpanded)
+    console.log('📊 Expanded chapters:', Array.from(newExpanded))
   }
 
   if (!courseCreation) {
@@ -444,12 +475,46 @@ export default function EditCoursePage() {
                     <p>No chapters yet. Add your first chapter to get started.</p>
                   </div>
                 ) : (
-                  courseCreation.chapters.map((chapter, index) => (
+                  courseCreation.chapters.map((chapter, index) => {
+                    // Skip if chapter is null or undefined
+                    if (!chapter) return null;
+                    
+                    const isExpanded = expandedChapters.has(chapter.id)
+                    const isLoading = chapterMediaState?.[chapter.id]?.loading
+                    const hasError = chapterMediaState?.[chapter.id]?.error
+                    
+                    return (
                     <div
-                      key={chapter.id}
-                      className="flex items-start gap-3 p-4 border rounded-lg"
+                      key={chapter.id || `chapter-${index}`}
+                      className="border rounded-lg overflow-hidden"
                     >
-                      <GripVertical className="h-5 w-5 text-muted-foreground mt-1" />
+                      {/* Chapter Header */}
+                      <div className="p-4 bg-gray-50">
+                        <div className="flex items-start gap-3">
+                          {/* Drag Handle */}
+                          <GripVertical className="h-5 w-5 text-muted-foreground mt-2" />
+                          
+                          {/* Expand/Collapse Button - More prominent */}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleToggleChapter(chapter.id)}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-white hover:bg-gray-100"
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                            <span className="text-sm font-medium">
+                              {isExpanded ? 'Hide' : 'Show'} Videos
+                            </span>
+                            {!isExpanded && chapter.videos && chapter.videos.length > 0 && (
+                              <Badge variant="secondary" className="ml-1 text-xs">
+                                {chapter.videos.length}
+                              </Badge>
+                            )}
+                          </Button>
                       
                       <div className="flex-1 space-y-3">
                         <div className="flex items-start gap-3">
@@ -466,7 +531,7 @@ export default function EditCoursePage() {
                                 </div>
                               )}
                             <Input
-                              value={editedChapters[chapter.id]?.title ?? chapter.title}
+                              value={editedChapters[chapter.id]?.title ?? chapter?.title ?? ''}
                               onChange={(e) => handleChapterChange(chapter.id, 'title', e.target.value)}
                               onBlur={() => handleChapterBlur(chapter.id)}
                               placeholder={`Chapter ${index + 1} title`}
@@ -477,7 +542,7 @@ export default function EditCoursePage() {
                             />
                             </div>
                             <Textarea
-                              value={editedChapters[chapter.id]?.description ?? chapter.description ?? ''}
+                              value={editedChapters[chapter.id]?.description ?? chapter?.description ?? ''}
                               onChange={(e) => handleChapterChange(chapter.id, 'description', e.target.value)}
                               onBlur={() => handleChapterBlur(chapter.id)}
                               placeholder="Chapter description (optional)"
@@ -519,38 +584,90 @@ export default function EditCoursePage() {
                             Add Media
                           </Button>
                         </div>
-                        
+                      </div>
+                      </div>
+                      
+                      {/* Collapsible section for videos */}
+                      {isExpanded && (
+                        <div className="p-4 bg-white border-t">
+                          {isLoading ? (
+                            <div className="flex items-center justify-center py-4">
+                              <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                              <span className="text-sm text-gray-500">Loading videos...</span>
+                            </div>
+                          ) : hasError ? (
+                            <div className="flex items-center justify-center py-4 text-red-500">
+                              <AlertCircle className="h-5 w-5 mr-2" />
+                              <span className="text-sm">Failed to load videos</span>
+                            </div>
+                          ) : (
+                            <>
                         {/* Display videos in this chapter */}
                         {chapter.videos && chapter.videos.length > 0 && (
                           <div className="mt-4 space-y-2">
                             <h5 className="text-sm font-medium text-gray-700">Videos in this chapter:</h5>
                             <div className="space-y-2">
-                              {chapter.videos?.map((video: any, videoIndex: number) => (
-                                <div key={video.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm text-gray-500">{videoIndex + 1}.</span>
-                                    <FileVideo className="h-4 w-4 text-gray-400" />
-                                    <span className="text-sm">{video.title || video.name || video.originalFilename}</span>
-                                    {video.durationFormatted && (
-                                      <span className="text-xs text-gray-500">({video.durationFormatted})</span>
+                              {chapter.videos?.map((video: any, videoIndex: number) => {
+                                // Skip if video is null or undefined
+                                if (!video) return null;
+                                
+                                // Log video structure for debugging
+                                console.log('Video data:', video);
+                                
+                                // Extract video details based on possible data structures
+                                const videoTitle = video?.title || 
+                                                 video?.name || 
+                                                 video?.originalFilename || 
+                                                 video?.filename ||
+                                                 video?.mediaFile?.title ||
+                                                 video?.mediaFile?.originalFilename ||
+                                                 'Untitled Video';
+                                
+                                const videoDuration = video?.durationFormatted || 
+                                                     video?.duration ||
+                                                     video?.mediaFile?.durationFormatted ||
+                                                     video?.mediaFile?.duration;
+                                
+                                const videoId = video?.id || 
+                                              video?.mediaFileId || 
+                                              video?.mediaFile?.id;
+                                
+                                return (
+                                  <div key={videoId || `video-${videoIndex}`} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                    <div className="flex items-center gap-3">
+                                      <span className="text-sm font-medium text-gray-500">{videoIndex + 1}.</span>
+                                      <FileVideo className="h-4 w-4 text-blue-500" />
+                                      <div className="flex flex-col">
+                                        <span className="text-sm font-medium text-gray-900">{videoTitle}</span>
+                                        {videoDuration && (
+                                          <span className="text-xs text-gray-500">Duration: {videoDuration}</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {videoId && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleUnassignMedia(videoId)}
+                                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
                                     )}
                                   </div>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleUnassignMedia(video.id)}
-                                    className="text-red-600 hover:text-red-700"
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         )}
+                            </>
+                          )}
+                        </div>
+                      )}
                       </div>
                     </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </CardContent>
@@ -722,6 +839,107 @@ export default function EditCoursePage() {
               )}
             </CardContent>
           </Card>
+          
+          {/* Unassigned Media Section */}
+          {courseCreation?.unassignedMedia && courseCreation.unassignedMedia.filter(Boolean).length > 0 ? (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileVideo className="h-5 w-5" />
+                      Unassigned Media
+                    </CardTitle>
+                    <CardDescription>
+                      These videos are uploaded but not assigned to any chapter. Drag them to a chapter or use the assign button.
+                    </CardDescription>
+                  </div>
+                  <Badge variant="outline">{courseCreation.unassignedMedia.filter(Boolean).length} videos</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-3">
+                  {courseCreation.unassignedMedia.filter(Boolean).map((media: any, index: number) => {
+                    // Skip if media is null or undefined
+                    if (!media) {
+                      console.warn(`Unassigned media at index ${index} is null/undefined`)
+                      return null
+                    }
+                    
+                    return (
+                    <div
+                      key={media.id || `unassigned-${index}`}
+                      className="flex items-center justify-between p-3 border rounded-lg bg-amber-50 hover:bg-amber-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <FileVideo className="h-5 w-5 text-amber-600" />
+                        <div>
+                          <p className="font-medium text-sm">
+                            {media?.filename || media?.original_filename || media?.title || `Video ${index + 1}`}
+                          </p>
+                          <div className="flex items-center gap-3 text-xs text-gray-500">
+                            {media?.file_size && <span>{formatFileSize(media.file_size)}</span>}
+                            {media?.duration && <span>{media.duration}</span>}
+                            {media?.processing_status && (
+                              <Badge variant="outline" className="text-xs">
+                                {media.processing_status}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        {courseCreation?.chapters && courseCreation.chapters.length > 0 && (
+                          <Select
+                            onValueChange={(chapterId) => {
+                              assignMediaToSection(media.id, chapterId, {
+                                title: media.filename || media.original_filename || media.title,
+                                isPublished: true
+                              })
+                            }}
+                          >
+                            <SelectTrigger className="w-[180px]">
+                              <SelectValue placeholder="Assign to chapter..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {courseCreation.chapters.map((chapter) => (
+                                <SelectItem key={chapter.id} value={chapter.id}>
+                                  {chapter.title}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeVideo(media.id)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            // Show a message when no unassigned media exists
+            courseCreation?.chapters && courseCreation.chapters.some(ch => ch.videos && ch.videos.length > 0) && (
+              <Card className="border-green-200 bg-green-50">
+                <CardContent className="pt-6">
+                  <div className="text-center text-green-700">
+                    <CheckCircle className="h-8 w-8 mx-auto mb-2" />
+                    <p className="font-medium">All media files are assigned!</p>
+                    <p className="text-sm text-green-600">Your videos have been assigned to chapters.</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          )}
         </TabsContent>
 
         {/* Settings Tab */}

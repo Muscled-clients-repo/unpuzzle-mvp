@@ -6,7 +6,7 @@ import { Footer } from "@/components/layout/footer"
 import { AICourseCard } from "@/components/course/ai-course-card"
 import { CourseFiltersComponent } from "@/components/course/course-filters"
 import { useAppStore } from "@/stores/app-store"
-import { LoadingSpinner } from "@/components/common"
+import { CourseGridSkeleton, CourseFiltersSkeleton } from "@/components/common/CourseCardSkeleton"
 import { ErrorFallback } from "@/components/common"
 import { Button } from "@/components/ui/button"
 import { ChevronLeft, ChevronRight } from "lucide-react"
@@ -51,8 +51,25 @@ export default function CoursesPage() {
     return (
       <div className="flex min-h-screen flex-col">
         <Header />
-        <main className="flex-1 pt-16 flex items-center justify-center">
-          <LoadingSpinner />
+        <main className="flex-1 pt-16">
+          <section className="border-b bg-muted/50 py-8">
+            <div className="container px-4">
+              <h1 className="mb-2 text-3xl font-bold">Browse All Courses</h1>
+              <p className="text-muted-foreground">
+                Discover courses that accelerate your learning with AI assistance
+              </p>
+            </div>
+          </section>
+
+          <section className="py-8">
+            <div className="container px-4">
+              <CourseFiltersSkeleton />
+              <CourseGridSkeleton 
+                count={8} 
+                className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" 
+              />
+            </div>
+          </section>
         </main>
         <Footer />
       </div>
@@ -98,11 +115,34 @@ export default function CoursesPage() {
               totalCount={totalCount}
             />
 
-            {/* Course Grid */}
-            {loading ? (
-              <div className="flex justify-center py-12">
-                <LoadingSpinner />
+            {/* Error State */}
+            {error ? (
+              <div className="text-center py-12">
+                <h3 className="text-lg font-semibold mb-2">Unable to Load Courses</h3>
+                <p className="text-muted-foreground mb-4">
+                  {error === 'Authentication required' 
+                    ? 'Some courses may require authentication to view.'
+                    : error === 'Network connection failed. Please check your internet connection.'
+                    ? 'Please check your internet connection and try again.'
+                    : 'There was a problem loading courses. Please try again.'}
+                </p>
+                <div className="flex gap-3 justify-center">
+                  <Button onClick={() => {
+                    clearError()
+                    loadCourses()
+                  }}>
+                    Try Again
+                  </Button>
+                  <Button variant="outline" onClick={clearError}>
+                    Dismiss
+                  </Button>
+                </div>
               </div>
+            ) : loading ? (
+              <CourseGridSkeleton 
+                count={8} 
+                className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" 
+              />
             ) : courses.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-muted-foreground mb-4">

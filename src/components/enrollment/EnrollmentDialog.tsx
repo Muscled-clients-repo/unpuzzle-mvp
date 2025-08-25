@@ -79,7 +79,7 @@ export function EnrollmentDialog({ course, isOpen, onClose, onSuccess }: Enrollm
 
       // Success - redirect to course
       onSuccess?.()
-      router.push(`/student/course/${course.id}`)
+      router.push(`/student/courses/${course.id}`)
     } catch (err) {
       // Error handling is done by the store
       console.error('Enrollment failed:', err)

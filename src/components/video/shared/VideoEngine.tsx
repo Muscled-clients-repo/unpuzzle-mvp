@@ -259,6 +259,8 @@ export const VideoEngine = forwardRef<VideoEngineRef, VideoEngineProps>(
         src={videoUrl}
         className="w-full h-full pointer-events-none object-cover"
         style={{ margin: 0, padding: 0 }}
+        playsInline
+        preload="metadata"
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={onEnded}

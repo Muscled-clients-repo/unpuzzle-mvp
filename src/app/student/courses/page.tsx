@@ -1,5 +1,5 @@
 "use client"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { useAppStore } from "@/stores/app-store"
-import { LoadingSpinner } from "@/components/common"
+import { StudentCoursesSkeleton } from "@/components/common/CourseCardSkeleton"
 import { ErrorFallback } from "@/components/common"
 import { 
   BookOpen, 
@@ -22,7 +22,8 @@ import {
   Target,
   Brain,
   Sparkles,
-  XCircle
+  XCircle,
+  LoaderIcon
 } from "lucide-react"
 import Link from "next/link"
 
@@ -40,6 +41,7 @@ export default function MyCoursesPage() {
   } = useAppStore()
   
   const userId = 'user-1' // In production, get from auth context
+  const [attemptedProgressLoads, setAttemptedProgressLoads] = useState<Set<string>>(new Set())
   
   // Ensure enrolledCourses is always an array (extra safety check)
   const safeEnrolledCourses = Array.isArray(enrolledCourses) ? enrolledCourses : []
@@ -51,11 +53,17 @@ export default function MyCoursesPage() {
   useEffect(() => {
     // Load progress for each enrolled course
     safeEnrolledCourses.forEach(course => {
-      if (!courseProgress[course.id] && !loadingProgressCourseId) {
-        loadCourseProgress(userId, course.id)
+      // Only attempt to load if we haven't tried before and aren't currently loading
+      if (!courseProgress[course.id] && 
+          !loadingProgressCourseId && 
+          !attemptedProgressLoads.has(course.id)) {
+        // Mark as attempted to prevent infinite retries on error
+        setAttemptedProgressLoads(prev => new Set(prev).add(course.id))
+        // Call with only courseId - backend extracts userId from token
+        loadCourseProgress(course.id)
       }
     })
-  }, [safeEnrolledCourses, userId, courseProgress, loadingProgressCourseId, loadCourseProgress])
+  }, [safeEnrolledCourses, courseProgress, loadingProgressCourseId, loadCourseProgress, attemptedProgressLoads])
   
   // Helper function to format last accessed time
   const formatLastAccessed = (dateString: string | undefined) => {
@@ -77,7 +85,13 @@ export default function MyCoursesPage() {
     }
   }
   
-  if (loading) return <LoadingSpinner />
+  if (loading) {
+    return (
+      <div className="flex-1 p-6">
+        <StudentCoursesSkeleton />
+      </div>
+    )
+  }
   
   if (error) return <ErrorFallback error={error} />
 
@@ -228,7 +242,7 @@ export default function MyCoursesPage() {
                         {/* Action Buttons */}
                         <div className="flex gap-2">
                           <Button asChild className="flex-1">
-                            <Link href={`/learn/${course.id}?v=${course.videos?.[displayProgress.completedLessons]?.id || course.videos?.[0]?.id || '1'}`}>
+                            <Link href={`/student/courses/learn/${course.id}?v=${course.videos?.[displayProgress.completedLessons]?.id || course.videos?.[0]?.id || '1'}`}>
                               <Play className="mr-2 h-4 w-4" />
                               Continue
                             </Link>
@@ -311,7 +325,7 @@ export default function MyCoursesPage() {
                       </CardHeader>
                       <CardContent>
                         <Button asChild className="w-full">
-                          <Link href={`/learn/${course.id}`}>
+                          <Link href={`/student/courses/learn/${course.id}`}>
                             Continue Learning
                           </Link>
                         </Button>
@@ -358,7 +372,7 @@ export default function MyCoursesPage() {
                             </div>
                           </div>
                           <Button asChild className="w-full" variant="outline">
-                            <Link href={`/student/course/${course.id}/certificate`}>
+                            <Link href={`/student/courses/${course.id}/certificate`}>
                               View Certificate
                             </Link>
                           </Button>

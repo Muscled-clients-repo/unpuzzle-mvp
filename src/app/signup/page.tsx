@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { useAuth } from "@/hooks"
+import { useRouter } from "next/navigation"
+import { useAppStore } from "@/stores/app-store"
+import { apiClient } from "@/lib/api-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -30,7 +32,9 @@ import {
 } from "lucide-react"
 
 export default function SignupPage() {
-  const { signup, isLoading, error: authError, redirectToDashboard, user } = useAuth()
+  const router = useRouter()
+  const { setUser, profile, isAuthenticated } = useAppStore()
+  
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -45,6 +49,7 @@ export default function SignupPage() {
   const [success, setSuccess] = useState("")
   const [passwordStrength, setPasswordStrength] = useState(0)
   const [registeredEmail, setRegisteredEmail] = useState("") // Store the email after successful signup
+  const [isLoading, setIsLoading] = useState(false)
 
   const calculatePasswordStrength = (password: string) => {
     let strength = 0
@@ -86,43 +91,87 @@ export default function SignupPage() {
     setSuccess("")
     
     if (!validateForm()) return
-
-    const result = await signup({
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      email: formData.email,
-      password: formData.password,
-      agreeToTerms
-    })
-
-    if (result.success) {
-      setSuccess("Account created successfully! Please check your email to confirm your account.")
+    
+    setIsLoading(true)
+    
+    try {
+      // Call the real signup API
+      console.log('🔐 Attempting signup for:', formData.email)
       
-      // Store the email before clearing the form
-      setRegisteredEmail(formData.email)
-      
-      // Clear the form
-      setFormData({
-        firstName: "",
-        lastName: "",
-        email: "",
-        password: "",
-        confirmPassword: ""
+      const response = await apiClient.signup({
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        password: formData.password
       })
-      setPasswordStrength(0)
-      setAgreeToTerms(false)
-    } else {
-      setError(result.error?.message || "Failed to create account. Please try again.")
+      
+      console.log('🔐 Signup response:', { 
+        status: response.status, 
+        hasData: !!response.data,
+        error: response.error 
+      })
+      
+      if (response.error) {
+        // Handle specific error cases
+        if (response.status === 409) {
+          setError("An account with this email already exists. Please login instead.")
+        } else if (response.status === 400) {
+          setError(response.error || "Invalid data provided. Please check your information.")
+        } else {
+          setError(response.error || "Failed to create account. Please try again.")
+        }
+        return
+      }
+      
+      if (response.data && (response.status === 200 || response.status === 201)) {
+        setSuccess("Account created successfully! Please check your email to verify your account.")
+        
+        // Store the email before clearing the form
+        setRegisteredEmail(formData.email)
+      
+        // Clear the form
+        setFormData({
+          firstName: "",
+          lastName: "",
+          email: "",
+          password: "",
+          confirmPassword: ""
+        })
+        setPasswordStrength(0)
+        setAgreeToTerms(false)
+        
+        // Don't redirect automatically - let user see the email verification message
+      } else {
+        // If we get here, something unexpected happened
+        setError("Unexpected response from server. Please try again.")
+      }
+    } catch (err) {
+      console.error('❌ Signup error:', err)
+      
+      // Check if it's a network error
+      if (err instanceof TypeError && err.message.includes('fetch')) {
+        setError("Network error. Please check your connection.")
+      } else {
+        setError("An error occurred during signup. Please try again.")
+      }
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  // Redirect if already logged in (after initial auth check completes)
+  // Redirect if already logged in
   useEffect(() => {
-    console.log("user: ",user)
-    if (user && !isLoading) {
-      redirectToDashboard()
+    if (isAuthenticated()) {
+      // Redirect based on role
+      if (profile?.role === 'instructor') {
+        router.push('/instructor')
+      } else if (profile?.role === 'admin') {
+        router.push('/admin')
+      } else {
+        router.push('/student')
+      }
     }
-  }, [user, isLoading, redirectToDashboard])
+  }, [isAuthenticated, profile, router])
 
   const getPasswordStrengthText = () => {
     if (passwordStrength <= 25) return "Weak"
@@ -267,10 +316,10 @@ export default function SignupPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Alerts */}
-              {(error || authError) && (
+              {error && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error || authError?.message}</AlertDescription>
+                  <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
               <form onSubmit={handleSubmit} className="space-y-4">

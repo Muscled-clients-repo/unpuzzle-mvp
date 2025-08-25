@@ -22,7 +22,7 @@ export interface StudentCourseActions {
   loadRecommendedCourses: (userId: string) => Promise<void>
   loadAllCourses: () => Promise<void>
   loadCourseById: (courseId: string) => Promise<void>
-  loadCourseProgress: (userId: string, courseId: string) => Promise<void>
+  loadCourseProgress: (courseId: string) => Promise<void>
   enrollInCourse: (userId: string, courseId: string, paymentData?: { paymentMethod?: string; couponCode?: string }) => Promise<void>
   unenrollFromCourse: (courseId: string) => Promise<void>
   submitCourseReview: (courseId: string, review: { rating: number; comment: string }) => Promise<void>
@@ -105,10 +105,11 @@ export const createStudentCourseSlice: StateCreator<StudentCourseSlice> = (set, 
     }
   },
 
-  loadCourseProgress: async (userId: string, courseId: string) => {
+  loadCourseProgress: async (courseId: string) => {
     set({ loadingProgressCourseId: courseId, error: null })
     
-    const result = await studentCourseService.getCourseProgress(userId, courseId)
+    // Backend extracts userId from auth token
+    const result = await studentCourseService.getCourseProgress('', courseId)
     
     if (result.error) {
       set({ loadingProgressCourseId: null, error: result.error })

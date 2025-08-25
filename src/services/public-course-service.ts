@@ -110,14 +110,77 @@ class PublicCourseService {
       
       const response = await apiClient.getPublicCourses(filters)
       
-      // Check if API response has the expected structure
-      if (response.data?.data?.courses || response.data?.courses) {
-        // Handle nested data structure (backend format)
-        const apiData = response.data.data || response.data
-        const courses = apiData.courses
-        const pagination = apiData.pagination || {}
+      // Log the full response structure for debugging
+      console.log('📡 API Response:', {
+        status: response.status,
+        hasData: !!response.data,
+        dataKeys: response.data ? Object.keys(response.data) : [],
+        error: response.error
+      })
+      
+      // Handle API errors first
+      if (response.error) {
+        console.error('❌ API Error in getCourses:', response.error)
         
-        if (courses && courses.length > 0) {
+        // Handle specific error cases
+        switch (response.status) {
+          case 401:
+            console.log('🔄 Authentication required - falling back to mock data for public courses')
+            break
+          case 404:
+            console.log('🔍 Courses endpoint not found - falling back to mock data')
+            break
+          case 500:
+            console.log('🔥 Server error - falling back to mock data')
+            break
+          default:
+            console.log('⚠️ Unknown error - falling back to mock data')
+        }
+        
+        // Fall through to mock data instead of returning error immediately
+      } else if (response.data && response.status === 200) {
+        const apiResponse = response.data as any
+        
+        // Check for Django REST Framework format
+        if (apiResponse.hasOwnProperty('results')) {
+          const courses = apiResponse.results || []
+          const totalCount = apiResponse.count || 0
+          
+          // Parse page from query params if available
+          const currentPage = filters?.page || 1
+          const limit = filters?.limit || 20
+          const totalPages = Math.ceil(totalCount / limit)
+          
+          console.log('📊 Parsed Django REST response:', {
+            coursesCount: courses.length,
+            totalCount: totalCount,
+            currentPage: currentPage
+          })
+          
+          console.log('✅ Using real API data - found', courses.length, 'courses')
+          return {
+            success: true,
+            data: {
+              courses: courses,
+              totalCount: totalCount,
+              totalPages: totalPages,
+              currentPage: currentPage,
+              hasNextPage: apiResponse.next !== null,
+              hasPreviousPage: apiResponse.previous !== null
+            }
+          }
+        }
+        
+        // Check for custom format { data: [], pagination: {...} }
+        if (apiResponse.hasOwnProperty('data')) {
+          const courses = apiResponse.data || []
+          const pagination = apiResponse.pagination || {}
+          
+          console.log('📊 Parsed custom response:', {
+            coursesCount: courses.length,
+            pagination: pagination
+          })
+          
           console.log('✅ Using real API data - found', courses.length, 'courses')
           return {
             success: true,
@@ -230,15 +293,69 @@ class PublicCourseService {
   async getCourseById(courseId: string): Promise<ServiceResult<Course>> {
     try {
       console.log('🔍 Fetching course details for:', courseId)
+      console.log('📍 API URL:', `/api/v1/courses/${courseId}`)
       
       const response = await apiClient.getPublicCourseById(courseId)
       
+      console.log('📡 Course API Response:', {
+        status: response.status,
+        hasData: !!response.data,
+        dataKeys: response.data ? Object.keys(response.data) : [],
+        error: response.error
+      })
+      
+      // Handle API errors
+      if (response.error) {
+        console.error('❌ API Error in getCourseById:', response.error, 'Status:', response.status)
+        
+        switch (response.status) {
+          case 404:
+            console.log('🔍 Course not found in API:', courseId)
+            // Don't fall back to mock data for 404s - the course genuinely doesn't exist
+            return {
+              success: false,
+              error: 'Course not found'
+            }
+          
+          case 401:
+            console.log('🔄 Authentication required for course details - falling back to mock data')
+            break
+            
+          case 403:
+            console.log('🚫 Access denied for course details - falling back to mock data')
+            break
+            
+          case 500:
+            console.log('🔥 Server error for course details - falling back to mock data')
+            break
+            
+          default:
+            console.log('⚠️ Unknown error for course details - falling back to mock data')
+        }
+        
+        // Fall through to mock data for non-404 errors
+      }
+      
       // Check if API response has the expected structure
-      if (response.data?.data || (response.data && !response.error)) {
-        const courseData = response.data.data || response.data
+      if (response.data && response.status === 200) {
+        const apiResponse = response.data as any
+        
+        // Django REST Framework returns the course object directly
+        if (apiResponse.id) {
+          console.log('✅ Using real API data for course:', apiResponse.title || apiResponse.id)
+          console.log('👨‍🏫 API Instructor data:', apiResponse.instructor)
+          console.log('📝 API Instructor name:', apiResponse.instructor?.name)
+          return {
+            success: true,
+            data: apiResponse
+          }
+        }
+        
+        // Handle nested data structure (if backend returns { data: course })
+        const courseData = apiResponse.data || apiResponse
         
         if (courseData && courseData.id) {
-          console.log('✅ Using real API data for course:', courseData.title)
+          console.log('✅ Using real API data for course:', courseData.title || courseData.id)
           return {
             success: true,
             data: courseData
@@ -281,8 +398,9 @@ class PublicCourseService {
       const response = await apiClient.getCourseReviews(courseId, { page, limit })
       
       // Check if API response has the expected structure
-      if (response.data?.data || (response.data && !response.error)) {
-        const reviewData = response.data.data || response.data
+      if (response.data && !response.error) {
+        const apiResponse = response.data as any
+        const reviewData = apiResponse.data || apiResponse
         const reviews = reviewData.reviews || []
         const pagination = reviewData.pagination || {}
         
@@ -350,10 +468,13 @@ class PublicCourseService {
       
       const response = await apiClient.getRecommendedCourses()
       
-      if (response.data?.success !== false && response.data?.courses) {
-        return {
-          success: true,
-          data: response.data.courses
+      if (response.data && response.status === 200) {
+        const apiResponse = response.data as any
+        if (apiResponse.success !== false && apiResponse.courses) {
+          return {
+            success: true,
+            data: apiResponse.courses
+          }
         }
       }
       

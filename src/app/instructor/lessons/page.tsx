@@ -254,7 +254,7 @@ export default function TeachLessonsPage() {
                       <BarChart3 className="mr-2 h-4 w-4" />
                       View Analytics
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => window.open(`/learn/${lesson.id}`, '_blank')}>
+                    <DropdownMenuItem onClick={() => window.open(`/student/courses/learn/${lesson.id}`, '_blank')}>
                       <ExternalLink className="mr-2 h-4 w-4" />
                       Preview
                     </DropdownMenuItem>

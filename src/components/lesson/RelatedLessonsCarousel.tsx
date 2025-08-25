@@ -112,7 +112,7 @@ export function RelatedLessonsCarousel({
           {relatedLessons.map((lesson) => (
             <Link
               key={lesson.id}
-              href={`/learn/${lesson.id}`}
+              href={`/student/courses/learn/${lesson.id}`}
               className="flex-none w-[300px] group"
             >
               <Card className="h-full overflow-hidden hover:shadow-lg transition-shadow">

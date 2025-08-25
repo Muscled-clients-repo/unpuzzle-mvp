@@ -1,6 +1,7 @@
 import { StateCreator } from 'zustand'
 import { User, UIPreferences, CourseProgress } from '@/types/domain'
 import { UI, VIDEO } from '@/config/constants'
+import { apiClient } from '@/lib/api-client'
 
 // Local types for this slice
 interface UserState {
@@ -19,7 +20,10 @@ interface UserActions {
   useAiInteraction: () => boolean
   resetDailyAiInteractions: () => void
   updateSubscription: (subscription: User['subscription']) => void
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   logout: () => void
+  isAuthenticated: () => boolean
+  initializeAuth: () => Promise<void>
 }
 
 // Student-specific data structures
@@ -194,7 +198,163 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
       } : null
     })),
 
-  logout: () => set({ ...initialUserState, studentData: initialStudentData }),
+  login: async (email: string, password: string) => {
+    try {
+      // Validation
+      if (!email || !password) {
+        return { success: false, error: 'Email and password are required' }
+      }
+      
+      console.log('🔐 Attempting login for:', email)
+      
+      // Call the real API
+      const response = await apiClient.login(email, password)
+      
+      console.log('🔐 Login response:', { 
+        status: response.status, 
+        hasData: !!response.data,
+        error: response.error 
+      })
+      
+      if (response.error) {
+        // Handle specific error cases
+        if (response.status === 401) {
+          return { success: false, error: 'Invalid email or password' }
+        } else if (response.status === 403) {
+          return { success: false, error: 'Account locked or not verified' }
+        } else if (response.status === 404) {
+          return { success: false, error: 'Authentication service unavailable' }
+        }
+        return { success: false, error: response.error }
+      }
+      
+      if (response.data && response.status === 200) {
+        const loginData = response.data as any
+        
+        // Extract user data from response
+        // Backend might return { user: {...}, token: "..." } or just user data
+        const userData = loginData.user || loginData
+        
+        // Transform backend user data to our User type
+        const user: User = {
+          id: userData.id || userData._id || 'unknown',
+          name: userData.name || `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userData.username || 'User',
+          email: userData.email || email,
+          role: userData.role || 'student',
+          avatar: userData.avatar || userData.profilePicture || `https://api.dicebear.com/7.x/avataaars/png?seed=${email}`,
+          createdAt: userData.createdAt || new Date().toISOString(),
+          subscription: userData.subscription || {
+            plan: 'basic',
+            status: 'active',
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            features: {
+              maxCoursesPerMonth: 3,
+              aiInteractionsPerDay: 10,
+              downloadableResources: true,
+              certificateAccess: true,
+              prioritySupport: false
+            }
+          }
+        }
+        
+        // Store user in state
+        set({
+          id: user.id,
+          profile: user
+        })
+        
+        console.log('✅ Login successful for:', user.email)
+        return { success: true }
+      }
+      
+      // If we get here, something unexpected happened
+      return { success: false, error: 'Unexpected response from server' }
+      
+    } catch (error) {
+      console.error('❌ Login error:', error)
+      
+      // Check if it's a network error
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        return { success: false, error: 'Network error. Please check your connection.' }
+      }
+      
+      return { success: false, error: 'An error occurred during login. Please try again.' }
+    }
+  },
+  
+  logout: () => {
+    // Clear tokens
+    apiClient.logout()
+    
+    // Reset state
+    set({ ...initialUserState, studentData: initialStudentData })
+  },
+  
+  isAuthenticated: () => {
+    const state = get()
+    return !!state.profile && !!state.id
+  },
+  
+  initializeAuth: async () => {
+    try {
+      // Check if we have a stored token
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken')
+      
+      if (!token) {
+        console.log('🔐 No auth token found')
+        return
+      }
+      
+      console.log('🔐 Found auth token, fetching user profile...')
+      
+      // Try to get current user from API
+      const response = await apiClient.getCurrentUser()
+      
+      if (response.data && response.status === 200) {
+        const userData = response.data as any
+        
+        // Transform backend user data to our User type
+        const user: User = {
+          id: userData.id || userData._id || 'unknown',
+          name: userData.name || `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userData.username || 'User',
+          email: userData.email || 'user@example.com',
+          role: userData.role || 'student',
+          avatar: userData.avatar || userData.profilePicture || `https://api.dicebear.com/7.x/avataaars/png?seed=${userData.email}`,
+          createdAt: userData.createdAt || new Date().toISOString(),
+          subscription: userData.subscription || {
+            plan: 'basic',
+            status: 'active',
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            features: {
+              maxCoursesPerMonth: 3,
+              aiInteractionsPerDay: 10,
+              downloadableResources: true,
+              certificateAccess: true,
+              prioritySupport: false
+            }
+          }
+        }
+        
+        // Store user in state
+        set({
+          id: user.id,
+          profile: user
+        })
+        
+        console.log('✅ Auth initialized for:', user.email)
+      } else if (response.status === 401) {
+        // Token is invalid or expired
+        console.log('🔐 Auth token expired or invalid')
+        localStorage.removeItem('authToken')
+        sessionStorage.removeItem('authToken')
+      }
+    } catch (error) {
+      console.error('❌ Auth initialization error:', error)
+      // Clear invalid tokens
+      localStorage.removeItem('authToken')
+      sessionStorage.removeItem('authToken')
+    }
+  },
 
   loadStudentData: () => {
     // Initialize with mock data (temporary until backend)

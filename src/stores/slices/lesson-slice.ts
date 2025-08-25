@@ -327,7 +327,7 @@ export const createLessonSlice: StateCreator<LessonSlice> = (set, get) => ({
   },
   
   generateShareLink: (lessonId) => {
-    return `${window.location.origin}/learn/${lessonId}`
+    return `${window.location.origin}/student/courses/learn/${lessonId}`
   },
   
   trackView: (lessonId) => {

@@ -76,6 +76,8 @@ interface MediaLibraryState {
 }
 
 export interface CourseCreationSlice {
+  chapterMediaState: Record<string, { loading: boolean; loaded: boolean; error?: string }>
+  loadChapterMedia: (courseId: string, chapterId: string) => Promise<void>
   courseCreation: CourseCreationData | null
   uploadQueue: VideoUpload[]
   uploadSessions: Map<string, UploadSession>
@@ -155,6 +157,7 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
   currentStep: 'info',
   saveError: null,
   lastSaveAttempt: null,
+  chapterMediaState: {},  // Track loading state for each chapter
   mediaLibrary: {
     isOpen: false,
     targetChapterId: null,
@@ -608,6 +611,82 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
   },
   
   // Media Assignment API Functions
+  // Lazy load media for a specific chapter/section
+  loadChapterMedia: async (courseId: string, chapterId: string) => {
+    const { chapterMediaState } = get()
+    
+    // Check if already loading or loaded
+    if (chapterMediaState[chapterId]?.loading || chapterMediaState[chapterId]?.loaded) {
+      console.log(`📹 Chapter ${chapterId} media already ${chapterMediaState[chapterId]?.loaded ? 'loaded' : 'loading'}`)
+      return
+    }
+    
+    // Set loading state
+    set(state => ({
+      chapterMediaState: {
+        ...state.chapterMediaState,
+        [chapterId]: { loading: true, loaded: false }
+      }
+    }))
+    
+    try {
+      console.log(`📹 Loading media for chapter ${chapterId} in course ${courseId}`)
+      const response = await apiClient.getSectionMedia(courseId, chapterId)
+      console.log(`📹 Chapter ${chapterId} media response:`, response)
+      
+      if (!response.error && response.data) {
+        const mediaData = response.data.data || response.data
+        const mediaFiles = Array.isArray(mediaData) ? mediaData : (mediaData.mediaFiles || mediaData.videos || [])
+        
+        console.log(`📹 Found ${mediaFiles.length} media files for chapter ${chapterId}`)
+        
+        // Update the chapter's videos in state
+        set(state => {
+          if (!state.courseCreation) return state
+          
+          return {
+            courseCreation: {
+              ...state.courseCreation,
+              chapters: state.courseCreation.chapters.map(chapter => 
+                chapter.id === chapterId 
+                  ? { ...chapter, videos: mediaFiles }
+                  : chapter
+              )
+            },
+            chapterMediaState: {
+              ...state.chapterMediaState,
+              [chapterId]: { loading: false, loaded: true }
+            }
+          }
+        })
+      } else {
+        // Handle error
+        set(state => ({
+          chapterMediaState: {
+            ...state.chapterMediaState,
+            [chapterId]: { 
+              loading: false, 
+              loaded: false, 
+              error: response.error || 'Failed to load media' 
+            }
+          }
+        }))
+      }
+    } catch (error) {
+      console.error(`Failed to load media for chapter ${chapterId}:`, error)
+      set(state => ({
+        chapterMediaState: {
+          ...state.chapterMediaState,
+          [chapterId]: { 
+            loading: false, 
+            loaded: false, 
+            error: 'Network error loading media' 
+          }
+        }
+      }))
+    }
+  },
+  
   loadCourseMedia: async (courseId) => {
     try {
       console.log('🎬 Loading course media for courseId:', courseId)
@@ -616,8 +695,35 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       
       if (!response.error && response.data) {
         const mediaData = response.data.data || response.data
-        const sections = mediaData.sections || []
-        const unsectionedMedia = mediaData.unsectionedMedia || []
+        
+        // Handle different response structures
+        let sections = mediaData.sections || []
+        let unsectionedMedia = mediaData.unsectionedMedia || mediaData.unassignedMedia || []
+        
+        // If media is returned as a flat array, we need to filter out already assigned ones
+        if (Array.isArray(mediaData) && mediaData.length > 0) {
+          // Get all assigned media IDs from current chapters
+          const assignedMediaIds = new Set()
+          const currentChapters = get().courseCreation?.chapters || []
+          
+          currentChapters.forEach(chapter => {
+            if (chapter.videos && Array.isArray(chapter.videos)) {
+              chapter.videos.forEach(video => {
+                if (video.id) assignedMediaIds.add(video.id)
+              })
+            }
+          })
+          
+          console.log('🎬 Already assigned media IDs:', Array.from(assignedMediaIds))
+          
+          // Filter out already assigned media
+          unsectionedMedia = mediaData.filter((media: any) => !assignedMediaIds.has(media.id))
+          sections = []
+          
+          console.log('🎬 Total media files:', mediaData.length)
+          console.log('🎬 Already assigned:', assignedMediaIds.size)
+          console.log('🎬 Actually unassigned:', unsectionedMedia.length)
+        }
         
         console.log('🎬 Media sections:', sections)
         console.log('🎬 Unsectioned media:', unsectionedMedia)
@@ -1147,15 +1253,38 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           // Only override chapters if we actually got sections from the API
           if (sections && sections.length > 0) {
             // Map backend sections to frontend chapters
-            chapters = sections.map((section: any, index: number) => ({
-              id: section.id || `section-${courseId}-${index}`,
-              title: section.title || `Section ${index + 1}`,
-              description: section.description || '',
-              order: section.order !== undefined ? section.order : index,
-              videos: section.mediaFiles || section.videos || [],
-              isPublished: section.isPublished,
-              isPreview: section.isPreview
-            }))
+            chapters = sections.map((section: any, index: number) => {
+              // Process videos - handle both array of objects and array of strings
+              let processedVideos = []
+              const rawVideos = section.mediaFiles || section.videos || []
+              
+              if (Array.isArray(rawVideos)) {
+                processedVideos = rawVideos.map((video: any, vIndex: number) => {
+                  // If video is a string (ID), create a minimal object
+                  if (typeof video === 'string') {
+                    return {
+                      id: video,
+                      title: `Video ${vIndex + 1}`,
+                      name: `Video ${vIndex + 1}`
+                    }
+                  }
+                  // If video is already an object, use it as-is
+                  return video
+                })
+              }
+              
+              console.log(`📹 Section ${index} videos:`, processedVideos)
+              
+              return {
+                id: section.id || `section-${courseId}-${index}`,
+                title: section.title || `Section ${index + 1}`,
+                description: section.description || '',
+                order: section.order !== undefined ? section.order : index,
+                videos: processedVideos,
+                isPublished: section.isPublished,
+                isPreview: section.isPreview
+              }
+            })
             console.log('📚 Using API sections, mapped chapters:', chapters)
           } else {
             console.log('📚 No sections from API, keeping course data chapters:', chapters)
@@ -1197,8 +1326,8 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       console.log('✅ Course loaded for editing successfully')
       console.log('📊 Final chapters in state:', get().courseCreation?.chapters?.length || 0)
       
-      // Also load media assignments
-      await get().loadCourseMedia(courseId)
+      // Don't load media here - it will be lazy loaded when chapters are expanded
+      console.log('🎬 Media will be loaded lazily when chapters are expanded')
     } catch (error) {
       console.log('❌ Failed to load course:', error)
       set({
