@@ -70,7 +70,7 @@ export class VirtualTimelineEngine {
     const deltaTime = timestamp - this.lastFrameTime
     const framesElapsed = (deltaTime * this.fps) / 1000
     
-    // Advance current frame
+    // Advance current frame smoothly
     this.currentFrame += framesElapsed
     
     // Stop at end of last clip if we haven't manually continued
@@ -79,15 +79,15 @@ export class VirtualTimelineEngine {
       this.currentFrame = this.totalFrames
       this.hasReachedEnd = true
       this.pause()
-      this.onFrameUpdate?.(Math.round(this.currentFrame))
+      this.onFrameUpdate?.(this.currentFrame)
       return
     }
     
     // Sync video to timeline position
     this.syncVideoToTimeline()
     
-    // Notify frame update (rounded to avoid floating point artifacts)
-    this.onFrameUpdate?.(Math.round(this.currentFrame))
+    // Notify frame update - keep fractional frames for smooth movement
+    this.onFrameUpdate?.(this.currentFrame)
     
     // Continue loop
     this.lastFrameTime = timestamp
@@ -95,7 +95,7 @@ export class VirtualTimelineEngine {
   }
 
   // Sync video element to show correct content for current frame
-  private async syncVideoToTimeline() {
+  private syncVideoToTimeline() {
     if (!this.videoElement) return
     
     const targetSegment = this.findSegmentAtFrame(Math.floor(this.currentFrame))
@@ -261,7 +261,7 @@ export class VirtualTimelineEngine {
     // If paused, sync immediately
     if (!this.isPlaying) {
       this.syncVideoToTimeline()
-      this.onFrameUpdate?.(Math.round(this.currentFrame))
+      this.onFrameUpdate?.(this.currentFrame)
     }
   }
 

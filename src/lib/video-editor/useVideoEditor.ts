@@ -9,6 +9,7 @@ export function useVideoEditor() {
   // State
   const [clips, setClips] = useState<Clip[]>([])
   const [currentFrame, setCurrentFrame] = useState(0)
+  const [visualFrame, setVisualFrame] = useState(0) // Throttled frame for smooth UI
   const [isPlaying, setIsPlaying] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [totalFrames, setTotalFrames] = useState(0)
@@ -19,6 +20,7 @@ export function useVideoEditor() {
   const recordingStartTimeRef = useRef<number>(0)
   const chunksRef = useRef<Blob[]>([])
   const engineRef = useRef<VirtualTimelineEngine | null>(null)
+  const lastVisualUpdateRef = useRef<number>(0)
 
   // Initialize virtual timeline engine
   useEffect(() => {
@@ -27,7 +29,16 @@ export function useVideoEditor() {
       
       // Set callbacks
       engineRef.current.setCallbacks({
-        onFrameUpdate: (frame) => setCurrentFrame(frame),
+        onFrameUpdate: (frame) => {
+          setCurrentFrame(frame) // Always update precise frame
+          
+          // Throttle visual updates to 30 FPS (33ms)
+          const now = Date.now()
+          if (now - lastVisualUpdateRef.current >= 33) {
+            setVisualFrame(frame)
+            lastVisualUpdateRef.current = now
+          }
+        },
         onPlayStateChange: (playing) => setIsPlaying(playing)
       })
     }
@@ -145,6 +156,7 @@ export function useVideoEditor() {
   // Seek to frame using virtual timeline
   const seekToFrame = useCallback((frame: number) => {
     engineRef.current?.seekToFrame(frame)
+    setVisualFrame(frame) // Update visual immediately when seeking
   }, [])
   
   // Move clip to new position
@@ -229,7 +241,8 @@ export function useVideoEditor() {
   return {
     // State
     clips,
-    currentFrame,
+    currentFrame,      // Precise frame for editing operations
+    visualFrame,       // Throttled frame for smooth UI
     isPlaying,
     isRecording,
     totalFrames,

@@ -36,7 +36,9 @@ export function SimpleTimeline({
   // Scale pixels per second based on zoom
   const basePixelsPerSecond = 50
   const pixelsPerSecond = basePixelsPerSecond * zoomLevel
-  const totalSeconds = Math.max(120, totalFrames / FPS) // Extended to 120 seconds for better zoom out
+  // Extend timeline to show more space for editing
+  const minSeconds = 60 // Minimum 60 seconds of timeline
+  const totalSeconds = Math.max(minSeconds, Math.ceil(totalFrames / FPS) + 10)
   const timelineWidth = totalSeconds * pixelsPerSecond
   
   const handleClipPointerDown = (clip: any, e: React.PointerEvent) => {
@@ -149,11 +151,7 @@ export function SimpleTimeline({
     if (!container) return
     
     const handleWheel = (e: WheelEvent) => {
-      // Always prevent default horizontal scrolling to avoid browser navigation
-      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
-        e.preventDefault()
-      }
-      
+      // Only prevent default when zooming with Ctrl/Cmd
       // Check if Ctrl (Windows/Linux) or Cmd (Mac) is pressed, or if it's a pinch gesture
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault()
@@ -182,30 +180,10 @@ export function SimpleTimeline({
     return () => container.removeEventListener('wheel', handleWheel)
   }, [zoomLevel, pixelsPerSecond, basePixelsPerSecond])
   
-  // Prevent browser back/forward navigation gestures
-  useEffect(() => {
-    const container = scrollContainerRef.current
-    if (!container) return
-    
-    // Prevent touchpad swipe gestures that trigger browser navigation
-    const preventSwipeNavigation = (e: Event) => {
-      e.preventDefault()
-    }
-    
-    // Add listeners for various swipe/gesture events
-    container.addEventListener('gesturestart', preventSwipeNavigation)
-    container.addEventListener('gesturechange', preventSwipeNavigation)
-    container.addEventListener('gestureend', preventSwipeNavigation)
-    
-    return () => {
-      container.removeEventListener('gesturestart', preventSwipeNavigation)
-      container.removeEventListener('gesturechange', preventSwipeNavigation)
-      container.removeEventListener('gestureend', preventSwipeNavigation)
-    }
-  }, [])
+  // Note: Removed gesture prevention to allow normal scrolling
   
   return (
-    <div className="h-full flex flex-col bg-gray-900" style={{ overscrollBehaviorX: 'contain' }}>
+    <div className="h-full flex flex-col bg-gray-900">
       <div className="h-8 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-2">
         <span className="text-xs text-gray-400">Timeline ({clips.length} clips)</span>
         <span className="text-xs text-gray-400">Zoom: {Math.round(zoomLevel * 100)}%</span>
@@ -214,7 +192,6 @@ export function SimpleTimeline({
       <div 
         className="flex-1 relative overflow-x-auto overflow-y-hidden" 
         ref={scrollContainerRef}
-        style={{ overscrollBehaviorX: 'contain' }}
       >
         <div 
           className="relative select-none"
@@ -247,14 +224,14 @@ export function SimpleTimeline({
                       {formatTime(i)}
                     </span>
                     
-                    {/* Minor marks only when zoomed in enough */}
+                    {/* Minor marks disabled for performance - was creating 480+ DOM elements
                     {zoomLevel >= 0.75 && interval === 1 && [1, 2, 3, 4].map(j => (
                       <div 
                         key={j}
                         className="absolute h-1 w-px bg-gray-700"
                         style={{ left: j * (pixelsPerSecond / 5) }}
                       />
-                    ))}
+                    ))} */}
                   </div>
                 )
               }
@@ -331,7 +308,7 @@ export function SimpleTimeline({
           <div
             className="absolute top-0 w-0.5 bg-red-500 pointer-events-none z-20"
             style={{ 
-              left: (currentFrame / FPS) * pixelsPerSecond + 70,
+              transform: `translateX(${(currentFrame / FPS) * pixelsPerSecond + 70}px)`,
               height: '100%'
             }}
           >

@@ -166,7 +166,7 @@ export function SimpleStudio() {
           <div className="flex-1 overflow-hidden" style={{ width: '80%' }}>
             <SimpleTimeline 
               clips={editor.clips}
-              currentFrame={editor.currentFrame}
+              currentFrame={editor.visualFrame}  // Use throttled frame for smooth visuals
               totalFrames={editor.totalFrames}
               onSeekToFrame={editor.seekToFrame}
               selectedClipId={selectedClipId}
