@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { FPS } from '@/lib/video-editor/types'
+import { Minus, Plus } from 'lucide-react'
 
 interface SimpleTimelineProps {
   clips: Array<{
@@ -30,16 +31,23 @@ export function SimpleTimeline({
   const [dragOffset, setDragOffset] = useState(0)
   const [zoomLevel, setZoomLevel] = useState(1) // 1 = 100%, 2 = 200%, etc.
   const [isDraggingScrubber, setIsDraggingScrubber] = useState(false)
+  const [viewportWidth, setViewportWidth] = useState(1000) // Track viewport width for real-time updates
+  const [scrollPosition, setScrollPosition] = useState(0) // Track scroll position for viewport indicator
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const dragStartPosRef = useRef<{x: number, y: number} | null>(null)
   
   // Scale pixels per second based on zoom
   const basePixelsPerSecond = 50
   const pixelsPerSecond = basePixelsPerSecond * zoomLevel
-  // Extend timeline to show more space for editing
-  const minSeconds = 60 // Minimum 60 seconds of timeline
-  const totalSeconds = Math.max(minSeconds, Math.ceil(totalFrames / FPS) + 10)
+  // Dynamic timeline length
+  const [totalSeconds, setTotalSeconds] = useState(60) // Start with 60 seconds
   const timelineWidth = totalSeconds * pixelsPerSecond
+  
+  // Calculate min zoom to fit entire timeline (max zoom stays at 200%)
+  const minZoom = useMemo(() => {
+    const minZoomToFitTimeline = viewportWidth / (totalSeconds * basePixelsPerSecond)
+    return Math.max(0.1, Math.min(0.25, minZoomToFitTimeline))  // Allow zooming out more as timeline grows
+  }, [viewportWidth, totalSeconds, basePixelsPerSecond])
   
   const handleClipPointerDown = (clip: any, e: React.PointerEvent) => {
     e.stopPropagation()
@@ -89,7 +97,7 @@ export function SimpleTimeline({
     // Jump to click position if not near scrubber
     if (Math.abs(x - scrubberX) > magneticRange) {
       const clickedFrame = Math.round((x / pixelsPerSecond) * FPS)
-      const maxFrame = Math.max(totalFrames, totalSeconds * FPS)
+      const maxFrame = totalSeconds * FPS
       onSeekToFrame(Math.min(clickedFrame, maxFrame))
     }
     
@@ -104,7 +112,7 @@ export function SimpleTimeline({
     if (x < 0) return
     
     const frame = Math.round((x / pixelsPerSecond) * FPS)
-    const maxFrame = Math.max(totalFrames, totalSeconds * FPS)
+    const maxFrame = totalSeconds * FPS
     onSeekToFrame(Math.min(frame, maxFrame))
   }
   
@@ -119,7 +127,7 @@ export function SimpleTimeline({
       const rect = container.getBoundingClientRect()
       const x = e.clientX - rect.left + container.scrollLeft - 70
       const frame = Math.round(Math.max(0, x / pixelsPerSecond) * FPS)
-      const maxFrame = Math.max(totalFrames, totalSeconds * FPS)
+      const maxFrame = totalSeconds * FPS
       onSeekToFrame(Math.min(frame, maxFrame))
     }
     
@@ -145,53 +153,139 @@ export function SimpleTimeline({
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
   
-  // Handle zoom with wheel event (Ctrl/Cmd + scroll or pinch)
+  // Update viewport width on mount and resize
+  useEffect(() => {
+    const updateViewportWidth = () => {
+      if (scrollContainerRef.current) {
+        setViewportWidth(scrollContainerRef.current.clientWidth)
+      }
+    }
+    
+    updateViewportWidth()
+    window.addEventListener('resize', updateViewportWidth)
+    
+    // Also update after a short delay to ensure container is rendered
+    const timer = setTimeout(updateViewportWidth, 100)
+    
+    return () => {
+      window.removeEventListener('resize', updateViewportWidth)
+      clearTimeout(timer)
+    }
+  }, [])
+  
+  // Track scroll position for viewport indicator
   useEffect(() => {
     const container = scrollContainerRef.current
     if (!container) return
     
-    const handleWheel = (e: WheelEvent) => {
-      // Only prevent default when zooming with Ctrl/Cmd
-      // Check if Ctrl (Windows/Linux) or Cmd (Mac) is pressed, or if it's a pinch gesture
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault()
-        
-        // Get mouse position relative to timeline for zoom anchoring
-        const rect = container.getBoundingClientRect()
-        const mouseX = e.clientX - rect.left + container.scrollLeft
-        const timeAtMouse = (mouseX - 70) / pixelsPerSecond // Time in seconds at mouse position
-        
-        // Calculate new zoom level
-        const zoomDelta = e.deltaY > 0 ? 0.9 : 1.1 // Zoom out or in
-        const newZoom = Math.min(Math.max(0.25, zoomLevel * zoomDelta), 10) // Clamp between 25% and 1000%
-        
-        setZoomLevel(newZoom)
-        
-        // After zoom, scroll to keep the same time position under the mouse
-        setTimeout(() => {
-          const newPixelsPerSecond = basePixelsPerSecond * newZoom
-          const newMouseX = (timeAtMouse * newPixelsPerSecond) + 70
-          container.scrollLeft = newMouseX - (e.clientX - rect.left)
-        }, 0)
-      }
+    const handleScroll = () => {
+      setScrollPosition(container.scrollLeft)
     }
     
-    container.addEventListener('wheel', handleWheel, { passive: false })
-    return () => container.removeEventListener('wheel', handleWheel)
-  }, [zoomLevel, pixelsPerSecond, basePixelsPerSecond])
+    container.addEventListener('scroll', handleScroll)
+    return () => container.removeEventListener('scroll', handleScroll)
+  }, [])
   
-  // Note: Removed gesture prevention to allow normal scrolling
+  // Dynamic timeline extension based on clip positions and viewport
+  useEffect(() => {
+    // Find the end of the last clip
+    const lastClipEnd = clips.reduce((max, clip) => 
+      Math.max(max, clip.startFrame + clip.durationFrames), 0
+    ) / FPS // Convert to seconds
+    
+    // Calculate minimum seconds needed to fill viewport
+    const minSecondsForViewport = Math.ceil(viewportWidth / pixelsPerSecond)
+    
+    // Ensure timeline is at least as wide as viewport
+    const minRequired = Math.max(60, minSecondsForViewport, lastClipEnd + 10)
+    
+    // Check if we need to extend
+    if (lastClipEnd > totalSeconds - 10 || totalSeconds < minRequired) {
+      // Calculate extension based on visible area
+      const visibleSeconds = viewportWidth / pixelsPerSecond
+      const extensionAmount = Math.ceil(visibleSeconds / 3)
+      
+      setTotalSeconds(Math.max(minRequired, totalSeconds + extensionAmount))
+    }
+    
+    // Contract if there's too much empty space (but keep minimum requirements)
+    if (lastClipEnd < totalSeconds - 60 && totalSeconds > minRequired) {
+      setTotalSeconds(Math.max(minRequired, lastClipEnd + 30))
+    }
+  }, [clips, totalSeconds, pixelsPerSecond, viewportWidth])
+  
+  // Handle pinch/scroll zoom only
+  useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    
+    const handleZoom = (e: WheelEvent) => {
+      // Only handle zoom with Ctrl/Cmd + scroll or pinch gesture
+      if (!e.ctrlKey && !e.metaKey) return
+      
+      e.preventDefault()
+      
+      // Get scrubber position for zoom anchoring
+      const scrubberTime = currentFrame / FPS  // Time in seconds at scrubber
+      
+      // Calculate new zoom level (match dynamic slider limits)
+      const zoomDelta = e.deltaY > 0 ? 0.95 : 1.05
+      const newZoom = Math.min(Math.max(minZoom, zoomLevel * zoomDelta), 2)
+      
+      setZoomLevel(newZoom)
+      
+      // Keep the scrubber centered after zoom
+      setTimeout(() => {
+        const newPixelsPerSecond = basePixelsPerSecond * newZoom
+        const scrubberX = (scrubberTime * newPixelsPerSecond) + 70
+        // Center scrubber in viewport
+        container.scrollLeft = scrubberX - (container.clientWidth / 2)
+      }, 0)
+    }
+    
+    container.addEventListener('wheel', handleZoom, { passive: false })
+    return () => container.removeEventListener('wheel', handleZoom)
+  }, [zoomLevel, pixelsPerSecond, basePixelsPerSecond, minZoom, currentFrame])
+  
+  // Calculate viewport indicator position and width
+  const viewportIndicatorWidth = (viewportWidth / timelineWidth) * 100  // Percentage
+  const viewportIndicatorLeft = (scrollPosition / timelineWidth) * 100  // Percentage
   
   return (
-    <div className="h-full flex flex-col bg-gray-900">
+    <div className="h-full flex flex-col bg-gray-900 relative">
       <div className="h-8 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-2">
         <span className="text-xs text-gray-400">Timeline ({clips.length} clips)</span>
-        <span className="text-xs text-gray-400">Zoom: {Math.round(zoomLevel * 100)}%</span>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setZoomLevel(Math.max(minZoom, zoomLevel - 0.1))}
+            className="text-gray-400 hover:text-white p-0.5"
+          >
+            <Minus className="h-3 w-3" />
+          </button>
+          <input 
+            type="range"
+            min={minZoom * 100}
+            max={200}
+            value={zoomLevel * 100}
+            onChange={(e) => setZoomLevel(parseInt(e.target.value) / 100)}
+            className="w-24 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+            style={{
+              background: `linear-gradient(to right, #ffffff 0%, #ffffff ${((zoomLevel * 100 - minZoom * 100) / (200 - minZoom * 100)) * 100}%, #374151 ${((zoomLevel * 100 - minZoom * 100) / (200 - minZoom * 100)) * 100}%, #374151 100%)`
+            }}
+          />
+          <button 
+            onClick={() => setZoomLevel(Math.min(2, zoomLevel + 0.1))}
+            className="text-gray-400 hover:text-white p-0.5"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        </div>
       </div>
       
       <div 
         className="flex-1 relative overflow-x-auto overflow-y-hidden" 
         ref={scrollContainerRef}
+        data-timeline-scroll="true"
       >
         <div 
           className="relative select-none"
@@ -215,8 +309,11 @@ export function SimpleTimeline({
                 interval = 2 // Show every 2 seconds when slightly zoomed out
               }
               
+              // Calculate how many seconds the timeline actually covers visually
+              const visibleTimelineSeconds = Math.ceil(timelineWidth / pixelsPerSecond)
+              
               const markers = []
-              for (let i = 0; i <= totalSeconds; i += interval) {
+              for (let i = 0; i <= visibleTimelineSeconds; i += interval) {
                 markers.push(
                   <div key={i} className="absolute pointer-events-none" style={{ left: i * pixelsPerSecond + 70 }}>
                     <div className="h-2 w-px bg-gray-600" />
@@ -318,6 +415,17 @@ export function SimpleTimeline({
             </div>
           </div>
         </div>
+      </div>
+      
+      {/* Viewport Indicator Bar */}
+      <div className="absolute bottom-0 left-0 right-0 h-2 bg-gray-800 border-t border-gray-700">
+        <div 
+          className="absolute top-0 h-full bg-gray-600 transition-all duration-75"
+          style={{
+            left: `${viewportIndicatorLeft}%`,
+            width: `${Math.min(100, viewportIndicatorWidth)}%`
+          }}
+        />
       </div>
     </div>
   )

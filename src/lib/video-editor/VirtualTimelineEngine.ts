@@ -201,9 +201,10 @@ export class VirtualTimelineEngine {
   play() {
     if (this.isPlaying) return
     
-    // If we're at the end and user presses play again, allow continuing into empty space
-    if (this.hasReachedEnd && this.currentFrame >= this.totalFrames) {
-      this.hasReachedEnd = false  // Allow playing past the end
+    // If we're at the end and user presses play, loop back to start
+    if (this.currentFrame >= this.totalFrames && this.totalFrames > 0) {
+      this.currentFrame = 0
+      this.hasReachedEnd = false
     }
     
     this.isPlaying = true

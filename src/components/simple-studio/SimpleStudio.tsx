@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useVideoEditor } from '@/lib/video-editor/useVideoEditor'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Play, Pause, Circle, Square } from 'lucide-react'
@@ -13,6 +13,36 @@ export function SimpleStudio() {
   const editor = useVideoEditor()
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null)
   
+  // Prevent browser back/forward navigation on horizontal swipe
+  useEffect(() => {
+    let timelineElement: HTMLElement | null = null
+    
+    const handleWheel = (e: WheelEvent) => {
+      // Get timeline element
+      timelineElement = timelineElement || document.querySelector('[data-timeline-scroll]')
+      
+      if (timelineElement && Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        // It's a horizontal swipe - always prevent browser navigation
+        e.preventDefault()
+        
+        // Manually scroll the timeline
+        timelineElement.scrollLeft += e.deltaX
+      }
+    }
+    
+    document.addEventListener('wheel', handleWheel, { passive: false })
+    
+    return () => {
+      document.removeEventListener('wheel', handleWheel)
+    }
+  }, [])
+  
+  // Handle delete with selection clearing
+  const handleDeleteClip = (clipId: string) => {
+    editor.deleteClip(clipId)
+    setSelectedClipId(null) // Clear selection after deletion
+  }
+  
   // Use keyboard shortcuts hook
   useKeyboardShortcuts({
     isPlaying: editor.isPlaying,
@@ -21,7 +51,9 @@ export function SimpleStudio() {
     currentFrame: editor.currentFrame,
     clips: editor.clips,
     splitClip: editor.splitClip,
-    seekToFrame: editor.seekToFrame
+    seekToFrame: editor.seekToFrame,
+    selectedClipId,
+    deleteClip: handleDeleteClip
   })
   
   return (

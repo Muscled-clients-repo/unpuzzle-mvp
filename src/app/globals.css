@@ -57,3 +57,27 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Timeline zoom slider styles */
+@layer components {
+  /* Style the slider track */
+  input[type="range"].slider::-webkit-slider-track {
+    @apply h-1 rounded-lg bg-transparent;
+  }
+  
+  /* Style the slider thumb */
+  input[type="range"].slider::-webkit-slider-thumb {
+    @apply appearance-none w-3 h-3 rounded-full bg-white cursor-pointer hover:bg-gray-200 transition-colors;
+    box-shadow: 0 0 2px rgba(0,0,0,0.5);
+  }
+  
+  /* Firefox styles */
+  input[type="range"].slider::-moz-range-track {
+    @apply h-1 rounded-lg bg-transparent;
+  }
+  
+  input[type="range"].slider::-moz-range-thumb {
+    @apply w-3 h-3 rounded-full bg-white cursor-pointer hover:bg-gray-200 transition-colors border-0;
+    box-shadow: 0 0 2px rgba(0,0,0,0.5);
+  }
+}

@@ -182,6 +182,27 @@ export function useVideoEditor() {
     })
   }, [])
   
+  // Delete a clip by ID
+  const deleteClip = useCallback((clipId: string) => {
+    setClips(prevClips => {
+      const updatedClips = prevClips.filter(c => c.id !== clipId)
+      
+      // Recalculate total frames after deletion
+      const newTotalFrames = updatedClips.reduce((max, clip) => 
+        Math.max(max, clip.startFrame + clip.durationFrames), 0
+      )
+      setTotalFrames(newTotalFrames)
+      
+      // Revoke the blob URL of deleted clip
+      const deletedClip = prevClips.find(c => c.id === clipId)
+      if (deletedClip) {
+        URL.revokeObjectURL(deletedClip.url)
+      }
+      
+      return updatedClips
+    })
+  }, [])
+  
   // Split clip at specific frame
   const splitClip = useCallback((clipId: string, splitFrame: number) => {
     setClips(prevClips => {
@@ -256,6 +277,7 @@ export function useVideoEditor() {
     seekToFrame,
     splitClip,
     moveClip,
+    deleteClip,
     
     // Utilities
     getCurrentClip

@@ -9,6 +9,8 @@ interface UseKeyboardShortcutsProps {
   clips: Clip[]
   splitClip: (clipId: string, splitFrame: number) => void
   seekToFrame: (frame: number) => void
+  selectedClipId: string | null
+  deleteClip: (clipId: string) => void
 }
 
 export function useKeyboardShortcuts({
@@ -18,7 +20,9 @@ export function useKeyboardShortcuts({
   currentFrame,
   clips,
   splitClip,
-  seekToFrame
+  seekToFrame,
+  selectedClipId,
+  deleteClip
 }: UseKeyboardShortcutsProps) {
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
@@ -43,6 +47,12 @@ export function useKeyboardShortcuts({
         if (clipAtPlayhead) {
           splitClip(clipAtPlayhead.id, currentFrame)
         }
+      }
+      
+      // Delete key for deleting selected clip
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedClipId) {
+        e.preventDefault()
+        deleteClip(selectedClipId)
       }
       
       // Arrow keys for frame navigation
@@ -71,5 +81,5 @@ export function useKeyboardShortcuts({
     
     window.addEventListener('keydown', handleKeyPress)
     return () => window.removeEventListener('keydown', handleKeyPress)
-  }, [isPlaying, play, pause, currentFrame, clips, splitClip, seekToFrame])
+  }, [isPlaying, play, pause, currentFrame, clips, splitClip, seekToFrame, selectedClipId, deleteClip])
 }
