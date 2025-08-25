@@ -8,6 +8,8 @@ interface UseKeyboardShortcutsProps {
   currentFrame: number
   clips: Clip[]
   splitClip: (clipId: string, splitFrame: number) => void
+  trimClipLeft: (clipId: string, currentFrame: number) => void
+  trimClipRight: (clipId: string, currentFrame: number) => void
   seekToFrame: (frame: number) => void
   selectedClipId: string | null
   deleteClip: (clipId: string) => void
@@ -24,6 +26,8 @@ export function useKeyboardShortcuts({
   currentFrame,
   clips,
   splitClip,
+  trimClipLeft,
+  trimClipRight,
   seekToFrame,
   selectedClipId,
   deleteClip,
@@ -69,16 +73,49 @@ export function useKeyboardShortcuts({
         }
       }
       
-      // T key for split/trim at playhead
-      if (e.key === 't' || e.key === 'T') {
-        e.preventDefault()
-        const clipAtPlayhead = clips.find(clip => 
+      // Helper function to find the topmost clip at playhead position
+      const getTopmostClipAtPlayhead = () => {
+        const clipsAtPlayhead = clips.filter(clip => 
           currentFrame >= clip.startFrame && 
           currentFrame < clip.startFrame + clip.durationFrames
         )
         
+        // Return clip with lowest track index (topmost visually)
+        return clipsAtPlayhead.reduce((topClip, currentClip) => {
+          if (!topClip || currentClip.trackIndex < topClip.trackIndex) {
+            return currentClip
+          }
+          return topClip
+        }, null as typeof clips[0] | null)
+      }
+
+      // W key for split/trim at playhead
+      if (e.key === 'w' || e.key === 'W') {
+        e.preventDefault()
+        const clipAtPlayhead = getTopmostClipAtPlayhead()
+        
         if (clipAtPlayhead) {
           splitClip(clipAtPlayhead.id, currentFrame)
+        }
+      }
+      
+      // Q key for trim left side of clip at playhead (remove everything before current frame)
+      if (e.key === 'q' || e.key === 'Q') {
+        e.preventDefault()
+        const clipAtPlayhead = getTopmostClipAtPlayhead()
+        
+        if (clipAtPlayhead) {
+          trimClipLeft(clipAtPlayhead.id, currentFrame)
+        }
+      }
+      
+      // E key for trim right side of clip at playhead (remove everything after current frame)
+      if (e.key === 'e' || e.key === 'E') {
+        e.preventDefault()
+        const clipAtPlayhead = getTopmostClipAtPlayhead()
+        
+        if (clipAtPlayhead) {
+          trimClipRight(clipAtPlayhead.id, currentFrame)
         }
       }
       
@@ -114,5 +151,5 @@ export function useKeyboardShortcuts({
     
     window.addEventListener('keydown', handleKeyPress)
     return () => window.removeEventListener('keydown', handleKeyPress)
-  }, [isPlaying, play, pause, currentFrame, clips, splitClip, seekToFrame, selectedClipId, deleteClip, undo, redo, canUndo, canRedo])
+  }, [isPlaying, play, pause, currentFrame, clips, splitClip, trimClipLeft, trimClipRight, seekToFrame, selectedClipId, deleteClip, undo, redo, canUndo, canRedo])
 }

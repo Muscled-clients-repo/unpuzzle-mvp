@@ -18,6 +18,7 @@ export interface Track {
   type: 'video' | 'audio'
   visible: boolean
   locked: boolean
+  muted?: boolean  // Only for audio tracks
 }
 
 export interface EditorState {

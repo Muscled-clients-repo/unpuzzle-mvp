@@ -27,6 +27,7 @@ interface TimelineProps {
   onTrimClipEnd?: (clipId: string, newEndOffset: number) => void
   onTrimClipEndComplete?: () => void
   onAddTrack?: () => void
+  onToggleTrackMute?: (trackIndex: number) => void
 }
 
 export function Timeline({ 
@@ -48,7 +49,8 @@ export function Timeline({
   onTrimClipStartComplete,
   onTrimClipEnd,
   onTrimClipEndComplete,
-  onAddTrack
+  onAddTrack,
+  onToggleTrackMute
 }: TimelineProps) {
   const [zoomLevel, setZoomLevel] = useState(1) // 1 = 100%, 2 = 200%, etc.
   const [isDraggingScrubber, setIsDraggingScrubber] = useState(false)
@@ -86,8 +88,16 @@ export function Timeline({
     // Start dragging from anywhere on the ruler (including corner)
     setIsDraggingScrubber(true)
     
-    // Immediately move scrubber to clicked position (immediate = true for click)
-    const clickedFrame = Math.round((clickPosition / pixelsPerSecond) * FPS)
+    // Calculate frame with magnetic snap to whole seconds
+    let clickedFrame = Math.round((clickPosition / pixelsPerSecond) * FPS)
+    
+    // Magnetic snap to whole seconds (every 30 frames at 30 FPS)
+    const magneticRangeFrames = 3 // Snap within 3 frames of whole seconds
+    const nearestSecondFrame = Math.round(clickedFrame / FPS) * FPS
+    if (Math.abs(clickedFrame - nearestSecondFrame) <= magneticRangeFrames) {
+      clickedFrame = nearestSecondFrame
+    }
+    
     const maxFrame = totalSeconds * FPS
     onSeekToFrame(Math.min(Math.max(0, clickedFrame), maxFrame), true)
   }
@@ -106,7 +116,15 @@ export function Timeline({
     const handleGlobalMouseMove = (e: MouseEvent) => {
       const rect = container.getBoundingClientRect()
       const x = (e.clientX - rect.left + container.scrollLeft - 70) / pixelsPerSecond
-      const frame = Math.round(Math.max(0, x) * FPS)
+      let frame = Math.round(Math.max(0, x) * FPS)
+      
+      // Magnetic snap to whole seconds when dragging
+      const magneticRangeFrames = 3 // Snap within 3 frames of whole seconds
+      const nearestSecondFrame = Math.round(frame / FPS) * FPS
+      if (Math.abs(frame - nearestSecondFrame) <= magneticRangeFrames) {
+        frame = nearestSecondFrame
+      }
+      
       const maxFrame = totalSeconds * FPS
       onSeekToFrame(Math.min(frame, maxFrame), false) // debounced for dragging
     }
@@ -256,6 +274,7 @@ export function Timeline({
             onTrimClipEnd={onTrimClipEnd}
             onTrimClipEndComplete={onTrimClipEndComplete}
             onSeekToFrame={onSeekToFrame}
+            onToggleTrackMute={onToggleTrackMute}
           />
           
           <TimelineScrubber

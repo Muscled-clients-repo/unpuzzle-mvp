@@ -12,7 +12,7 @@ export function useVideoEditor() {
   const [clips, setClips] = useState<Clip[]>([])
   const [tracks, setTracks] = useState<Track[]>([
     { id: 'track-0', index: 0, name: 'V1', type: 'video', visible: true, locked: false },
-    { id: 'track-1', index: 1, name: 'A1', type: 'audio', visible: true, locked: false }
+    { id: 'track-1', index: 1, name: 'A1', type: 'audio', visible: true, locked: false, muted: false }
   ])
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null)
   const [selectedTrackIndex, setSelectedTrackIndex] = useState<number | null>(null)
@@ -309,6 +309,8 @@ export function useVideoEditor() {
   
   // Split clip at specific frame (saves history immediately - not a drag operation)
   const splitClip = useCallback((clipId: string, splitFrame: number) => {
+    let firstClipId: string | null = null
+    
     setClipsWithRef(prevClips => {
       const clipIndex = prevClips.findIndex(c => c.id === clipId)
       if (clipIndex === -1) return prevClips
@@ -347,12 +349,87 @@ export function useVideoEditor() {
         sourceOutFrame: sourceOutFrame
       }
       
+      // Store first clip ID for selection
+      firstClipId = firstClip.id
+      
       // Replace original clip with two new clips
       const newClips = [...prevClips]
       newClips.splice(clipIndex, 1, firstClip, secondClip)
       
       // Save history immediately for split (not a continuous operation)
       historyRef.current.saveState(newClips, totalFramesRef.current, 'Split clip')
+      
+      return newClips
+    })
+    
+    // Auto-select the left (first) clip after splitting
+    if (firstClipId) {
+      setSelectedClipId(firstClipId)
+    }
+  }, [setSelectedClipId])
+
+  // Trim left side of selected clip (E key) - remove everything before current frame
+  const trimClipLeft = useCallback((clipId: string, currentFrame: number) => {
+    setClipsWithRef(prevClips => {
+      const clipIndex = prevClips.findIndex(c => c.id === clipId)
+      if (clipIndex === -1) return prevClips
+      
+      const clip = prevClips[clipIndex]
+      
+      // Don't trim if frame is outside or at the edges
+      if (currentFrame <= clip.startFrame || currentFrame >= clip.startFrame + clip.durationFrames) {
+        return prevClips
+      }
+      
+      // Calculate how much to trim from the start
+      const framesToTrim = currentFrame - clip.startFrame
+      const sourceInFrame = clip.sourceInFrame ?? 0
+      
+      const updatedClip: Clip = {
+        ...clip,
+        startFrame: currentFrame,
+        durationFrames: clip.durationFrames - framesToTrim,
+        sourceInFrame: sourceInFrame + framesToTrim
+      }
+      
+      const newClips = [...prevClips]
+      newClips[clipIndex] = updatedClip
+      
+      // Save history
+      historyRef.current.saveState(newClips, totalFramesRef.current, 'Trim clip left')
+      
+      return newClips
+    })
+  }, [])
+
+  // Trim right side of selected clip (R key) - remove everything after current frame  
+  const trimClipRight = useCallback((clipId: string, currentFrame: number) => {
+    setClipsWithRef(prevClips => {
+      const clipIndex = prevClips.findIndex(c => c.id === clipId)
+      if (clipIndex === -1) return prevClips
+      
+      const clip = prevClips[clipIndex]
+      
+      // Don't trim if frame is outside or at the edges
+      if (currentFrame <= clip.startFrame || currentFrame >= clip.startFrame + clip.durationFrames) {
+        return prevClips
+      }
+      
+      // Calculate new duration up to current frame
+      const newDuration = currentFrame - clip.startFrame
+      const sourceInFrame = clip.sourceInFrame ?? 0
+      
+      const updatedClip: Clip = {
+        ...clip,
+        durationFrames: newDuration,
+        sourceOutFrame: sourceInFrame + newDuration
+      }
+      
+      const newClips = [...prevClips]
+      newClips[clipIndex] = updatedClip
+      
+      // Save history
+      historyRef.current.saveState(newClips, totalFramesRef.current, 'Trim clip right')
       
       return newClips
     })
@@ -399,7 +476,8 @@ export function useVideoEditor() {
         name: type === 'video' ? `V${trackNumber}` : `A${trackNumber}`,
         type,
         visible: true,
-        locked: false
+        locked: false,
+        ...(type === 'audio' ? { muted: false } : {})
       }
       
       // Sort tracks: video tracks first, then audio tracks
@@ -427,6 +505,14 @@ export function useVideoEditor() {
   const moveClipToTrack = useCallback((clipId: string, newTrackIndex: number) => {
     setClipsWithRef(prev => prev.map(clip => 
       clip.id === clipId ? { ...clip, trackIndex: newTrackIndex } : clip
+    ))
+  }, [])
+  
+  const toggleTrackMute = useCallback((trackIndex: number) => {
+    setTracks(prev => prev.map(track => 
+      track.index === trackIndex && track.type === 'audio'
+        ? { ...track, muted: !track.muted }
+        : track
     ))
   }, [])
 
@@ -464,6 +550,8 @@ export function useVideoEditor() {
     trimClipStartComplete,
     trimClipEnd,
     trimClipEndComplete,
+    trimClipLeft,
+    trimClipRight,
     moveClip,
     moveClipComplete,
     deleteClip,
@@ -472,6 +560,7 @@ export function useVideoEditor() {
     addTrack,
     removeTrack,
     moveClipToTrack,
+    toggleTrackMute,
     
     // Undo/Redo
     undo,

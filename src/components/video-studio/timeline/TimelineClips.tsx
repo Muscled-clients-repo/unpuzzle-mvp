@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Clip, Track, FPS, DEFAULT_TRACK_HEIGHT } from '@/lib/video-editor/types'
-import { Film, Music } from 'lucide-react'
+import { Film, Music, Volume2, VolumeX } from 'lucide-react'
 
 interface TimelineClipsProps {
   clips: Clip[]
@@ -21,6 +21,7 @@ interface TimelineClipsProps {
   onTrimClipEnd?: (clipId: string, newEndOffset: number) => void
   onTrimClipEndComplete?: () => void
   onSeekToFrame?: (frame: number) => void
+  onToggleTrackMute?: (trackIndex: number) => void
 }
 
 export function TimelineClips({ 
@@ -39,7 +40,8 @@ export function TimelineClips({
   onTrimClipStartComplete,
   onTrimClipEnd,
   onTrimClipEndComplete,
-  onSeekToFrame
+  onSeekToFrame,
+  onToggleTrackMute
 }: TimelineClipsProps) {
   const [draggedClipId, setDraggedClipId] = useState<string | null>(null)
   const [dragOffset, setDragOffset] = useState(0)
@@ -78,13 +80,27 @@ export function TimelineClips({
         const x = e.clientX - rect.left - dragOffset - 70
         let newStartFrame = Math.round(Math.max(0, x / pixelsPerSecond) * FPS)
         
-        // Magnetic effect: snap clip edges to scrubber position
+        // Magnetic effect: snap to scrubber, whole seconds, and clip edges
         const magneticRangeFrames = 3
         
+        // 1. Snap to scrubber position
         if (Math.abs(newStartFrame - currentFrame) <= magneticRangeFrames) {
           newStartFrame = currentFrame
         } else if (Math.abs((newStartFrame + clip.durationFrames) - currentFrame) <= magneticRangeFrames) {
           newStartFrame = currentFrame - clip.durationFrames
+        }
+        // 2. Snap to whole seconds
+        else {
+          const nearestSecondFrame = Math.round(newStartFrame / FPS) * FPS
+          if (Math.abs(newStartFrame - nearestSecondFrame) <= magneticRangeFrames) {
+            newStartFrame = nearestSecondFrame
+          }
+          // Also check if clip end would snap to a whole second
+          const clipEndFrame = newStartFrame + clip.durationFrames
+          const nearestEndSecondFrame = Math.round(clipEndFrame / FPS) * FPS
+          if (Math.abs(clipEndFrame - nearestEndSecondFrame) <= magneticRangeFrames) {
+            newStartFrame = nearestEndSecondFrame - clip.durationFrames
+          }
         }
         
         onMoveClip(clip.id, newStartFrame)
@@ -259,22 +275,41 @@ export function TimelineClips({
           style={{ height: `${DEFAULT_TRACK_HEIGHT}px` }}
           onClick={(e) => handleTrackClick(track.index, e)}
         >
-          <div 
-            className="absolute left-2 text-xs text-gray-400 z-10 cursor-pointer hover:text-white transition-colors flex items-center gap-1" 
-            style={{ width: '80px' }}
-            onClick={(e) => {
-              e.stopPropagation() // Prevent triggering the track container click
-              console.log('Track label clicked, selecting track index:', track.index)
-              onSelectClip(null) // Deselect any clip
-              onSelectTrack(track.index) // Select this track
-            }}
-          >
-            {track.type === 'video' ? (
-              <Film className="h-3 w-3" />
-            ) : (
-              <Music className="h-3 w-3" />
+          <div className="absolute left-2 z-10 flex flex-col items-center" style={{ width: '60px' }}>
+            <div 
+              className="text-xs text-gray-400 cursor-pointer hover:text-white transition-colors flex items-center gap-1" 
+              onClick={(e) => {
+                e.stopPropagation() // Prevent triggering the track container click
+                console.log('Track label clicked, selecting track index:', track.index)
+                onSelectClip(null) // Deselect any clip
+                onSelectTrack(track.index) // Select this track
+              }}
+            >
+              {track.type === 'video' ? (
+                <Film className="h-3 w-3" />
+              ) : (
+                <Music className="h-3 w-3" />
+              )}
+              {track.name}
+            </div>
+            
+            {/* Mute button for audio tracks - below the name, centered */}
+            {track.type === 'audio' && onToggleTrackMute && (
+              <button
+                className="text-gray-400 hover:text-white transition-colors p-0.5 mt-1 flex items-center justify-center"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleTrackMute(track.index)
+                }}
+                title={track.muted ? 'Unmute track' : 'Mute track'}
+              >
+                {track.muted ? (
+                  <VolumeX className="h-4 w-4 text-red-500" />
+                ) : (
+                  <Volume2 className="h-4 w-4" />
+                )}
+              </button>
             )}
-            {track.name}
           </div>
           
           {/* Render clips for this track */}
@@ -287,10 +322,17 @@ export function TimelineClips({
           const originalDuration = clip.originalDurationFrames ?? clip.durationFrames
           const currentInFrame = clip.sourceInFrame ?? 0
           const currentOutFrame = clip.sourceOutFrame ?? originalDuration
+          
+          // Check if this is a split clip (has -1 or -2 suffix)
+          const isSplitClip = clip.id.includes('-1') || clip.id.includes('-2')
+          
           const canTrimStart = currentInFrame > 0 // Can extend left
           const canTrimEnd = currentOutFrame < originalDuration // Can extend right
-          const trimmedStart = currentInFrame > 0
-          const trimmedEnd = currentOutFrame < originalDuration
+          
+          // Only show trim indicators for manually trimmed clips, not split clips
+          // And only show when the clip is selected to reduce visual noise
+          const trimmedStart = !isSplitClip && currentInFrame > 0 && isSelected
+          const trimmedEnd = !isSplitClip && currentOutFrame < originalDuration && isSelected
           
           return (
             <div
@@ -309,12 +351,12 @@ export function TimelineClips({
               }}
               onPointerDown={(e) => handleClipPointerDown(clip, e, 'move')}
             >
-              {/* Trim indicators */}
-              {(trimmedStart || canTrimStart) && (
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-yellow-400 opacity-75" />
+              {/* Trim indicators - thin lines only for selected trimmed clips */}
+              {trimmedStart && (
+                <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-yellow-400 opacity-90" />
               )}
-              {(trimmedEnd || canTrimEnd) && (
-                <div className="absolute right-0 top-0 bottom-0 w-1 bg-yellow-400 opacity-75" />
+              {trimmedEnd && (
+                <div className="absolute right-0 top-0 bottom-0 w-0.5 bg-yellow-400 opacity-90" />
               )}
               
               {/* Edge handles for trimming */}
