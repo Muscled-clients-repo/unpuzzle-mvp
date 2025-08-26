@@ -767,5 +767,3 @@ export function ChapterVideosSkeleton({ count = 3 }: { count?: number }) {
   )
 }
 
-// Export all skeleton components
-export { CourseGridSkeleton, CourseDetailsSkeleton, StudentCoursesSkeleton, StudentCourseOverviewSkeleton, StudentLearnPageSkeleton, ChapterVideosSkeleton }

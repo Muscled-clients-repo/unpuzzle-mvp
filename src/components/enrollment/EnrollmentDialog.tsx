@@ -7,6 +7,7 @@ import { useAppStore } from '@/stores/app-store'
 import { PaymentMethodSelector } from './PaymentMethodSelector'
 import { CouponInput } from './CouponInput'
 import { LoadingSpinner } from '@/components/common'
+import { StripePaymentForm } from '@/components/payment/StripePaymentForm'
 import { 
   Dialog, 
   DialogContent, 
@@ -28,7 +29,8 @@ import {
   Star,
   Clock,
   Users,
-  Award
+  Award,
+  CreditCard
 } from 'lucide-react'
 
 interface EnrollmentDialogProps {
@@ -44,12 +46,23 @@ export function EnrollmentDialog({ course, isOpen, onClose, onSuccess }: Enrollm
   const [couponCode, setCouponCode] = useState('')
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [appliedDiscount, setAppliedDiscount] = useState(0)
+  const [paymentStep, setPaymentStep] = useState<'enrollment' | 'payment'>('enrollment')
 
   const {
     enrollInCourse,
     enrollingCourseId,
     enrolledCourses,
-    error
+    error,
+    // New payment system
+    initiateEnrollment,
+    loadStripeConfig,
+    stripeConfig,
+    isProcessing,
+    processingCourseId,
+    currentEnrollment,
+    paymentStatus,
+    paymentError,
+    clearPaymentState
   } = useAppStore()
 
   // Mock user ID - in production, get from auth context
@@ -57,7 +70,7 @@ export function EnrollmentDialog({ course, isOpen, onClose, onSuccess }: Enrollm
 
   // Check if already enrolled
   const isAlreadyEnrolled = enrolledCourses?.some(c => c.id === course.id) || false
-  const isEnrolling = enrollingCourseId === course.id
+  const isEnrolling = isProcessing && processingCourseId === course.id
   const isFree = !course.price || course.price === 0
   
   // Calculate final price with discount
@@ -67,23 +80,54 @@ export function EnrollmentDialog({ course, isOpen, onClose, onSuccess }: Enrollm
 
   const handleEnroll = async () => {
     if (!termsAccepted) {
-      // Could add toast notification here
       return
     }
 
     try {
-      await enrollInCourse(userId, course.id, {
-        paymentMethod: !isFree ? paymentMethod : undefined,
-        couponCode: couponCode || undefined
-      })
-
-      // Success - redirect to course
-      onSuccess?.()
-      router.push(`/student/courses/${course.id}`)
+      // Use the new universal enrollment system
+      const result = await initiateEnrollment(course.id)
+      
+      if (result.is_free && result.success) {
+        // Free course - enrollment success (no redirect)
+        onSuccess?.()
+        onClose()
+        console.log('✅ Free course enrollment successful:', course.title)
+        // Redirect disabled - user stays on current page
+      } else if (!result.is_free && result.client_secret) {
+        // Paid course - transition to payment step
+        console.log('🔄 Payment required for course:', course.title)
+        console.log('💳 Client Secret:', result.client_secret)
+        
+        // Load Stripe configuration if not already loaded
+        if (!stripeConfig) {
+          console.log('🔧 Loading Stripe configuration...')
+          await loadStripeConfig()
+        }
+        
+        // Transition to payment step
+        setPaymentStep('payment')
+      } else {
+        // Unexpected response state
+        console.warn('Unexpected enrollment response:', result)
+        throw new Error('Unexpected enrollment response')
+      }
     } catch (err) {
-      // Error handling is done by the store
+      // Error handling is done by the payment slice
       console.error('Enrollment failed:', err)
     }
+  }
+
+  const handlePaymentSuccess = () => {
+    console.log('✅ Payment successful!')
+    onSuccess?.()
+    onClose()
+    // Redirect to student courses page after successful payment
+    router.push('/student/courses')
+  }
+
+  const handlePaymentError = (error: string) => {
+    console.error('❌ Payment failed:', error)
+    // Error is already shown in the Stripe form
   }
 
   const handleCouponApply = async (coupon: string) => {
@@ -115,8 +159,11 @@ export function EnrollmentDialog({ course, isOpen, onClose, onSuccess }: Enrollm
       setAppliedDiscount(0)
       setTermsAccepted(false)
       setPaymentMethod('credit_card')
+      setPaymentStep('enrollment')
+      // Clear payment state when closing dialog
+      clearPaymentState()
     }
-  }, [isOpen])
+  }, [isOpen, clearPaymentState])
 
   // Handle already enrolled
   useEffect(() => {
@@ -132,15 +179,19 @@ export function EnrollmentDialog({ course, isOpen, onClose, onSuccess }: Enrollm
         <DialogHeader>
           <DialogTitle className="text-xl">
             <ShoppingCart className="inline-block mr-2 h-5 w-5" />
-            Enroll in Course
+            {paymentStep === 'enrollment' ? 'Enroll in Course' : 'Complete Payment'}
           </DialogTitle>
           <DialogDescription>
-            Join thousands of students learning with AI assistance
+            {paymentStep === 'enrollment' 
+              ? 'Join thousands of students learning with AI assistance'
+              : 'Enter your payment details to complete enrollment'
+            }
           </DialogDescription>
         </DialogHeader>
 
-        {/* Course Summary */}
-        <div className="space-y-4">
+        {paymentStep === 'enrollment' ? (
+          /* Enrollment Step */
+          <div className="space-y-4">
           <div className="flex gap-4">
             <div className="w-16 h-16 bg-gradient-to-br from-primary/20 to-purple-500/20 rounded-lg flex items-center justify-center">
               <Award className="h-8 w-8 text-primary" />
@@ -237,10 +288,10 @@ export function EnrollmentDialog({ course, isOpen, onClose, onSuccess }: Enrollm
           </div>
 
           {/* Error Display */}
-          {error && (
+          {(error || paymentError) && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>{error || paymentError}</AlertDescription>
             </Alert>
           )}
 
@@ -267,32 +318,80 @@ export function EnrollmentDialog({ course, isOpen, onClose, onSuccess }: Enrollm
             </ul>
           </div>
         </div>
+        ) : (
+          /* Payment Step */
+          <div className="space-y-4">
+            {/* Course Summary - Compact */}
+            <div className="flex gap-4 p-4 bg-gray-50 rounded-lg">
+              <div className="w-12 h-12 bg-gradient-to-br from-primary/20 to-purple-500/20 rounded-lg flex items-center justify-center">
+                <Award className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-lg line-clamp-1">{course.title}</h3>
+                <div className="text-2xl font-bold text-primary">
+                  ${finalPrice.toFixed(2)}
+                  {appliedDiscount > 0 && (
+                    <span className="text-sm text-gray-500 line-through ml-2">
+                      ${originalPrice.toFixed(2)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Stripe Payment Form */}
+            {currentEnrollment?.client_secret && (
+              <StripePaymentForm
+                clientSecret={currentEnrollment.client_secret}
+                amount={Math.round(finalPrice * 100)} // Convert to cents
+                onSuccess={handlePaymentSuccess}
+                onError={handlePaymentError}
+                loading={isEnrolling}
+              />
+            )}
+          </div>
+        )}
 
         <DialogFooter className="flex gap-2">
-          <Button 
-            variant="outline" 
-            onClick={onClose}
-            disabled={isEnrolling}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleEnroll}
-            disabled={isEnrolling || !termsAccepted}
-            className="flex-1"
-          >
-            {isEnrolling ? (
-              <>
-                <LoadingSpinner size="sm" className="mr-2" />
-                Enrolling...
-              </>
-            ) : (
-              <>
-                <ShoppingCart className="mr-2 h-4 w-4" />
-                {isFree ? 'Enroll for Free' : `Enroll Now - $${finalPrice.toFixed(2)}`}
-              </>
-            )}
-          </Button>
+          {paymentStep === 'enrollment' ? (
+            <>
+              <Button 
+                variant="outline" 
+                onClick={onClose}
+                disabled={isEnrolling}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleEnroll}
+                disabled={isEnrolling || !termsAccepted}
+                className="flex-1"
+              >
+                {isEnrolling ? (
+                  <>
+                    <LoadingSpinner size="sm" className="mr-2" />
+                    Enrolling...
+                  </>
+                ) : (
+                  <>
+                    <ShoppingCart className="mr-2 h-4 w-4" />
+                    {isFree ? 'Enroll for Free' : `Enroll Now - $${finalPrice.toFixed(2)}`}
+                  </>
+                )}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button 
+                variant="outline" 
+                onClick={() => setPaymentStep('enrollment')}
+                disabled={isEnrolling}
+                className="flex-1"
+              >
+                Back to Course Details
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

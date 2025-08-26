@@ -532,6 +532,7 @@ class ApiClient {
   async getRecommendedCourses() {
     return this.get('/api/v1/courses/recommended')
   }
+
 }
 
 export const apiClient = new ApiClient()
