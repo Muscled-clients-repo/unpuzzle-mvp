@@ -14,6 +14,7 @@ import { StudentVideoSlice, createStudentVideoSlice } from './slices/student-vid
 import { InstructorVideoSlice, createInstructorVideoSlice } from './slices/instructor-video-slice'
 import { PublicCourseSlice, createPublicCourseSlice } from './slices/public-course-slice'
 import { PaymentSlice, createPaymentSlice } from './slices/payment-slice'
+import { SubscriptionSlice, createSubscriptionSlice } from './slices/subscription-slice'
 import { isDevelopment } from '@/config/env'
 
 // Clean architecture with role-specific stores
@@ -30,7 +31,8 @@ export interface AppStore extends
   StudentVideoSlice,     // NEW - role-specific
   InstructorVideoSlice,  // NEW - role-specific
   PublicCourseSlice,     // NEW - public course browsing
-  PaymentSlice           // NEW - payment and enrollment
+  PaymentSlice,          // NEW - payment and enrollment
+  SubscriptionSlice      // NEW - subscription management
 {}
 
 export const useAppStore = create<AppStore>()(
@@ -51,6 +53,7 @@ export const useAppStore = create<AppStore>()(
         ...createInstructorVideoSlice(...args),
         ...createPublicCourseSlice(...args),
         ...createPaymentSlice(...args),
+        ...createSubscriptionSlice(...args),
       })
     ),
     {

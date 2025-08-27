@@ -2,9 +2,20 @@
 
 import { useState, useEffect } from "react"
 import { useAppStore } from "@/stores/app-store"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Progress } from "@/components/ui/progress"
+import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   Lightbulb,
   CheckCircle2,
@@ -15,6 +26,9 @@ import {
   User,
   Sparkles,
   X,
+  AlertCircle,
+  Zap,
+  ArrowUpRight,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { mockAIResponses } from "@/data/mock"
@@ -41,15 +55,32 @@ export function AIChatSidebar({
   onAgentTrigger,
 }: AIChatSidebarProps) {
   const [input, setInput] = useState("")
+  const router = useRouter()
   
   // Use individual selectors for optimal performance
   const chatMessages = useAppStore((state) => state.chatMessages)
   const transcriptReferences = useAppStore((state) => state.transcriptReferences)
   const addChatMessage = useAppStore((state) => state.addChatMessage)
+  const sendChatMessage = useAppStore((state) => state.sendChatMessage)
   const removeTranscriptReference = useAppStore((state) => state.removeTranscriptReference)
   const clearVideoSegment = useAppStore((state) => state.clearVideoSegment)
   const profile = useAppStore((state) => state.profile)
   const useAiInteraction = useAppStore((state) => state.useAiInteraction)
+  
+  // New subscription and usage selectors
+  const usageStats = useAppStore((state) => state.usageStats)
+  const canUseAI = useAppStore((state) => state.canUseAI)
+  const upgradeRequired = useAppStore((state) => state.upgradeRequired)
+  const refreshUsageStats = useAppStore((state) => state.refreshUsageStats || (() => Promise.resolve()))
+  const showUpgradePrompt = useAppStore((state) => state.showUpgradePrompt)
+  const currentSubscription = useAppStore((state) => state.currentSubscription)
+  
+  // AI slice methods (optional for backward compatibility)
+  const checkAILimits = useAppStore((state) => state.checkAILimits || (() => Promise.resolve(true)))
+  
+  // State for upgrade prompt modal
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  const [pendingMessage, setPendingMessage] = useState("")
   
   // Convert store messages to component format
   const messages: Message[] = chatMessages.map(msg => ({
@@ -68,6 +99,13 @@ export function AIChatSidebar({
   const [hasAiActivated, setHasAiActivated] = useState(false)
   const [hasVideoStarted, setHasVideoStarted] = useState(false)
   
+  // Load usage stats on mount and periodically
+  useEffect(() => {
+    refreshUsageStats()
+    const interval = setInterval(refreshUsageStats, 60000) // Refresh every minute
+    return () => clearInterval(interval)
+  }, [])
+  
   // Track when AI actually activates
   useEffect(() => {
     if (chatMessages.length > 0) {
@@ -85,78 +123,78 @@ export function AIChatSidebar({
   // Auto-generate AI response when transcript references are added
   useEffect(() => {
     if (transcriptReference) {
-      // Simulate AI response to transcript reference
-      setTimeout(() => {
-        const aiResponse = `I see you've selected: "${transcriptReference.text}" from ${Math.floor(transcriptReference.startTime)}s to ${Math.floor(transcriptReference.endTime)}s.\n\nBased on this section, here are the key points:\n1. The main concept being explained\n2. How it connects to previous material\n3. Important for upcoming exercises\n\nWould you like me to explain any specific part in more detail?`
-        
-        // Add AI response as a message (this would come from AI service in production)
-        const store = useAppStore.getState()
-        store.addChatMessage(aiResponse, {
+      const handleTranscriptReference = async () => {
+        const message = `Please explain this part of the video: "${transcriptReference.text}"`
+        const context = {
           videoId,
-          timestamp: transcriptReference.startTime,
+          inPoint: transcriptReference.startTime,
+          outPoint: transcriptReference.endTime,
           transcript: transcriptReference.text,
-        })
-      }, 1000)
+          purpose: 'ai-context' as const,
+        }
+
+        try {
+          await sendChatMessage(message, context, transcriptReference)
+        } catch (error) {
+          console.error('Failed to process transcript reference:', error)
+          // Fallback message
+          const store = useAppStore.getState()
+          store.addChatMessage('I\'m having trouble processing the transcript reference. Please try again.', context, 'ai')
+        }
+      }
+
+      handleTranscriptReference()
     }
   }, [transcriptReferences.length])
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!input.trim()) return
 
-    // Check if user can use AI interaction
-    const canUseAI = useAiInteraction()
-    if (!canUseAI) {
+    // Check AI limits first
+    const canUse = await checkAILimits('chat')
+    if (!canUse) {
+      setPendingMessage(input)
+      setShowUpgradeModal(true)
+      return
+    }
+    
+    // Legacy check for backward compatibility
+    const canUseAILegacy = useAiInteraction()
+    if (!canUseAILegacy) {
       // Add system message about limit
-      const plan = profile?.subscription?.plan
-      const dailyUsed = profile?.subscription?.dailyAiInteractions || 0
+      const plan = profile?.subscription?.plan || currentSubscription?.plan_id || 'free'
+      const dailyUsed = usageStats?.usage_today || profile?.subscription?.dailyAiInteractions || 0
+      const dailyLimit = usageStats?.daily_limit || 3
       
       let limitMessage = ""
-      if (plan === 'basic') {
-        limitMessage = `🚫 Daily AI limit reached (${dailyUsed}/3). Upgrade to Premium for unlimited AI help!`
+      if (plan === 'basic' || plan === 'free') {
+        limitMessage = `🚫 Daily AI limit reached (${dailyUsed}/${dailyLimit}). Upgrade to Premium for 50 daily AI interactions!`
       } else {
         limitMessage = "🚫 Please upgrade to access AI features."
       }
       
       addChatMessage(limitMessage, undefined, 'ai')
       setInput("")
+      setShowUpgradeModal(true)
       return
     }
 
-    // Include transcript reference if available
+    // Use the AI service through the store
     const messageContent = transcriptReference 
       ? `${input}\n\n📝 Transcript Reference:\n"${transcriptReference.text}"`
       : input
 
-    // Add user message to store
-    addChatMessage(messageContent, transcriptReference ? {
+    const context = transcriptReference ? {
       videoId,
-      timestamp: transcriptReference.startTime,
+      inPoint: transcriptReference.startTime,
+      outPoint: transcriptReference.endTime,
       transcript: transcriptReference.text,
-    } : undefined)
-    
-    // Check for intent and respond accordingly
-    const lowerInput = input.toLowerCase()
-    let responseContent = ""
-    let agentType: "hint" | "check" | "reflect" | "path" | undefined = undefined
-
-    if (lowerInput.includes("hint") || lowerInput.includes("stuck") || lowerInput.includes("help")) {
-      const hint = mockAIResponses.hints[0]
-      responseContent = `💡 Here's a hint: ${hint.hint}`
-      agentType = "hint"
-    } else if (lowerInput.includes("quiz") || lowerInput.includes("test") || lowerInput.includes("check")) {
-      const check = mockAIResponses.checks[0]
-      responseContent = `📝 Quiz Time!\n\n${check.question}\n\nOptions:\n${check.options.map((o, i) => `${i + 1}. ${o}`).join("\n")}\n\nType the number of your answer!`
-      agentType = "check"
-    } else if (lowerInput.includes("reflect") || lowerInput.includes("think")) {
-      const reflection = mockAIResponses.reflections[0]
-      responseContent = `🤔 Let's reflect:\n\n${reflection.prompt}\n\nConsider these questions:\n${reflection.guidingQuestions?.map(q => `• ${q}`).join("\n")}`
-      agentType = "reflect"
-    } else if (lowerInput.includes("path") || lowerInput.includes("struggling") || lowerInput.includes("don't understand")) {
-      const path = mockAIResponses.paths[0]
-      responseContent = `🎯 I see you might need some extra help with ${path.detectedIssue}.\n\nHere's a personalized learning path:\n${path.recommendedContent.map(c => `• ${c.title} (${c.duration})`).join("\n")}\n\nWould you like me to explain any of these topics?`
-      agentType = "path"
-    } else {
-      responseContent = "I understand you're asking about that concept. Let me help you understand it better. The key thing to remember is that this builds on what you learned earlier in the video.\n\nYou can also ask me to:\n• Give you a hint\n• Quiz you on this topic\n• Help you reflect on what you've learned\n• Suggest a learning path"
+      purpose: 'ai-context' as const,
+    } : {
+      videoId,
+      inPoint: currentTime,
+      outPoint: currentTime + 30,
+      purpose: 'ai-context' as const,
     }
 
     setInput("")
@@ -168,47 +206,50 @@ export function AIChatSidebar({
       clearVideoSegment()
     }
 
-    // Simulate AI response (in production, this would be an API call)
-    setTimeout(() => {
-      // Add AI response to store
-      const store = useAppStore.getState()
-      store.addChatMessage(responseContent, { videoId, timestamp: currentTime })
-    }, 1000)
+    // Send message through AI service (this will make the actual API call)
+    try {
+      await sendChatMessage(messageContent, context, transcriptReference)
+      // Usage stats will be refreshed automatically in the AI slice
+    } catch (error) {
+      console.error('Failed to send AI message:', error)
+      // Fallback to local message if API fails
+      addChatMessage('Sorry, I encountered an error. Please try again.', undefined, 'ai')
+    }
   }
 
-  const quickAction = (action: string) => {
-    setInput(action)
-    // Add user action to store
-    addChatMessage(action, { videoId, timestamp: currentTime })
+  const quickAction = async (action: string) => {
+    // Check limits for the specific agent type
+    const agentType = action.toLowerCase().includes('hint') ? 'hint' :
+                     action.toLowerCase().includes('quiz') ? 'quiz' :
+                     action.toLowerCase().includes('reflect') ? 'reflection' :
+                     action.toLowerCase().includes('learning path') ? 'path' : 'chat'
     
-    // Process the action
-    const lowerInput = action.toLowerCase()
-    let responseContent = ""
-    let agentType: "hint" | "check" | "reflect" | "path" | undefined = undefined
-
-    if (lowerInput.includes("hint")) {
-      const hint = mockAIResponses.hints[0]
-      responseContent = `💡 Here's a hint: ${hint.hint}`
-      agentType = "hint"
-    } else if (lowerInput.includes("quiz")) {
-      const check = mockAIResponses.checks[0]
-      responseContent = `📝 Quiz Time!\n\n${check.question}\n\nOptions:\n${check.options.map((o, i) => `${i + 1}. ${o}`).join("\n")}\n\nType the number of your answer!`
-      agentType = "check"
-    } else if (lowerInput.includes("reflect")) {
-      const reflection = mockAIResponses.reflections[0]
-      responseContent = `🤔 Let's reflect:\n\n${reflection.prompt}\n\nConsider these questions:\n${reflection.guidingQuestions?.map(q => `• ${q}`).join("\n")}`
-      agentType = "reflect"
-    } else if (lowerInput.includes("learning path")) {
-      const path = mockAIResponses.paths[0]
-      responseContent = `🎯 Here's a personalized learning path based on your progress:\n\n${path.recommendedContent.map(c => `• ${c.title} (${c.duration})`).join("\n")}\n\nWould you like me to explain any of these topics?`
-      agentType = "path"
+    const canUse = await checkAILimits(agentType)
+    if (!canUse) {
+      setPendingMessage(action)
+      setShowUpgradeModal(true)
+      return
+    }
+    
+    setInput(action)
+    
+    // Create context for quick actions
+    const context = {
+      videoId,
+      inPoint: currentTime,
+      outPoint: currentTime + 30, // Add a 30-second window for context
+      purpose: 'ai-context' as const,
     }
 
-    setTimeout(() => {
-      // Add AI response to store
-      const store = useAppStore.getState()
-      store.addChatMessage(responseContent, { videoId, timestamp: currentTime })
-    }, 1000)
+    // Send message through AI service (this will make the actual API call)
+    try {
+      await sendChatMessage(action, context, transcriptReference)
+      // Usage stats will be refreshed automatically in the AI slice
+    } catch (error) {
+      console.error('Failed to send AI quick action:', error)
+      // Fallback to local message if API fails
+      addChatMessage('Sorry, I encountered an error processing your request. Please try again.', undefined, 'ai')
+    }
   }
 
   const getAgentIcon = (type?: "hint" | "check" | "reflect" | "path") => {
@@ -226,15 +267,135 @@ export function AIChatSidebar({
     }
   }
 
+  // Usage indicator component
+  const UsageIndicator = () => {
+    if (!usageStats) return null
+    
+    const usagePercent = (usageStats.usage_today / usageStats.daily_limit) * 100
+    const isNearLimit = usagePercent >= 80
+    
+    return (
+      <div className="p-2 border-t bg-muted/50">
+        <div className="flex items-center justify-between text-xs mb-1">
+          <span className="text-muted-foreground">AI Usage Today</span>
+          <span className="font-medium">
+            {usageStats.usage_today}/{usageStats.daily_limit}
+          </span>
+        </div>
+        <Progress value={usagePercent} className="h-1" />
+        {isNearLimit && (
+          <p className="text-xs text-warning mt-1">
+            {usageStats.remaining_today} interactions remaining
+          </p>
+        )}
+      </div>
+    )
+  }
+  
+  // Upgrade prompt modal
+  const UpgradePromptModal = () => (
+    <Dialog open={showUpgradeModal} onOpenChange={setShowUpgradeModal}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-warning" />
+            AI Limit Reached
+          </DialogTitle>
+          <DialogDescription>
+            You've reached your daily AI interaction limit
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          <Alert>
+            <Zap className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Current Plan:</strong> {currentSubscription?.plan_name || 'Free'}<br/>
+              <strong>Daily Limit:</strong> {usageStats?.daily_limit || 3} interactions<br/>
+              <strong>Used Today:</strong> {usageStats?.usage_today || 0} interactions
+            </AlertDescription>
+          </Alert>
+          
+          <div className="bg-primary/5 p-4 rounded-lg border border-primary/20">
+            <h4 className="font-semibold mb-2">Upgrade to Premium</h4>
+            <ul className="space-y-1 text-sm">
+              <li className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                50 AI interactions per day
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                Smart hints & quizzes
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                Reflection prompts
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                Priority support
+              </li>
+            </ul>
+          </div>
+          
+          <div className="flex gap-2">
+            <Button 
+              onClick={() => {
+                setShowUpgradeModal(false)
+                router.push('/subscription')
+              }}
+              className="flex-1"
+            >
+              Upgrade Now
+              <ArrowUpRight className="ml-2 h-4 w-4" />
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowUpgradeModal(false)
+                setPendingMessage('')
+              }}
+              className="flex-1"
+            >
+              Maybe Later
+            </Button>
+          </div>
+          
+          {usageStats?.reset_time && (
+            <p className="text-xs text-center text-muted-foreground">
+              Daily limit resets in {(() => {
+                const resetDate = new Date(usageStats.reset_time)
+                const now = new Date()
+                const diff = resetDate.getTime() - now.getTime()
+                const hours = Math.floor(diff / (1000 * 60 * 60))
+                return `${hours} hours`
+              })()}
+            </p>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+
   return (
     <div className="flex h-full flex-col bg-background overflow-hidden">
       {/* Header */}
       <div className="border-b p-4 flex-shrink-0">
-        <h3 className="flex items-center gap-2 text-lg font-semibold">
-          <Sparkles className="h-5 w-5 text-primary" />
-          AI Learning Assistant
-        </h3>
+        <div className="flex items-center justify-between">
+          <h3 className="flex items-center gap-2 text-lg font-semibold">
+            <Sparkles className="h-5 w-5 text-primary" />
+            AI Learning Assistant
+          </h3>
+          {currentSubscription && (
+            <Badge variant="outline" className="text-xs">
+              {currentSubscription.plan_name}
+            </Badge>
+          )}
+        </div>
       </div>
+      
+      {/* Usage Indicator */}
+      {usageStats && <UsageIndicator />}
 
       {/* Quick Actions */}
       <div className="border-b p-2 flex-shrink-0">
@@ -402,6 +563,9 @@ export function AIChatSidebar({
         </form>
         </div>
       </div>
+      
+      {/* Upgrade Prompt Modal */}
+      <UpgradePromptModal />
     </div>
   )
 }
