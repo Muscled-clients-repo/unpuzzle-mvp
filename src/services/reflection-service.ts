@@ -142,6 +142,7 @@ class ReflectionService {
         if (data.loom_link) formData.append('loom_link', data.loom_link)
         if (data.text_content) formData.append('text_content', data.text_content)
         
+        
         requestData = formData
         // Browser will set Content-Type with boundary automatically for FormData
       } else {
@@ -153,6 +154,9 @@ class ReflectionService {
         }
         requestData = jsonData
       }
+      
+      // Simple debug log before API request
+      console.log('[ReflectionService] Submitting reflection:', data.reflection_type, data.video_id)
       
       const response = await apiClient.post(`${this.baseUrl}/`, requestData, { headers })
       

@@ -606,17 +606,17 @@ export default function StandaloneLessonPage() {
     })
   }
   
-  // Exit intent detection
+  // Exit intent detection - TEMPORARILY DISABLED FOR DEVELOPMENT
   useEffect(() => {
-    const handleMouseLeave = (e: MouseEvent) => {
-      if (e.clientY <= 0 && !hasInteractedWithExit && !user) {
-        setShowExitIntent(true)
-        setHasInteractedWithExit(true)
-      }
-    }
+    // const handleMouseLeave = (e: MouseEvent) => {
+    //   if (e.clientY <= 0 && !hasInteractedWithExit && !user) {
+    //     setShowExitIntent(true)
+    //     setHasInteractedWithExit(true)
+    //   }
+    // }
     
-    document.addEventListener('mouseleave', handleMouseLeave)
-    return () => document.removeEventListener('mouseleave', handleMouseLeave)
+    // document.addEventListener('mouseleave', handleMouseLeave)
+    // return () => document.removeEventListener('mouseleave', handleMouseLeave)
   }, [hasInteractedWithExit, user])
 
   // Show skeleton loader for courses and lessons

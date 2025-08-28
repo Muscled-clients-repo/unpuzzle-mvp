@@ -1531,6 +1531,9 @@ export class VideoAgentStateMachine {
     const { reflectionService } = await import('@/services/reflection-service')
     
     try {
+      // Debug: Check what data we received
+      console.log('[SM] Received payload.data:', payload.data)
+      
       // Prepare reflection data based on type
       const reflectionData: any = {
         video_id: context.videoId,
@@ -1542,15 +1545,19 @@ export class VideoAgentStateMachine {
       }
       
       // Handle type-specific data
-      if (payload.type === 'voice' && payload.data.audioBlob) {
-        // For voice, convert blob to File for upload
-        const audioFile = new File([payload.data.audioBlob], `voice-memo-${Date.now()}.webm`, {
+      if (payload.type === 'voice' && payload.data.content) {
+        // For voice, convert blob URL to File for upload
+        const blobUrl = payload.data.content
+        const response = await fetch(blobUrl)
+        const audioBlob = await response.blob()
+        const audioFile = new File([audioBlob], `voice-memo-${Date.now()}.webm`, {
           type: 'audio/webm'
         })
         reflectionData.media_file = audioFile
         reflectionData.duration = payload.data.duration
         // Add text content for voice notes
         reflectionData.text_content = payload.data.notes || `Voice memo recorded at ${this.formatTime(context.timestamp)}`
+        
       } else if (payload.type === 'screenshot' && payload.data.imageFile) {
         // For screenshot, include the file
         reflectionData.media_file = payload.data.imageFile
