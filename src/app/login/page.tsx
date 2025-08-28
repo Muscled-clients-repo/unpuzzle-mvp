@@ -1,11 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useAppStore } from '@/stores/app-store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { 
   Brain, 
   Sparkles, 
@@ -15,25 +17,73 @@ import {
   Play,
   BarChart3,
   Users,
-  Star
+  Star,
+  Loader2,
+  AlertCircle,
+  CheckCircle2
 } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const returnUrl = searchParams.get('returnUrl')
+  
+  // Get auth functions from Zustand store
+  const { login, profile, isAuthenticated } = useAppStore()
+  
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [sessionExpiredMessage, setSessionExpiredMessage] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError("")
+    setSuccess("")
     setLoading(true)
-    
-    // Simulate auth - replace with actual auth logic
-    setTimeout(() => {
-      router.push('/student')
-    }, 1000)
+
+    try {
+      const result = await login(email, password)
+
+      if (result.success) {
+        setSuccess("Login successful! Redirecting...")
+        
+        // Get the user's role to determine redirect
+        const userRole = profile?.role
+        
+        setTimeout(() => {
+          // If we have a return URL, go there instead of dashboard
+          if (returnUrl) {
+            const decodedUrl = decodeURIComponent(returnUrl)
+            // Prevent redirect loops - if return URL is login, go to root instead
+            if (decodedUrl.includes('/login')) {
+              router.push('/')
+            } else {
+              router.push(decodedUrl)
+            }
+          } else {
+            // Redirect based on role
+            if (userRole === 'instructor') {
+              router.push('/instructor')
+            } else if (userRole === 'admin') {
+              router.push('/admin')
+            } else {
+              router.push('/student')
+            }
+          }
+        }, 1500)
+      } else {
+        setError(result.error || "Invalid email or password. Please try again.")
+      }
+    } catch (error) {
+      setError("An unexpected error occurred. Please try again.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   const features = [
@@ -48,6 +98,39 @@ export default function LoginPage() {
     { label: 'Courses Available', value: '500+' },
     { label: 'Completion Rate', value: '94%' }
   ]
+
+  // Check for session expired message in sessionStorage
+  useEffect(() => {
+    const authError = sessionStorage.getItem('authError')
+    if (authError) {
+      setSessionExpiredMessage(authError)
+      sessionStorage.removeItem('authError')
+    }
+  }, [])
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (isAuthenticated()) {
+      if (returnUrl) {
+        const decodedUrl = decodeURIComponent(returnUrl)
+        // Prevent redirect loops - if return URL is login, go to root instead
+        if (decodedUrl.includes('/login')) {
+          router.push('/')
+        } else {
+          router.push(decodedUrl)
+        }
+      } else {
+        // Redirect based on role
+        if (profile?.role === 'instructor') {
+          router.push('/instructor')
+        } else if (profile?.role === 'admin') {
+          router.push('/admin')
+        } else {
+          router.push('/student')
+        }
+      }
+    }
+  }, [isAuthenticated, profile, returnUrl, router])
 
   return (
     <div className="min-h-screen flex">
@@ -227,11 +310,8 @@ export default function LoginPage() {
             >
               {loading ? (
                 <span className="flex items-center justify-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Loading...
+                  <Loader2 className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" />
+                  {mode === 'signin' ? 'Signing in...' : 'Creating account...'}
                 </span>
               ) : (
                 <>
