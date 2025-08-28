@@ -62,6 +62,11 @@ export function AIChatSidebarV2({
   const [loomUrl, setLoomUrl] = useState('')
   const [showActivityLog, setShowActivityLog] = useState(false)
   
+  // Voice recording refs
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  
   // Track which agent is currently active based on messages
   const activeAgent = messages.find(msg => 
     msg.type === 'agent-prompt' && 
@@ -79,6 +84,25 @@ export function AIChatSidebarV2({
       scrollRef.current.scrollIntoView({ behavior: "smooth" })
     }
   }, [messages])
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Stop any recording and clean up streams
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop()
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
+      }
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current)
+      }
+      if (playbackIntervalRef.current) {
+        clearInterval(playbackIntervalRef.current)
+      }
+    }
+  }, [])
   
   const handleSendMessage = () => {
     if (!inputValue.trim()) return
@@ -422,25 +446,77 @@ export function AIChatSidebarV2({
     // Reflection options messages
     if (msg.type === 'reflection-options') {
       // Voice recording handlers
-      const startRecording = () => {
-        // Notify that voice memo was chosen
-        onReflectionTypeChosen?.('voice')
-        
-        setIsRecording(true)
-        setIsPaused(false)
-        setRecordingTime(0)
-        setHasRecording(false)
-        
-        // Dispatch recording started action
-        dispatch?.({ type: 'RECORDING_STARTED', payload: {} })
-        
-        // Start recording timer
-        recordingIntervalRef.current = setInterval(() => {
-          setRecordingTime(prev => prev + 1)
-        }, 1000)
+      const startRecording = async () => {
+        try {
+          // Request microphone access
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              sampleRate: 44100
+            } 
+          })
+          
+          streamRef.current = stream
+          audioChunksRef.current = []
+          
+          // Create MediaRecorder
+          const mediaRecorder = new MediaRecorder(stream, {
+            mimeType: 'audio/webm;codecs=opus'
+          })
+          
+          mediaRecorderRef.current = mediaRecorder
+          
+          // Handle data available
+          mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+              audioChunksRef.current.push(event.data)
+            }
+          }
+          
+          // Handle recording stop
+          mediaRecorder.onstop = () => {
+            const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+            setAudioBlob(audioBlob)
+            setHasRecording(true)
+            
+            // Clean up stream
+            if (streamRef.current) {
+              streamRef.current.getTracks().forEach(track => track.stop())
+              streamRef.current = null
+            }
+          }
+          
+          // Start recording
+          mediaRecorder.start(100) // Collect data every 100ms
+          
+          // Notify that voice memo was chosen
+          onReflectionTypeChosen?.('voice')
+          
+          setIsRecording(true)
+          setIsPaused(false)
+          setRecordingTime(0)
+          setHasRecording(false)
+          
+          // Dispatch recording started action
+          dispatch?.({ type: 'RECORDING_STARTED', payload: {} })
+          
+          // Start recording timer
+          recordingIntervalRef.current = setInterval(() => {
+            setRecordingTime(prev => prev + 1)
+          }, 1000)
+          
+        } catch (error) {
+          console.error('Error starting recording:', error)
+          alert('Could not access microphone. Please check your permissions.')
+        }
       }
 
       const pauseRecording = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+          mediaRecorderRef.current.pause()
+        }
+        
         setIsPaused(true)
         if (recordingIntervalRef.current) {
           clearInterval(recordingIntervalRef.current)
@@ -450,6 +526,10 @@ export function AIChatSidebarV2({
       }
 
       const resumeRecording = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
+          mediaRecorderRef.current.resume()
+        }
+        
         setIsPaused(false)
         recordingIntervalRef.current = setInterval(() => {
           setRecordingTime(prev => prev + 1)
@@ -459,9 +539,12 @@ export function AIChatSidebarV2({
       }
 
       const stopRecording = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop()
+        }
+        
         setIsRecording(false)
         setIsPaused(false)
-        setHasRecording(true)
         
         if (recordingIntervalRef.current) {
           clearInterval(recordingIntervalRef.current)
@@ -470,9 +553,7 @@ export function AIChatSidebarV2({
         // Dispatch recording stopped action
         dispatch?.({ type: 'RECORDING_STOPPED', payload: {} })
         
-        // Simulate creating audio blob
-        const mockBlob = new Blob(['mock-audio-data'], { type: 'audio/wav' })
-        setAudioBlob(mockBlob)
+        // Audio blob will be set in mediaRecorder.onstop callback
       }
 
       const deleteRecording = () => {

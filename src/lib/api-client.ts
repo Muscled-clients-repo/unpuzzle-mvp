@@ -115,7 +115,7 @@ class ApiClient {
     }
   }
   
-  async post<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
+  async post<T>(endpoint: string, body?: unknown, options?: { headers?: Record<string, string> }): Promise<ApiResponse<T>> {
     if (useMockData) {
       // Mock response - will be handled by service layer
       return { status: 200 } as ApiResponse<T>
@@ -131,20 +131,33 @@ class ApiClient {
     }
     
     try {
-      const requestBody = body ? JSON.stringify(body) : undefined
+      // Handle FormData vs JSON body
+      let requestBody: string | FormData | undefined
+      const isFormData = body instanceof FormData
+      
+      if (isFormData) {
+        requestBody = body as FormData
+      } else {
+        requestBody = body ? JSON.stringify(body) : undefined
+      }
       
       // More debugging for the specific endpoint
       if (endpoint.includes('/media/upload/complete')) {
         console.log('🌐 API Client - Final request body:', requestBody)
-        console.log('🌐 API Client - Request body length:', requestBody?.length || 0)
+        console.log('🌐 API Client - Request body length:', requestBody?.toString().length || 0)
       }
       
       // Get auth token if available
       const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken')
       
       const headers: HeadersInit = {
-        'Content-Type': 'application/json',
         'Accept': 'application/json',
+        ...options?.headers,
+      }
+      
+      // Only set Content-Type for JSON, let browser set it for FormData
+      if (!isFormData) {
+        headers['Content-Type'] = 'application/json'
       }
       
       // Add authorization header if token exists (except for login/signup)

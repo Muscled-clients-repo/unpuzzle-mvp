@@ -137,11 +137,22 @@ class ReflectionService {
         
         // Add optional fields
         if (data.course_id) formData.append('course_id', data.course_id)
+        if (data.course) formData.append('course', data.course)  // Support both course and course_id
         if (data.notes) formData.append('notes', data.notes)
         if (data.duration) formData.append('duration', data.duration.toString())
         if (data.loom_link) formData.append('loom_link', data.loom_link)
         if (data.text_content) formData.append('text_content', data.text_content)
         
+        
+        // Debug FormData contents
+        console.log('[ReflectionService] FormData fields:')
+        for (const [key, value] of formData.entries()) {
+          if (value instanceof File) {
+            console.log(`- ${key}: [File] ${value.name}`)
+          } else {
+            console.log(`- ${key}: ${value}`)
+          }
+        }
         
         requestData = formData
         // Browser will set Content-Type with boundary automatically for FormData

@@ -1534,12 +1534,12 @@ export class VideoAgentStateMachine {
       // Debug: Check what data we received
       console.log('[SM] Received payload.data:', payload.data)
       
-      // Prepare reflection data based on type
+      // Prepare reflection data based on type - map frontend fields to API fields
       const reflectionData: any = {
-        video_id: context.videoId,
-        course_id: context.courseId,
-        video_timestamp: context.timestamp,
-        reflection_type: payload.type as 'voice' | 'screenshot' | 'loom',
+        video_id: payload.data.videoId || context.videoId,  // Server expects 'video_id'
+        course: payload.data.courseId || context.courseId,  // API expects 'course' not 'course_id'
+        video_timestamp: payload.data.videoTimestamp || context.timestamp,  // Use from payload first
+        reflection_type: payload.data.type || payload.type,  // Use from payload.data.type first
         title: payload.data.title || undefined, // Let service generate if not provided
         notes: payload.data.notes || undefined
       }
@@ -1548,15 +1548,23 @@ export class VideoAgentStateMachine {
       if (payload.type === 'voice' && payload.data.content) {
         // For voice, convert blob URL to File for upload
         const blobUrl = payload.data.content
+        console.log('[SM] Fetching blob from URL:', blobUrl)
+        
         const response = await fetch(blobUrl)
+        console.log('[SM] Blob fetch response:', response.status, response.type)
+        
         const audioBlob = await response.blob()
+        console.log('[SM] Audio blob:', audioBlob.size, 'bytes, type:', audioBlob.type)
+        
         const audioFile = new File([audioBlob], `voice-memo-${Date.now()}.webm`, {
           type: 'audio/webm'
         })
+        console.log('[SM] Created audio file:', audioFile.name, audioFile.size, 'bytes, type:', audioFile.type)
+        
         reflectionData.media_file = audioFile
         reflectionData.duration = payload.data.duration
-        // Add text content for voice notes
-        reflectionData.text_content = payload.data.notes || `Voice memo recorded at ${this.formatTime(context.timestamp)}`
+        // Add text content for voice notes - use content as text if no notes provided
+        reflectionData.text_content = payload.data.notes || payload.data.textContent || `Voice memo recorded at ${this.formatTime(context.timestamp)}`
         
       } else if (payload.type === 'screenshot' && payload.data.imageFile) {
         // For screenshot, include the file
@@ -1568,6 +1576,8 @@ export class VideoAgentStateMachine {
         reflectionData.loom_link = payload.data.loomUrl
         reflectionData.text_content = payload.data.notes || `Loom video shared at ${this.formatTime(context.timestamp)}`
       }
+
+      console.log("reflectionData: ", reflectionData)
       
       // Submit to API with retry logic
       const result = await reflectionService.submitWithRetry(reflectionData, 2)
