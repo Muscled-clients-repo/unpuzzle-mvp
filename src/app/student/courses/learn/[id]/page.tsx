@@ -7,6 +7,7 @@ import { useAppStore } from "@/stores/app-store"
 import { StudentLearnPageSkeleton, ChapterVideosSkeleton } from "@/components/common/CourseCardSkeleton"
 import { InstructorVideoView } from "@/components/video/views/InstructorVideoView"
 import { apiClient } from "@/lib/api-client"
+import { useVideoAgentSystem } from "@/lib/video-agent-system"
 
 // Dynamically import the VideoPlayer component with loading fallback
 const VideoPlayer = dynamic(
@@ -23,15 +24,18 @@ const VideoPlayer = dynamic(
   }
 )
 
-// Dynamically import the AIChatSidebar component
-const AIChatSidebar = dynamic(
-  () => import("@/components/student/ai/ai-chat-sidebar").then(mod => ({
-    default: mod.AIChatSidebar
+// Import StudentVideoPlayerRef for video control
+import type { StudentVideoPlayerRef } from "@/components/video/student/StudentVideoPlayer"
+
+// Dynamically import the AIChatSidebarV2 component for enhanced features
+const AIChatSidebarV2 = dynamic(
+  () => import("@/components/student/ai/AIChatSidebarV2").then(mod => ({
+    default: mod.AIChatSidebarV2
   })),
   { 
     loading: () => (
       <div className="h-full flex items-center justify-center bg-background">
-        <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse" />
+        <LoadingSpinner />
       </div>
     ),
     ssr: false
@@ -70,12 +74,17 @@ import Link from "next/link"
 import { CommentsSection } from "@/components/lesson/CommentsSection"
 import { RelatedLessonsCarousel } from "@/components/lesson/RelatedLessonsCarousel"
 import { Textarea } from "@/components/ui/textarea"
+import { LoadingSpinner } from "@/components/common/LoadingSpinner"
+
+// Type for section videos
+type SectionVideo = {id: string, title?: string, description?: string, duration?: number, url?: string, cdn_url?: string, file_url?: string, filename?: string}
 
 export default function StandaloneLessonPage() {
   const params = useParams()
   const searchParams = useSearchParams()
   const router = useRouter()
   const contentId = params.id as string
+  const lessonId = contentId // For AI interaction tracking
   
   // Check for instructor mode
   const isInstructorMode = searchParams.get('instructor') === 'true'
@@ -106,11 +115,14 @@ export default function StandaloneLessonPage() {
     error: courseError
   } = useAppStore()
   
+  // Video agent system for V2 sidebar
+  const { context, dispatch, setVideoRef } = useVideoAgentSystem()
+  
   // State for current video in course (for video switching)
   const [currentVideoId, setCurrentVideoId] = useState<string>('')
   
   // State for lazy loading section videos
-  const [sectionVideos, setSectionVideos] = useState<{[sectionId: string]: any[]}>({})
+  const [sectionVideos, setSectionVideos] = useState<{[sectionId: string]: SectionVideo[]}>({})
   const [loadingSections, setLoadingSections] = useState<{[sectionId: string]: boolean}>({})
   const loadedSectionsRef = useRef<Set<string>>(new Set())
   
@@ -129,6 +141,8 @@ export default function StandaloneLessonPage() {
   const [showExitIntent, setShowExitIntent] = useState(false)
   const [hasInteractedWithExit, setHasInteractedWithExit] = useState(false)
   const sidebarRef = useRef<HTMLDivElement>(null)
+  const videoPlayerRef = useRef<StudentVideoPlayerRef>(null)
+  const [videoPlayerReady, setVideoPlayerReady] = useState(false)
   
   const FREE_AI_LIMIT = 3
   const [lessonLoading, setLessonLoading] = useState(false)
@@ -267,6 +281,36 @@ export default function StandaloneLessonPage() {
       }
     }
   }, [isCourse, sections, sectionVideos, videoQueryParam, currentVideoId, loadStudentVideo])
+  
+  // Set video ref for agent system when it becomes available
+  useEffect(() => {
+    // Check periodically if the ref is available (for dynamic imports)
+    const checkAndSetRef = () => {
+      if (videoPlayerRef.current && setVideoRef) {
+        console.log('🎬 Setting video ref for agent system')
+        // Pass videoId and courseId to the agent system
+        const videoId = isCourse ? currentVideoId : contentId
+        const courseId = isCourse ? contentId : undefined
+        setVideoRef(videoPlayerRef.current, videoId, courseId)
+        setVideoPlayerReady(true)
+        return true
+      }
+      return false
+    }
+    
+    // Try immediately
+    if (checkAndSetRef()) return
+    
+    // If not available, try again after a delay
+    const timer = setInterval(() => {
+      if (checkAndSetRef()) {
+        clearInterval(timer)
+      }
+    }, 100)
+    
+    // Cleanup
+    return () => clearInterval(timer)
+  }, [setVideoRef, videoPlayerReady, currentVideoId, contentId, isCourse])
   
   // Video switching function for courses
   const switchToVideo = (videoId: string) => {
@@ -408,8 +452,35 @@ export default function StandaloneLessonPage() {
   }
   
   const handleTimeUpdate = (time: number) => {
-    // Remove console log to avoid spam
+    // Time updates are handled internally by the video player
+    // No need to dispatch to agent system
     // console.log('Time update:', time)
+  }
+
+  const handleVideoPause = (time: number) => {
+    console.log('Paused at', time)
+    
+    // Notify V2 context
+    dispatch({
+      type: 'VIDEO_MANUALLY_PAUSED',
+      payload: { time }
+    })
+  }
+
+  const handleVideoPlay = () => {
+    console.log('Playing')
+    
+    // Notify V2 context
+    dispatch({
+      type: 'VIDEO_PLAYED',
+      payload: {}
+    })
+  }
+
+  const handleVideoEnded = () => {
+    console.log('Video ended')
+    // Video ended is not a standard action in the agent system
+    // It can be handled through other mechanisms if needed
   }
 
   const handleAgentTrigger = (type: "hint" | "check" | "reflect" | "path") => {
@@ -425,6 +496,85 @@ export default function StandaloneLessonPage() {
     }
     
     trackAiInteraction(lessonId)
+  }
+
+  // V2 Event Handlers for Advanced AI Features
+  const handleAgentRequest = (agentType: string) => {
+    const currentTime = videoPlayerRef.current?.getCurrentTime() || 0
+    console.log('[Learn Page] Agent button clicked:', agentType, currentTime)
+    
+    dispatch({
+      type: 'AGENT_BUTTON_CLICKED',
+      payload: { agentType, time: currentTime }
+    })
+  }
+
+  const handleQuizAnswer = (questionId: string, selectedAnswer: number) => {
+    console.log('[Learn Page] Quiz answer selected:', { questionId, selectedAnswer })
+    
+    dispatch({
+      type: 'QUIZ_ANSWER_SELECTED',
+      payload: { questionId, selectedAnswer }
+    })
+  }
+
+  const handleReflectionSubmit = (type: string, data: Record<string, unknown>) => {
+    console.log('[Learn Page] Reflection submitted:', { type, data })
+    
+    dispatch({
+      type: 'REFLECTION_SUBMITTED',
+      payload: { type, data }
+    })
+  }
+
+  const handleReflectionTypeChosen = (reflectionType: string) => {
+    console.log('[Learn Page] Reflection type chosen:', reflectionType)
+    
+    dispatch({
+      type: 'REFLECTION_TYPE_CHOSEN',
+      payload: { reflectionType }
+    })
+  }
+
+  const handleReflectionCancel = () => {
+    console.log('[Learn Page] Reflection cancelled')
+    
+    dispatch({
+      type: 'REFLECTION_CANCELLED',
+      payload: {}
+    })
+  }
+
+  const handleSetInPoint = () => {
+    console.log('[Learn Page] Setting in point')
+    dispatch({
+      type: 'SET_IN_POINT',
+      payload: {}
+    })
+  }
+
+  const handleSetOutPoint = () => {
+    console.log('[Learn Page] Setting out point')
+    dispatch({
+      type: 'SET_OUT_POINT',
+      payload: {}
+    })
+  }
+
+  const handleClearSegment = () => {
+    console.log('[Learn Page] Clearing segment')
+    dispatch({
+      type: 'CLEAR_SEGMENT',
+      payload: {}
+    })
+  }
+
+  const handleSendSegmentToChat = () => {
+    console.log('[Learn Page] Sending segment to chat')
+    dispatch({
+      type: 'SEND_SEGMENT_TO_CHAT',
+      payload: {}
+    })
   }
   
   // Exit intent detection
@@ -541,14 +691,15 @@ export default function StandaloneLessonPage() {
           {/* Video Player */}
           <div className="flex-1 bg-black p-4">
             <VideoPlayer
+              ref={videoPlayerRef}
               videoUrl={currentVideo?.videoUrl || ''}
               title={currentVideo?.title || ''}
               transcript={currentVideo?.transcript || []}
               videoId={isCourse ? currentVideoId : contentId}
               onTimeUpdate={handleTimeUpdate}
-              onPause={(time) => console.log('Paused at', time)}
-              onPlay={() => console.log('Playing')}
-              onEnded={() => console.log('Video ended')}
+              onPause={handleVideoPause}
+              onPlay={handleVideoPlay}
+              onEnded={handleVideoEnded}
             />
           </div>
 
@@ -843,11 +994,21 @@ export default function StandaloneLessonPage() {
               className="flex-shrink-0 h-full overflow-hidden border-l"
               style={{ width: `${sidebarWidth}px` }}
             >
-              <AIChatSidebar
-                courseId={isCourse ? contentId : "lesson"} 
-                videoId={isCourse ? currentVideoId : contentId}
-                currentTime={currentTime}
-                onAgentTrigger={handleAgentTrigger}
+              <AIChatSidebarV2
+                messages={context.messages}
+                isVideoPlaying={context.videoState?.isPlaying || false}
+                onAgentRequest={handleAgentRequest}
+                onAgentAccept={(id) => dispatch({ type: 'ACCEPT_AGENT', payload: id })}
+                onAgentReject={(id) => dispatch({ type: 'REJECT_AGENT', payload: id })}
+                onQuizAnswer={handleQuizAnswer}
+                onReflectionSubmit={handleReflectionSubmit}
+                onReflectionTypeChosen={handleReflectionTypeChosen}
+                onReflectionCancel={handleReflectionCancel}
+                onSetInPoint={handleSetInPoint}
+                onSetOutPoint={handleSetOutPoint}
+                onClearSegment={handleClearSegment}
+                onSendSegmentToChat={handleSendSegmentToChat}
+                context={context}
               />
             </div>
           </>

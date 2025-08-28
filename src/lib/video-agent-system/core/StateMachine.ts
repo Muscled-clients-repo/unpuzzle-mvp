@@ -66,8 +66,19 @@ export class VideoAgentStateMachine {
     return Object.freeze(JSON.parse(JSON.stringify(this.context)))
   }
   
-  public setVideoRef(ref: VideoRef) {
+  public setVideoRef(ref: VideoRef, videoId?: string, courseId?: string) {
     this.videoController.setVideoRef(ref)
+    // Update video context with IDs
+    if (videoId || courseId) {
+      this.updateContext({
+        ...this.context,
+        videoState: {
+          ...this.context.videoState,
+          videoId: videoId || this.context.videoState.videoId,
+          courseId: courseId || this.context.videoState.courseId
+        }
+      })
+    }
   }
   
   private createCommand(action: Action): Command {
@@ -594,22 +605,51 @@ export class VideoAgentStateMachine {
       return
     }
     
-    // Generate AI response for other agents
+    // Add loading message immediately
+    const loadingMessage: Message = {
+      id: `loading-${Date.now()}`,
+      type: 'ai-loading' as const,
+      state: MessageState.PERMANENT,
+      message: 'Generating response...',
+      timestamp: Date.now()
+    }
+    
+    // Update context with loading message immediately
+    this.updateContext({
+      ...this.context,
+      state: SystemState.AGENT_ACTIVATED,
+      messages: [...messagesWithActivation, loadingMessage],
+      agentState: {
+        ...this.context.agentState,
+        currentUnactivatedId: null,
+        activeType: agentType as 'hint' | 'quiz' | 'reflect' | 'path' | null
+      }
+    })
+    
+    // Generate AI response asynchronously
+    const aiResponseText = await this.generateAIResponse(agentType)
+    
+    // Replace loading message with actual AI response
     const aiResponse: Message = {
       id: `ai-${Date.now()}`,
       type: 'ai' as const,
       state: MessageState.PERMANENT,
-      message: this.generateAIResponse(agentType),
+      message: aiResponseText,
       timestamp: Date.now()
     }
+    
+    // Update messages by replacing loading message with AI response
+    const updatedMessagesWithResponse = this.context.messages.map(msg => 
+      msg.id === loadingMessage.id ? aiResponse : msg
+    )
     
     this.updateContext({
       ...this.context,
       state: SystemState.AGENT_ACTIVATED,
-      messages: [...messagesWithActivation, aiResponse],
+      messages: updatedMessagesWithResponse,
       agentState: {
         ...this.context.agentState,
-        currentUnactivatedId: null, // No longer unactivated
+        currentUnactivatedId: null,
         activeType: null // Clear active type for hint/path agents
       }
     })
@@ -686,7 +726,70 @@ export class VideoAgentStateMachine {
     }
   }
   
-  private generateAIResponse(agentType: string | null): string {
+  private async generateAIResponse(agentType: string | null): Promise<string> {
+    try {
+      // Import the AI service
+      const { aiService } = await import('@/services/ai-service')
+      
+      // Get proper video context with all required fields
+      const currentTime = this.videoController?.getCurrentTime() || 0
+      const videoContext = {
+        videoId: this.context.videoState?.videoId || 'video-unknown',
+        timestamp: currentTime,
+        courseId: this.context.videoState?.courseId || undefined
+      }
+      
+      console.log('[AI] Generating response with context:', videoContext)
+      
+      // Generate specialized prompts based on agent type for hints
+      let prompt = ''
+      switch (agentType) {
+        case 'hint':
+          // More specific hint prompt that tells AI to analyze video content
+          prompt = `Based on the video content at timestamp ${Math.round(currentTime)} seconds (${this.formatTime(currentTime)}), provide a helpful hint about the key concept being discussed. The hint should guide the learner without giving away the complete answer. Focus on the learning objective at this point in the video.`
+          break
+        case 'quiz':
+          prompt = `Based on the video content up to timestamp ${Math.round(currentTime)} seconds (${this.formatTime(currentTime)}), create an engaging multiple-choice quiz question that tests understanding of the key concept just covered.`
+          break
+        case 'reflect':
+          prompt = `Based on what was just covered in the video at timestamp ${Math.round(currentTime)} seconds (${this.formatTime(currentTime)}), generate thought-provoking reflection questions that help the learner connect this concept to their existing knowledge.`
+          break
+        case 'path':
+          prompt = `Based on the learner's progress at timestamp ${Math.round(currentTime)} seconds (${this.formatTime(currentTime)}) in this video, suggest a personalized learning path with next steps and recommended topics to explore.`
+          break
+        default:
+          prompt = `Help the learner understand the concept being discussed at timestamp ${Math.round(currentTime)} seconds in this educational video.`
+      }
+      
+      // Call AI service with proper context
+      const result = await aiService.sendChatMessage(prompt, videoContext)
+      
+      console.log('[AI] Response received:', result)
+      
+      if (result.error) {
+        console.error('AI Service Error:', result.error)
+        // Fallback to default responses if AI service fails
+        return this.getDefaultResponse(agentType)
+      }
+      
+      // Extract the actual message content
+      const responseContent = result.data?.content || result.data?.message || ''
+      
+      if (!responseContent) {
+        console.warn('[AI] Empty response received, using fallback')
+        return this.getDefaultResponse(agentType)
+      }
+      
+      return responseContent
+      
+    } catch (error) {
+      console.error('Failed to generate AI response:', error)
+      // Fallback to default responses
+      return this.getDefaultResponse(agentType)
+    }
+  }
+  
+  private getDefaultResponse(agentType: string | null): string {
     switch (agentType) {
       case 'hint':
         return 'Here\'s a hint: Pay attention to how the state is being managed in this section. The pattern used here will be important for the upcoming exercises.'

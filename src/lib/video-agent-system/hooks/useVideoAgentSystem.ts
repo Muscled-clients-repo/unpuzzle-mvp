@@ -29,8 +29,8 @@ export function useVideoAgentSystem() {
     globalStateMachine?.dispatch(action)
   }, [])
   
-  const setVideoRef = useCallback((ref: VideoRef) => {
-    globalStateMachine?.setVideoRef(ref)
+  const setVideoRef = useCallback((ref: VideoRef, videoId?: string, courseId?: string) => {
+    globalStateMachine?.setVideoRef(ref, videoId, courseId)
   }, [])
   
   return {

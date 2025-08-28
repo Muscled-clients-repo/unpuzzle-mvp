@@ -18,6 +18,7 @@ export interface VideoContext {
   timestamp: number
   duration?: number
   title?: string
+  courseId?: string
 }
 
 export interface TranscriptReference {

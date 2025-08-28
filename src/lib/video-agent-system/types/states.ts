@@ -67,7 +67,7 @@ export interface QuizResultData {
 
 export interface Message {
   id: string
-  type: 'system' | 'agent-prompt' | 'ai' | 'user' | 'quiz-question' | 'quiz-result' | 'reflection-options' | 'reflection-complete'
+  type: 'system' | 'agent-prompt' | 'ai' | 'user' | 'quiz-question' | 'quiz-result' | 'reflection-options' | 'reflection-complete' | 'ai-loading'
   agentType?: 'hint' | 'quiz' | 'reflect' | 'path'
   state: MessageState
   message: string
@@ -89,6 +89,8 @@ export interface SystemContext {
     isPlaying: boolean
     currentTime: number
     duration: number
+    videoId?: string
+    courseId?: string
   }
   agentState: {
     currentUnactivatedId: string | null

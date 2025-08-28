@@ -280,6 +280,33 @@ export function AIChatSidebarV2({
       )
     }
     
+    // Loading state for AI messages - Skeleton loader
+    if (msg.type === 'ai-loading') {
+      return (
+        <div key={msg.id} className="flex items-start gap-3 my-4">
+          <Avatar className="h-10 w-10 border-2 border-primary/20 shadow-md">
+            <AvatarFallback className="bg-gradient-to-br from-primary to-primary/70 animate-pulse">
+              <Bot className="h-5 w-5 text-primary-foreground" />
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex-1 bg-gradient-to-br from-secondary/50 to-secondary/30 rounded-lg px-4 py-3 border border-border/50">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              </div>
+              <div className="space-y-2">
+                <div className="h-2 bg-muted rounded animate-pulse w-3/4"></div>
+                <div className="h-2 bg-muted rounded animate-pulse w-1/2"></div>
+                <div className="h-2 bg-muted rounded animate-pulse w-2/3"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+    }
+    
     // AI messages (responses) - Enhanced styling with better visual hierarchy
     if (msg.type === 'ai') {
       // Check if this is a quiz result message
