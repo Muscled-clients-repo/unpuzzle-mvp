@@ -1453,7 +1453,7 @@ export class VideoAgentStateMachine {
         case 'loom':
           systemMessage = `📍 PuzzleReflect • Loom Video at ${formattedTime}`
           aiMessage = `Excellent! I've linked your Loom video reflection. Recording your thoughts helps deepen understanding.`
-          reflectionData.content = reflection.external_url || payload.data.loomUrl
+          reflectionData.content = reflection.loom_link || payload.data.loomUrl
           break
         default:
           systemMessage = `📍 PuzzleReflect • Reflection at ${formattedTime}`
@@ -1549,12 +1549,17 @@ export class VideoAgentStateMachine {
         })
         reflectionData.media_file = audioFile
         reflectionData.duration = payload.data.duration
+        // Add text content for voice notes
+        reflectionData.text_content = payload.data.notes || `Voice memo recorded at ${this.formatTime(context.timestamp)}`
       } else if (payload.type === 'screenshot' && payload.data.imageFile) {
         // For screenshot, include the file
         reflectionData.media_file = payload.data.imageFile
+        // Add text content for screenshot notes  
+        reflectionData.text_content = payload.data.notes || `Screenshot captured at ${this.formatTime(context.timestamp)}`
       } else if (payload.type === 'loom') {
-        // For Loom, include the URL
-        reflectionData.external_url = payload.data.loomUrl
+        // For Loom, include the URL with correct field name
+        reflectionData.loom_link = payload.data.loomUrl
+        reflectionData.text_content = payload.data.notes || `Loom video shared at ${this.formatTime(context.timestamp)}`
       }
       
       // Submit to API with retry logic

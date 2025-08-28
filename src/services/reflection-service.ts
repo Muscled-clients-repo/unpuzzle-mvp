@@ -10,7 +10,8 @@ export interface ReflectionCreateRequest {
   title?: string
   notes?: string
   duration?: number
-  external_url?: string  // For Loom URLs
+  loom_link?: string     // For Loom URLs (backend expects this field name)
+  text_content?: string  // For text reflections (backend requirement)  
   media_file?: File      // For audio/image upload
 }
 
@@ -25,7 +26,8 @@ export interface ReflectionResponse {
   media_file_id?: string
   media_url?: string
   media_thumbnail?: string
-  external_url?: string
+  loom_link?: string     // Backend uses this field name
+  text_content?: string  // Backend requires this field
   notes?: string
   duration?: number
   created_at: string
@@ -137,6 +139,8 @@ class ReflectionService {
         if (data.course_id) formData.append('course_id', data.course_id)
         if (data.notes) formData.append('notes', data.notes)
         if (data.duration) formData.append('duration', data.duration.toString())
+        if (data.loom_link) formData.append('loom_link', data.loom_link)
+        if (data.text_content) formData.append('text_content', data.text_content)
         
         requestData = formData
         // Browser will set Content-Type with boundary automatically for FormData
