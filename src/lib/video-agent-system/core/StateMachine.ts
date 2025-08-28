@@ -773,7 +773,7 @@ export class VideoAgentStateMachine {
       }
       
       // Extract the actual message content
-      const responseContent = result.data?.content || result.data?.message || ''
+      const responseContent = result.data?.content || ''
       
       if (!responseContent) {
         console.warn('[AI] Empty response received, using fallback')
@@ -804,43 +804,78 @@ export class VideoAgentStateMachine {
     }
   }
 
-  private generateQuizQuestions(): QuizQuestion[] {
+  private async generateQuizQuestions(): Promise<QuizQuestion[]> {
+    try {
+      // Import the API client
+      const { apiClient } = await import('@/lib/api-client')
+      
+      // Get video context
+      const currentTime = this.videoController?.getCurrentTime() || 0
+      const videoId = this.context.videoState?.videoId || 'video-unknown'
+      
+      // Generate multiple quiz questions
+      const questions: QuizQuestion[] = []
+      const numQuestions = 3 // Generate 3 questions
+      
+      for (let i = 0; i < numQuestions; i++) {
+        const payload = {
+          video_id: videoId,
+          difficulty_level: 'medium',
+          timestamp: currentTime // Use current timestamp for context
+        }
+        
+        console.log(`[Quiz] Generating question ${i + 1}/${numQuestions}:`, payload)
+        
+        const response = await apiClient.post('/api/v1/ai-assistant/agents/quiz/', payload)
+        
+        if (response.error) {
+          console.error(`Failed to generate quiz question ${i + 1}:`, response.error)
+          continue
+        }
+        
+        // Map API response to QuizQuestion format
+        const questionData = response.data as {
+          question: string
+          options: string[]
+          correctAnswer: number
+          explanation: string
+        }
+        questions.push({
+          id: `q${i + 1}`,
+          question: questionData.question,
+          options: questionData.options,
+          correctAnswer: questionData.correctAnswer,
+          explanation: questionData.explanation
+        })
+      }
+      
+      // If API fails, fallback to default questions
+      if (questions.length === 0) {
+        console.warn('[Quiz] API failed, using fallback questions')
+        return this.getFallbackQuizQuestions()
+      }
+      
+      return questions
+    } catch (error) {
+      console.error('[Quiz] Failed to generate questions:', error)
+      return this.getFallbackQuizQuestions()
+    }
+  }
+  
+  private getFallbackQuizQuestions(): QuizQuestion[] {
+    // Fallback questions if API fails
     return [
       {
         id: 'q1',
-        question: 'What is the primary purpose of the useState hook in React?',
+        question: 'What concept was just discussed in the video?',
         options: [
-          'To fetch data from an API',
-          'To manage local component state',
-          'To handle side effects',
-          'To optimize performance'
-        ],
-        correctAnswer: 1,
-        explanation: 'useState is used to add state to functional components, allowing them to store and update local data.'
-      },
-      {
-        id: 'q2',
-        question: 'When does the useEffect hook run by default?',
-        options: [
-          'Only when the component mounts',
-          'Only when the component unmounts', 
-          'After every render',
-          'Only when props change'
+          'Review the video content',
+          'Pay attention to key terms',
+          'Focus on the main topic',
+          'Consider the examples shown'
         ],
         correctAnswer: 2,
-        explanation: 'useEffect runs after every render by default, including the initial render and after every update.'
-      },
-      {
-        id: 'q3',
-        question: 'What happens when you call setState in React?',
-        options: [
-          'The component re-renders immediately',
-          'The component re-renders on the next event loop',
-          'The component schedules a re-render',
-          'Nothing happens until you refresh'
-        ],
-        correctAnswer: 2,
-        explanation: 'setState schedules a re-render, which React processes asynchronously for performance optimization.'
+        explanation: 'Focus on understanding the main topic that was covered in this section.'
       }
     ]
   }
@@ -848,7 +883,30 @@ export class VideoAgentStateMachine {
   private async startQuiz(updatedMessages: Message[]) {
     console.log('[SM] Starting quiz')
     
-    const questions = this.generateQuizQuestions()
+    // Show loading message while generating questions
+    const loadingMessage: Message = {
+      id: `loading-${Date.now()}`,
+      type: 'ai-loading' as const,
+      state: MessageState.PERMANENT,
+      message: 'Generating quiz questions based on the video content...',
+      timestamp: Date.now()
+    }
+    
+    this.updateContext({
+      ...this.context,
+      messages: [...updatedMessages, loadingMessage],
+      agentState: {
+        ...this.context.agentState,
+        activeType: 'quiz'
+      }
+    })
+    
+    // Generate questions from API
+    const questions = await this.generateQuizQuestions()
+    
+    // Remove loading message and add quiz
+    const messagesWithoutLoading = this.context.messages.filter(msg => msg.id !== loadingMessage.id)
+    
     const quizState: QuizState = {
       questions,
       currentQuestionIndex: 0,
@@ -880,7 +938,7 @@ export class VideoAgentStateMachine {
     this.updateContext({
       ...this.context,
       state: SystemState.AGENT_ACTIVATED,
-      messages: [...updatedMessages, aiIntro, firstQuestion],
+      messages: [...messagesWithoutLoading, aiIntro, firstQuestion],
       agentState: {
         ...this.context.agentState,
         currentUnactivatedId: null,
