@@ -518,12 +518,41 @@ export default function StandaloneLessonPage() {
     })
   }
 
-  const handleReflectionSubmit = (type: string, data: Record<string, unknown>) => {
+  const handleReflectionSubmit = async (type: string, data: Record<string, unknown>) => {
     console.log('[Learn Page] Reflection submitted:', { type, data })
     
+    // Get current video context
+    const videoId = currentVideo?.id || (isCourse ? currentVideoId : contentId)
+    const courseId = isCourse ? contentId : undefined
+    const currentTime = videoPlayerRef.current?.getCurrentTime() || 0
+    
+    // Validate video ID
+    if (!videoId) {
+      console.error('[Learn Page] No video ID available for reflection')
+      // Could show error toast here
+      return
+    }
+    
+    console.log('[Learn Page] Video context:', { videoId, courseId, timestamp: currentTime })
+    
+    // Enhanced payload with video context
+    const enhancedPayload = {
+      type,
+      data: {
+        ...data,
+        videoId,
+        courseId,
+        timestamp: currentTime,
+        videoTitle: currentVideo?.title || lesson?.title || 'Unknown Video'
+      }
+    }
+    
+    console.log('[Learn Page] Enhanced reflection payload:', enhancedPayload)
+    
+    // Dispatch to StateMachine (which will now handle API calls)
     dispatch({
       type: 'REFLECTION_SUBMITTED',
-      payload: { type, data }
+      payload: enhancedPayload
     })
   }
 

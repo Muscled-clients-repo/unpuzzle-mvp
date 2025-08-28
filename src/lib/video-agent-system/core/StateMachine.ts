@@ -1371,11 +1371,22 @@ export class VideoAgentStateMachine {
   private async handleReflectionSubmit(payload: { type: string, data: any }) {
     console.log('[SM] Reflection submitted:', payload)
     
-    // Get current video timestamp
+    // Get current video timestamp and context
     const currentVideoTime = this.videoController.getCurrentTime()
     const formattedTime = this.formatTime(currentVideoTime)
+    const videoId = payload.data?.videoId
+    const courseId = payload.data?.courseId
     
-    // Now that reflection is submitted, clean up messages
+    // Show loading message immediately
+    const loadingMessage: Message = {
+      id: `loading-reflection-${Date.now()}`,
+      type: 'ai-loading' as const,
+      state: MessageState.PERMANENT,
+      message: 'Saving your reflection...',
+      timestamp: Date.now()
+    }
+    
+    // Clean up messages and add loading
     const filteredMessages = this.context.messages.map(msg => {
       // Mark the reflection agent prompt as PERMANENT
       if (msg.agentType === 'reflect' && msg.state === MessageState.UNACTIVATED) {
@@ -1387,81 +1398,179 @@ export class VideoAgentStateMachine {
       if ((msg as any).reflectionIntro) return false
       // Remove reflection options
       if (msg.type === 'reflection-options') return false
-      // Remove the "Paused at X:XX" system message since we'll have "PuzzleReflect • Voice Memo at X:XX"
+      // Remove the "Paused at X:XX" system message
       if (msg.id === this.context.agentState.currentSystemMessageId && msg.type === 'system') {
         return false
       }
       return true
     })
     
-    let systemMessage = ''
-    let aiMessage = ''
-    let reflectionData: any = {
-      type: payload.type,
-      videoTimestamp: currentVideoTime
-    }
-
-    // Add reflection type-specific messages with PuzzleReflect prefix
-    switch (payload.type) {
-      case 'voice':
-        systemMessage = `📍 PuzzleReflect • Voice Memo at ${formattedTime}`
-        aiMessage = `Perfect! I've saved your ${payload.data.duration}s voice memo. This audio reflection will help reinforce what you're learning at this point in the video.`
-        reflectionData.duration = payload.data.duration
-        reflectionData.content = payload.data.audioUrl
-        break
-      case 'screenshot':
-        systemMessage = `📍 PuzzleReflect • Screenshot at ${formattedTime}`
-        aiMessage = `Great! I've captured your screenshot. Visual notes like this are excellent for remembering key concepts.`
-        reflectionData.content = payload.data.imageUrl
-        break
-      case 'loom':
-        systemMessage = `📍 PuzzleReflect • Loom Video at ${formattedTime}`
-        aiMessage = `Excellent! I've linked your Loom video reflection. Recording your thoughts helps deepen understanding.`
-        reflectionData.content = payload.data.loomUrl
-        break
-      default:
-        systemMessage = `📍 PuzzleReflect • Reflection at ${formattedTime}`
-        aiMessage = `I've saved your reflection. Taking time to reflect helps solidify your learning.`
-    }
-
-    // Add system message for activity tracking (now includes PuzzleReflect prefix)
-    const timestampMessage: Message = {
-      id: `sys-reflection-${Date.now()}`,
-      type: 'system' as const,
-      state: MessageState.PERMANENT,
-      message: systemMessage,
-      timestamp: Date.now()
-    }
-
-    // AI message with reflection data
-    const aiResponse: Message = {
-      id: `ai-${Date.now()}`,
-      type: 'ai' as const,
-      state: MessageState.PERMANENT,
-      message: aiMessage,
-      reflectionData, // Attach reflection data to AI message
-      timestamp: Date.now()
-    }
-
-    // Add countdown message
-    const countdownId = `countdown-${Date.now()}`
-    const countdownMessage: Message = {
-      id: countdownId,
-      type: 'system' as const,
-      state: MessageState.PERMANENT,
-      message: 'Video continues in 3...',
-      timestamp: Date.now()
-    }
-    
-    const newMessages = [...filteredMessages, timestampMessage, aiResponse, countdownMessage]
-    
+    // Update context with loading state
     this.updateContext({
       ...this.context,
-      messages: newMessages
+      messages: [...filteredMessages, loadingMessage]
     })
+    
+    try {
+      // Validate we have a video ID
+      if (!videoId) {
+        throw new Error('Video ID is required to save reflection. Please ensure a video is loaded.')
+      }
+      
+      // Call API to save reflection
+      const reflection = await this.saveReflectionToAPI(payload, {
+        videoId,
+        courseId,
+        timestamp: currentVideoTime
+      })
+      
+      // Remove loading message and show success
+      const messagesWithoutLoading = this.context.messages.filter(msg => msg.id !== loadingMessage.id)
+      
+      let systemMessage = ''
+      let aiMessage = ''
+      let reflectionData: any = {
+        type: payload.type,
+        videoTimestamp: currentVideoTime,
+        reflectionId: reflection.id,
+        mediaUrl: reflection.media_url
+      }
 
-    // Start countdown to resume video
-    this.startVideoCountdown(countdownId)
+      // Add reflection type-specific messages with PuzzleReflect prefix
+      switch (payload.type) {
+        case 'voice':
+          systemMessage = `📍 PuzzleReflect • Voice Memo at ${formattedTime}`
+          aiMessage = `Perfect! I've saved your ${payload.data.duration}s voice memo. This audio reflection will help reinforce what you're learning at this point in the video.`
+          reflectionData.duration = payload.data.duration
+          reflectionData.content = reflection.media_url || payload.data.audioUrl
+          break
+        case 'screenshot':
+          systemMessage = `📍 PuzzleReflect • Screenshot at ${formattedTime}`
+          aiMessage = `Great! I've captured your screenshot. Visual notes like this are excellent for remembering key concepts.`
+          reflectionData.content = reflection.media_url || payload.data.imageUrl
+          reflectionData.thumbnail = reflection.media_thumbnail
+          break
+        case 'loom':
+          systemMessage = `📍 PuzzleReflect • Loom Video at ${formattedTime}`
+          aiMessage = `Excellent! I've linked your Loom video reflection. Recording your thoughts helps deepen understanding.`
+          reflectionData.content = reflection.external_url || payload.data.loomUrl
+          break
+        default:
+          systemMessage = `📍 PuzzleReflect • Reflection at ${formattedTime}`
+          aiMessage = `I've saved your reflection. Taking time to reflect helps solidify your learning.`
+      }
+
+      // Add system message for activity tracking
+      const timestampMessage: Message = {
+        id: `sys-reflection-${Date.now()}`,
+        type: 'system' as const,
+        state: MessageState.PERMANENT,
+        message: systemMessage,
+        timestamp: Date.now()
+      }
+
+      // AI message with reflection data
+      const aiResponse: Message = {
+        id: `ai-${Date.now()}`,
+        type: 'ai' as const,
+        state: MessageState.PERMANENT,
+        message: aiMessage,
+        reflectionData, // Attach reflection data to AI message
+        timestamp: Date.now()
+      }
+
+      // Add countdown message
+      const countdownId = `countdown-${Date.now()}`
+      const countdownMessage: Message = {
+        id: countdownId,
+        type: 'system' as const,
+        state: MessageState.PERMANENT,
+        message: 'Video continues in 3...',
+        timestamp: Date.now()
+      }
+      
+      const newMessages = [...messagesWithoutLoading, timestampMessage, aiResponse, countdownMessage]
+      
+      this.updateContext({
+        ...this.context,
+        messages: newMessages
+      })
+
+      // Start countdown to resume video
+      this.startVideoCountdown(countdownId)
+      
+    } catch (error) {
+      console.error('[SM] Reflection submission failed:', error)
+      
+      // Remove loading message and show error
+      const messagesWithoutLoading = this.context.messages.filter(msg => msg.id !== loadingMessage.id)
+      
+      const errorMessage: Message = {
+        id: `error-reflection-${Date.now()}`,
+        type: 'ai' as const,
+        state: MessageState.PERMANENT,
+        message: `❌ Failed to save reflection: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
+        timestamp: Date.now()
+      }
+      
+      this.updateContext({
+        ...this.context,
+        messages: [...messagesWithoutLoading, errorMessage]
+      })
+      
+      // Don't start countdown on error - let user retry
+    }
+  }
+  
+  /**
+   * Save reflection to API with proper error handling
+   * Submits directly to /api/v1/reflections/ with file support
+   */
+  private async saveReflectionToAPI(payload: { type: string, data: any }, context: { videoId: string, courseId?: string, timestamp: number }) {
+    // Import reflection service
+    const { reflectionService } = await import('@/services/reflection-service')
+    
+    try {
+      // Prepare reflection data based on type
+      const reflectionData: any = {
+        video_id: context.videoId,
+        course_id: context.courseId,
+        video_timestamp: context.timestamp,
+        reflection_type: payload.type as 'voice' | 'screenshot' | 'loom',
+        title: payload.data.title || undefined, // Let service generate if not provided
+        notes: payload.data.notes || undefined
+      }
+      
+      // Handle type-specific data
+      if (payload.type === 'voice' && payload.data.audioBlob) {
+        // For voice, convert blob to File for upload
+        const audioFile = new File([payload.data.audioBlob], `voice-memo-${Date.now()}.webm`, {
+          type: 'audio/webm'
+        })
+        reflectionData.media_file = audioFile
+        reflectionData.duration = payload.data.duration
+      } else if (payload.type === 'screenshot' && payload.data.imageFile) {
+        // For screenshot, include the file
+        reflectionData.media_file = payload.data.imageFile
+      } else if (payload.type === 'loom') {
+        // For Loom, include the URL
+        reflectionData.external_url = payload.data.loomUrl
+      }
+      
+      // Submit to API with retry logic
+      const result = await reflectionService.submitWithRetry(reflectionData, 2)
+      
+      if (result.error) {
+        throw new Error(`Reflection creation failed: ${result.error}`)
+      }
+      
+      console.log('[SM] Reflection saved successfully:', result.data?.id)
+      return result.data!
+      
+    } catch (error) {
+      console.error('[SM] saveReflectionToAPI error:', error)
+      throw error
+    }
   }
 
   // Recording state handlers
