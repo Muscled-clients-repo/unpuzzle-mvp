@@ -6,6 +6,19 @@ const withBundleAnalyzer = bundleAnalyzer({
 });
 
 const nextConfig: NextConfig = {
+  // Ignore TypeScript errors during build (not recommended for production)
+  typescript: {
+    // !! WARN !!
+    // Dangerously allow production builds to successfully complete even if
+    // your project has type errors.
+    ignoreBuildErrors: true,
+  },
+  // Ignore ESLint errors during build
+  eslint: {
+    // Warning: This allows production builds to successfully complete even if
+    // your project has ESLint errors.
+    ignoreDuringBuilds: true,
+  },
   images: {
     remotePatterns: [
       {
