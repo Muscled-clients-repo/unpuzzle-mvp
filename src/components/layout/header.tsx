@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useAppStore } from "@/stores/app-store"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Bell, Search, User, Menu, Eye, Settings as SettingsIcon, LogOut, MessageCircle, GraduationCap, UserCheck, ChevronLeft } from "lucide-react"
@@ -18,19 +19,23 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { ThemeToggle } from "@/components/theme-toggle"
 
 interface HeaderProps {
-  user?: {
-    name: string
-    email: string
-    role: "learner" | "instructor" | "admin"
-  }
   backButton?: {
     href: string
     label?: string
   }
 }
 
-export function Header({ user, backButton }: HeaderProps) {
+export function Header({ backButton }: HeaderProps) {
   const router = useRouter()
+  const { profile, isAuthenticated, logout, isLoading } = useAppStore()
+  
+  // Get user from store
+  const user = isAuthenticated() ? profile : null
+  
+  const handleLogout = () => {
+    logout()
+    router.push('/login')
+  }
   
   return (
     <header className="fixed top-0 z-50 w-full border-b bg-background">
@@ -88,7 +93,10 @@ export function Header({ user, backButton }: HeaderProps) {
 
           <ThemeToggle />
           
-          {user ? (
+          {isLoading ? (
+            // Show nothing or a skeleton while loading
+            <div className="w-20 h-8" />
+          ) : user ? (
             <>
               <Button variant="ghost" size="icon">
                 <Bell className="h-5 w-5" />
@@ -103,9 +111,9 @@ export function Header({ user, backButton }: HeaderProps) {
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuLabel>
                     <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none">{user.name}</p>
+                      <p className="text-sm font-medium leading-none">{user.name || 'User'}</p>
                       <p className="text-xs leading-none text-muted-foreground">
-                        {user.email}
+                        {user.email || 'user@example.com'}
                       </p>
                     </div>
                   </DropdownMenuLabel>
@@ -126,7 +134,7 @@ export function Header({ user, backButton }: HeaderProps) {
                   )}
                   
                   <DropdownMenuItem asChild>
-                    <Link href={user.role === "learner" ? "/student/settings" : "/instructor/settings"}>
+                    <Link href={user.role === "student" ? "/student/settings" : "/instructor/settings"}>
                       <SettingsIcon className="mr-2 h-4 w-4" />
                       Settings
                     </Link>
@@ -138,7 +146,7 @@ export function Header({ user, backButton }: HeaderProps) {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-red-600">
+                  <DropdownMenuItem className="text-red-600 cursor-pointer" onClick={handleLogout}>
                     <LogOut className="mr-2 h-4 w-4" />
                     Sign Out
                   </DropdownMenuItem>
@@ -151,7 +159,7 @@ export function Header({ user, backButton }: HeaderProps) {
                 <Link href="/login">Log In</Link>
               </Button>
               <Button asChild>
-                <Link href="/signup">Sign Up</Link>
+                <Link href="/login">Sign Up</Link>
               </Button>
             </div>
           )}

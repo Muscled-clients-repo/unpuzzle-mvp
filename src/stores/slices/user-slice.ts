@@ -11,6 +11,7 @@ interface UserState {
   progress: { [courseId: string]: CourseProgress }
   dailyAiInteractions?: number  // UI-specific field
   lastResetDate?: string  // UI-specific field
+  isLoading: boolean  // Loading state for auth operations
 }
 
 interface UserActions {
@@ -21,6 +22,7 @@ interface UserActions {
   resetDailyAiInteractions: () => void
   updateSubscription: (subscription: User['subscription']) => void
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
+  signup: (email: string, password: string, firstName: string, lastName: string) => Promise<{ success: boolean; error?: string }>
   logout: () => void
   isAuthenticated: () => boolean
   initializeAuth: () => Promise<void>
@@ -85,6 +87,7 @@ export interface UserSlice extends UserState, UserActions {
   studentData: StudentData
   loadStudentData: () => void
   addReflection: (reflection: Omit<Reflection, 'id'>) => void
+  isLoading: boolean
 }
 
 const initialUserPreferences: UIPreferences = {
@@ -110,7 +113,8 @@ const initialUserState: UserState = {
   preferences: initialUserPreferences,
   progress: {},
   dailyAiInteractions: undefined,
-  lastResetDate: undefined
+  lastResetDate: undefined,
+  isLoading: true  // Start with loading true, will be set to false after init
 }
 
 export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
@@ -198,10 +202,107 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
       } : null
     })),
 
-  login: async (email: string, password: string) => {
+  signup: async (email: string, password: string, firstName: string, lastName: string) => {
     try {
       // Validation
+      if (!email || !password || !firstName || !lastName) {
+        return { success: false, error: 'All fields are required' }
+      }
+      
+      console.log('🔐 Attempting signup for:', email)
+      
+      // Call the signup API
+      const response = await apiClient.signup({
+        email,
+        password,
+        firstName,
+        lastName
+      })
+      
+      console.log('🔐 Signup response:', { 
+        status: response.status, 
+        hasData: !!response.data,
+        error: response.error 
+      })
+      
+      if (response.error) {
+        // Handle specific error cases
+        if (response.status === 400) {
+          // Check if it's email already exists error
+          if (response.error.includes('already registered') || response.error.includes('already exists')) {
+            return { success: false, error: 'This email is already registered' }
+          }
+          return { success: false, error: 'Invalid signup information' }
+        }
+        return { success: false, error: response.error }
+      }
+      
+      if (response.data && response.status === 201) {
+        const signupData = response.data as any
+        
+        // Extract user data from response
+        const userData = signupData.user || signupData
+        
+        // Store access token if provided
+        if (signupData.session?.access_token) {
+          localStorage.setItem('authToken', signupData.session.access_token)
+        }
+        
+        // Transform backend user data to our User type
+        const user: User = {
+          id: userData.supabase_user_id || userData.id || 'unknown',
+          name: userData.full_name || `${firstName} ${lastName}`.trim() || 'User',
+          email: userData.email || email,
+          role: userData.roles?.[0] || 'student',
+          avatar: userData.avatar_url || `https://api.dicebear.com/7.x/avataaars/png?seed=${email}`,
+          createdAt: userData.created_at || new Date().toISOString(),
+          subscription: {
+            plan: 'basic',
+            status: 'active',
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            features: {
+              maxCoursesPerMonth: 3,
+              aiInteractionsPerDay: 10,
+              downloadableResources: true,
+              certificateAccess: true,
+              prioritySupport: false
+            }
+          }
+        }
+        
+        // Store user in state
+        set({
+          id: user.id,
+          profile: user
+        })
+        
+        console.log('✅ Signup successful for:', user.email)
+        return { success: true }
+      }
+      
+      // If we get here, something unexpected happened
+      return { success: false, error: 'Unexpected response from server' }
+      
+    } catch (error) {
+      console.error('❌ Signup error:', error)
+      
+      // Check if it's a network error
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        return { success: false, error: 'Network error. Please check your connection.' }
+      }
+      
+      return { success: false, error: 'An error occurred during signup. Please try again.' }
+    }
+  },
+
+  login: async (email: string, password: string) => {
+    try {
+      // Set loading to true
+      set({ isLoading: true })
+      
+      // Validation
       if (!email || !password) {
+        set({ isLoading: false })
         return { success: false, error: 'Email and password are required' }
       }
       
@@ -218,6 +319,7 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
       
       if (response.error) {
         // Handle specific error cases
+        set({ isLoading: false })
         if (response.status === 401) {
           return { success: false, error: 'Invalid email or password' }
         } else if (response.status === 403) {
@@ -260,7 +362,8 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
         // Store user in state
         set({
           id: user.id,
-          profile: user
+          profile: user,
+          isLoading: false
         })
         
         console.log('✅ Login successful for:', user.email)
@@ -268,10 +371,12 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
       }
       
       // If we get here, something unexpected happened
+      set({ isLoading: false })
       return { success: false, error: 'Unexpected response from server' }
       
     } catch (error) {
       console.error('❌ Login error:', error)
+      set({ isLoading: false })
       
       // Check if it's a network error
       if (error instanceof TypeError && error.message.includes('fetch')) {
@@ -302,6 +407,7 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
       
       if (!token) {
         console.log('🔐 No auth token found')
+        set({ isLoading: false })
         return
       }
       
@@ -338,7 +444,8 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
         // Store user in state
         set({
           id: user.id,
-          profile: user
+          profile: user,
+          isLoading: false
         })
         
         console.log('✅ Auth initialized for:', user.email)
@@ -347,12 +454,14 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
         console.log('🔐 Auth token expired or invalid')
         localStorage.removeItem('authToken')
         sessionStorage.removeItem('authToken')
+        set({ isLoading: false })
       }
     } catch (error) {
       console.error('❌ Auth initialization error:', error)
       // Clear invalid tokens
       localStorage.removeItem('authToken')
       sessionStorage.removeItem('authToken')
+      set({ isLoading: false })
     }
   },
 

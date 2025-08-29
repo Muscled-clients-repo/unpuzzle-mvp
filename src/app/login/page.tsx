@@ -29,16 +29,18 @@ function LoginContent() {
   const returnUrl = searchParams.get('returnUrl')
   
   // Get auth functions from Zustand store
-  const { login, profile, isAuthenticated } = useAppStore()
+  const { login, signup, profile, isAuthenticated } = useAppStore()
   
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [name, setName] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [sessionExpiredMessage, setSessionExpiredMessage] = useState('')
+  const [showEmailConfirmation, setShowEmailConfirmation] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -47,37 +49,52 @@ function LoginContent() {
     setLoading(true)
 
     try {
-      const result = await login(email, password)
-
-      if (result.success) {
-        setSuccess("Login successful! Redirecting...")
+      let result
+      
+      if (mode === 'signup') {
+        // Validate signup fields
+        if (!firstName || !lastName) {
+          setError("Please enter your full name")
+          setLoading(false)
+          return
+        }
         
-        // Get the user's role to determine redirect
-        const userRole = profile?.role
+        result = await signup(email, password, firstName, lastName)
         
-        setTimeout(() => {
-          // If we have a return URL, go there instead of dashboard
-          if (returnUrl) {
-            const decodedUrl = decodeURIComponent(returnUrl)
-            // Prevent redirect loops - if return URL is login, go to root instead
-            if (decodedUrl.includes('/login')) {
-              router.push('/')
-            } else {
-              router.push(decodedUrl)
-            }
-          } else {
-            // Redirect based on role
-            if (userRole === 'instructor') {
-              router.push('/instructor')
-            } else if (userRole === 'admin') {
-              router.push('/admin')
-            } else {
-              router.push('/student')
-            }
-          }
-        }, 1500)
+        if (result.success) {
+          // Show email confirmation message instead of redirecting
+          setShowEmailConfirmation(true)
+          setSuccess("")
+          setError("")
+        } else {
+          setError(result.error || "Failed to create account. Please try again.")
+        }
       } else {
-        setError(result.error || "Invalid email or password. Please try again.")
+        // Login flow
+        result = await login(email, password)
+        
+        if (result.success) {
+          setSuccess("Login successful! Redirecting...")
+          
+          // Only redirect for login, not signup
+          setTimeout(() => {
+            // If we have a return URL, go there instead of home
+            if (returnUrl) {
+              const decodedUrl = decodeURIComponent(returnUrl)
+              // Prevent redirect loops - if return URL is login, go to home instead
+              if (decodedUrl.includes('/login')) {
+                router.push('/')
+              } else {
+                router.push(decodedUrl)
+              }
+            } else {
+              // No return URL - redirect to home page
+              router.push('/')
+            }
+          }, 1500)
+        } else {
+          setError(result.error || "Invalid email or password. Please try again.")
+        }
       }
     } catch (error) {
       setError("An unexpected error occurred. Please try again.")
@@ -113,21 +130,15 @@ function LoginContent() {
     if (isAuthenticated()) {
       if (returnUrl) {
         const decodedUrl = decodeURIComponent(returnUrl)
-        // Prevent redirect loops - if return URL is login, go to root instead
+        // Prevent redirect loops - if return URL is login, go to home instead
         if (decodedUrl.includes('/login')) {
           router.push('/')
         } else {
           router.push(decodedUrl)
         }
       } else {
-        // Redirect based on role
-        if (profile?.role === 'instructor') {
-          router.push('/instructor')
-        } else if (profile?.role === 'admin') {
-          router.push('/admin')
-        } else {
-          router.push('/student')
-        }
+        // No return URL - redirect to home page
+        router.push('/')
       }
     }
   }, [isAuthenticated, profile, returnUrl, router])
@@ -214,20 +225,80 @@ function LoginContent() {
             <span className="text-2xl font-bold">Unpuzzle</span>
           </div>
 
-          {/* Form Header */}
-          <div className="text-center space-y-2">
-            <h2 className="text-3xl font-bold tracking-tight">
-              {mode === 'signin' ? 'Welcome back' : 'Get started'}
-            </h2>
-            <p className="text-muted-foreground">
-              {mode === 'signin' 
-                ? 'Enter your credentials to access your account' 
-                : 'Create an account to start learning'}
-            </p>
-          </div>
+          {/* Email Confirmation Message */}
+          {showEmailConfirmation ? (
+            <div className="space-y-6">
+              <div className="text-center space-y-2">
+                <div className="mx-auto w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mb-4">
+                  <CheckCircle2 className="h-10 w-10 text-green-600" />
+                </div>
+                <h2 className="text-3xl font-bold tracking-tight">Check your email</h2>
+                <p className="text-muted-foreground">
+                  We've sent a confirmation email to <strong>{email}</strong>
+                </p>
+              </div>
 
-          {/* Auth Toggle */}
-          <div className="flex rounded-lg bg-muted p-1">
+              <Alert className="border-blue-200 bg-blue-50">
+                <AlertCircle className="h-4 w-4 text-blue-600" />
+                <AlertDescription className="text-blue-800">
+                  Please check your email and click the confirmation link to activate your account. 
+                  You may need to check your spam folder.
+                </AlertDescription>
+              </Alert>
+
+              <div className="space-y-3">
+                <Button 
+                  className="w-full"
+                  onClick={() => {
+                    // Open email client or redirect to email provider
+                    window.open('https://mail.google.com', '_blank')
+                  }}
+                >
+                  Open Gmail
+                </Button>
+                
+                <Button 
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    setShowEmailConfirmation(false)
+                    setMode('signin')
+                    setPassword('')
+                  }}
+                >
+                  Back to Sign In
+                </Button>
+              </div>
+
+              <p className="text-center text-sm text-muted-foreground">
+                Didn't receive the email?{' '}
+                <button 
+                  className="text-primary hover:underline"
+                  onClick={() => {
+                    // TODO: Implement resend confirmation email
+                    setSuccess("Confirmation email resent!")
+                  }}
+                >
+                  Resend confirmation email
+                </button>
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Form Header */}
+              <div className="text-center space-y-2">
+                <h2 className="text-3xl font-bold tracking-tight">
+                  {mode === 'signin' ? 'Welcome back' : 'Get started'}
+                </h2>
+                <p className="text-muted-foreground">
+                  {mode === 'signin' 
+                    ? 'Enter your credentials to access your account' 
+                    : 'Create an account to start learning'}
+                </p>
+              </div>
+
+              {/* Auth Toggle */}
+              <div className="flex rounded-lg bg-muted p-1">
             <button
               onClick={() => setMode('signin')}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
@@ -250,21 +321,65 @@ function LoginContent() {
             </button>
           </div>
 
+          {/* Session expired message */}
+          {sessionExpiredMessage && (
+            <Alert className="border-yellow-200 bg-yellow-50">
+              <AlertCircle className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="text-yellow-800">
+                {sessionExpiredMessage}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Error message */}
+          {error && (
+            <Alert className="border-red-200 bg-red-50">
+              <AlertCircle className="h-4 w-4 text-red-600" />
+              <AlertDescription className="text-red-800">
+                {error}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Success message */}
+          {success && (
+            <Alert className="border-green-200 bg-green-50">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-800">
+                {success}
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
             {mode === 'signup' && (
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input
-                  id="name"
-                  type="text"
-                  placeholder="John Doe"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required={mode === 'signup'}
-                  className="h-11"
-                />
-              </div>
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="firstName">First Name</Label>
+                  <Input
+                    id="firstName"
+                    type="text"
+                    placeholder="John"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    required={mode === 'signup'}
+                    className="h-11"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastName">Last Name</Label>
+                  <Input
+                    id="lastName"
+                    type="text"
+                    placeholder="Doe"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    required={mode === 'signup'}
+                    className="h-11"
+                  />
+                </div>
+              </>
             )}
 
             <div className="space-y-2">
@@ -365,17 +480,19 @@ function LoginContent() {
             </Button>
           </div>
 
-          {/* Footer */}
-          <p className="text-center text-sm text-muted-foreground">
-            By continuing, you agree to our{' '}
-            <Link href="/terms" className="underline hover:text-primary">
-              Terms of Service
-            </Link>{' '}
-            and{' '}
-            <Link href="/privacy" className="underline hover:text-primary">
-              Privacy Policy
-            </Link>
-          </p>
+              {/* Footer */}
+              <p className="text-center text-sm text-muted-foreground">
+                By continuing, you agree to our{' '}
+                <Link href="/terms" className="underline hover:text-primary">
+                  Terms of Service
+                </Link>{' '}
+                and{' '}
+                <Link href="/privacy" className="underline hover:text-primary">
+                  Privacy Policy
+                </Link>
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>

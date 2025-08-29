@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "https://app.unpuzzle.co/"
+    },
+    {
+      "source": "/:path*",
+      "destination": "https://app.unpuzzle.co/:path*"
+    }
+  ]
+}
