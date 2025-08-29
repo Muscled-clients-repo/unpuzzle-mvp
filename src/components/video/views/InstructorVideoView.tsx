@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 import { 
   MessageSquare, AlertCircle, Send, Users,
   User, Brain, Target, Search,
-  Mic, Image, Video, Play, CheckCircle, ChevronRight
+  Mic, Image as ImageIcon, Video, Play, CheckCircle, ChevronRight
 } from "lucide-react"
 import { useAppStore } from "@/stores/app-store"
 
@@ -623,7 +623,7 @@ function useCounter(initialValue = 0) {
                           </div>
                         )}
                         {reflection.type === 'screenshot' && (
-                          <Image className="h-3 w-3 text-muted-foreground" />
+                          <ImageIcon className="h-3 w-3 text-muted-foreground" />
                         )}
                         {reflection.type === 'loom' && (
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -658,7 +658,7 @@ function useCounter(initialValue = 0) {
                       <div className="space-y-2">
                         <p className="text-sm text-muted-foreground">{reflection.content}</p>
                         <div className="bg-muted rounded p-2 text-center">
-                          <Image className="h-8 w-8 mx-auto text-muted-foreground mb-1" />
+                          <ImageIcon className="h-8 w-8 mx-auto text-muted-foreground mb-1" />
                           <p className="text-xs text-muted-foreground">Click to view screenshot</p>
                         </div>
                       </div>

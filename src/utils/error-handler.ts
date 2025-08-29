@@ -16,7 +16,7 @@ export interface AppError {
   type: ErrorType
   message: string
   code?: string | number
-  details?: any
+  details?: Record<string, unknown>
   timestamp: Date
   recoverable: boolean
   userMessage: string
@@ -26,7 +26,7 @@ export interface ErrorContext {
   component?: string
   action?: string
   userId?: string
-  additionalData?: Record<string, any>
+  additionalData?: Record<string, unknown>
 }
 
 export class ErrorHandler {
@@ -47,7 +47,7 @@ export class ErrorHandler {
     message: string,
     options: {
       code?: string | number
-      details?: any
+      details?: Record<string, unknown>
       recoverable?: boolean
       userMessage?: string
     } = {}
@@ -177,7 +177,7 @@ export class ErrorHandler {
     return ['network', 'timeout', 'server'].includes(type)
   }
 
-  private isAppError(error: any): error is AppError {
+  private isAppError(error: unknown): error is AppError {
     return error && typeof error === 'object' && 'type' in error && 'userMessage' in error
   }
 

@@ -67,7 +67,7 @@ export function BlogListingClient({
     <div className="min-h-screen flex flex-col">
       <Header />
       
-      <main className="flex-1">
+      <main className="flex-1 pt-16">
         {/* Hero Section */}
         <section className="bg-gradient-to-b from-primary/10 to-background py-16">
           <div className="container px-4">

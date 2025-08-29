@@ -165,14 +165,20 @@ export interface Course {
   id: string
   title: string
   description: string
+  shortDescription?: string
   thumbnailUrl: string
   instructor: Instructor
   price: number
+  currency?: string
   duration: number
   difficulty: 'beginner' | 'intermediate' | 'advanced'
+  language?: string
   tags: string[]
+  category?: string
   videos: Video[]
+  sections?: any[]
   enrollmentCount: number
+  reviewCount?: number
   rating: number
   isPublished: boolean
   isFree: boolean

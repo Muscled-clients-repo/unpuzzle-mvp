@@ -18,6 +18,7 @@ export interface VideoContext {
   timestamp: number
   duration?: number
   title?: string
+  courseId?: string
 }
 
 export interface TranscriptReference {
@@ -40,7 +41,12 @@ export interface AIResponse {
   suggestedActions?: Array<{
     type: 'replay_segment' | 'jump_to_timestamp' | 'review_concept'
     label: string
-    data: any
+    data: {
+      timestamp?: number
+      segment?: { start: number; end: number }
+      concept?: string
+      url?: string
+    }
   }>
 }
 
@@ -70,6 +76,225 @@ export interface AIService {
   getPersonalizedSuggestions(userId: string, courseId: string): Promise<ServiceResult<string[]>>
   processTranscriptQuery(transcriptText: string, question: string): Promise<ServiceResult<AIResponse>>
   clearChatHistory(sessionId?: string): Promise<ServiceResult<void>>
+}
+
+// Real AI Service implementation
+class RealAIService implements AIService {
+  private readonly baseUrl = '/api/v1/ai-assistant'
+  private sessionId: string | null = null
+  
+  private getSessionId(): string {
+    if (!this.sessionId) {
+      this.sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    }
+    return this.sessionId
+  }
+  
+  private mapResponseToMessage(response: {
+    id?: string
+    role?: string
+    content?: string
+    timestamp?: string
+    suggestedActions?: Array<{
+      type: string
+      label: string
+      data: unknown
+    }>
+  }): ChatMessage {
+    return {
+      id: response.message_id || response.id,
+      content: response.response || response.message || response.content,
+      role: 'assistant',
+      timestamp: new Date(response.created_at || Date.now()),
+      metadata: {
+        confidence: response.confidence,
+        videoContext: response.context,
+        tokens_used: response.tokens_used,
+        cached: response.cached,
+        session_id: response.session_id
+      }
+    }
+  }
+  
+  private handleError(error: unknown): ServiceResult<never> {
+    if (error.response?.status === 429) {
+      return {
+        error: 'rate_limit_exceeded',
+        details: error.response.data.details
+      }
+    }
+    return {
+      error: error.message || 'An error occurred'
+    }
+  }
+  
+  async sendChatMessage(
+    message: string,
+    context?: VideoContext,
+    transcriptRef?: TranscriptReference
+  ): Promise<ServiceResult<ChatMessage>> {
+    console.log('RealAIService.sendChatMessage called:', { message, baseUrl: this.baseUrl })
+    
+    try {
+      const { apiClient } = await import('@/lib/api-client')
+      const payload = {
+        message,
+        session_id: this.getSessionId(),
+        context: context ? {
+          video_id: context.videoId,
+          timestamp: context.timestamp,
+          course_id: context.courseId || undefined
+        } : undefined
+      }
+      
+      console.log('Making API request to:', `${this.baseUrl}/chat/send/`, payload)
+      const response = await apiClient.post(`${this.baseUrl}/chat/send/`, payload)
+      
+      console.log('AI API Response:', {
+        status: response.status,
+        data: response.data,
+        error: response.error
+      })
+      
+      if (response.status === 429) {
+        return this.handleError({ response })
+      }
+      
+      if (response.error) {
+        console.log('AI API Error:', response.error)
+        return { error: response.error }
+      }
+      
+      const mappedMessage = this.mapResponseToMessage(response.data)
+      console.log('Mapped AI Message:', mappedMessage)
+      
+      return {
+        data: mappedMessage
+      }
+    } catch (error) {
+      return this.handleError(error)
+    }
+  }
+  
+  async getChatHistory(sessionId?: string): Promise<ServiceResult<ChatMessage[]>> {
+    try {
+      const { apiClient } = await import('@/lib/api-client')
+      const sid = sessionId || this.getSessionId()
+      const response = await apiClient.get(`${this.baseUrl}/chat/history/${sid}/`)
+      
+      if (response.error) {
+        return { error: response.error }
+      }
+      
+      const messages = response.data.messages?.map((msg: {
+        id?: string
+        role?: string
+        content?: string
+        timestamp?: string
+        suggestedActions?: unknown[]
+      }) => ({
+        id: msg.id,
+        content: msg.content,
+        role: msg.message_type === 'assistant' ? 'assistant' : 'user',
+        timestamp: new Date(msg.created_at),
+        metadata: msg.metadata
+      })) || []
+      
+      return { data: messages }
+    } catch (error) {
+      return this.handleError(error)
+    }
+  }
+  
+  async generateInsights(videoId: string, watchProgress: number): Promise<ServiceResult<LearningInsight[]>> {
+    try {
+      const { apiClient } = await import('@/lib/api-client')
+      const response = await apiClient.post(`${this.baseUrl}/insights/generate/`, {
+        video_id: videoId,
+        progress: watchProgress
+      })
+      
+      if (response.error) {
+        return { error: response.error }
+      }
+      
+      return { data: response.data.insights || [] }
+    } catch (error) {
+      return this.handleError(error)
+    }
+  }
+  
+  async explainConcept(concept: string, context?: VideoContext): Promise<ServiceResult<AIResponse>> {
+    try {
+      const { apiClient } = await import('@/lib/api-client')
+      const response = await apiClient.post(`${this.baseUrl}/explain/`, {
+        concept,
+        context
+      })
+      
+      if (response.error) {
+        return { error: response.error }
+      }
+      
+      return { data: response.data }
+    } catch (error) {
+      return this.handleError(error)
+    }
+  }
+  
+  async getPersonalizedSuggestions(userId: string, courseId: string): Promise<ServiceResult<string[]>> {
+    try {
+      const { apiClient } = await import('@/lib/api-client')
+      const response = await apiClient.post(`${this.baseUrl}/suggestions/`, {
+        user_id: userId,
+        course_id: courseId
+      })
+      
+      if (response.error) {
+        return { error: response.error }
+      }
+      
+      return { data: response.data.suggestions || [] }
+    } catch (error) {
+      return this.handleError(error)
+    }
+  }
+  
+  async processTranscriptQuery(transcriptText: string, question: string): Promise<ServiceResult<AIResponse>> {
+    try {
+      const { apiClient } = await import('@/lib/api-client')
+      const response = await apiClient.post(`${this.baseUrl}/transcript/search/`, {
+        query: question,
+        transcript_text: transcriptText,
+        semantic_search: true
+      })
+      
+      if (response.error) {
+        return { error: response.error }
+      }
+      
+      return { data: response.data }
+    } catch (error) {
+      return this.handleError(error)
+    }
+  }
+  
+  async clearChatHistory(sessionId?: string): Promise<ServiceResult<void>> {
+    try {
+      const { apiClient } = await import('@/lib/api-client')
+      const sid = sessionId || this.getSessionId()
+      const response = await apiClient.delete(`${this.baseUrl}/chat/history/${sid}/`)
+      
+      if (response.error) {
+        return { error: response.error }
+      }
+      
+      this.sessionId = null // Reset session
+      return { data: undefined }
+    } catch (error) {
+      return this.handleError(error)
+    }
+  }
 }
 
 // Mock implementation
@@ -271,5 +496,18 @@ class MockAIService implements AIService {
   }
 }
 
-// Export singleton instance
-export const aiService: AIService = new MockAIService()
+// Export with feature flag for progressive enhancement
+const useRealAI = process.env.NEXT_PUBLIC_USE_REAL_AI === 'true'
+
+console.log('AI Service Config:', {
+  NEXT_PUBLIC_USE_REAL_AI: process.env.NEXT_PUBLIC_USE_REAL_AI,
+  useRealAI,
+  serviceName: useRealAI ? 'RealAIService' : 'MockAIService'
+})
+
+export const aiService: AIService = useRealAI
+  ? new RealAIService()
+  : new MockAIService()
+
+// Export for testing
+export { MockAIService, RealAIService }

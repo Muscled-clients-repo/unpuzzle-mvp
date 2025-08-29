@@ -99,7 +99,7 @@ export default function EditLessonPage() {
     }
   }
 
-  const handleInputChange = (field: string, value: any) => {
+  const handleInputChange = (field: string, value: string) => {
     switch(field) {
       case 'title':
         setTitle(value)

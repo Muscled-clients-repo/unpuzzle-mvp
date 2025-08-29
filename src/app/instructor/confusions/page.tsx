@@ -23,29 +23,22 @@ import {
 } from "@/components/ui/table"
 import {
   Tabs,
-  TabsContent,
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
 import {
   AlertCircle,
   Clock,
-  Filter,
   MessageSquare,
   Search,
   User,
-  BookOpen,
   ArrowRight,
   CheckCircle,
-  XCircle,
   ChevronLeft,
   ChevronRight,
-  Calendar,
-  TrendingUp,
   AlertTriangle
 } from "lucide-react"
 import Link from "next/link"
-import { cn } from "@/lib/utils"
 
 export default function ConfusionsPage() {
   const { 

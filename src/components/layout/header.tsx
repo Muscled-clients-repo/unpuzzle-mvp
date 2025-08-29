@@ -126,7 +126,7 @@ export function Header({ user, backButton }: HeaderProps) {
                   )}
                   
                   <DropdownMenuItem asChild>
-                    <Link href={user.role === "learner" ? "/learn/settings" : "/instructor/settings"}>
+                    <Link href={user.role === "learner" ? "/student/settings" : "/instructor/settings"}>
                       <SettingsIcon className="mr-2 h-4 w-4" />
                       Settings
                     </Link>

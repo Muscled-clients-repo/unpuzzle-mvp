@@ -55,10 +55,53 @@ export class StudentCourseService {
       }
     }
 
-    const response = await apiClient.get<Course[]>(`/api/student/courses`)
-    return response.error
-      ? { error: response.error }
-      : { data: response.data }
+    // Use the new API client method with correct endpoint
+    const response = await apiClient.getStudentCourses()
+    
+    // Debug logging
+    console.log('Student courses API response:', response)
+    
+    if (response.error) {
+      console.error('Error fetching enrolled courses:', response.error)
+      return { error: response.error }
+    }
+    
+    // Ensure we always return an array
+    const courses = response.data
+    
+    // Handle various response formats
+    if (!courses) {
+      console.log('No courses data in response')
+      return { data: [] }
+    }
+    
+    // If the response has a nested structure like { data: courses }
+    if (courses && typeof courses === 'object' && !Array.isArray(courses)) {
+      // Check for common nested structures
+      if ('data' in courses && Array.isArray((courses as any).data)) {
+        console.log('Found courses in nested data property')
+        return { data: (courses as any).data }
+      }
+      if ('courses' in courses && Array.isArray((courses as any).courses)) {
+        console.log('Found courses in nested courses property')
+        return { data: (courses as any).courses }
+      }
+      
+      // If it's a single course object, wrap it in an array
+      if ('id' in courses) {
+        console.log('Single course object, wrapping in array')
+        return { data: [courses as Course] }
+      }
+      
+      console.warn('Unknown response structure:', courses)
+      return { data: [] }
+    }
+    
+    // Ensure it's an array
+    const coursesArray = Array.isArray(courses) ? courses : []
+    console.log(`Returning ${coursesArray.length} courses`)
+    
+    return { data: coursesArray }
   }
 
   async getCourseProgress(
@@ -78,9 +121,8 @@ export class StudentCourseService {
       }
     }
 
-    const response = await apiClient.get<CourseProgress>(
-      `/api/student/courses/${courseId}/progress`
-    )
+    // Use the new API client method with correct endpoint
+    const response = await apiClient.getStudentCourseProgress(courseId)
     return response.error
       ? { error: response.error }
       : { data: response.data }
@@ -110,21 +152,21 @@ export class StudentCourseService {
 
   async enrollInCourse(
     userId: string,
-    courseId: string
-  ): Promise<ServiceResult<{ success: boolean; message: string }>> {
+    courseId: string,
+    paymentData?: { paymentMethod?: string; couponCode?: string }
+  ): Promise<ServiceResult<{ success: boolean; message: string; enrollmentId?: string }>> {
     if (useMockData) {
       return {
         data: {
           success: true,
-          message: 'Successfully enrolled in course'
+          message: 'Successfully enrolled in course',
+          enrollmentId: `enroll-${courseId}-${userId}`
         }
       }
     }
 
-    const response = await apiClient.post(
-      `/api/student/courses/${courseId}/enroll`,
-      { userId }
-    )
+    // Use the new API client method
+    const response = await apiClient.enrollInCourse(courseId, paymentData)
     return response.error
       ? { error: response.error }
       : { data: response.data }
@@ -180,6 +222,31 @@ export class StudentCourseService {
       : { data: response.data }
   }
 
+  async unenrollFromCourse(courseId: string): Promise<ServiceResult<void>> {
+    if (useMockData) {
+      return { data: undefined }
+    }
+
+    const response = await apiClient.unenrollFromCourse(courseId)
+    return response.error
+      ? { error: response.error }
+      : { data: undefined }
+  }
+
+  async submitCourseReview(
+    courseId: string, 
+    review: { rating: number; comment: string }
+  ): Promise<ServiceResult<void>> {
+    if (useMockData) {
+      return { data: undefined }
+    }
+
+    const response = await apiClient.submitCourseReview(courseId, review)
+    return response.error
+      ? { error: response.error }
+      : { data: undefined }
+  }
+
   async getAllCourses(): Promise<ServiceResult<Course[]>> {
     if (useMockData) {
       // Transform ALL mock courses for public browsing
@@ -231,9 +298,16 @@ export class StudentCourseService {
   }
 
   async getCourseById(courseId: string): Promise<ServiceResult<Course | null>> {
+    console.log('🔍 StudentCourseService.getCourseById called with:', courseId)
+    console.log('📊 Available mock courses:', mockCourses.map(c => ({ id: c.id, title: c.title, videosCount: c.videos.length })))
+    
     if (useMockData) {
       const course = mockCourses.find(c => c.id === courseId)
-      if (!course) return { data: null }
+      console.log('🎯 Found course:', course ? { id: course.id, title: course.title, videosCount: course.videos.length } : 'NOT FOUND')
+      if (!course) {
+        console.log('❌ Course not found, returning error')
+        return { error: 'Course not found' }
+      }
 
       // Transform the found course to match domain Course type
       const transformedCourse: Course = {
@@ -277,10 +351,62 @@ export class StudentCourseService {
       }
     }
 
-    const response = await apiClient.get<Course>(`/api/courses/${courseId}`)
-    return response.error
-      ? { error: response.error }
-      : { data: response.data }
+    try {
+      const response = await apiClient.get<any>(`/api/v1/courses/${courseId}`)
+      
+      if (response.error) {
+        console.log('❌ API error:', response.error)
+        return { error: response.error }
+      }
+      
+      if (!response.data) {
+        console.log('❌ No data in response')
+        return { error: 'Course not found' }
+      }
+      
+      console.log('✅ Raw API response:', response.data)
+      
+      // Transform API response to frontend Course structure
+      const apiCourse = response.data
+      const transformedCourse: Course = {
+        id: apiCourse.id,
+        title: apiCourse.title,
+        description: apiCourse.description,
+        shortDescription: apiCourse.shortDescription,
+        thumbnailUrl: apiCourse.thumbnailUrl,
+        instructor: {
+          id: apiCourse.instructor.id,
+          name: apiCourse.instructor.name,
+          email: apiCourse.instructor.email,
+          avatar: apiCourse.instructor.avatarUrl
+        },
+        price: apiCourse.price || 0,
+        currency: apiCourse.currency || 'USD',
+        duration: apiCourse.duration || 0,
+        difficulty: apiCourse.difficulty,
+        language: apiCourse.language || 'en',
+        tags: apiCourse.tags || [],
+        category: apiCourse.category,
+        rating: apiCourse.ratingAverage || 0,
+        reviewCount: apiCourse.ratingCount || 0,
+        enrollmentCount: apiCourse.enrollmentCount || 0,
+        isPublished: apiCourse.isPublished,
+        isFree: apiCourse.isFree,
+        createdAt: apiCourse.createdAt,
+        updatedAt: apiCourse.updatedAt,
+        // Keep original videos array for backward compatibility (but get videos from sections)
+        videos: [],
+        sections: apiCourse.sections || []
+      }
+      
+      console.log('✅ Transformed course:', transformedCourse)
+      console.log('📊 Sections found:', transformedCourse.sections.length)
+      
+      return { data: transformedCourse }
+    } catch (error) {
+      console.error('❌ Error in getCourseById:', error)
+      return { error: 'Network error while fetching course' }
+    }
   }
 
   async getPublicLessons(): Promise<ServiceResult<Lesson[]>> {

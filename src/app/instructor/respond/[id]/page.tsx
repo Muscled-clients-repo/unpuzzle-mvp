@@ -121,7 +121,7 @@ export default function RespondToConfusionPage() {
                   <div className="flex items-start gap-3">
                     <AlertCircle className="h-5 w-5 text-orange-500 mt-0.5" />
                     <div>
-                      <p className="font-medium mb-1">Student's Question:</p>
+                      <p className="font-medium mb-1">Student&apos;s Question:</p>
                       <p>{confusion.message}</p>
                     </div>
                   </div>
@@ -131,9 +131,9 @@ export default function RespondToConfusionPage() {
                 <div className="p-4 bg-muted/50 rounded-lg">
                   <p className="text-sm font-medium mb-2">Video Transcript at {confusion.videoTime}:</p>
                   <p className="text-sm italic">
-                    "...the handleUpdate function is being recreated on every render. To fix this performance issue, 
+                    &quot;...the handleUpdate function is being recreated on every render. To fix this performance issue, 
                     we wrap it with useCallback. This ensures the function reference stays the same between renders 
-                    unless its dependencies change..."
+                    unless its dependencies change...&quot;
                   </p>
                 </div>
               </div>
@@ -307,7 +307,7 @@ export default function RespondToConfusionPage() {
             <CardContent>
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Today's Responses</span>
+                  <span className="text-muted-foreground">Today&apos;s Responses</span>
                   <span className="font-medium">12</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">

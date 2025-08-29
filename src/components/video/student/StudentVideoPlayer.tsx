@@ -1,12 +1,19 @@
 "use client"
 
-import { useRef, useEffect, useState } from "react"
+import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react"
 import { useAppStore } from "@/stores/app-store"
 import { cn } from "@/lib/utils"
 import { VideoEngine, VideoEngineRef } from "../shared/VideoEngine"
 import { VideoControls } from "../shared/VideoControls"
 import { VideoSeeker } from "../shared/VideoSeeker"
 import { TranscriptPanel } from "../shared/TranscriptPanel"
+
+export interface StudentVideoPlayerRef {
+  pause: () => void
+  play: () => void
+  isPaused: () => boolean
+  getCurrentTime: () => number
+}
 
 interface StudentVideoPlayerProps {
   videoUrl: string
@@ -17,9 +24,19 @@ interface StudentVideoPlayerProps {
   onPause?: (time: number) => void
   onPlay?: () => void
   onEnded?: () => void
+  // Nuclear segment props
+  onSetInPoint?: () => void
+  onSetOutPoint?: () => void
+  onSendToChat?: () => void
+  onClearSelection?: () => void
+  inPoint?: number | null
+  outPoint?: number | null
 }
 
-export function StudentVideoPlayer({
+export const StudentVideoPlayer = forwardRef<
+  StudentVideoPlayerRef,
+  StudentVideoPlayerProps
+>(({
   videoUrl,
   title,
   transcript,
@@ -28,7 +45,13 @@ export function StudentVideoPlayer({
   onPause,
   onPlay,
   onEnded,
-}: StudentVideoPlayerProps) {
+  onSetInPoint: onSetInPointProp,
+  onSetOutPoint: onSetOutPointProp,
+  onSendToChat: onSendToChatProp,
+  onClearSelection: onClearSelectionProp,
+  inPoint: inPointProp,
+  outPoint: outPointProp,
+}, ref) => {
   // console.log('📹 StudentVideoPlayer rendering with:', { videoUrl, title })
   
   const containerRef = useRef<HTMLDivElement>(null)
@@ -37,7 +60,7 @@ export function StudentVideoPlayer({
   const [videoDuration, setVideoDuration] = useState(0)
 
   // Get state and actions from Zustand store using individual selectors
-  // OLD: Generic video state (still needed for basic playback)
+  // Generic video state (still needed for basic playback)
   const isPlaying = useAppStore((state) => state.isPlaying)
   const currentTime = useAppStore((state) => state.currentTime)
   const duration = useAppStore((state) => state.duration)
@@ -47,13 +70,7 @@ export function StudentVideoPlayer({
   const showControls = useAppStore((state) => state.showControls)
   const showLiveTranscript = useAppStore((state) => state.showLiveTranscript)
   
-  // NEW: Student-specific video state (for segments and reflections)
-  const inPoint = useAppStore((state) => state.inPoint) // From student-video-slice
-  const outPoint = useAppStore((state) => state.outPoint) // From student-video-slice
-  const selectedSegment = useAppStore((state) => state.selectedSegment)
-  const reflections = useAppStore((state) => state.reflections)
-  
-  // OLD: Generic video actions
+  // Generic video actions
   const setIsPlaying = useAppStore((state) => state.setIsPlaying)
   const setCurrentTime = useAppStore((state) => state.setCurrentTime)
   const setDuration = useAppStore((state) => state.setDuration)
@@ -63,12 +80,22 @@ export function StudentVideoPlayer({
   const setShowControls = useAppStore((state) => state.setShowControls)
   const setShowLiveTranscript = useAppStore((state) => state.setShowLiveTranscript)
   
-  // NEW: Student-specific video actions
+  // Student-specific video actions
   const loadStudentVideo = useAppStore((state) => state.loadStudentVideo)
-  const setVideoSegment = useAppStore((state) => state.setVideoSegment)
-  const clearVideoSegment = useAppStore((state) => state.clearVideoSegment)
-  const addReflection = useAppStore((state) => state.addReflection)
-  const addTranscriptReference = useAppStore((state) => state.addTranscriptReference)
+  
+  // Expose imperative API for parent components
+  useImperativeHandle(ref, () => ({
+    pause: () => {
+      videoEngineRef.current?.pause()
+      setIsPlaying(false)
+    },
+    play: () => {
+      videoEngineRef.current?.play()
+      setIsPlaying(true)
+    },
+    isPaused: () => !isPlaying,
+    getCurrentTime: () => currentTime
+  }), [isPlaying, currentTime, setIsPlaying])
 
   // Load student-specific video data when component mounts
   useEffect(() => {
@@ -76,6 +103,22 @@ export function StudentVideoPlayer({
       loadStudentVideo(videoId)
     }
   }, [videoId, loadStudentVideo])
+
+  // Effect to manage controls visibility based on play state
+  useEffect(() => {
+    if (!isPlaying) {
+      // Always show controls when paused
+      setShowControls(true)
+      // Clear any existing timeout
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current)
+        controlsTimeoutRef.current = null
+      }
+    }
+  }, [isPlaying, setShowControls])
+
+  // Load student-specific video data when component mounts
+  // Removed the video sync effect since it was causing issues
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -130,10 +173,25 @@ export function StudentVideoPlayer({
       videoEngineRef.current.pause()
       setIsPlaying(false)
       onPause?.(currentTime)
+      // Show controls when paused
+      setShowControls(true)
+      // Clear any existing timeout
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current)
+        controlsTimeoutRef.current = null
+      }
     } else {
       videoEngineRef.current.play()
       setIsPlaying(true)
       onPlay?.()
+      // Show controls for 3 seconds when resuming
+      setShowControls(true)
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current)
+      }
+      controlsTimeoutRef.current = setTimeout(() => {
+        setShowControls(false)
+      }, 3000)
     }
   }
 
@@ -183,44 +241,37 @@ export function StudentVideoPlayer({
     }
   }
 
-  const handleSetInPoint = () => {
-    // Set in point at current time, keep out point as is or set to current time if not set
-    setVideoSegment(currentTime, outPoint !== null ? outPoint : currentTime)
-  }
+  // Use nuclear segment handlers from props if provided
+  const handleSetInPoint = onSetInPointProp || (() => {
+    console.log('Set in point - no handler provided')
+  })
 
-  const handleSetOutPoint = () => {
-    // Set out point at current time, keep in point as is or set to 0 if not set
-    setVideoSegment(inPoint !== null ? inPoint : 0, currentTime)
-  }
+  const handleSetOutPoint = onSetOutPointProp || (() => {
+    console.log('Set out point - no handler provided')
+  })
 
-  const handleSendToChat = () => {
-    if (inPoint !== null && outPoint !== null) {
-      const formatTime = (time: number) => {
-        const minutes = Math.floor(time / 60)
-        const seconds = Math.floor(time % 60)
-        return `${minutes}:${seconds.toString().padStart(2, "0")}`
-      }
-      
-      addTranscriptReference({
-        text: `[Video clip from ${formatTime(inPoint)} to ${formatTime(outPoint)}]`,
-        startTime: inPoint,
-        endTime: outPoint,
-        videoId: videoUrl,
-      })
-    }
-  }
+  const handleSendToChat = onSendToChatProp || (() => {
+    console.log('Send to chat - no handler provided')
+  })
+  
+  const handleClearSelection = onClearSelectionProp || (() => {
+    console.log('Clear selection - no handler provided')
+  })
 
   const handleMouseMove = () => {
     // Only call setShowControls if controls are not already showing
     if (!showControls) {
       setShowControls(true)
     }
-    if (controlsTimeoutRef.current) {
-      clearTimeout(controlsTimeoutRef.current)
+    // Only set timeout to hide controls if video is playing
+    if (isPlaying) {
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current)
+      }
+      controlsTimeoutRef.current = setTimeout(() => {
+        setShowControls(false)
+      }, 3000)
     }
-    controlsTimeoutRef.current = setTimeout(() => {
-      if (isPlaying) setShowControls(false)
-    }, 3000)
   }
 
   const handleTimeUpdate = (time: number) => {
@@ -239,7 +290,12 @@ export function StudentVideoPlayer({
       className="relative aspect-video bg-black rounded-lg overflow-hidden group focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-default"
       onMouseMove={handleMouseMove}
       onMouseEnter={() => !showControls && setShowControls(true)}
-      onMouseLeave={() => isPlaying && showControls && setShowControls(false)}
+      onMouseLeave={() => {
+        // Only hide on mouse leave if video is playing
+        if (isPlaying && showControls) {
+          setShowControls(false)
+        }
+      }}
       tabIndex={0}
       aria-label="Video player - Click to play/pause, use keyboard shortcuts for controls"
     >
@@ -267,12 +323,6 @@ export function StudentVideoPlayer({
           showControls ? "opacity-100" : "opacity-0"
         )}
       >
-        {title && (
-          <div className="absolute top-0 left-0 right-0 p-4 pointer-events-none">
-            <h3 className="text-white text-lg font-medium">{title}</h3>
-          </div>
-        )}
-
         <div 
           className="absolute bottom-0 left-0 right-0 px-4 pb-2 pt-4 pointer-events-auto z-30"
           onClick={(e) => e.stopPropagation()}
@@ -283,6 +333,8 @@ export function StudentVideoPlayer({
               duration={videoDuration || duration}
               onSeek={handleSeek}
               videoRef={videoEngineRef.current?.getVideoElement()}
+              inPoint={inPointProp}
+              outPoint={outPointProp}
             />
           </div>
 
@@ -304,7 +356,9 @@ export function StudentVideoPlayer({
             onSetInPoint={handleSetInPoint}
             onSetOutPoint={handleSetOutPoint}
             onSendToChat={handleSendToChat}
-            onClearSelection={clearVideoSegment}
+            onClearSelection={handleClearSelection}
+            inPoint={inPointProp}
+            outPoint={outPointProp}
           />
         </div>
       </div>
@@ -319,4 +373,6 @@ export function StudentVideoPlayer({
       )}
     </div>
   )
-}
+})
+
+StudentVideoPlayer.displayName = 'StudentVideoPlayer'

@@ -13,7 +13,7 @@ export default function HomePage() {
     <div className="flex min-h-screen flex-col">
       <Header />
       
-      <main className="flex-1">
+      <main className="flex-1 pt-16">
         <section className="relative overflow-hidden bg-gradient-to-b from-background to-muted py-20">
           <div className="container px-4">
             <div className="mx-auto max-w-3xl text-center">
@@ -229,7 +229,7 @@ export default function HomePage() {
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="h-4 w-4 text-green-500" />
-                    <span className="text-sm">View others' confusions & insights</span>
+                    <span className="text-sm">View others&apos; confusions & insights</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="h-4 w-4 text-green-500" />

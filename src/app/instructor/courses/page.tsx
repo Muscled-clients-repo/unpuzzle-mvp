@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAppStore } from "@/stores/app-store"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -28,7 +27,6 @@ import {
   Eye,
   Archive,
   Video,
-  Clock,
   AlertCircle
 } from "lucide-react"
 import {
@@ -38,39 +36,129 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Course } from "@/types/domain"
+
+// Extended interface for instructor course data with analytics
+interface InstructorCourseData extends Course {
+  status?: 'draft' | 'published' | 'archived' | 'under_review'
+  revenue?: number
+  completionRate?: number
+  lastUpdated?: string
+}
 
 export default function TeachCoursesPage() {
   const router = useRouter()
-  const { courses, loadCourses } = useAppStore()
+  const { 
+    instructorCourses,
+    loadInstructorCourses,
+    deleteCourse,
+    publishCourse,
+    unpublishCourse,
+    duplicateCourse,
+    loading,
+    error,
+    successMessage,
+    clearMessages,
+    profile
+  } = useAppStore()
+  
+  console.log('🔍 Current state:', { instructorCourses, loading, error, hasProfile: !!profile })
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [sortBy, setSortBy] = useState("lastUpdated")
   
+  // Action handlers
+  const handleArchiveCourse = async (courseId: string) => {
+    if (window.confirm('Are you sure you want to archive this course?')) {
+      await deleteCourse(courseId)
+    }
+  }
+  
+  const handlePublishToggle = async (courseId: string, isPublished: boolean) => {
+    if (isPublished) {
+      await unpublishCourse(courseId)
+    } else {
+      await publishCourse(courseId)
+    }
+  }
+  
+  const handleDuplicateCourse = async (courseId: string) => {
+    await duplicateCourse(courseId)
+  }
+  
   useEffect(() => {
-    loadCourses()
-  }, [loadCourses])
+    console.log('📋 Courses page mounted, loading instructor courses...')
+    loadInstructorCourses()
+  }, [loadInstructorCourses])
 
-  const filteredCourses = courses.filter(course => {
+  const filteredCourses = (instructorCourses || []).filter(course => {
     const matchesSearch = course.title.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStatus = statusFilter === "all" || course.status === statusFilter
+    const matchesStatus = statusFilter === "all" || (course as InstructorCourseData).status === statusFilter
     return matchesSearch && matchesStatus
   })
 
   const sortedCourses = [...filteredCourses].sort((a, b) => {
     switch (sortBy) {
       case 'students':
-        return b.students - a.students
+        return (b.enrollmentCount || 0) - (a.enrollmentCount || 0)
       case 'revenue':
-        return b.revenue - a.revenue
+        return ((b as InstructorCourseData).revenue || 0) - ((a as InstructorCourseData).revenue || 0)
       case 'completionRate':
-        return b.completionRate - a.completionRate
+        return ((b as InstructorCourseData).completionRate || 0) - ((a as InstructorCourseData).completionRate || 0)
       default:
         return 0 // Mock - would use actual dates
     }
   })
 
+  // Loading state
+  if (loading && (!instructorCourses || instructorCourses.length === 0)) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error && (!instructorCourses || instructorCourses.length === 0)) {
+    return (
+      <div className="container mx-auto p-6">
+        <Card className="p-12">
+          <div className="text-center">
+            <AlertCircle className="mx-auto h-12 w-12 text-destructive" />
+            <h3 className="mt-4 text-lg font-semibold">Failed to Load Courses</h3>
+            <p className="mt-2 text-sm text-muted-foreground">{error}</p>
+            <Button 
+              className="mt-4" 
+              onClick={() => loadInstructorCourses()}
+            >
+              Try Again
+            </Button>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="container mx-auto p-6 space-y-6">
+      {/* Notifications */}
+      {(successMessage || error) && (
+        <div className={`p-4 rounded-md flex justify-between items-center ${
+          successMessage ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'
+        }`}>
+          <p>{successMessage || error}</p>
+          <button 
+            onClick={clearMessages}
+            className="ml-4 text-sm underline hover:no-underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+      
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -93,9 +181,9 @@ export default function TeachCoursesPage() {
             <Video className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{courses.length}</div>
+            <div className="text-2xl font-bold">{(instructorCourses || []).length}</div>
             <p className="text-xs text-muted-foreground">
-              {courses.filter(c => c.status === 'published').length} published
+              {(instructorCourses || []).filter(c => (c as InstructorCourseData).status === 'published' || c.isPublished).length} published
             </p>
           </CardContent>
         </Card>
@@ -107,7 +195,7 @@ export default function TeachCoursesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {courses.reduce((acc, c) => acc + c.students, 0).toLocaleString()}
+              {(instructorCourses || []).reduce((acc, c) => acc + (c.enrollmentCount || 0), 0).toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
               Across all courses
@@ -122,7 +210,7 @@ export default function TeachCoursesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${courses.reduce((acc, c) => acc + c.revenue, 0).toLocaleString()}
+              ${(instructorCourses || []).reduce((acc, c) => acc + ((c as InstructorCourseData).revenue || 0), 0).toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
               Lifetime earnings
@@ -137,10 +225,14 @@ export default function TeachCoursesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {Math.round(
-                courses.filter(c => c.status === 'published').reduce((acc, c) => acc + c.completionRate, 0) / 
-                courses.filter(c => c.status === 'published').length
-              )}%
+              {(instructorCourses || []).filter(c => (c as InstructorCourseData).status === 'published' || c.isPublished).length > 0
+                ? Math.round(
+                    (instructorCourses || [])
+                      .filter(c => (c as InstructorCourseData).status === 'published' || c.isPublished)
+                      .reduce((acc, c) => acc + ((c as InstructorCourseData).completionRate || 0), 0) / 
+                    (instructorCourses || []).filter(c => (c as InstructorCourseData).status === 'published' || c.isPublished).length
+                  )
+                : 0}%
             </div>
             <p className="text-xs text-muted-foreground">
               Student success rate
@@ -197,12 +289,12 @@ export default function TeachCoursesPage() {
               <Badge 
                 className="absolute top-2 right-2"
                 variant={
-                  course.status === 'published' ? 'default' :
-                  course.status === 'draft' ? 'secondary' :
+                  (course as InstructorCourseData).status === 'published' || course.isPublished ? 'default' :
+                  (course as InstructorCourseData).status === 'draft' || !course.isPublished ? 'secondary' :
                   'outline'
                 }
               >
-                {course.status}
+                {(course as InstructorCourseData).status || (course.isPublished ? 'published' : 'draft')}
               </Badge>
               {course.pendingConfusions > 0 && (
                 <Badge className="absolute top-2 left-2" variant="destructive">
@@ -235,7 +327,10 @@ export default function TeachCoursesPage() {
                       Preview as Student
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive">
+                    <DropdownMenuItem 
+                      className="text-destructive"
+                      onClick={() => handleArchiveCourse(course.id)}
+                    >
                       <Archive className="mr-2 h-4 w-4" />
                       Archive Course
                     </DropdownMenuItem>
@@ -248,30 +343,30 @@ export default function TeachCoursesPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Videos</span>
-                  <span className="font-medium">{course.totalVideos}</span>
+                  <span className="font-medium">{course.videos?.length || 0}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Duration</span>
-                  <span className="font-medium">{course.totalDuration}</span>
+                  <span className="font-medium">{Math.floor((course.duration || 0) / 60)} min</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Students</span>
-                  <span className="font-medium">{course.students.toLocaleString()}</span>
+                  <span className="font-medium">{(course.enrollmentCount || 0).toLocaleString()}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Completion</span>
-                  <span className="font-medium">{course.completionRate}%</span>
+                  <span className="font-medium">{(course as InstructorCourseData).completionRate || 0}%</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Revenue</span>
                   <span className="font-medium text-green-600">
-                    ${course.revenue.toLocaleString()}
+                    ${((course as InstructorCourseData).revenue || 0).toLocaleString()}
                   </span>
                 </div>
                 
                 <div className="pt-3 border-t">
                   <p className="text-xs text-muted-foreground">
-                    Last updated {course.lastUpdated}
+                    Last updated {new Date(course.updatedAt || Date.now()).toLocaleDateString()}
                   </p>
                 </div>
                 

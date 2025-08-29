@@ -10,7 +10,6 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Select,
   SelectContent,
@@ -21,15 +20,12 @@ import {
 import { 
   Upload,
   Plus,
-  Video,
-  Folder,
   GripVertical,
   X,
   Save,
   ChevronRight,
   AlertCircle,
   CheckCircle,
-  Clock,
   Loader2,
   FileVideo,
   ChevronDown,
@@ -45,11 +41,11 @@ export default function CreateCoursePage() {
     currentStep,
     uploadQueue,
     isAutoSaving,
+    saveError,
     setCourseInfo,
     addVideosToQueue,
     updateVideoName,
     removeVideo,
-    createChapter,
     updateChapter,
     deleteChapter,
     moveVideoToChapter,
@@ -58,7 +54,9 @@ export default function CreateCoursePage() {
     saveDraft,
     publishCourse,
     setCurrentStep,
-    toggleAutoSave
+    toggleAutoSave,
+    clearSaveError,
+    retryAutoSave
   } = useAppStore()
 
   const [draggedVideo, setDraggedVideo] = useState<string | null>(null)
@@ -69,10 +67,11 @@ export default function CreateCoursePage() {
   const [chapterTitle, setChapterTitle] = useState("")
   const [editingVideo, setEditingVideo] = useState<string | null>(null)
   const [videoTitle, setVideoTitle] = useState("")
+  const [saveMessage, setSaveMessage] = useState<string | null>(null)
 
   // Auto-expand first chapter when it has videos
   useEffect(() => {
-    const firstChapter = courseCreation?.chapters[0]
+    const firstChapter = courseCreation?.chapters?.[0]
     if (firstChapter?.id && firstChapter.videos.length > 0) {
       setExpandedChapters(prev => {
         const next = new Set(prev)
@@ -80,26 +79,51 @@ export default function CreateCoursePage() {
         return next
       })
     }
-  }, [courseCreation?.chapters[0]?.videos.length])
+  }, [courseCreation?.chapters])
 
   // Initialize course if not exists
   useEffect(() => {
     if (!courseCreation) {
+      // Create initial chapter locally without API call
+      const initialChapter = {
+        id: `temp-chapter-${Date.now()}`,
+        title: 'Chapter 1',
+        description: '',
+        order: 1,
+        videos: []
+      }
+      
       setCourseInfo({
         title: '',
         description: '',
         category: '',
         level: 'beginner',
         price: 0,
-        chapters: [],
+        chapters: [initialChapter],
         videos: [],
         status: 'draft',
-        autoSaveEnabled: true
+        autoSaveEnabled: false
       })
-      // Auto-create Chapter 1
-      createChapter('Chapter 1')
     }
-  }, [courseCreation, setCourseInfo, createChapter])
+  }, [courseCreation, setCourseInfo])
+
+  // Create local chapter (before course is saved)
+  const createLocalChapter = useCallback((title: string) => {
+    if (!courseCreation) return
+    
+    const newChapter = {
+      id: `temp-chapter-${Date.now()}`,
+      title,
+      description: '',
+      order: courseCreation.chapters.length + 1,
+      videos: []
+    }
+    
+    setCourseInfo({
+      ...courseCreation,
+      chapters: [...courseCreation.chapters, newChapter]
+    })
+  }, [courseCreation, setCourseInfo])
 
   // Handle file drop
   const handleFileDrop = useCallback((e: React.DragEvent) => {
@@ -169,6 +193,51 @@ export default function CreateCoursePage() {
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
+      {/* Success Message */}
+      {saveMessage && (
+        <div className="mb-4 p-4 bg-green-50 text-green-800 border border-green-200 rounded-md flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="h-5 w-5" />
+            <p>{saveMessage}</p>
+          </div>
+          <button 
+            onClick={() => setSaveMessage(null)}
+            className="text-sm underline hover:no-underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Error Message */}
+      {saveError && (
+        <div className="mb-4 p-4 bg-red-50 text-red-800 border border-red-200 rounded-md">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertCircle className="h-5 w-5" />
+            <p className="font-medium">Failed to save course</p>
+          </div>
+          <p className="text-sm mb-3">{saveError}</p>
+          <div className="flex gap-3">
+            <button 
+              onClick={retryAutoSave}
+              className="text-sm bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 disabled:opacity-50"
+              disabled={isAutoSaving}
+            >
+              {isAutoSaving ? 'Retrying...' : 'Retry'}
+            </button>
+            <button 
+              onClick={clearSaveError}
+              className="text-sm border border-red-300 px-3 py-1 rounded hover:bg-red-100"
+            >
+              Dismiss
+            </button>
+          </div>
+          <p className="text-xs mt-2 text-red-600">
+            Auto-save is paused until this error is resolved. Make changes to retry automatically.
+          </p>
+        </div>
+      )}
+      
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
@@ -184,10 +253,48 @@ export default function CreateCoursePage() {
               Saving...
             </div>
           )}
-          <Button variant="outline" onClick={saveDraft}>
+          {saveError && (
+            <div className="flex items-center gap-2 text-sm text-red-600">
+              <AlertCircle className="h-4 w-4" />
+              Save failed
+            </div>
+          )}
+          {courseCreation?.lastSaved && !isAutoSaving && !saveError && (
+            <div className="flex items-center gap-2 text-sm text-green-600">
+              <CheckCircle className="h-4 w-4" />
+              Saved {new Date(courseCreation.lastSaved).toLocaleTimeString()}
+            </div>
+          )}
+          <Button 
+            variant="outline" 
+            onClick={async () => {
+              // Clear any existing error before manual save
+              clearSaveError()
+              await saveDraft()
+              
+              // Check if save was successful (no error after attempting)
+              const currentState = useAppStore.getState()
+              if (!currentState.saveError) {
+                setSaveMessage('Course draft saved successfully!')
+                setTimeout(() => setSaveMessage(null), 3000)
+              }
+            }}
+            disabled={isAutoSaving}
+          >
             <Save className="mr-2 h-4 w-4" />
             Save Draft
           </Button>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={courseCreation?.autoSaveEnabled || false}
+                onChange={toggleAutoSave}
+                className="rounded"
+              />
+              Auto-save
+            </label>
+          </div>
           <Button 
             onClick={publishCourse}
             disabled={!courseCreation?.title || (courseCreation?.videos.length || 0) === 0}
@@ -296,7 +403,7 @@ export default function CreateCoursePage() {
                 <Label htmlFor="level">Level</Label>
                 <Select 
                   value={courseCreation?.level || 'beginner'}
-                  onValueChange={(value: any) => setCourseInfo({ level: value })}
+                  onValueChange={(value: 'beginner' | 'intermediate' | 'advanced') => setCourseInfo({ level: value })}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -397,7 +504,7 @@ export default function CreateCoursePage() {
                       Organize your videos into chapters
                     </CardDescription>
                   </div>
-                  <Button onClick={() => createChapter(`Chapter ${(courseCreation?.chapters.length || 0) + 1}`)}>
+                  <Button onClick={() => createLocalChapter(`Chapter ${(courseCreation?.chapters.length || 0) + 1}`)}>
                     <Plus className="mr-2 h-4 w-4" />
                     Add Chapter
                   </Button>

@@ -1,0 +1,2613 @@
+{
+	"info": {
+		"_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+		"name": "Unpuzzle MVP API - Complete",
+		"description": "Complete API collection for Unpuzzle MVP backend with all endpoints including Session Management, RBAC, Course Management System, and Advanced Media Upload with Backblaze B2 integration. Updated with comprehensive video upload workflow and file management capabilities.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"version": "2.1.0"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Core Authentication",
+					"item": [
+						{
+							"name": "Sign Up",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 201 || pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    if (response.data && response.data.user) {",
+											"        pm.environment.set('user_id', response.data.user.id);",
+											"    }",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"SecurePassword123!\",\n    \"metadata\": {\n        \"full_name\": \"John Doe\",\n        \"phone\": \"+1234567890\"\n    }\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/signup",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"auth",
+										"signup"
+									]
+								},
+								"description": "Create a new user account with email verification. Rate limited to 5 requests per minute."
+							},
+							"response": []
+						},
+						{
+							"name": "Login",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    if (response.data) {",
+											"        if (response.data.user) {",
+											"            pm.environment.set('user_id', response.data.user.id);",
+											"        }",
+											"        if (response.data.csrf_token) {",
+											"            pm.environment.set('csrf_token', response.data.csrf_token);",
+											"        }",
+											"        if (response.data.session_id) {",
+											"            pm.environment.set('session_id', response.data.session_id);",
+											"        }",
+											"    }",
+											"    ",
+											"    // Extract cookies",
+											"    const cookies = pm.response.cookies;",
+											"    const accessToken = cookies.find(c => c.name === 'access_token');",
+											"    const refreshToken = cookies.find(c => c.name === 'refresh_token');",
+											"    ",
+											"    if (accessToken) {",
+											"        pm.environment.set('access_token', accessToken.value);",
+											"    }",
+											"    if (refreshToken) {",
+											"        pm.environment.set('refresh_token', refreshToken.value);",
+											"    }",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"SecurePassword123!\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/login",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"auth",
+										"login"
+									]
+								},
+								"description": "Authenticate user and receive access/refresh tokens via cookies. Creates a new session. Rate limited to 10 requests per minute."
+							},
+							"response": []
+						},
+						{
+							"name": "Logout",
+							"request": {
+								"auth": {
+									"type": "noauth"
+								},
+								"method": "POST",
+								"header": [
+									{
+										"key": "Cookie",
+										"value": "access_token={{access_token}}; refresh_token={{refresh_token}}",
+										"description": "Authentication cookies"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/logout",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"auth",
+										"logout"
+									]
+								},
+								"description": "Logout the current user, terminate session and clear authentication cookies. Requires authentication."
+							},
+							"response": []
+						},
+						{
+							"name": "Refresh Token",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const cookies = pm.response.cookies;",
+											"    const accessToken = cookies.find(c => c.name === 'access_token');",
+											"    const refreshToken = cookies.find(c => c.name === 'refresh_token');",
+											"    ",
+											"    if (accessToken) {",
+											"        pm.environment.set('access_token', accessToken.value);",
+											"    }",
+											"    if (refreshToken) {",
+											"        pm.environment.set('refresh_token', refreshToken.value);",
+											"    }",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Cookie",
+										"value": "refresh_token={{refresh_token}}",
+										"description": "Refresh token cookie"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/refresh",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"auth",
+										"refresh"
+									]
+								},
+								"description": "Refresh access token using refresh token. Rate limited to 30 requests per minute."
+							},
+							"response": []
+						},
+						{
+							"name": "Get CSRF Token",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    if (response.data && response.data.csrf_token) {",
+											"        pm.environment.set('csrf_token', response.data.csrf_token);",
+											"    }",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Cookie",
+										"value": "access_token={{access_token}}",
+										"description": "Authentication cookie"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/csrf-token",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"auth",
+										"csrf-token"
+									]
+								},
+								"description": "Get CSRF token for protected requests. Requires authentication."
+							},
+							"response": []
+						}
+					],
+					"description": "Core authentication endpoints for user registration, login, logout, and token management"
+				},
+				{
+					"name": "Session Management",
+					"item": [
+						{
+							"name": "Get User Sessions",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    if (response.data && response.data.sessions && response.data.sessions.length > 0) {",
+											"        // Store the first session ID for testing other endpoints",
+											"        pm.environment.set('test_session_id', response.data.sessions[0].id);",
+											"    }",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Cookie",
+										"value": "access_token={{access_token}}",
+										"description": "Authentication cookie"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/sessions",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"auth",
+										"sessions"
+									]
+								},
+								"description": "Get all active sessions for the current user. Shows device info, IP addresses, and last activity for each session. Requires authentication."
+							},
+							"response": []
+						},
+						{
+							"name": "Revoke Specific Session",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Cookie",
+										"value": "access_token={{access_token}}",
+										"description": "Authentication cookie"
+									},
+									{
+										"key": "X-CSRF-Token",
+										"value": "{{csrf_token}}",
+										"description": "CSRF protection token"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/sessions/{{test_session_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"auth",
+										"sessions",
+										"{{test_session_id}}"
+									]
+								},
+								"description": "Revoke a specific user session by ID. Useful for logging out from a specific device. Requires authentication and CSRF token."
+							},
+							"response": []
+						},
+						{
+							"name": "Revoke All Sessions",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Cookie",
+										"value": "access_token={{access_token}}",
+										"description": "Authentication cookie"
+									},
+									{
+										"key": "X-CSRF-Token",
+										"value": "{{csrf_token}}",
+										"description": "CSRF protection token"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/sessions/revoke-all",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"auth",
+										"sessions",
+										"revoke-all"
+									]
+								},
+								"description": "Revoke all user sessions except the current one. Logs out from all other devices. Requires authentication and CSRF token."
+							},
+							"response": []
+						}
+					],
+					"description": "Session management endpoints for multi-device support and security"
+				},
+				{
+					"name": "Role-Based Access Control",
+					"item": [
+						{
+							"name": "Get User Roles",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    if (response.data && response.data.roles) {",
+											"        pm.environment.set('user_roles', JSON.stringify(response.data.roles));",
+											"    }",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Cookie",
+										"value": "access_token={{access_token}}",
+										"description": "Authentication cookie"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/roles",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"auth",
+										"roles"
+									]
+								},
+								"description": "Get the current user's roles and permissions. Returns role names, permissions, and metadata. Requires authentication."
+							},
+							"response": []
+						},
+						{
+							"name": "Assign User Role (Admin)",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Cookie",
+										"value": "access_token={{access_token}}",
+										"description": "Authentication cookie (must be admin)"
+									},
+									{
+										"key": "X-CSRF-Token",
+										"value": "{{csrf_token}}",
+										"description": "CSRF protection token"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"role\": \"instructor\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/users/{{target_user_id}}/roles",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"auth",
+										"users",
+										"{{target_user_id}}",
+										"roles"
+									]
+								},
+								"description": "Assign a role to a user. Requires admin privileges (user:manage_roles permission) and CSRF token."
+							},
+							"response": []
+						},
+						{
+							"name": "Check User Permission",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Cookie",
+										"value": "access_token={{access_token}}",
+										"description": "Authentication cookie"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"permission\": \"course:create\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/check-permission",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"auth",
+										"check-permission"
+									]
+								},
+								"description": "Check if the current user has a specific permission. Returns true/false. Requires authentication."
+							},
+							"response": []
+						},
+						{
+							"name": "Check User Role",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Cookie",
+										"value": "access_token={{access_token}}",
+										"description": "Authentication cookie"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"role\": \"instructor\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/check-role",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"auth",
+										"check-role"
+									]
+								},
+								"description": "Check if the current user has a specific role. Returns true/false. Requires authentication."
+							},
+							"response": []
+						}
+					],
+					"description": "Role-Based Access Control (RBAC) endpoints for managing user roles and permissions"
+				}
+			],
+			"description": "Authentication endpoints including core auth, session management, and RBAC"
+		},
+		{
+			"name": "User",
+			"item": [
+				{
+					"name": "Get Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/user/profile",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"user",
+								"profile"
+							]
+						},
+						"description": "Get the current user's complete profile information including metadata. Rate limited to 60 requests per minute. Requires authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"full_name\": \"John Doe Updated\",\n    \"phone\": \"+1987654321\",\n    \"metadata\": {\n        \"bio\": \"Software Developer\",\n        \"location\": \"San Francisco, CA\",\n        \"skills\": [\"Python\", \"JavaScript\", \"React\"]\n    }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/user/profile",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"user",
+								"profile"
+							]
+						},
+						"description": "Update the current user's profile information and metadata. Rate limited to 10 requests per minute. Requires authentication and CSRF token."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Account",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/user/profile",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"user",
+								"profile"
+							]
+						},
+						"description": "Permanently delete the current user's account. This action cannot be undone. Rate limited to 1 request per hour. Requires authentication and CSRF token."
+					},
+					"response": []
+				}
+			],
+			"description": "User profile management endpoints"
+		},
+		{
+			"name": "Public Courses",
+			"item": [
+				{
+					"name": "Get All Courses",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    if (response.data && response.data.courses && response.data.courses.length > 0) {",
+									"        pm.environment.set('course_id', response.data.courses[0].id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/courses?search=&difficulty=all&category=&priceRange=all&minRating=&instructor=&sortBy=newest&page=1&limit=20",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"courses"
+							],
+							"query": [
+								{
+									"key": "search",
+									"value": "",
+									"description": "Search term for course title/description"
+								},
+								{
+									"key": "difficulty",
+									"value": "all",
+									"description": "Filter by difficulty: all, beginner, intermediate, advanced"
+								},
+								{
+									"key": "category",
+									"value": "",
+									"description": "Filter by category"
+								},
+								{
+									"key": "priceRange",
+									"value": "all",
+									"description": "Filter by price: all, free, paid"
+								},
+								{
+									"key": "minRating",
+									"value": "",
+									"description": "Minimum rating filter (1-5)"
+								},
+								{
+									"key": "instructor",
+									"value": "",
+									"description": "Filter by instructor name"
+								},
+								{
+									"key": "sortBy",
+									"value": "newest",
+									"description": "Sort options: popular, newest, price-asc, price-desc, rating"
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number for pagination"
+								},
+								{
+									"key": "limit",
+									"value": "20",
+									"description": "Items per page (max 100)"
+								}
+							]
+						},
+						"description": "Get all public courses with comprehensive filtering, sorting and pagination. No authentication required. Rate limited to 100 requests per minute."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Course by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/courses/{{course_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"courses",
+								"{{course_id}}"
+							]
+						},
+						"description": "Get detailed course information by ID including videos, sections, and metadata. No authentication required. Rate limited to 100 requests per minute."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Course Reviews",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/courses/{{course_id}}/reviews?page=1&limit=20",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"courses",
+								"{{course_id}}",
+								"reviews"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number"
+								},
+								{
+									"key": "limit",
+									"value": "20",
+									"description": "Reviews per page"
+								}
+							]
+						},
+						"description": "Get paginated reviews for a course with user information. No authentication required. Rate limited to 100 requests per minute."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Recommended Courses",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/courses/recommended",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"courses",
+								"recommended"
+							]
+						},
+						"description": "Get personalized course recommendations based on user history and preferences. Requires authentication. Rate limited to 50 requests per minute."
+					},
+					"response": []
+				}
+			],
+			"description": "Public course browsing endpoints (authentication optional except for recommendations)"
+		},
+		{
+			"name": "Student",
+			"item": [
+				{
+					"name": "Get Enrolled Courses",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/student/courses",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"student",
+								"courses"
+							]
+						},
+						"description": "Get all courses the student is enrolled in with progress information. Rate limited to 100 requests per minute. Requires authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Enroll in Course",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    if (response.data && response.data.enrollmentId) {",
+									"        pm.environment.set('enrollment_id', response.data.enrollmentId);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"paymentMethod\": \"credit_card\",\n    \"couponCode\": \"DISCOUNT20\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/student/courses/{{course_id}}/enroll",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"student",
+								"courses",
+								"{{course_id}}",
+								"enroll"
+							]
+						},
+						"description": "Enroll in a course with optional payment and coupon. Rate limited to 10 requests per minute. Requires authentication and CSRF token."
+					},
+					"response": []
+				},
+				{
+					"name": "Unenroll from Course",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/student/courses/{{course_id}}/unenroll",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"student",
+								"courses",
+								"{{course_id}}",
+								"unenroll"
+							]
+						},
+						"description": "Unenroll from a course. May trigger refund process. Rate limited to 10 requests per minute. Requires authentication and CSRF token."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Course Progress",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/student/courses/{{course_id}}/progress",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"student",
+								"courses",
+								"{{course_id}}",
+								"progress"
+							]
+						},
+						"description": "Get detailed course progress including videos completed, quiz scores, and certificate status. Rate limited to 100 requests per minute. Requires authentication and enrollment."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Video Progress",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/student/videos/{{video_id}}/progress",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"student",
+								"videos",
+								"{{video_id}}",
+								"progress"
+							]
+						},
+						"description": "Get detailed video watching progress including timestamps and bookmarks. Rate limited to 100 requests per minute. Requires authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Video Progress",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"watchedSeconds\": 450,\n    \"lastPosition\": 450,\n    \"playbackSpeed\": 1.5\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/student/videos/{{video_id}}/progress",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"student",
+								"videos",
+								"{{video_id}}",
+								"progress"
+							]
+						},
+						"description": "Update video watching progress in real-time. Rate limited to 500 requests per minute for smooth playback tracking. Requires authentication and CSRF token."
+					},
+					"response": []
+				},
+				{
+					"name": "Mark Video Complete",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/student/videos/{{video_id}}/complete",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"student",
+								"videos",
+								"{{video_id}}",
+								"complete"
+							]
+						},
+						"description": "Mark a video as fully completed. Updates course progress. Rate limited to 50 requests per minute. Requires authentication and CSRF token."
+					},
+					"response": []
+				},
+				{
+					"name": "Submit Quiz Answer",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"answer\": 2,\n    \"timeSpent\": 30\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/student/videos/{{video_id}}/quiz/{{quiz_id}}/answer",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"student",
+								"videos",
+								"{{video_id}}",
+								"quiz",
+								"{{quiz_id}}",
+								"answer"
+							]
+						},
+						"description": "Submit an answer to a quiz question. Returns correct answer and explanation. Rate limited to 50 requests per minute. Requires authentication, enrollment, and CSRF token."
+					},
+					"response": []
+				},
+				{
+					"name": "Submit Course Review",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"rating\": 5,\n    \"title\": \"Excellent Course!\",\n    \"comment\": \"Very comprehensive and well-structured. The instructor explains concepts clearly.\",\n    \"pros\": [\"Clear explanations\", \"Good examples\", \"Practical projects\"],\n    \"cons\": [\"Could use more exercises\"]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/student/courses/{{course_id}}/review",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"student",
+								"courses",
+								"{{course_id}}",
+								"review"
+							]
+						},
+						"description": "Submit or update a review for a course. One review per student per course. Rate limited to 10 requests per minute. Requires authentication, enrollment, and CSRF token."
+					},
+					"response": []
+				}
+			],
+			"description": "Student-specific endpoints for enrollment, progress tracking, and course interaction"
+		},
+		{
+			"name": "Instructor",
+			"item": [
+				{
+					"name": "Get Instructor Courses",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/instructor/courses",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"instructor",
+								"courses"
+							]
+						},
+						"description": "Get all courses created by the instructor with detailed analytics. Rate limited to 100 requests per minute. Requires authentication and instructor role."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Instructor Course by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/instructor/courses/{{course_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"instructor",
+								"courses",
+								"{{course_id}}"
+							]
+						},
+						"description": "Get a specific course by ID with all videos. Instructor must own the course. Rate limited to 100 requests per minute. Requires authentication and instructor role."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Course",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    if (response.data && response.data.id) {",
+									"        pm.environment.set('new_course_id', response.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Advanced React Development\",\n    \"description\": \"Master React with advanced patterns and best practices\",\n    \"shortDescription\": \"Learn advanced React patterns\",\n    \"thumbnailUrl\": \"https://example.com/thumb.jpg\",\n    \"price\": 99.99,\n    \"currency\": \"USD\",\n    \"duration\": 3600,\n    \"difficulty\": \"advanced\",\n    \"language\": \"en\",\n    \"tags\": [\"react\", \"javascript\", \"frontend\"],\n    \"category\": \"Web Development\",\n    \"isFree\": false,\n    \"prerequisites\": [\"Basic JavaScript knowledge\", \"React fundamentals\"],\n    \"learningOutcomes\": [\"Build complex React applications\", \"Implement advanced patterns\"],\n    \"targetAudience\": [\"Intermediate developers\", \"Senior developers\"],\n    \"courseStructure\": {\n        \"modules\": 10,\n        \"totalVideos\": 50,\n        \"assignments\": 5\n    }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/instructor/courses",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"instructor",
+								"courses"
+							]
+						},
+						"description": "Create a new course in draft status. Rate limited to 10 requests per minute. Requires authentication, instructor role, and CSRF token."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Course",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Updated Course Title\",\n    \"description\": \"Updated comprehensive description\",\n    \"price\": 89.99,\n    \"tags\": [\"react\", \"typescript\", \"advanced\"],\n    \"seoMetadata\": {\n        \"metaTitle\": \"Learn Advanced React\",\n        \"metaDescription\": \"Master React development\"\n    }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/instructor/courses/{{course_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"instructor",
+								"courses",
+								"{{course_id}}"
+							]
+						},
+						"description": "Update course details. Cannot update published courses' core content. Rate limited to 50 requests per minute. Requires authentication, course ownership, and CSRF token."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Course",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/instructor/courses/{{course_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"instructor",
+								"courses",
+								"{{course_id}}"
+							]
+						},
+						"description": "Soft delete a course. Course data is preserved but hidden. Rate limited to 10 requests per minute. Requires authentication, course ownership, and CSRF token."
+					},
+					"response": []
+				},
+				{
+					"name": "Publish Course",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/instructor/courses/{{course_id}}/publish",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"instructor",
+								"courses",
+								"{{course_id}}",
+								"publish"
+							]
+						},
+						"description": "Publish a course to make it publicly available. Requires at least one video. Rate limited to 20 requests per minute. Requires authentication, course ownership, and CSRF token."
+					},
+					"response": []
+				},
+				{
+					"name": "Unpublish Course",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/instructor/courses/{{course_id}}/unpublish",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"instructor",
+								"courses",
+								"{{course_id}}",
+								"unpublish"
+							]
+						},
+						"description": "Unpublish a course to make it private. Enrolled students retain access. Rate limited to 20 requests per minute. Requires authentication, course ownership, and CSRF token."
+					},
+					"response": []
+				},
+				{
+					"name": "Duplicate Course",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/instructor/courses/{{course_id}}/duplicate",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"instructor",
+								"courses",
+								"{{course_id}}",
+								"duplicate"
+							]
+						},
+						"description": "Create a duplicate of an existing course with all content. New course starts in draft status. Rate limited to 10 requests per minute. Requires authentication, course ownership, and CSRF token."
+					},
+					"response": []
+				},
+				{
+					"name": "Add Video to Course",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    if (response.data && response.data.id) {",
+									"        pm.environment.set('video_id', response.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Introduction to Hooks\",\n    \"description\": \"Learn about React Hooks fundamentals\",\n    \"videoUrl\": \"https://example.com/video.mp4\",\n    \"videoProvider\": \"vimeo\",\n    \"thumbnailUrl\": \"https://example.com/thumb.jpg\",\n    \"duration\": 600,\n    \"order\": 1,\n    \"sectionId\": null,\n    \"isPreview\": false,\n    \"isDownloadable\": false,\n    \"transcriptUrl\": \"https://example.com/transcript.vtt\",\n    \"subtitlesUrl\": \"https://example.com/subtitles.vtt\",\n    \"resources\": [\n        {\"title\": \"Slides\", \"url\": \"https://example.com/slides.pdf\"},\n        {\"title\": \"Code Examples\", \"url\": \"https://github.com/example\"}\n    ],\n    \"quizPoints\": [\n        {\n            \"timestamp\": 300,\n            \"question\": \"What is the purpose of useEffect?\",\n            \"options\": [\n                \"To manage state\",\n                \"To handle side effects\",\n                \"To create components\",\n                \"To style components\"\n            ],\n            \"correctAnswer\": 1,\n            \"explanation\": \"useEffect is used to handle side effects in functional components.\"\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/instructor/courses/{{course_id}}/videos",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"instructor",
+								"courses",
+								"{{course_id}}",
+								"videos"
+							]
+						},
+						"description": "Add a new video to a course with optional quiz questions. Rate limited to 20 requests per minute. Requires authentication, course ownership, and CSRF token."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Video",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Updated Video Title\",\n    \"description\": \"Updated comprehensive description\",\n    \"order\": 2,\n    \"isPreview\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/instructor/videos/{{video_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"instructor",
+								"videos",
+								"{{video_id}}"
+							]
+						},
+						"description": "Update video details and metadata. Rate limited to 50 requests per minute. Requires authentication, course ownership, and CSRF token."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Video",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/instructor/videos/{{video_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"instructor",
+								"videos",
+								"{{video_id}}"
+							]
+						},
+						"description": "Remove a video from a course. Updates video order automatically. Rate limited to 20 requests per minute. Requires authentication, course ownership, and CSRF token."
+					},
+					"response": []
+				},
+				{
+					"name": "Reorder Videos",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"videoIds\": [\"video-3\", \"video-1\", \"video-2\", \"video-4\"]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/instructor/courses/{{course_id}}/videos/reorder",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"instructor",
+								"courses",
+								"{{course_id}}",
+								"videos",
+								"reorder"
+							]
+						},
+						"description": "Reorder videos within a course. Provide complete ordered list of video IDs. Rate limited to 20 requests per minute. Requires authentication, course ownership, and CSRF token."
+					},
+					"response": []
+				}
+			],
+			"description": "Instructor-specific endpoints for course and video management"
+		},
+		{
+			"name": "AI Features",
+			"item": [
+				{
+					"name": "Get Course Recommendations",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/ai/courses/{{course_id}}/recommendations",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"ai",
+								"courses",
+								"{{course_id}}",
+								"recommendations"
+							]
+						},
+						"description": "Get AI-powered recommendations for course improvement. Analyzes engagement patterns and suggests optimizations. Rate limited to 50 requests per minute. Instructor only."
+					},
+					"response": []
+				},
+				{
+					"name": "Generate Course Outline",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"topic\": \"Python Programming\",\n    \"level\": \"intermediate\",\n    \"duration\": 10,\n    \"targetAudience\": \"Web developers transitioning to Python\",\n    \"learningGoals\": [\"Master Python fundamentals\", \"Build web applications\", \"Data processing\"]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/ai/courses/generate-outline",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"ai",
+								"courses",
+								"generate-outline"
+							]
+						},
+						"description": "Generate a comprehensive course outline using AI. Rate limited to 20 requests per minute. Requires authentication and CSRF token."
+					},
+					"response": []
+				},
+				{
+					"name": "Get AI Chat History",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/ai/videos/{{video_id}}/chat",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"ai",
+								"videos",
+								"{{video_id}}",
+								"chat"
+							]
+						},
+						"description": "Get AI chat history for a specific video. Returns all conversations with context. Rate limited to 100 requests per minute. Requires authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Send AI Chat Message",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"message\": \"Can you explain this concept in more detail?\",\n    \"videoContext\": {\n        \"startTime\": 120,\n        \"endTime\": 180,\n        \"content\": \"Introduction to functions\"\n    },\n    \"sessionId\": \"{{chat_session_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/ai/videos/{{video_id}}/chat",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"ai",
+								"videos",
+								"{{video_id}}",
+								"chat"
+							]
+						},
+						"description": "Send a message to AI tutor about video content. Includes video context for accurate responses. Rate limited to 50 requests per minute. Requires authentication and CSRF token."
+					},
+					"response": []
+				},
+				{
+					"name": "Analyze Course Engagement",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/ai/courses/{{course_id}}/analyze-engagement",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"ai",
+								"courses",
+								"{{course_id}}",
+								"analyze-engagement"
+							]
+						},
+						"description": "Analyze student engagement patterns using AI. Provides insights on drop-off points and improvement areas. Rate limited to 30 requests per minute. Instructor only."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Personalized Learning Path",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/ai/users/learning-path",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"ai",
+								"users",
+								"learning-path"
+							]
+						},
+						"description": "Get personalized learning path recommendations based on user history, preferences, and goals. Rate limited to 30 requests per minute. Requires authentication."
+					},
+					"response": []
+				}
+			],
+			"description": "AI-powered features for course recommendations, chat, and analytics"
+		},
+		{
+			"name": "File Upload",
+			"item": [
+				{
+					"name": "Upload Video",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "video",
+									"type": "file",
+									"src": "/path/to/video.mp4",
+									"description": "Video file (MP4, WebM, MOV)"
+								},
+								{
+									"key": "course_id",
+									"value": "{{course_id}}",
+									"type": "text",
+									"description": "Course ID to associate video with"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/videos/upload",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"videos",
+								"upload"
+							]
+						},
+						"description": "Upload a video file for a course. Max size depends on server config. Rate limited to 10 requests per minute. Instructor only with CSRF token."
+					},
+					"response": []
+				},
+				{
+					"name": "Upload Thumbnail",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "thumbnail",
+									"type": "file",
+									"src": "/path/to/image.jpg",
+									"description": "Image file (JPG, PNG, WebP)"
+								},
+								{
+									"key": "resource_id",
+									"value": "{{resource_id}}",
+									"type": "text",
+									"description": "Resource ID (course or video)"
+								},
+								{
+									"key": "resource_type",
+									"value": "course",
+									"type": "text",
+									"description": "Resource type: 'course' or 'video'"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/thumbnails/upload",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"thumbnails",
+								"upload"
+							]
+						},
+						"description": "Upload a thumbnail image for a course or video. Rate limited to 20 requests per minute. Instructor only with CSRF token."
+					},
+					"response": []
+				},
+				{
+					"name": "Upload Document",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "document",
+									"type": "file",
+									"src": "/path/to/document.pdf",
+									"description": "Document file (PDF, DOC, DOCX)"
+								},
+								{
+									"key": "course_id",
+									"value": "{{course_id}}",
+									"type": "text",
+									"description": "Course ID"
+								},
+								{
+									"key": "title",
+									"value": "Course Materials",
+									"type": "text",
+									"description": "Document title"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/documents/upload",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"documents",
+								"upload"
+							]
+						},
+						"description": "Upload a document file for course resources. Rate limited to 20 requests per minute. Instructor only with CSRF token."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete File",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie"
+							},
+							{
+								"key": "X-CSRF-Token",
+								"value": "{{csrf_token}}",
+								"description": "CSRF protection token"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"file_path\": \"videos/course123_video.mp4\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/delete",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"delete"
+							]
+						},
+						"description": "Delete an uploaded file. Only file owner can delete. Rate limited to 20 requests per minute. Instructor only with CSRF token."
+					},
+					"response": []
+				},
+				{
+					"name": "Serve Uploaded File",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "access_token={{access_token}}",
+								"description": "Authentication cookie (required for videos)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/uploads/{{category}}/{{filename}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"uploads",
+								"{{category}}",
+								"{{filename}}"
+							]
+						},
+						"description": "Serve uploaded files with access control. Videos require enrollment, thumbnails are public, documents require enrollment. Dynamic authentication based on file type."
+					},
+					"response": []
+				}
+			],
+			"description": "File upload and management endpoints for videos, thumbnails, and documents"
+		},
+		{
+			"name": "Health",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"health"
+							]
+						},
+						"description": "Check the health status of the API. Returns server status, version, and basic system info. No authentication required."
+					},
+					"response": []
+				}
+			],
+			"description": "System health and status endpoints"
+		},
+		{
+			"name": "Media Upload (Backblaze)",
+			"description": "User-specific media file upload and management with Backblaze B2 storage. All media files are automatically associated with the authenticated user and filtered by user ownership.",
+			"item": [
+				{
+					"name": "Upload Workflow",
+					"item": [
+						{
+							"name": "Initiate Upload",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    if (response.success && response.data) {",
+											"        pm.environment.set('upload_session_key', response.data.sessionKey);",
+											"        pm.environment.set('upload_url', response.data.uploadUrl);",
+											"        pm.environment.set('storage_key', response.data.storageKey);",
+											"        console.log('Upload session initiated:', response.data.sessionKey);",
+											"    }",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"filename\": \"sample-video.mp4\",\n    \"fileSize\": 10485760,\n    \"contentType\": \"video/mp4\",\n    \"courseId\": \"{{course_id}}\",\n    \"tags\": [\"lesson\", \"tutorial\"]\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/media/upload/initiate",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"media",
+										"upload",
+										"initiate"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Complete Upload",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    if (response.success && response.data) {",
+											"        pm.environment.set('media_file_id', response.data.mediaFileId);",
+											"        pm.environment.set('cdn_url', response.data.cdnUrl);",
+											"        console.log('Upload completed. Media File ID:', response.data.mediaFileId);",
+											"    }",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"sessionKey\": \"{{upload_session_key}}\",\n    \"storageKey\": \"{{storage_key}}\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/media/upload/complete",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"media",
+										"upload",
+										"complete"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Get Upload Progress",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/media/upload/progress/{{upload_session_key}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"media",
+										"upload",
+										"progress",
+										"{{upload_session_key}}"
+									]
+								}
+							},
+							"response": []
+						}
+					],
+					"description": "Complete video upload workflow using presigned URLs"
+				},
+				{
+					"name": "Media File Management",
+					"item": [
+						{
+							"name": "Get Media File Info",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/media/media/{{media_file_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"media",
+										"media",
+										"{{media_file_id}}"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Process Video Metadata",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/media/media/{{media_file_id}}/process",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"media",
+										"media",
+										"{{media_file_id}}",
+										"process"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Attach Media to Video",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"videoId\": \"{{video_id}}\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/media/media/{{media_file_id}}/attach-video",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"media",
+										"media",
+										"{{media_file_id}}",
+										"attach-video"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Delete Media File",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/media/media/{{media_file_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"media",
+										"media",
+										"{{media_file_id}}"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "List User Media Files",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/media/user/media?page=1&limit=20&type=video&status=completed&sortBy=created&sortOrder=desc",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"media",
+										"user",
+										"media"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1",
+											"description": "Page number for pagination"
+										},
+										{
+											"key": "limit",
+											"value": "20",
+											"description": "Number of items per page"
+										},
+										{
+											"key": "type",
+											"value": "video",
+											"description": "Filter by file type"
+										},
+										{
+											"key": "status",
+											"value": "completed",
+											"description": "Filter by processing status"
+										},
+										{
+											"key": "sortBy",
+											"value": "created",
+											"description": "Sort field"
+										},
+										{
+											"key": "sortOrder",
+											"value": "desc",
+											"description": "Sort order"
+										}
+									]
+								}
+							},
+							"response": []
+						}
+					],
+					"description": "Manage uploaded media files and metadata"
+				},
+				{
+					"name": "Storage & Analytics",
+					"item": [
+						{
+							"name": "Get Storage Usage",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/media/user/storage-usage",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"media",
+										"user",
+										"storage-usage"
+									]
+								}
+							},
+							"response": []
+						}
+					],
+					"description": "Storage usage and analytics endpoints"
+				}
+			],
+			"description": "Advanced media upload system using Backblaze B2 with CDN delivery. Supports direct browser uploads, progress tracking, and comprehensive media management."
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Global pre-request script",
+					"// Can be used for setting up common headers or variables"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Global test script",
+					"// Check for common response patterns",
+					"if (pm.response.code >= 400) {",
+					"    console.error('Request failed with status:', pm.response.code);",
+					"    console.error('Response:', pm.response.text());",
+					"}"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:5000",
+			"type": "string",
+			"description": "Base URL for the API"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string",
+			"description": "JWT access token from login"
+		},
+		{
+			"key": "refresh_token",
+			"value": "",
+			"type": "string",
+			"description": "JWT refresh token from login"
+		},
+		{
+			"key": "csrf_token",
+			"value": "",
+			"type": "string",
+			"description": "CSRF protection token"
+		},
+		{
+			"key": "user_id",
+			"value": "",
+			"type": "string",
+			"description": "Current user ID"
+		},
+		{
+			"key": "session_id",
+			"value": "",
+			"type": "string",
+			"description": "Current session ID"
+		},
+		{
+			"key": "test_session_id",
+			"value": "",
+			"type": "string",
+			"description": "Session ID for testing revocation"
+		},
+		{
+			"key": "target_user_id",
+			"value": "",
+			"type": "string",
+			"description": "Target user ID for admin operations"
+		},
+		{
+			"key": "course_id",
+			"value": "",
+			"type": "string",
+			"description": "Current course ID"
+		},
+		{
+			"key": "video_id",
+			"value": "",
+			"type": "string",
+			"description": "Current video ID"
+		},
+		{
+			"key": "quiz_id",
+			"value": "",
+			"type": "string",
+			"description": "Current quiz ID"
+		},
+		{
+			"key": "enrollment_id",
+			"value": "",
+			"type": "string",
+			"description": "Current enrollment ID"
+		},
+		{
+			"key": "new_course_id",
+			"value": "",
+			"type": "string",
+			"description": "Newly created course ID"
+		},
+		{
+			"key": "resource_id",
+			"value": "",
+			"type": "string",
+			"description": "Resource ID for uploads"
+		},
+		{
+			"key": "category",
+			"value": "videos",
+			"type": "string",
+			"description": "Upload category (videos, thumbnails, documents)"
+		},
+		{
+			"key": "filename",
+			"value": "",
+			"type": "string",
+			"description": "Filename for serving uploaded files"
+		},
+		{
+			"key": "chat_session_id",
+			"value": "",
+			"type": "string",
+			"description": "AI chat session ID"
+		},
+		{
+			"key": "user_roles",
+			"value": "",
+			"type": "string",
+			"description": "JSON string of user roles"
+		},
+		{
+			"key": "upload_session_key",
+			"value": "",
+			"type": "string",
+			"description": "Upload session key for tracking upload progress"
+		},
+		{
+			"key": "storage_key",
+			"value": "",
+			"type": "string",
+			"description": "Backblaze storage key for file location"
+		},
+		{
+			"key": "media_file_id",
+			"value": "",
+			"type": "string",
+			"description": "Media file ID from completed uploads"
+		},
+		{
+			"key": "upload_url",
+			"value": "",
+			"type": "string",
+			"description": "Presigned upload URL for direct file upload"
+		},
+		{
+			"key": "cdn_url",
+			"value": "",
+			"type": "string",
+			"description": "CDN URL for video delivery"
+		}
+	]
+}

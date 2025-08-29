@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useAppStore } from "@/stores/app-store"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -184,10 +185,11 @@ export default function TeachLessonsPage() {
           <Card key={lesson.id} className="overflow-hidden">
             <div className="aspect-video relative bg-muted">
               {lesson.thumbnailUrl ? (
-                <img 
+                <Image 
                   src={lesson.thumbnailUrl} 
                   alt={lesson.title}
-                  className="w-full h-full object-cover"
+                  fill
+                  className="object-cover"
                 />
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center">
@@ -254,7 +256,7 @@ export default function TeachLessonsPage() {
                       <BarChart3 className="mr-2 h-4 w-4" />
                       View Analytics
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => window.open(`/learn/${lesson.id}`, '_blank')}>
+                    <DropdownMenuItem onClick={() => window.open(`/student/courses/learn/${lesson.id}`, '_blank')}>
                       <ExternalLink className="mr-2 h-4 w-4" />
                       Preview
                     </DropdownMenuItem>

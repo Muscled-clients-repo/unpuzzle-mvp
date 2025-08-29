@@ -87,7 +87,7 @@ export default function ModeratorRespondPage() {
         <Shield className="h-4 w-4" />
         <AlertDescription className="flex items-center justify-between">
           <span>
-            You're responding as a <strong>Trusted Moderator</strong>. 
+            You&apos;re responding as a <strong>Trusted Moderator</strong>. 
             Your response will be visible to the student and may be endorsed by instructors.
           </span>
           <Badge className="ml-4">
@@ -292,7 +292,7 @@ export default function ModeratorRespondPage() {
                 ))}
               </div>
               <p className="text-xs text-muted-foreground mt-3">
-                You're qualified to answer questions in these areas
+                You&apos;re qualified to answer questions in these areas
               </p>
             </CardContent>
           </Card>
@@ -318,7 +318,7 @@ export default function ModeratorRespondPage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-red-500">✗</span>
-                  <span>Don't guess if unsure - escalate instead</span>
+                  <span>Don&apos;t guess if unsure - escalate instead</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-red-500">✗</span>

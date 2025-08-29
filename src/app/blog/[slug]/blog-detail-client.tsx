@@ -11,9 +11,7 @@ import { useAppStore } from "@/stores/app-store"
 import { 
   Calendar, 
   Clock, 
-  ArrowLeft,
   ArrowRight,
-  Share2,
   ThumbsUp,
   Tag,
   Twitter,
@@ -106,7 +104,7 @@ export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) 
     <div className="min-h-screen flex flex-col">
       <Header />
       
-      <main className="flex-1">
+      <main className="flex-1 pt-16">
         <article className="container max-w-4xl mx-auto px-4 py-12">
           <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-8">
             <Link href="/" className="hover:text-foreground">Home</Link>
