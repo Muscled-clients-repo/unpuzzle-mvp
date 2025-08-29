@@ -60,23 +60,6 @@ export default function CreateLessonPage() {
   const [copiedLink, setCopiedLink] = useState(false)
   const [lessonId, setLessonId] = useState<string | null>(null)
 
-  // Handle file drop
-  const handleFileDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    const file = e.dataTransfer.files[0]
-    if (file && file.type.startsWith('video/')) {
-      handleVideoUpload(file)
-    }
-  }, [handleVideoUpload])
-
-  // Handle file select
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      handleVideoUpload(file)
-    }
-  }
-
   // Handle video upload
   const handleVideoUpload = useCallback((file: File) => {
     // Create lesson if not exists
@@ -95,6 +78,23 @@ export default function CreateLessonPage() {
       uploadLessonVideo(file, lessonId)
     }
   }, [lessonId, createLesson, title, description, tags, visibility, ctaText, ctaLink, uploadLessonVideo])
+
+  // Handle file drop
+  const handleFileDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    const file = e.dataTransfer.files[0]
+    if (file && file.type.startsWith('video/')) {
+      handleVideoUpload(file)
+    }
+  }, [handleVideoUpload])
+
+  // Handle file select
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      handleVideoUpload(file)
+    }
+  }
 
   // Handle YouTube URL
   const handleYoutubeSubmit = () => {
