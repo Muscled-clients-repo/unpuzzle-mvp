@@ -21,9 +21,11 @@ interface StoreProviderProps {
 }
 
 export function StoreProvider({ children }: StoreProviderProps) {
+  const { initializeAuth } = useAppStore()
+  
   useEffect(() => {
-    // Mock user initialization removed - auth is now handled by useAuth hook
-    // The useAuth hook will handle session restoration from cookies
+    // Initialize authentication on mount
+    initializeAuth()
 
     // Only expose store in development and in browser environment
     if (isBrowser && isDevelopment) {
