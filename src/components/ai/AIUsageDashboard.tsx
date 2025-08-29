@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useAppStore } from '@/stores/app-store'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -133,19 +133,19 @@ export function AIUsageDashboard() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   
+  const loadStats = useCallback(async () => {
+    if (!refreshing) {
+      await refreshUsageStats()
+      setLoading(false)
+    }
+  }, [refreshing, refreshUsageStats])
+  
   useEffect(() => {
     loadStats()
     // Refresh every minute
     const interval = setInterval(loadStats, 60000)
     return () => clearInterval(interval)
-  }, [])
-  
-  const loadStats = async () => {
-    if (!refreshing) {
-      await refreshUsageStats()
-      setLoading(false)
-    }
-  }
+  }, [loadStats])
   
   const handleManualRefresh = async () => {
     setRefreshing(true)
@@ -202,7 +202,7 @@ export function AIUsageDashboard() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <Activity className="h-4 w-4" />
-              Today's Usage
+              Today&apos;s Usage
             </CardTitle>
           </CardHeader>
           <CardContent>

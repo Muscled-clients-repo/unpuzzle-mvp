@@ -11,9 +11,7 @@ import { useAppStore } from "@/stores/app-store"
 import { 
   Calendar, 
   Clock, 
-  ArrowLeft,
   ArrowRight,
-  Share2,
   ThumbsUp,
   Tag,
   Twitter,

@@ -173,7 +173,7 @@ export function SubscriptionManager() {
     // Refresh usage stats every minute
     const interval = setInterval(refreshUsageStats, 60000)
     return () => clearInterval(interval)
-  }, [])
+  }, [loadCurrentSubscription, loadAvailablePlans, refreshUsageStats])
   
   const handleSelectPlan = async (planId: string) => {
     if (currentSubscription) {
@@ -351,7 +351,7 @@ export function SubscriptionManager() {
                     <div className="space-y-2 p-4 bg-destructive/10 rounded-lg">
                       <p className="text-sm font-medium">Are you sure you want to cancel?</p>
                       <p className="text-xs text-muted-foreground">
-                        You'll retain access until {new Date(currentSubscription.current_period_end).toLocaleDateString()}
+                        You&apos;ll retain access until {new Date(currentSubscription.current_period_end).toLocaleDateString()}
                       </p>
                       <Button
                         variant="destructive"
@@ -374,7 +374,7 @@ export function SubscriptionManager() {
               ) : (
                 <div className="text-center py-8">
                   <Sparkles className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-lg font-medium mb-2">You're on the Free plan</p>
+                  <p className="text-lg font-medium mb-2">You&apos;re on the Free plan</p>
                   <p className="text-sm text-muted-foreground mb-4">
                     Upgrade to unlock advanced AI features and higher limits
                   </p>

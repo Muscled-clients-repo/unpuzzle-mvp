@@ -253,7 +253,7 @@ export function AIChatSidebarV2({
                     onClick={() => onAgentAccept(msg.id)}
                   >
                     <CheckCircle2 className="mr-1.5 h-4 w-4" />
-                    Let's go
+                    Let&apos;s go
                   </Button>
                   <Button
                     size="sm"

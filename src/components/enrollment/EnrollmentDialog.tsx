@@ -297,7 +297,7 @@ export function EnrollmentDialog({ course, isOpen, onClose, onSuccess }: Enrollm
 
           {/* What's Included */}
           <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-            <h4 className="font-medium text-sm text-gray-900">What's included:</h4>
+            <h4 className="font-medium text-sm text-gray-900">What&apos;s included:</h4>
             <ul className="text-sm text-gray-600 space-y-1">
               <li className="flex items-center gap-2">
                 <Check className="h-4 w-4 text-green-600" />

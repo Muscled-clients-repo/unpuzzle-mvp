@@ -18,7 +18,7 @@ import { useState, useCallback } from 'react'
 import type { ErrorFallbackProps } from './ErrorBoundary'
 import type { AppError } from '@/utils/error-handler'
 
-export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps | { error: string | null, resetError?: () => void, context?: any }) {
+export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps | { error: string | null, resetError?: () => void, context?: Record<string, unknown> }) {
   const [showDetails, setShowDetails] = useState(false)
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'success' | 'error'>('idle')
   

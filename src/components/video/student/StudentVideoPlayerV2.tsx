@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { StudentVideoPlayer, StudentVideoPlayerRef } from "./StudentVideoPlayer"
 import { useAppStore } from "@/stores/app-store"
 import { useVideoAgentSystem } from "@/lib/video-agent-system"
@@ -61,10 +61,10 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
     if (videoPlayerRef.current) {
       setVideoRef(videoPlayerRef.current)
     }
-  }, [])
+  }, [setVideoRef])
   
   // Handle resize
-  const handleMouseMove = (e: MouseEvent) => {
+  const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isResizing) return
     
     const newWidth = window.innerWidth - e.clientX
@@ -72,11 +72,11 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
     if (newWidth >= 300 && newWidth <= 600) {
       updatePreferences({ sidebarWidth: newWidth })
     }
-  }
+  }, [isResizing, updatePreferences])
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     setIsResizing(false)
-  }
+  }, [])
 
   useEffect(() => {
     if (isResizing) {
@@ -95,7 +95,7 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
       document.body.style.userSelect = ''
       document.body.style.cursor = ''
     }
-  }, [isResizing])
+  }, [isResizing, handleMouseMove, handleMouseUp])
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault()

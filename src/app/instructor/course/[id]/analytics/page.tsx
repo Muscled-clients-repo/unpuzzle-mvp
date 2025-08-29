@@ -11,7 +11,6 @@ import { Progress } from "@/components/ui/progress"
 import {
   AlertCircle,
   TrendingUp,
-  Users,
   Clock,
   MessageCircle,
   Brain,
@@ -188,7 +187,7 @@ export default function CourseAnalyticsPageClean() {
                   <div className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2">
                       <Brain className="h-4 w-4 text-purple-500" />
-                      <span>Mike's learn rate improved to 48 min/hr</span>
+                      <span>Mike&apos;s learn rate improved to 48 min/hr</span>
                     </div>
                     <span className="text-muted-foreground">3h ago</span>
                   </div>
@@ -239,8 +238,6 @@ export default function CourseAnalyticsPageClean() {
                   
                   // Calculate video-specific performance metrics
                   const learnRate = 35 + (index * 4) // min/hr learning rate for this video
-                  const executionRate = 82 + (index * 3) // % of students who actively engaged
-                  const executionPace = 45 - (index * 2) // seconds avg time to execute concepts
                   
                   return (
                     <div key={video.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50">

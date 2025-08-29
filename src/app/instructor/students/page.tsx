@@ -179,7 +179,7 @@ export default function InstructorStudentsPage() {
           <div className="mb-8">
             <h1 className="text-3xl font-bold mb-2">Students</h1>
             <p className="text-muted-foreground">
-              Monitor and support your students' learning journey
+              Monitor and support your students&apos; learning journey
             </p>
           </div>
 

@@ -25,7 +25,6 @@ import {
   Loader2,
   Plus,
   X,
-  Edit2,
   Trash2,
   GripVertical,
   Video,
@@ -39,6 +38,44 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { MediaLibraryModal } from "./components/MediaLibraryModal"
+import { MediaFile } from "@/services/video-upload-service"
+
+// Define types for video data that can come from different sources
+interface VideoData {
+  id?: string
+  title?: string
+  name?: string
+  originalFilename?: string
+  filename?: string
+  mediaFile?: {
+    id: string
+    title?: string
+    originalFilename?: string
+    duration?: string
+    durationFormatted?: string
+  }
+  durationFormatted?: string
+  duration?: string
+  mediaFileId?: string
+}
+
+// Define types for unassigned media
+interface UnassignedMedia {
+  id: string
+  filename?: string
+  original_filename?: string
+  title?: string
+  file_size?: number
+  duration?: string
+  processing_status?: string
+}
+
+// Define types for chapter data
+interface ChapterUpdate {
+  title?: string
+  description?: string
+  order?: number
+}
 
 export default function EditCoursePage() {
   const router = useRouter()
@@ -77,7 +114,7 @@ export default function EditCoursePage() {
   const [isCreatingChapter, setIsCreatingChapter] = useState(false)
   const [updatingChapterId, setUpdatingChapterId] = useState<string | null>(null)
   const [deletingChapterId, setDeletingChapterId] = useState<string | null>(null)
-  const [editedChapters, setEditedChapters] = useState<Record<string, any>>({})
+  const [editedChapters, setEditedChapters] = useState<Record<string, ChapterUpdate>>({})
   const [hasChanges, setHasChanges] = useState<Record<string, boolean>>({})
   const [assigningMediaId, setAssigningMediaId] = useState<string | null>(null)
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null)
@@ -114,7 +151,7 @@ export default function EditCoursePage() {
   }
   
   // Handle completed upload - auto-assign to selected chapter
-  const handleUploadComplete = async (videoId: string, mediaFile: any) => {
+  const handleUploadComplete = async (videoId: string, mediaFile: MediaFile) => {
     // Complete the upload first
     completeVideoUpload(videoId, mediaFile)
     
@@ -174,7 +211,7 @@ export default function EditCoursePage() {
     }
     
     loadData()
-  }, [courseId, initialLoad]) // Removed function dependencies to avoid the error
+  }, [courseId, initialLoad, loadCourseForEdit])
 
   // Check if we're in edit mode
   const isEditMode = getEditModeStatus()
@@ -187,7 +224,7 @@ export default function EditCoursePage() {
     // The success indicator in the header will show the save status
   }
 
-  const handleInputChange = (field: string, value: any) => {
+  const handleInputChange = (field: string, value: string | number) => {
     // Use existing setCourseInfo - it already handles change tracking
     setCourseInfo({ [field]: value })
   }
@@ -607,7 +644,7 @@ export default function EditCoursePage() {
                           <div className="mt-4 space-y-2">
                             <h5 className="text-sm font-medium text-gray-700">Videos in this chapter:</h5>
                             <div className="space-y-2">
-                              {chapter.videos?.map((video: any, videoIndex: number) => {
+                              {chapter.videos?.map((video: VideoData, videoIndex: number) => {
                                 // Skip if video is null or undefined
                                 if (!video) return null;
                                 
@@ -859,7 +896,7 @@ export default function EditCoursePage() {
               </CardHeader>
               <CardContent>
                 <div className="grid gap-3">
-                  {courseCreation.unassignedMedia.filter(Boolean).map((media: any, index: number) => {
+                  {courseCreation.unassignedMedia.filter(Boolean).map((media: UnassignedMedia, index: number) => {
                     // Skip if media is null or undefined
                     if (!media) {
                       console.warn(`Unassigned media at index ${index} is null/undefined`)

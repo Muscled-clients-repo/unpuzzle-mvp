@@ -104,7 +104,7 @@ export function AIChatSidebar({
     refreshUsageStats()
     const interval = setInterval(refreshUsageStats, 60000) // Refresh every minute
     return () => clearInterval(interval)
-  }, [])
+  }, [refreshUsageStats])
   
   // Track when AI actually activates
   useEffect(() => {
@@ -118,7 +118,7 @@ export function AIChatSidebar({
     if (currentTime > 0 && !hasVideoStarted) {
       setHasVideoStarted(true)
     }
-  }, [currentTime])
+  }, [currentTime, hasVideoStarted])
   
   // Auto-generate AI response when transcript references are added
   useEffect(() => {
@@ -145,7 +145,7 @@ export function AIChatSidebar({
 
       handleTranscriptReference()
     }
-  }, [transcriptReferences.length])
+  }, [transcriptReference, videoId, sendChatMessage])
 
   const handleSendMessage = async () => {
     if (!input.trim()) return
@@ -302,7 +302,7 @@ export function AIChatSidebar({
             AI Limit Reached
           </DialogTitle>
           <DialogDescription>
-            You've reached your daily AI interaction limit
+            You&apos;ve reached your daily AI interaction limit
           </DialogDescription>
         </DialogHeader>
         
@@ -528,7 +528,7 @@ export function AIChatSidebar({
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground line-clamp-2">
-                  "{transcriptReference.text}"
+                  &quot;{transcriptReference.text}&quot;
                 </p>
               </div>
               <Button

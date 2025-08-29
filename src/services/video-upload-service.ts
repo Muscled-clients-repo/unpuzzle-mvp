@@ -73,7 +73,7 @@ export interface MediaFilters {
 }
 
 export class VideoUploadService {
-  private cache = new Map<string, { data: any, timestamp: number }>()
+  private cache = new Map<string, { data: unknown, timestamp: number }>()
   private CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
   // Calculate SHA1 hash of file for B2 native upload

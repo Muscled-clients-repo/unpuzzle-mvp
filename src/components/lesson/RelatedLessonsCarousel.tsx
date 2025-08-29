@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -119,10 +120,11 @@ export function RelatedLessonsCarousel({
                 {/* Thumbnail */}
                 <div className="aspect-video relative bg-muted">
                   {lesson.thumbnailUrl ? (
-                    <img
+                    <Image
                       src={lesson.thumbnailUrl}
                       alt={lesson.title}
-                      className="w-full h-full object-cover"
+                      fill
+                      className="object-cover"
                     />
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center">

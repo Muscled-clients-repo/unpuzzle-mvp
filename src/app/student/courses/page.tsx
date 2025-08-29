@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { useAppStore } from "@/stores/app-store"
 import { StudentCoursesSkeleton } from "@/components/common/CourseCardSkeleton"
-import { ErrorFallback } from "@/components/common"
+import { ErrorFallback, LoadingSpinner } from "@/components/common"
 import { 
   BookOpen, 
   Clock, 
@@ -44,7 +44,9 @@ export default function MyCoursesPage() {
   const [attemptedProgressLoads, setAttemptedProgressLoads] = useState<Set<string>>(new Set())
   
   // Ensure enrolledCourses is always an array (extra safety check)
-  const safeEnrolledCourses = Array.isArray(enrolledCourses) ? enrolledCourses : []
+  const safeEnrolledCourses = useMemo(() => {
+    return Array.isArray(enrolledCourses) ? enrolledCourses : []
+  }, [enrolledCourses])
   
   useEffect(() => {
     loadEnrolledCourses(userId)
@@ -63,7 +65,7 @@ export default function MyCoursesPage() {
         loadCourseProgress(course.id)
       }
     })
-  }, [safeEnrolledCourses, courseProgress, loadingProgressCourseId, loadCourseProgress, attemptedProgressLoads])
+  }, [enrolledCourses, safeEnrolledCourses, courseProgress, loadingProgressCourseId, loadCourseProgress, attemptedProgressLoads])
   
   // Helper function to format last accessed time
   const formatLastAccessed = (dateString: string | undefined) => {

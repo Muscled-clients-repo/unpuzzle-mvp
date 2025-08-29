@@ -7,9 +7,30 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import NextImage from 'next/image'
-import { Loader2, Search, Video, Music, FileText, Image, Play, X, FolderOpen } from 'lucide-react'
+import { Loader2, Search, Video, Music, FileText, Image as ImageIcon, Play, X } from 'lucide-react'
 import { useAppStore } from '@/stores/app-store'
 import { cn } from '@/lib/utils'
+
+// Define types for media items
+interface MediaItem {
+  id: string
+  title?: string
+  originalFilename?: string
+  filename?: string
+  fileType: string
+  fileSize?: number
+  file_size?: number
+  fileSizeFormatted?: string
+  duration?: string
+  durationFormatted?: string
+  resolution?: string
+  thumbnailUrl?: string
+  thumbnail_url?: string
+  processingStatus?: 'pending' | 'processing' | 'completed' | 'failed'
+  processing_status?: string
+}
+
+type MediaTypeFilter = 'all' | 'video' | 'audio' | 'document' | 'image'
 
 const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 Bytes'
@@ -24,7 +45,7 @@ const getFileIcon = (type: string) => {
     case 'video': return <Video className="h-4 w-4" />
     case 'audio': return <Music className="h-4 w-4" />
     case 'document': return <FileText className="h-4 w-4" />
-    case 'image': return <Image className="h-4 w-4" />
+    case 'image': return <ImageIcon className="h-4 w-4" />
     default: return <FileText className="h-4 w-4" />
   }
 }
@@ -90,7 +111,7 @@ export function MediaLibraryModal() {
             
             <Tabs
               value={mediaLibrary.filters.type}
-              onValueChange={(value: any) => setMediaFilters({ type: value })}
+              onValueChange={(value: MediaTypeFilter) => setMediaFilters({ type: value })}
             >
               <TabsList>
                 <TabsTrigger value="all">All</TabsTrigger>
@@ -120,7 +141,7 @@ export function MediaLibraryModal() {
             ) : (
               <div className="h-[400px] overflow-auto">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-                  {mediaLibrary.media.map((media: any) => (
+                  {mediaLibrary.media.map((media: MediaItem) => (
                     <MediaCard
                       key={media.id}
                       media={media}
@@ -186,7 +207,7 @@ export function MediaLibraryModal() {
   )
 }
 
-function MediaCard({ media, isSelected, onToggle }: { media: any, isSelected: boolean, onToggle: () => void }) {
+function MediaCard({ media, isSelected, onToggle }: { media: MediaItem, isSelected: boolean, onToggle: () => void }) {
   return (
     <div
       className={cn(

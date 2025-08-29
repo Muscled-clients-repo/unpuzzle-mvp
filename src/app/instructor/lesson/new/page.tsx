@@ -67,7 +67,7 @@ export default function CreateLessonPage() {
     if (file && file.type.startsWith('video/')) {
       handleVideoUpload(file)
     }
-  }, [])
+  }, [handleVideoUpload])
 
   // Handle file select
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -78,7 +78,7 @@ export default function CreateLessonPage() {
   }
 
   // Handle video upload
-  const handleVideoUpload = (file: File) => {
+  const handleVideoUpload = useCallback((file: File) => {
     // Create lesson if not exists
     if (!lessonId) {
       const id = createLesson({
@@ -94,7 +94,7 @@ export default function CreateLessonPage() {
     } else {
       uploadLessonVideo(file, lessonId)
     }
-  }
+  }, [lessonId, createLesson, title, description, tags, visibility, ctaText, ctaLink, uploadLessonVideo])
 
   // Handle YouTube URL
   const handleYoutubeSubmit = () => {
@@ -290,7 +290,7 @@ export default function CreateLessonPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Tabs value={uploadMethod} onValueChange={(v: any) => setUploadMethod(v)}>
+              <Tabs value={uploadMethod} onValueChange={(v: 'upload' | 'youtube') => setUploadMethod(v)}>
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="upload">
                     <Upload className="mr-2 h-4 w-4" />
@@ -429,7 +429,7 @@ export default function CreateLessonPage() {
                   type="radio"
                   value="public"
                   checked={visibility === 'public'}
-                  onChange={(e) => setVisibility(e.target.value as any)}
+                  onChange={(e) => setVisibility(e.target.value as 'public' | 'unlisted')}
                   className="text-primary"
                 />
                 <div>
@@ -448,7 +448,7 @@ export default function CreateLessonPage() {
                   type="radio"
                   value="unlisted"
                   checked={visibility === 'unlisted'}
-                  onChange={(e) => setVisibility(e.target.value as any)}
+                  onChange={(e) => setVisibility(e.target.value as 'public' | 'unlisted')}
                   className="text-primary"
                 />
                 <div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useMemo } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { useParams, useSearchParams, useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import { useAppStore } from "@/stores/app-store"
@@ -243,7 +243,7 @@ export default function StandaloneLessonPage() {
       setCourseLoadingState('loading')
       loadCourseById(contentId)
     }
-  }, [contentId, isStandaloneLesson, isCourse, lessons.length, loadLessons, loadCourseById])
+  }, [contentId, isStandaloneLesson, isCourse, lessons.length, loadLessons, loadCourseById, currentCourse, courseLoading])
   
   // Update course loading state based on store state
   useEffect(() => {
@@ -407,7 +407,7 @@ export default function StandaloneLessonPage() {
   }, [isStandaloneLesson, lesson, contentId, trackView])
   
   // Handle resize
-  const handleMouseMove = (e: MouseEvent) => {
+  const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isResizing) return
     
     const newWidth = window.innerWidth - e.clientX
@@ -415,11 +415,11 @@ export default function StandaloneLessonPage() {
     if (newWidth >= 300 && newWidth <= 600) {
       updatePreferences({ sidebarWidth: newWidth })
     }
-  }
+  }, [isResizing, updatePreferences])
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     setIsResizing(false)
-  }
+  }, [])
 
   useEffect(() => {
     if (isResizing) {
@@ -438,7 +438,7 @@ export default function StandaloneLessonPage() {
       document.body.style.userSelect = ''
       document.body.style.cursor = ''
     }
-  }, [isResizing])
+  }, [isResizing, handleMouseMove, handleMouseUp])
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -1051,7 +1051,7 @@ export default function StandaloneLessonPage() {
             <CardHeader>
               <div className="flex justify-between items-start">
                 <div>
-                  <CardTitle>You've Used Your Free AI Credits</CardTitle>
+                  <CardTitle>You&apos;ve Used Your Free AI Credits</CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">
                     Get unlimited AI interactions by signing up
                   </p>

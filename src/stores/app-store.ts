@@ -64,7 +64,19 @@ export const useAppStore = create<AppStore>()(
 )
 
 // Store subscription helpers for advanced use cases
-export const subscribeToVideo = (callback: (state: any) => void) =>
+interface VideoState {
+  currentTime: number
+  duration: number
+  isPlaying: boolean
+  inPoint?: number
+  outPoint?: number
+  selectedTranscript?: unknown
+  volume: number
+  playbackRate: number
+  isFullscreen: boolean
+}
+
+export const subscribeToVideo = (callback: (state: VideoState) => void) =>
   useAppStore.subscribe(
     (state) => ({
       currentTime: state.currentTime,
@@ -87,7 +99,7 @@ export const subscribeToVideo = (callback: (state: any) => void) =>
     }
   )
 
-export const subscribeToChat = (callback: (messages: any[]) => void) =>
+export const subscribeToChat = (callback: (messages: unknown[]) => void) =>
   useAppStore.subscribe((state) => state.chatMessages, callback)
 
 // Devtools helpers

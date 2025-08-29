@@ -136,7 +136,20 @@ class RealSubscriptionService implements ISubscriptionService {
   private readonly billingUrl = '/api/v1/accounts/billing'
   private readonly aiStatsUrl = '/api/v1/ai-assistant/user'
   
-  private mapSubscriptionResponse(data: any): Subscription {
+  private mapSubscriptionResponse(data: {
+    subscription?: {
+      plan_id?: string
+      plan_name?: string
+      status?: string
+      billing_period?: string
+      current_period_end?: string
+      created_at?: string
+    }
+    plan?: string
+    status?: string
+    ai_credits?: number
+    ai_credits_used?: number
+  }): Subscription {
     return {
       plan_id: data.subscription?.plan_id || data.plan || 'free',
       plan_name: data.subscription?.plan_name || 'Free Plan',
@@ -169,7 +182,7 @@ class RealSubscriptionService implements ISubscriptionService {
       }
       
       return { data: this.mapSubscriptionResponse(response.data) }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { error: error.message || 'Failed to fetch subscription' }
     }
   }
@@ -184,7 +197,7 @@ class RealSubscriptionService implements ISubscriptionService {
       }
       
       return { data: (response.data as any).plans || [] }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { error: error.message || 'Failed to fetch plans' }
     }
   }
@@ -208,7 +221,7 @@ class RealSubscriptionService implements ISubscriptionService {
       }
       
       return { data: this.mapSubscriptionResponse(response.data) }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { error: error.message || 'Failed to create subscription' }
     }
   }
@@ -219,7 +232,7 @@ class RealSubscriptionService implements ISubscriptionService {
   ): Promise<ServiceResult<Subscription>> {
     try {
       const { apiClient } = await import('@/lib/api-client')
-      const payload: any = { new_plan_id: newPlanId }
+      const payload = { new_plan_id: newPlanId }
       if (billingPeriod) {
         payload.billing_period = billingPeriod
       }
@@ -231,7 +244,7 @@ class RealSubscriptionService implements ISubscriptionService {
       }
       
       return { data: this.mapSubscriptionResponse(response.data) }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { error: error.message || 'Failed to update subscription' }
     }
   }
@@ -249,7 +262,7 @@ class RealSubscriptionService implements ISubscriptionService {
       }
       
       return { data: undefined }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { error: error.message || 'Failed to cancel subscription' }
     }
   }
@@ -264,7 +277,7 @@ class RealSubscriptionService implements ISubscriptionService {
       }
       
       return { data: this.mapSubscriptionResponse(response.data) }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { error: error.message || 'Failed to resume subscription' }
     }
   }
@@ -279,7 +292,7 @@ class RealSubscriptionService implements ISubscriptionService {
       }
       
       return { data: response.data as AIUsageStats }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { error: error.message || 'Failed to fetch AI usage stats' }
     }
   }
@@ -296,7 +309,7 @@ class RealSubscriptionService implements ISubscriptionService {
       }
       
       return { data: response.data as LimitCheckResult }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { error: error.message || 'Failed to check AI limits' }
     }
   }
@@ -311,7 +324,7 @@ class RealSubscriptionService implements ISubscriptionService {
       }
       
       return { data: (response.data as any).payment_methods || [] }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { error: error.message || 'Failed to fetch payment methods' }
     }
   }
@@ -332,7 +345,7 @@ class RealSubscriptionService implements ISubscriptionService {
       }
       
       return { data: (response.data as any).payment_method }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { error: error.message || 'Failed to add payment method' }
     }
   }
@@ -347,7 +360,7 @@ class RealSubscriptionService implements ISubscriptionService {
       }
       
       return { data: (response.data as any).invoices || [] }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { error: error.message || 'Failed to fetch invoices' }
     }
   }
@@ -362,7 +375,7 @@ class RealSubscriptionService implements ISubscriptionService {
       }
       
       return { data: (response.data as any).upcoming_invoice }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { error: error.message || 'Failed to fetch upcoming invoice' }
     }
   }

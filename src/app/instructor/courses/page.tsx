@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAppStore } from "@/stores/app-store"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -28,7 +27,6 @@ import {
   Eye,
   Archive,
   Video,
-  Clock,
   AlertCircle
 } from "lucide-react"
 import {
@@ -38,6 +36,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Course } from "@/types/domain"
+
+// Extended interface for instructor course data with analytics
+interface InstructorCourseData extends Course {
+  status?: 'draft' | 'published' | 'archived' | 'under_review'
+  revenue?: number
+  completionRate?: number
+  lastUpdated?: string
+}
 
 export default function TeachCoursesPage() {
   const router = useRouter()
@@ -86,7 +93,7 @@ export default function TeachCoursesPage() {
 
   const filteredCourses = (instructorCourses || []).filter(course => {
     const matchesSearch = course.title.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStatus = statusFilter === "all" || (course as any).status === statusFilter
+    const matchesStatus = statusFilter === "all" || (course as InstructorCourseData).status === statusFilter
     return matchesSearch && matchesStatus
   })
 
@@ -95,9 +102,9 @@ export default function TeachCoursesPage() {
       case 'students':
         return (b.enrollmentCount || 0) - (a.enrollmentCount || 0)
       case 'revenue':
-        return ((b as any).revenue || 0) - ((a as any).revenue || 0)
+        return ((b as InstructorCourseData).revenue || 0) - ((a as InstructorCourseData).revenue || 0)
       case 'completionRate':
-        return ((b as any).completionRate || 0) - ((a as any).completionRate || 0)
+        return ((b as InstructorCourseData).completionRate || 0) - ((a as InstructorCourseData).completionRate || 0)
       default:
         return 0 // Mock - would use actual dates
     }
@@ -176,7 +183,7 @@ export default function TeachCoursesPage() {
           <CardContent>
             <div className="text-2xl font-bold">{(instructorCourses || []).length}</div>
             <p className="text-xs text-muted-foreground">
-              {(instructorCourses || []).filter(c => (c as any).status === 'published' || c.isPublished).length} published
+              {(instructorCourses || []).filter(c => (c as InstructorCourseData).status === 'published' || c.isPublished).length} published
             </p>
           </CardContent>
         </Card>
@@ -203,7 +210,7 @@ export default function TeachCoursesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${(instructorCourses || []).reduce((acc, c) => acc + ((c as any).revenue || 0), 0).toLocaleString()}
+              ${(instructorCourses || []).reduce((acc, c) => acc + ((c as InstructorCourseData).revenue || 0), 0).toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
               Lifetime earnings
@@ -218,12 +225,12 @@ export default function TeachCoursesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {(instructorCourses || []).filter(c => (c as any).status === 'published' || c.isPublished).length > 0
+              {(instructorCourses || []).filter(c => (c as InstructorCourseData).status === 'published' || c.isPublished).length > 0
                 ? Math.round(
                     (instructorCourses || [])
-                      .filter(c => (c as any).status === 'published' || c.isPublished)
-                      .reduce((acc, c) => acc + ((c as any).completionRate || 0), 0) / 
-                    (instructorCourses || []).filter(c => (c as any).status === 'published' || c.isPublished).length
+                      .filter(c => (c as InstructorCourseData).status === 'published' || c.isPublished)
+                      .reduce((acc, c) => acc + ((c as InstructorCourseData).completionRate || 0), 0) / 
+                    (instructorCourses || []).filter(c => (c as InstructorCourseData).status === 'published' || c.isPublished).length
                   )
                 : 0}%
             </div>
@@ -282,12 +289,12 @@ export default function TeachCoursesPage() {
               <Badge 
                 className="absolute top-2 right-2"
                 variant={
-                  (course as any).status === 'published' || course.isPublished ? 'default' :
-                  (course as any).status === 'draft' || !course.isPublished ? 'secondary' :
+                  (course as InstructorCourseData).status === 'published' || course.isPublished ? 'default' :
+                  (course as InstructorCourseData).status === 'draft' || !course.isPublished ? 'secondary' :
                   'outline'
                 }
               >
-                {(course as any).status || (course.isPublished ? 'published' : 'draft')}
+                {(course as InstructorCourseData).status || (course.isPublished ? 'published' : 'draft')}
               </Badge>
               {course.pendingConfusions > 0 && (
                 <Badge className="absolute top-2 left-2" variant="destructive">
@@ -348,12 +355,12 @@ export default function TeachCoursesPage() {
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Completion</span>
-                  <span className="font-medium">{(course as any).completionRate || 0}%</span>
+                  <span className="font-medium">{(course as InstructorCourseData).completionRate || 0}%</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Revenue</span>
                   <span className="font-medium text-green-600">
-                    ${((course as any).revenue || 0).toLocaleString()}
+                    ${((course as InstructorCourseData).revenue || 0).toLocaleString()}
                   </span>
                 </div>
                 

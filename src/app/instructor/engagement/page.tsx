@@ -37,7 +37,7 @@ import {
   GraduationCap,
   Eye,
   Mic,
-  Image,
+  Image as ImageIcon,
   Play,
   ListFilter
 } from "lucide-react"
@@ -388,7 +388,7 @@ export default function InstructorEngagementPage() {
                     
                     {activity.inputType === 'screenshot' && (
                       <div className="flex items-center gap-2 p-2 bg-muted rounded">
-                        <Image className="h-4 w-4 text-muted-foreground" />
+                        <ImageIcon className="h-4 w-4 text-muted-foreground" />
                         <p className="text-sm flex-1">{activity.content}</p>
                         <Button size="sm" variant="ghost">View</Button>
                       </div>

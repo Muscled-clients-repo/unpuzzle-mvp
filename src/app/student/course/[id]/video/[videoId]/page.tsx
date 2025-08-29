@@ -89,7 +89,7 @@ export default function VideoPlayerPage() {
       }
     }
     loadStandaloneLessons()
-  }, [isStandaloneLesson])
+  }, [isStandaloneLesson, lessons.length, loadLessons])
   
   // Track view for standalone lesson
   useEffect(() => {
@@ -99,7 +99,7 @@ export default function VideoPlayerPage() {
         trackView(videoId)
       }
     }
-  }, [isStandaloneLesson, videoId, lessons.length])
+  }, [isStandaloneLesson, videoId, lessons.length, lessons, trackView])
   
   // Get video data based on context - use store data for course videos
   const course = !isStandaloneLesson ? currentCourse : null

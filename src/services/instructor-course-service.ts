@@ -10,8 +10,20 @@ import {
 } from '@/types/domain'
 import { mockCourses } from '@/data/mock/courses'
 
+// Interface for course update data
+interface CourseUpdateData {
+  title?: string
+  description?: string
+  category?: string
+  level?: 'beginner' | 'intermediate' | 'advanced'
+  price?: number
+  chapters?: unknown[]
+  videos?: unknown[]
+  status?: string
+}
+
 export class InstructorCourseService {
-  private cache = new Map<string, { data: any, timestamp: number }>()
+  private cache = new Map<string, { data: unknown, timestamp: number }>()
   private CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
   private clearCoursesCache() {
@@ -599,7 +611,7 @@ export class InstructorCourseService {
     return { data: courseCreationData }
   }
 
-  async updateCourseDetails(courseId: string, courseData: any): Promise<ServiceResult<Course>> {
+  async updateCourseDetails(courseId: string, courseData: CourseUpdateData): Promise<ServiceResult<Course>> {
     console.log('💾 Updating course details:', courseId)
     
     if (useMockData) {

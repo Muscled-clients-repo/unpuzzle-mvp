@@ -10,7 +10,6 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Select,
   SelectContent,
@@ -21,15 +20,12 @@ import {
 import { 
   Upload,
   Plus,
-  Video,
-  Folder,
   GripVertical,
   X,
   Save,
   ChevronRight,
   AlertCircle,
   CheckCircle,
-  Clock,
   Loader2,
   FileVideo,
   ChevronDown,
@@ -75,7 +71,7 @@ export default function CreateCoursePage() {
 
   // Auto-expand first chapter when it has videos
   useEffect(() => {
-    const firstChapter = courseCreation?.chapters[0]
+    const firstChapter = courseCreation?.chapters?.[0]
     if (firstChapter?.id && firstChapter.videos.length > 0) {
       setExpandedChapters(prev => {
         const next = new Set(prev)
@@ -83,7 +79,7 @@ export default function CreateCoursePage() {
         return next
       })
     }
-  }, [courseCreation?.chapters[0]?.videos.length])
+  }, [courseCreation?.chapters])
 
   // Initialize course if not exists
   useEffect(() => {
@@ -407,7 +403,7 @@ export default function CreateCoursePage() {
                 <Label htmlFor="level">Level</Label>
                 <Select 
                   value={courseCreation?.level || 'beginner'}
-                  onValueChange={(value: any) => setCourseInfo({ level: value })}
+                  onValueChange={(value: 'beginner' | 'intermediate' | 'advanced') => setCourseInfo({ level: value })}
                 >
                   <SelectTrigger>
                     <SelectValue />

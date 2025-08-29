@@ -193,7 +193,7 @@ export default function LoginPage() {
             ))}
           </div>
           <p className="text-white/90 italic mb-3">
-            "Unpuzzle completely changed how I learn. The AI assistance feels like having a personal tutor available 24/7."
+            &quot;Unpuzzle completely changed how I learn. The AI assistance feels like having a personal tutor available 24/7.&quot;
           </p>
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-400 to-purple-400" />

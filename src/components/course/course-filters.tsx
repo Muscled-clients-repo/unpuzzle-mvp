@@ -112,7 +112,7 @@ export function CourseFiltersComponent({
             <Label>Difficulty</Label>
             <Select 
               value={filters.difficulty || 'all'} 
-              onValueChange={(value) => onFiltersChange({ difficulty: value as any, page: 1 })}
+              onValueChange={(value: 'all' | 'beginner' | 'intermediate' | 'advanced') => onFiltersChange({ difficulty: value, page: 1 })}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -131,7 +131,7 @@ export function CourseFiltersComponent({
             <Label>Price</Label>
             <Select 
               value={filters.priceRange || 'all'} 
-              onValueChange={(value) => onFiltersChange({ priceRange: value as any, page: 1 })}
+              onValueChange={(value: 'all' | 'free' | 'paid') => onFiltersChange({ priceRange: value, page: 1 })}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -149,7 +149,7 @@ export function CourseFiltersComponent({
             <Label>Sort By</Label>
             <Select 
               value={filters.sortBy || 'newest'} 
-              onValueChange={(value) => onFiltersChange({ sortBy: value as any, page: 1 })}
+              onValueChange={(value: 'popular' | 'newest' | 'price-asc' | 'price-desc' | 'rating') => onFiltersChange({ sortBy: value, page: 1 })}
             >
               <SelectTrigger>
                 <SelectValue />

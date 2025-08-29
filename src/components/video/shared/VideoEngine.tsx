@@ -131,7 +131,7 @@ export const VideoEngine = forwardRef<VideoEngineRef, VideoEngineProps>(
         // Wait for YT to load
         window.onYouTubeIframeAPIReady = initPlayer
       }
-    }, [isYouTube, youtubeId])
+    }, [isYouTube, youtubeId, onLoadedMetadata, onTimeUpdate, onPlay, onPause, onEnded])
 
     // Cleanup interval on unmount
     useEffect(() => {

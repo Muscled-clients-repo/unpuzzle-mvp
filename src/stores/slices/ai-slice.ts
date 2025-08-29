@@ -294,7 +294,7 @@ export const createAISlice: StateCreator<AISlice> = (set, get) => ({
     }
   },
   
-  handleRateLimitError: (error: any) => {
+  handleRateLimitError: (error: { details?: { upgrade_message?: string; message?: string; reset_time?: string }; message?: string }) => {
     const details = error.details || error
     set({ 
       error: details.upgrade_message || details.message || 'AI limit reached',

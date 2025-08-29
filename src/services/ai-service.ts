@@ -41,7 +41,12 @@ export interface AIResponse {
   suggestedActions?: Array<{
     type: 'replay_segment' | 'jump_to_timestamp' | 'review_concept'
     label: string
-    data: any
+    data: {
+      timestamp?: number
+      segment?: { start: number; end: number }
+      concept?: string
+      url?: string
+    }
   }>
 }
 
@@ -85,7 +90,17 @@ class RealAIService implements AIService {
     return this.sessionId
   }
   
-  private mapResponseToMessage(response: any): ChatMessage {
+  private mapResponseToMessage(response: {
+    id?: string
+    role?: string
+    content?: string
+    timestamp?: string
+    suggestedActions?: Array<{
+      type: string
+      label: string
+      data: unknown
+    }>
+  }): ChatMessage {
     return {
       id: response.message_id || response.id,
       content: response.response || response.message || response.content,
@@ -101,7 +116,7 @@ class RealAIService implements AIService {
     }
   }
   
-  private handleError(error: any): ServiceResult<any> {
+  private handleError(error: unknown): ServiceResult<never> {
     if (error.response?.status === 429) {
       return {
         error: 'rate_limit_exceeded',
@@ -171,7 +186,13 @@ class RealAIService implements AIService {
         return { error: response.error }
       }
       
-      const messages = response.data.messages?.map((msg: any) => ({
+      const messages = response.data.messages?.map((msg: {
+        id?: string
+        role?: string
+        content?: string
+        timestamp?: string
+        suggestedActions?: unknown[]
+      }) => ({
         id: msg.id,
         content: msg.content,
         role: msg.message_type === 'assistant' ? 'assistant' : 'user',

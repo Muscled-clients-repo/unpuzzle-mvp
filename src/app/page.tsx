@@ -229,7 +229,7 @@ export default function HomePage() {
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="h-4 w-4 text-green-500" />
-                    <span className="text-sm">View others' confusions & insights</span>
+                    <span className="text-sm">View others&apos; confusions & insights</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="h-4 w-4 text-green-500" />

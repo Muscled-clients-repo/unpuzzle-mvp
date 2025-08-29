@@ -84,7 +84,7 @@ export class PaymentService {
    * This would typically be handled by Stripe SDK directly,
    * but we can wrap it for additional error handling
    */
-  async confirmPayment(clientSecret: string, stripe: any): Promise<{success: boolean, error?: string}> {
+  async confirmPayment(clientSecret: string, stripe: { confirmCardPayment: (secret: string) => Promise<{ error?: { message?: string } }> }): Promise<{success: boolean, error?: string}> {
     try {
       const result = await stripe.confirmCardPayment(clientSecret)
       

@@ -28,7 +28,6 @@ import {
   ShoppingCart
 } from "lucide-react"
 import { useAppStore } from "@/stores/app-store"
-import { ErrorFallback } from "@/components/common"
 import { CourseDetailsSkeleton } from "@/components/common/CourseCardSkeleton"
 import { EnrollmentDialog } from "@/components/enrollment/EnrollmentDialog"
 import { CourseReviews } from "@/components/course/course-reviews"

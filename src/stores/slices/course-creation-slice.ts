@@ -55,11 +55,50 @@ export interface CourseCreationData {
   hasAutoSaveError?: boolean // Track if auto-save failed
 }
 
+// Media Assignment Data
+interface MediaAssignmentData {
+  title?: string
+  description?: string
+  order?: number
+  isPreview?: boolean
+  isPublished?: boolean
+}
+
+// API Response Types
+interface SectionResponse {
+  id: string
+  title: string
+  description?: string
+  order: number
+  mediaFiles?: unknown[]
+  videos?: unknown[]
+  isPublished?: boolean
+  isPreview?: boolean
+}
+
 // Media Library Types
+interface MediaItem {
+  id: string
+  title?: string
+  originalFilename?: string
+  filename?: string
+  fileType: string
+  fileSize?: number
+  file_size?: number
+  fileSizeFormatted?: string
+  duration?: string
+  durationFormatted?: string
+  resolution?: string
+  thumbnailUrl?: string
+  thumbnail_url?: string
+  processingStatus?: 'pending' | 'processing' | 'completed' | 'failed'
+  processing_status?: string
+}
+
 interface MediaLibraryState {
   isOpen: boolean
   targetChapterId: string | null
-  media: any[]
+  media: MediaItem[]
   loading: boolean
   error: string | null
   selectedIds: Set<string>
@@ -117,7 +156,7 @@ export interface CourseCreationSlice {
   
   // Media Assignment Actions
   loadCourseMedia: (courseId: string) => Promise<void>
-  assignMediaToSection: (mediaFileId: string, sectionId: string, data?: any) => Promise<void>
+  assignMediaToSection: (mediaFileId: string, sectionId: string, data?: MediaAssignmentData) => Promise<void>
   unassignMediaFromSection: (mediaFileId: string) => Promise<void>
   
   // Media Library Actions
@@ -717,7 +756,7 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           console.log('🎬 Already assigned media IDs:', Array.from(assignedMediaIds))
           
           // Filter out already assigned media
-          unsectionedMedia = mediaData.filter((media: any) => !assignedMediaIds.has(media.id))
+          unsectionedMedia = mediaData.filter((media: { id: string }) => !assignedMediaIds.has(media.id))
           sections = []
           
           console.log('🎬 Total media files:', mediaData.length)
@@ -738,7 +777,7 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
             return {
               courseCreation: {
                 ...state.courseCreation,
-                chapters: sections.map((section: any) => ({
+                chapters: sections.map((section: SectionResponse) => ({
                   id: section.sectionId,
                   title: section.sectionTitle,
                   order: section.order,
@@ -1231,7 +1270,7 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         
         // Check the response structure - handle multiple possible response formats
         if (!sectionsResponse.error && sectionsResponse.data) {
-          let sections: any[] = []
+          let sections: SectionResponse[] = []
           
           // Try different response structures
           if (Array.isArray(sectionsResponse.data)) {
@@ -1253,13 +1292,13 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           // Only override chapters if we actually got sections from the API
           if (sections && sections.length > 0) {
             // Map backend sections to frontend chapters
-            chapters = sections.map((section: any, index: number) => {
+            chapters = sections.map((section: SectionResponse, index: number) => {
               // Process videos - handle both array of objects and array of strings
               let processedVideos = []
               const rawVideos = section.mediaFiles || section.videos || []
               
               if (Array.isArray(rawVideos)) {
-                processedVideos = rawVideos.map((video: any, vIndex: number) => {
+                processedVideos = rawVideos.map((video: unknown, vIndex: number) => {
                   // If video is a string (ID), create a minimal object
                   if (typeof video === 'string') {
                     return {
