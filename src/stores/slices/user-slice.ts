@@ -122,7 +122,7 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
   studentData: initialStudentData,
 
   setUser: (profile: User) => 
-    set((state) => ({
+    set(() => ({
       id: profile.id,
       profile,
     })),
@@ -298,41 +298,17 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
       if (response.data && response.status === 200) {
         const loginData = response.data as any
         
-        // Extract user data from response
-        // Backend might return { user: {...}, token: "..." } or just user data
-        const userData = loginData.user || loginData
-        
-        // Transform backend user data to our User type
-        const user: User = {
-          id: userData.id || userData._id || 'unknown',
-          name: userData.name || `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userData.username || 'User',
-          email: userData.email || email,
-          role: userData.role || 'student',
-          avatar: userData.avatar || userData.profilePicture || `https://api.dicebear.com/7.x/avataaars/png?seed=${email}`,
-          createdAt: userData.createdAt || new Date().toISOString(),
-          updatedAt: userData.updatedAt || new Date().toISOString(),
-          subscription: userData.subscription || {
-            plan: 'basic',
-            status: 'active',
-            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-            features: {
-              maxCoursesPerMonth: 3,
-              aiInteractionsPerDay: 10,
-              downloadableResources: true,
-              certificateAccess: true,
-              prioritySupport: false
-            }
-          }
+        // Store only the auth token - user profile will be fetched separately
+        if (loginData.token || loginData.access_token) {
+          localStorage.setItem('authToken', loginData.token || loginData.access_token)
         }
         
-        // Store user in state
-        set({
-          id: user.id,
-          profile: user,
-          isLoading: false
-        })
+        set({ isLoading: false })
         
-        console.log('✅ Login successful for:', user.email)
+        // Fetch user profile from server using the stored token
+        await get().initializeAuth()
+        
+        console.log('✅ Login successful - token stored and profile fetched from server')
         return { success: true }
       }
       
@@ -368,19 +344,19 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
   
   initializeAuth: async () => {
     try {
-      // Check if we have a stored token
+      // Check if we have a stored token (for OAuth)
       const token = localStorage.getItem('authToken') || 
                    localStorage.getItem('access_token') || 
                    localStorage.getItem('token') ||
                    sessionStorage.getItem('authToken')
       
-      if (!token) {
-        console.log('🔐 No auth token found')
-        set({ isLoading: false })
-        return
+      if (token) {
+        console.log('🔐 Found auth token, fetching user profile...')
+      } else {
+        console.log('🔐 No auth token found, checking cookie-based authentication...')
       }
       
-      console.log('🔐 Found auth token, fetching user profile...')
+      // Always try to fetch user profile - server will handle both token and cookie auth
       
       // Try to get current user from API
       const response = await apiClient.getCurrentUser()
@@ -420,17 +396,27 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
         
         console.log('✅ Auth initialized for:', user.email)
       } else if (response.status === 401) {
-        // Token is invalid or expired
-        console.log('🔐 Auth token expired or invalid')
-        localStorage.removeItem('authToken')
-        sessionStorage.removeItem('authToken')
+        // Not authenticated (neither token nor cookie valid)
+        console.log('🔐 Not authenticated - no valid token or cookie session')
+        // Only clear tokens if they exist (don't clear cookies as they're HTTP-only)
+        if (token) {
+          localStorage.removeItem('authToken')
+          sessionStorage.removeItem('authToken')
+        }
+        set({ isLoading: false })
+      } else {
+        // Other error responses
+        console.log('🔐 Failed to fetch user profile, status:', response.status)
         set({ isLoading: false })
       }
     } catch (error) {
       console.error('❌ Auth initialization error:', error)
-      // Clear invalid tokens
-      localStorage.removeItem('authToken')
-      sessionStorage.removeItem('authToken')
+      // Only clear tokens if they exist (cookies are managed by server)
+      const storedToken = localStorage.getItem('authToken') || sessionStorage.getItem('authToken')
+      if (storedToken) {
+        localStorage.removeItem('authToken')
+        sessionStorage.removeItem('authToken')
+      }
       set({ isLoading: false })
     }
   },
