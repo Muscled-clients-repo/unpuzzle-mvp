@@ -403,7 +403,10 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
   initializeAuth: async () => {
     try {
       // Check if we have a stored token
-      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken')
+      const token = localStorage.getItem('authToken') || 
+                   localStorage.getItem('access_token') || 
+                   localStorage.getItem('token') ||
+                   sessionStorage.getItem('authToken')
       
       if (!token) {
         console.log('🔐 No auth token found')
@@ -427,6 +430,7 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
           role: userData.role || 'student',
           avatar: userData.avatar || userData.profilePicture || `https://api.dicebear.com/7.x/avataaars/png?seed=${userData.email}`,
           createdAt: userData.createdAt || new Date().toISOString(),
+          updatedAt: userData.updatedAt || new Date().toISOString(),
           subscription: userData.subscription || {
             plan: 'basic',
             status: 'active',

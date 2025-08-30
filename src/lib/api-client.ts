@@ -507,12 +507,8 @@ class ApiClient {
   }
 
   async getCurrentUser() {
-    const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken')
-    if (!token) {
-      return { error: 'No authentication token', status: 401 }
-    }
-    
-    return this.get('/api/v1/auth/me')
+    // Server uses httpOnly cookies for authentication - no token check needed
+    return this.get('/api/v1/auth/profile/')
   }
 
   async signup(data: {

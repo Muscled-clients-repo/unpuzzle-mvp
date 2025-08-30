@@ -14,6 +14,11 @@ const isBrowser = typeof window !== 'undefined'
 export function redirectToLogin(returnUrl?: string) {
   if (!isBrowser) return
   
+  // Don't redirect if we're already on the login page
+  if (window.location.pathname === '/login') {
+    return
+  }
+  
   const currentPath = returnUrl || window.location.pathname + window.location.search
   const loginUrl = `/login?returnUrl=${encodeURIComponent(currentPath)}`
   
@@ -49,6 +54,11 @@ export function handle401Error(error: { status?: number; response?: { status?: n
     error?.code === 401
   
   if (is401) {
+    // Don't handle 401 if we're already on login/signup page
+    if (window.location.pathname === '/login' || window.location.pathname === '/signup') {
+      return true
+    }
+    
     // Clear any stored auth tokens
     localStorage.removeItem('token')
     localStorage.removeItem('refreshToken')
