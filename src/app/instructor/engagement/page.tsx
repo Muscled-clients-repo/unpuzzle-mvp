@@ -132,8 +132,8 @@ export default function InstructorEngagementPage() {
   const filteredActivity = getFilteredActivity()
 
   const handleReviewJourney = (studentId: string, videoId: string) => {
-    // Navigate to video page with student context
-    router.push(`/learn/${videoId}?instructor=true&student=${studentId}`)
+    // Navigate to instructor video page with student context
+    router.push(`/instructor/course/course-1/video/${videoId}?student=${studentId}`)
   }
 
   return (

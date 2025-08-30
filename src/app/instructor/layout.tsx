@@ -14,16 +14,16 @@ export default function InstructorLayout({
   const instructor = mockUsers.instructors[0]
   const pathname = usePathname()
   
-  // Hide sidebar on studio page
-  const isStudioPage = pathname.includes('/studio')
+  // Hide sidebar on studio page and video pages
+  const isFullscreenPage = pathname.includes('/studio') || pathname.includes('/video/')
   
   return (
     <div className="min-h-screen">
-      {!isStudioPage && <Header user={{ name: instructor.name, email: instructor.email, role: instructor.role }} />}
-      {!isStudioPage && <Sidebar role="instructor" />}
-      <div className={isStudioPage ? "" : "md:pl-64 pt-16"}>
-        {!isStudioPage && <CourseSelector />}
-        <main className={isStudioPage ? "min-h-screen" : "min-h-[calc(100vh-4rem)]"}>
+      {!isFullscreenPage && <Header user={{ name: instructor.name, email: instructor.email, role: instructor.role }} />}
+      {!isFullscreenPage && <Sidebar role="instructor" />}
+      <div className={isFullscreenPage ? "" : "md:pl-64 pt-16"}>
+        {!isFullscreenPage && <CourseSelector />}
+        <main className={isFullscreenPage ? "min-h-screen" : "min-h-[calc(100vh-4rem)]"}>
           {children}
         </main>
       </div>

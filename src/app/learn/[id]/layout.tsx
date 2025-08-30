@@ -1,4 +1,5 @@
 import { Metadata } from 'next'
+import { Header } from "@/components/layout/header"
 
 interface LayoutProps {
   children: React.ReactNode
@@ -115,5 +116,12 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 }
 
 export default function LessonLayout({ children }: LayoutProps) {
-  return <>{children}</>
+  return (
+    <>
+      <Header />
+      <div className="pt-16">
+        {children}
+      </div>
+    </>
+  )
 }
