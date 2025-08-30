@@ -133,7 +133,7 @@ export function TimelineClips({
     setPreviewClipPosition(newStartFrame)
     
     // Only update clip position if not showing preview track
-    if (!showNewTrackPreview) {
+    if (!showNewTrackPreview && onMoveClip) {
       onMoveClip(clip.id, newStartFrame)
     }
     

@@ -309,8 +309,6 @@ export function useVideoEditor() {
   
   // Split clip at specific frame (saves history immediately - not a drag operation)
   const splitClip = useCallback((clipId: string, splitFrame: number) => {
-    let firstClipId: string | null = null
-    
     setClipsWithRef(prevClips => {
       const clipIndex = prevClips.findIndex(c => c.id === clipId)
       if (clipIndex === -1) return prevClips
@@ -349,9 +347,6 @@ export function useVideoEditor() {
         sourceOutFrame: sourceOutFrame
       }
       
-      // Store first clip ID for selection
-      firstClipId = firstClip.id
-      
       // Replace original clip with two new clips
       const newClips = [...prevClips]
       newClips.splice(clipIndex, 1, firstClip, secondClip)
@@ -359,13 +354,15 @@ export function useVideoEditor() {
       // Save history immediately for split (not a continuous operation)
       historyRef.current.saveState(newClips, totalFramesRef.current, 'Split clip')
       
+      // Auto-select the left (first) clip after splitting
+      // Using setTimeout to ensure state update completes first
+      setTimeout(() => {
+        console.log('Setting selected clip after split:', firstClip.id)
+        setSelectedClipId(firstClip.id)
+      }, 0)
+      
       return newClips
     })
-    
-    // Auto-select the left (first) clip after splitting
-    if (firstClipId) {
-      setSelectedClipId(firstClipId)
-    }
   }, [setSelectedClipId])
 
   // Trim left side of selected clip (E key) - remove everything before current frame

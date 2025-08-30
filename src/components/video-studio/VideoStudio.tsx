@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { ArrowLeft, Play, Pause, Circle, Square, Undo2, Redo2, X, Maximize } from 'lucide-react'
 import Link from 'next/link'
 import { Timeline } from './Timeline'
-import { useKeyboardShortcuts } from './useKeyboardShortcuts'
+import { useKeyboardShortcuts } from '@/lib/video-editor/useKeyboardShortcuts'
 import { formatFrame } from './formatters'
 
 export function VideoStudio() {
@@ -426,7 +426,7 @@ export function VideoStudio() {
       {viewMode !== 'fullTab' && (
         <div className="h-14 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 flex-shrink-0">
         <div className="flex items-center gap-4">
-          <Link href="/instructor" className="text-gray-400 hover:text-white">
+          <Link href="/" className="text-gray-400 hover:text-white">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <h1 className="text-lg font-semibold">Unpuzzle AI Course Maker</h1>
