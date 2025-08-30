@@ -238,45 +238,10 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
       }
       
       if (response.data && response.status === 201) {
-        const signupData = response.data as any
+        // Don't authenticate user immediately - they need to verify email first
+        // The user data and token will be set during login after email verification
         
-        // Extract user data from response
-        const userData = signupData.user || signupData
-        
-        // Store access token if provided
-        if (signupData.session?.access_token) {
-          localStorage.setItem('authToken', signupData.session.access_token)
-        }
-        
-        // Transform backend user data to our User type
-        const user: User = {
-          id: userData.supabase_user_id || userData.id || 'unknown',
-          name: userData.full_name || `${firstName} ${lastName}`.trim() || 'User',
-          email: userData.email || email,
-          role: userData.roles?.[0] || 'student',
-          avatar: userData.avatar_url || `https://api.dicebear.com/7.x/avataaars/png?seed=${email}`,
-          createdAt: userData.created_at || new Date().toISOString(),
-          subscription: {
-            plan: 'basic',
-            status: 'active',
-            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-            features: {
-              maxCoursesPerMonth: 3,
-              aiInteractionsPerDay: 10,
-              downloadableResources: true,
-              certificateAccess: true,
-              prioritySupport: false
-            }
-          }
-        }
-        
-        // Store user in state
-        set({
-          id: user.id,
-          profile: user
-        })
-        
-        console.log('✅ Signup successful for:', user.email)
+        console.log('✅ Signup successful - email verification required')
         return { success: true }
       }
       
@@ -345,6 +310,7 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
           role: userData.role || 'student',
           avatar: userData.avatar || userData.profilePicture || `https://api.dicebear.com/7.x/avataaars/png?seed=${email}`,
           createdAt: userData.createdAt || new Date().toISOString(),
+          updatedAt: userData.updatedAt || new Date().toISOString(),
           subscription: userData.subscription || {
             plan: 'basic',
             status: 'active',
