@@ -41,7 +41,21 @@ export class VideoAgentStateMachine {
     }
     
     this.commandQueue = new CommandQueue()
-    this.videoController = new VideoController()
+    
+    // Check if DI is available at runtime
+    if (isFeatureEnabled('USE_DEPENDENCY_INJECTION') && typeof window !== 'undefined') {
+      // Try to get from DI at runtime only
+      try {
+        const { getService } = require('@/lib/dependency-injection/ServiceContainer')
+        const diVideoController = getService('videoController')
+        this.videoController = diVideoController || new VideoController()
+      } catch {
+        this.videoController = new VideoController()
+      }
+    } else {
+      this.videoController = new VideoController()
+    }
+    
     this.messageManager = new MessageManager()
     
     // Connect command queue to state machine
@@ -49,6 +63,7 @@ export class VideoAgentStateMachine {
     
     // Register as state source if coordinator is enabled
     if (isFeatureEnabled('USE_STATE_COORDINATOR')) {
+      // Just use direct import for now
       videoStateCoordinator.registerSource({
         name: 'agent-state-machine',
         priority: 2, // Lower priority than Zustand but higher than video element

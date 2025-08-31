@@ -3,6 +3,7 @@
 import { forwardRef, useImperativeHandle, useRef, useEffect, useState } from "react"
 import { videoStateCoordinator } from "@/lib/video-state/VideoStateCoordinator"
 import { isFeatureEnabled } from "@/utils/feature-flags"
+import { getServiceWithFallback } from "@/lib/dependency-injection/helpers"
 
 // Declare YouTube types
 declare global {
@@ -138,9 +139,15 @@ export const VideoEngine = forwardRef<VideoEngineRef, VideoEngineProps>(
     // Register video element as state source
     useEffect(() => {
       if (isFeatureEnabled('USE_STATE_COORDINATOR')) {
+        // Get coordinator from DI or use direct import
+        const coordinator = getServiceWithFallback(
+          'videoStateCoordinator',
+          () => videoStateCoordinator
+        )
+        
         // Register HTML video element as a read-only state source
         if (!isYouTube && videoRef.current) {
-          videoStateCoordinator.registerSource({
+          coordinator.registerSource({
             name: 'html-video-element',
             priority: 3, // Lower priority than Zustand
             isWritable: false, // Read-only
@@ -161,7 +168,7 @@ export const VideoEngine = forwardRef<VideoEngineRef, VideoEngineProps>(
         
         // Register YouTube player as a read-only state source
         if (isYouTube && youtubePlayerRef.current && isYouTubeReady) {
-          videoStateCoordinator.registerSource({
+          coordinator.registerSource({
             name: 'youtube-player',
             priority: 3, // Lower priority than Zustand
             isWritable: false, // Read-only

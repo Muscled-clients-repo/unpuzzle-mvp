@@ -71,6 +71,7 @@ export class VideoController {
     
     // Check for duplicate update
     if (isFeatureEnabled('USE_SINGLE_SOURCE_TRUTH')) {
+      // For now, just use direct import to avoid circular dependency
       const isDuplicate = stateUpdateTracker.trackUpdate('isPlaying', false, 'VideoController.pause')
       if (!isDuplicate) {
         store.setIsPlaying(false)
@@ -134,6 +135,7 @@ export class VideoController {
     
     // Check for duplicate update
     if (isFeatureEnabled('USE_SINGLE_SOURCE_TRUTH')) {
+      // For now, just use direct import to avoid circular dependency
       const isDuplicate = stateUpdateTracker.trackUpdate('isPlaying', true, 'VideoController.play')
       if (!isDuplicate) {
         store.setIsPlaying(true)
