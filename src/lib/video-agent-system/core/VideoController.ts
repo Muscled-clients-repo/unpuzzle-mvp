@@ -2,6 +2,7 @@ import { useAppStore } from '@/stores/app-store'
 import { discoveryLogger } from '@/utils/discovery-logger'
 import { videoStateAdapter } from '../adapters/VideoStateAdapter'
 import { isFeatureEnabled } from '@/utils/feature-flags'
+import { stateUpdateTracker } from '@/lib/video-state/StateUpdateTracker'
 
 export interface VideoRef {
   pause: () => void
@@ -67,7 +68,16 @@ export class VideoController {
       ? videoStateAdapter.getState('VideoController.pauseVideo')
       : useAppStore.getState()
     discoveryLogger.logGetState('VideoController.pauseVideo', { isPlaying: store.isPlaying })
-    store.setIsPlaying(false)
+    
+    // Check for duplicate update
+    if (isFeatureEnabled('USE_SINGLE_SOURCE_TRUTH')) {
+      const isDuplicate = stateUpdateTracker.trackUpdate('isPlaying', false, 'VideoController.pause')
+      if (!isDuplicate) {
+        store.setIsPlaying(false)
+      }
+    } else {
+      store.setIsPlaying(false)
+    }
     
     // Method 1: Direct ref call
     try {
@@ -121,7 +131,16 @@ export class VideoController {
     const store = isFeatureEnabled('USE_VIDEO_STATE_ADAPTER') 
       ? videoStateAdapter.getState('VideoController.play')
       : useAppStore.getState()
-    store.setIsPlaying(true)
+    
+    // Check for duplicate update
+    if (isFeatureEnabled('USE_SINGLE_SOURCE_TRUTH')) {
+      const isDuplicate = stateUpdateTracker.trackUpdate('isPlaying', true, 'VideoController.play')
+      if (!isDuplicate) {
+        store.setIsPlaying(true)
+      }
+    } else {
+      store.setIsPlaying(true)
+    }
     
     try {
       this.videoRef.play()

@@ -8,6 +8,8 @@ import { VideoControls } from "../shared/VideoControls"
 import { VideoSeeker } from "../shared/VideoSeeker"
 import { TranscriptPanel } from "../shared/TranscriptPanel"
 import { useDocumentEventListener } from "@/hooks/useTrackedEventListener"
+import { raceConditionGuard } from "@/lib/video-state/RaceConditionGuard"
+import { isFeatureEnabled } from "@/utils/feature-flags"
 
 export interface StudentVideoPlayerRef {
   pause: () => void
@@ -88,11 +90,11 @@ export const StudentVideoPlayer = forwardRef<
   useImperativeHandle(ref, () => ({
     pause: () => {
       videoEngineRef.current?.pause()
-      setIsPlaying(false)
+      // State will be set by VideoEngine's onPause event
     },
     play: () => {
       videoEngineRef.current?.play()
-      setIsPlaying(true)
+      // State will be set by VideoEngine's onPlay event
     },
     isPaused: () => !isPlaying,
     getCurrentTime: () => currentTime
@@ -165,41 +167,97 @@ export const StudentVideoPlayer = forwardRef<
   // Use tracked event listener that will be automatically cleaned up
   useDocumentEventListener('keydown', handleKeyDown, undefined, 'StudentVideoPlayer')
 
-  const handlePlayPause = () => {
+  const handlePlayPause = async () => {
     if (!videoEngineRef.current) return
     
+    // Prevent rapid play/pause clicks
+    if (isFeatureEnabled('USE_SINGLE_SOURCE_TRUTH')) {
+      const operationId = `play-pause-${Date.now()}`
+      const canProceed = raceConditionGuard.startOperation(operationId, 'play-pause')
+      
+      if (!canProceed) {
+        console.log('Play/pause operation blocked - another in progress')
+        return
+      }
+      
+      try {
+        await executePlayPause()
+      } finally {
+        raceConditionGuard.completeOperation(operationId)
+      }
+    } else {
+      await executePlayPause()
+    }
+  }
+  
+  const executePlayPause = async () => {
     if (isPlaying) {
-      videoEngineRef.current.pause()
-      setIsPlaying(false)
-      onPause?.(currentTime)
-      // Show controls when paused
-      setShowControls(true)
-      // Clear any existing timeout
+      // Clear timeout BEFORE pausing to prevent race condition
       if (controlsTimeoutRef.current) {
         clearTimeout(controlsTimeoutRef.current)
         controlsTimeoutRef.current = null
       }
+      
+      videoEngineRef.current!.pause()
+      // Don't set state here - VideoEngine's onPause will handle it
+      onPause?.(currentTime)
+      // Show controls when paused
+      setShowControls(true)
     } else {
-      videoEngineRef.current.play()
-      setIsPlaying(true)
+      videoEngineRef.current!.play()
+      // Don't set state here - VideoEngine's onPlay will handle it
       onPlay?.()
       // Show controls for 3 seconds when resuming
       setShowControls(true)
+      
+      // Cancel any existing timeout before setting new one
       if (controlsTimeoutRef.current) {
         clearTimeout(controlsTimeoutRef.current)
       }
-      controlsTimeoutRef.current = setTimeout(() => {
-        setShowControls(false)
+      
+      // Use a unique ID for this timeout to detect if it's been replaced
+      const timeoutId = setTimeout(() => {
+        // Only hide if this is still the active timeout
+        if (controlsTimeoutRef.current === timeoutId) {
+          setShowControls(false)
+        }
       }, 3000)
+      
+      controlsTimeoutRef.current = timeoutId
     }
   }
 
-  const handleSeek = (time: number) => {
-    videoEngineRef.current?.seek(time)
-    setCurrentTime(time)
+  const handleSeek = async (time: number) => {
+    if (!videoEngineRef.current) return
+    
+    // Prevent seeking during play/pause transitions
+    if (isFeatureEnabled('USE_SINGLE_SOURCE_TRUTH')) {
+      if (raceConditionGuard.isOperationInProgress('play-pause')) {
+        console.log('Seek blocked - play/pause in progress')
+        return
+      }
+      
+      const operationId = `seek-${Date.now()}`
+      const canProceed = raceConditionGuard.startOperation(operationId, 'seek')
+      
+      if (!canProceed) {
+        console.log('Seek operation blocked - another seek in progress')
+        return
+      }
+      
+      try {
+        videoEngineRef.current.seek(time)
+        setCurrentTime(time)
+      } finally {
+        raceConditionGuard.completeOperation(operationId)
+      }
+    } else {
+      videoEngineRef.current.seek(time)
+      setCurrentTime(time)
+    }
   }
 
-  const handleSkip = (seconds: number) => {
+  const handleSkip = async (seconds: number) => {
     if (!videoEngineRef.current) return
     
     // Get the actual video element to read current time directly
@@ -214,8 +272,8 @@ export const StudentVideoPlayer = forwardRef<
       ? Math.max(0, Math.min(actualCurrentTime + seconds, actualDuration))
       : Math.max(0, actualCurrentTime + seconds)
     
-    videoEngineRef.current.seek(newTime)
-    setCurrentTime(newTime)
+    // Use handleSeek which has race condition protection
+    await handleSeek(newTime)
   }
 
   const handleVolumeChange = (newVolume: number) => {
