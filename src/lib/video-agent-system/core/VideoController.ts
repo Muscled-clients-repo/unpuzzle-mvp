@@ -1,4 +1,7 @@
 import { useAppStore } from '@/stores/app-store'
+import { discoveryLogger } from '@/utils/discovery-logger'
+import { videoStateAdapter } from '../adapters/VideoStateAdapter'
+import { isFeatureEnabled } from '@/utils/feature-flags'
 
 export interface VideoRef {
   pause: () => void
@@ -14,6 +17,7 @@ export class VideoController {
   private readonly VERIFY_DELAY_MS = 50
   
   setVideoRef(ref: VideoRef) {
+    discoveryLogger.logRefChain('VideoController.setVideoRef', ref)
     this.videoRef = ref
   }
   
@@ -28,11 +32,15 @@ export class VideoController {
     }
     
     // Fallback to Zustand store
-    const store = useAppStore.getState()
+    const store = isFeatureEnabled('USE_VIDEO_STATE_ADAPTER') 
+      ? videoStateAdapter.getState('VideoController.getCurrentTime')
+      : useAppStore.getState()
+    discoveryLogger.logGetState('VideoController.getCurrentTime', { currentTime: store.currentTime })
     storeTime = store.currentTime
     
     // Fallback to DOM
     const videoElement = document.querySelector('video') as HTMLVideoElement
+    discoveryLogger.logDOMAccess('video', !!videoElement)
     if (videoElement) {
       domTime = videoElement.currentTime
     }
@@ -55,7 +63,10 @@ export class VideoController {
     }
     
     // Update state FIRST to prevent race conditions (Issue #1 FIXED)
-    const store = useAppStore.getState()
+    const store = isFeatureEnabled('USE_VIDEO_STATE_ADAPTER') 
+      ? videoStateAdapter.getState('VideoController.pauseVideo')
+      : useAppStore.getState()
+    discoveryLogger.logGetState('VideoController.pauseVideo', { isPlaying: store.isPlaying })
     store.setIsPlaying(false)
     
     // Method 1: Direct ref call
@@ -107,7 +118,9 @@ export class VideoController {
       throw new Error('No video ref available')
     }
     
-    const store = useAppStore.getState()
+    const store = isFeatureEnabled('USE_VIDEO_STATE_ADAPTER') 
+      ? videoStateAdapter.getState('VideoController.play')
+      : useAppStore.getState()
     store.setIsPlaying(true)
     
     try {
@@ -125,7 +138,11 @@ export class VideoController {
       
       // Check all sources
       const refPaused = this.videoRef?.isPaused() ?? false
-      const storePaused = !useAppStore.getState().isPlaying
+      const storePaused = !(
+        isFeatureEnabled('USE_VIDEO_STATE_ADAPTER') 
+          ? videoStateAdapter.getState('VideoController.verifyPaused').isPlaying
+          : useAppStore.getState().isPlaying
+      )
       
       // For YouTube videos, we might not have a DOM video element
       const videoElement = document.querySelector('video') as HTMLVideoElement

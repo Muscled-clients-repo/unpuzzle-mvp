@@ -108,7 +108,7 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   const handleSegmentClick = (segmentTime: number, segmentIndex: number) => {
     // This is V2-only behavior
     setHighlightedSegment(segmentIndex)
-    setSidebarMessage(`Jumping to segment ${segmentIndex + 1}`)
+    // Note: setSidebarMessage was removed - it was test code
     
     // You could trigger video seek here if you had a ref to the video
     // For now, just log it
@@ -119,9 +119,10 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
     // Call the original handler
     props.onTimeUpdate?.(time)
     
-    // V2-only: Check if we're in a special segment and notify sidebar
+    // V2-only: Check if we're in a special segment 
+    // Note: setSidebarMessage was removed - it was test code
     if (time > 30 && time < 60) {
-      setSidebarMessage("You're in the advanced section!")
+      // Could add special segment behavior here if needed
     }
   }
   

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { VideoAgentStateMachine } from '../core/StateMachine'
 import { SystemContext, SystemState, Action } from '../types/states'
 import { VideoRef } from '../core/VideoController'
+import { discoveryLogger } from '@/utils/discovery-logger'
 
 let globalStateMachine: VideoAgentStateMachine | null = null
 
@@ -10,8 +11,10 @@ export function useVideoAgentSystem() {
   
   useEffect(() => {
     // Create singleton state machine
+    discoveryLogger.logSingletonAccess('VideoAgentStateMachine', globalStateMachine)
     if (!globalStateMachine) {
       globalStateMachine = new VideoAgentStateMachine()
+      discoveryLogger.logSingletonAccess('VideoAgentStateMachine-Created', globalStateMachine)
     }
     
     // Subscribe to updates

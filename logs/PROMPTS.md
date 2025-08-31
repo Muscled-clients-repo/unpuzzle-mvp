@@ -1,4 +1,4 @@
-1. review the file to ensure no contradictiosn conflicts non best practices, redundacies. Now you will most likely find this in the implementation plan, and you will repeatedly find it if I repeatedly run this prompt. So how should we address this? Don’t start reviewing the file until we address this.
+1. review the file to ensure no contradictiosn conflicts non best practices, redundacies (unless the redundenceis provide useful reinforcement). Now you will most likely find this in the implementation plan, and you will repeatedly find it if I repeatedly run this prompt. So how should we address this? Don’t start reviewing the file until we address this.
 
 2. Review the file in its entirety in one shot and let me know if it truly achieves true SSOT principles. Keep doing it until it has 0 contradictions or conflicts with respect to achieving true SSOT. If you find one contradiction or conflict, that means you need to review the file again until there are absolutely no contradictions or conflicts. Remember, even one contradiction or one conflict found means you need to review the entire file in its entirety in one shot to find more contradictions or conflicts until there are 0.
 
@@ -51,3 +51,5 @@ If you find yourself in a loop of more than 3 or 4, pause and tell me how we can
   from prescriptive code to flexible
   principles, which is exactly what
   you wanted!
+
+  are there contradictions, confusions or conflicts in the codebase that are critical and will prevent us from building a production ready MVP that can get initial 100 users?
