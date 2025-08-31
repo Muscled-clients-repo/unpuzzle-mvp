@@ -3,6 +3,8 @@ import { Command, CommandType } from '../types/commands'
 import { CommandQueue } from './CommandQueue'
 import { VideoController, VideoRef } from './VideoController'
 import { MessageManager } from './MessageManager'
+import { videoStateCoordinator } from '@/lib/video-state/VideoStateCoordinator'
+import { isFeatureEnabled } from '@/utils/feature-flags'
 
 export class VideoAgentStateMachine {
   private context: SystemContext
@@ -44,6 +46,20 @@ export class VideoAgentStateMachine {
     
     // Connect command queue to state machine
     this.commandQueue.executeCommand = this.executeCommand.bind(this)
+    
+    // Register as state source if coordinator is enabled
+    if (isFeatureEnabled('USE_STATE_COORDINATOR')) {
+      videoStateCoordinator.registerSource({
+        name: 'agent-state-machine',
+        priority: 2, // Lower priority than Zustand but higher than video element
+        isWritable: false, // Read-only - state machine has its own state
+        getState: () => ({
+          isPlaying: this.context.videoState.isPlaying,
+          currentTime: this.context.videoState.currentTime,
+          duration: this.context.videoState.duration
+        })
+      })
+    }
     
     if (process.env.NODE_ENV === 'development') {
       console.log('[SM] State Machine initialized', this.context)

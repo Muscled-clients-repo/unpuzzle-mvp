@@ -1,6 +1,8 @@
 "use client"
 
 import { forwardRef, useImperativeHandle, useRef, useEffect, useState } from "react"
+import { videoStateCoordinator } from "@/lib/video-state/VideoStateCoordinator"
+import { isFeatureEnabled } from "@/utils/feature-flags"
 
 // Declare YouTube types
 declare global {
@@ -133,6 +135,61 @@ export const VideoEngine = forwardRef<VideoEngineRef, VideoEngineProps>(
       }
     }, [isYouTube, youtubeId])
 
+    // Register video element as state source
+    useEffect(() => {
+      if (isFeatureEnabled('USE_STATE_COORDINATOR')) {
+        // Register HTML video element as a read-only state source
+        if (!isYouTube && videoRef.current) {
+          videoStateCoordinator.registerSource({
+            name: 'html-video-element',
+            priority: 3, // Lower priority than Zustand
+            isWritable: false, // Read-only
+            getState: () => {
+              const video = videoRef.current
+              if (!video) return {}
+              return {
+                isPlaying: !video.paused,
+                currentTime: video.currentTime,
+                duration: video.duration || 0,
+                volume: video.volume,
+                isMuted: video.muted,
+                playbackRate: video.playbackRate
+              }
+            }
+          })
+        }
+        
+        // Register YouTube player as a read-only state source
+        if (isYouTube && youtubePlayerRef.current && isYouTubeReady) {
+          videoStateCoordinator.registerSource({
+            name: 'youtube-player',
+            priority: 3, // Lower priority than Zustand
+            isWritable: false, // Read-only
+            getState: () => {
+              const player = youtubePlayerRef.current
+              if (!player) return {}
+              return {
+                isPlaying: player.getPlayerState?.() === 1, // 1 = playing
+                currentTime: player.getCurrentTime?.() || 0,
+                duration: player.getDuration?.() || 0,
+                volume: (player.getVolume?.() || 100) / 100,
+                isMuted: player.isMuted?.() || false,
+                playbackRate: player.getPlaybackRate?.() || 1
+              }
+            }
+          })
+        }
+      }
+      
+      return () => {
+        // Cleanup: unregister sources
+        if (isFeatureEnabled('USE_STATE_COORDINATOR')) {
+          videoStateCoordinator.unregisterSource('html-video-element')
+          videoStateCoordinator.unregisterSource('youtube-player')
+        }
+      }
+    }, [isYouTube, isYouTubeReady])
+    
     // Cleanup interval on unmount
     useEffect(() => {
       return () => {

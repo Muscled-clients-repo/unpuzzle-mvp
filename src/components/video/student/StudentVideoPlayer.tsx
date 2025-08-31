@@ -202,8 +202,17 @@ export const StudentVideoPlayer = forwardRef<
   const handleSkip = (seconds: number) => {
     if (!videoEngineRef.current) return
     
-    const videoDuration = duration || 0
-    const newTime = Math.max(0, Math.min(currentTime + seconds, videoDuration))
+    // Get the actual video element to read current time directly
+    const videoElement = videoEngineRef.current.getVideoElement?.()
+    const actualCurrentTime = videoElement?.currentTime ?? currentTime
+    
+    // Use videoDuration from local state first, then store, then video element
+    const actualDuration = videoDuration || duration || videoElement?.duration || 0
+    
+    // If we still don't have a duration, just skip by the seconds without limit
+    const newTime = actualDuration > 0 
+      ? Math.max(0, Math.min(actualCurrentTime + seconds, actualDuration))
+      : Math.max(0, actualCurrentTime + seconds)
     
     videoEngineRef.current.seek(newTime)
     setCurrentTime(newTime)

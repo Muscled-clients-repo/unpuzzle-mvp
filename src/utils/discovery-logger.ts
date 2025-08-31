@@ -189,6 +189,23 @@ export class DiscoveryLogger {
   }
   
   /**
+   * Log state synchronization events
+   */
+  logStateSync(action: string, details: any) {
+    if (!DISCOVERY_ENABLED) return
+    
+    const log = {
+      type: 'STATE_SYNC',
+      action,
+      details,
+      timestamp: new Date().toISOString()
+    }
+    
+    this.logs.push(log)
+    console.log('🔄 [StateSync]', action, details)
+  }
+  
+  /**
    * Clear logs
    */
   clearLogs() {
