@@ -3,6 +3,7 @@ import { discoveryLogger } from '@/utils/discovery-logger'
 import { videoStateAdapter } from '../adapters/VideoStateAdapter'
 import { isFeatureEnabled } from '@/utils/feature-flags'
 import { stateUpdateTracker } from '@/lib/video-state/StateUpdateTracker'
+import { getServiceWithFallback } from '@/lib/dependency-injection/helpers'
 
 export interface VideoRef {
   pause: () => void
@@ -39,8 +40,11 @@ export class VideoController {
     discoveryLogger.logGetState('VideoController.getCurrentTime', { currentTime: store.currentTime })
     storeTime = store.currentTime
     
-    // Fallback to DOM
-    const videoElement = document.querySelector('video') as HTMLVideoElement
+    // Fallback to DOM using DOMService
+    const domService = getServiceWithFallback('domService', () => ({
+      querySelector: (s: string) => document.querySelector(s)
+    }))
+    const videoElement = domService.querySelector<HTMLVideoElement>('video')
     discoveryLogger.logDOMAccess('video', !!videoElement)
     if (videoElement) {
       domTime = videoElement.currentTime
@@ -101,7 +105,10 @@ export class VideoController {
     
     // Method 3: Direct DOM manipulation
     try {
-      const videoElement = document.querySelector('video')
+      const domService = getServiceWithFallback('domService', () => ({
+        querySelector: (s: string) => document.querySelector(s)
+      }))
+      const videoElement = domService.querySelector<HTMLVideoElement>('video')
       videoElement?.pause()
       if (await this.verifyPaused()) {
         return true
@@ -166,11 +173,14 @@ export class VideoController {
       )
       
       // For YouTube videos, we might not have a DOM video element
-      const videoElement = document.querySelector('video') as HTMLVideoElement
+      const domService = getServiceWithFallback('domService', () => ({
+        querySelector: (s: string) => document.querySelector(s)
+      }))
+      const videoElement = domService.querySelector<HTMLVideoElement>('video')
       const domPaused = videoElement ? videoElement.paused : true // If no video element (YouTube), assume paused is what we want
       
       // Check if YouTube iframe exists (indicates YouTube video)
-      const isYouTube = document.querySelector('#youtube-player') !== null
+      const isYouTube = domService.querySelector('#youtube-player') !== null
       
       if (isYouTube) {
         // For YouTube, trust the ref and store state

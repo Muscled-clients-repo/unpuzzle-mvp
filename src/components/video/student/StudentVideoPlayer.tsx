@@ -10,6 +10,7 @@ import { TranscriptPanel } from "../shared/TranscriptPanel"
 import { useDocumentEventListener } from "@/hooks/useTrackedEventListener"
 import { raceConditionGuard } from "@/lib/video-state/RaceConditionGuard"
 import { isFeatureEnabled } from "@/utils/feature-flags"
+import { getServiceWithFallback } from "@/lib/dependency-injection/helpers"
 
 export interface StudentVideoPlayerRef {
   pause: () => void
@@ -299,11 +300,19 @@ export const StudentVideoPlayer = forwardRef<
     setPlaybackRate(rate)
   }
 
-  const handleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      containerRef.current?.requestFullscreen()
+  const handleFullscreen = async () => {
+    const domService = getServiceWithFallback('domService', () => ({
+      isFullscreen: () => !!document.fullscreenElement,
+      requestFullscreen: (el: Element) => el.requestFullscreen(),
+      exitFullscreen: () => document.exitFullscreen()
+    }))
+    
+    if (!domService.isFullscreen()) {
+      if (containerRef.current) {
+        await domService.requestFullscreen(containerRef.current)
+      }
     } else {
-      document.exitFullscreen()
+      await domService.exitFullscreen()
     }
   }
 

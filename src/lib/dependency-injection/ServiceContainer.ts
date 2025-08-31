@@ -33,6 +33,7 @@ export interface Services {
   stateUpdateTracker?: any // Will be typed later
   raceConditionGuard?: any // Will be typed later
   eventListenerManager?: any // Will be typed later
+  domService?: any // IDOMService - will be typed later
 }
 
 /**
@@ -111,6 +112,21 @@ export class ServiceContainer {
       factory: () => {
         const { EventListenerManager } = require('@/utils/event-listener-manager')
         return EventListenerManager.getInstance()
+      },
+      singleton: true
+    })
+    
+    // Register DOMService
+    this.register('domService', {
+      factory: () => {
+        // Use browser implementation in browser, mock in Node/SSR
+        if (typeof window !== 'undefined') {
+          const { BrowserDOMService } = require('./services/BrowserDOMService')
+          return new BrowserDOMService()
+        } else {
+          const { MockDOMService } = require('./services/MockDOMService')
+          return new MockDOMService()
+        }
       },
       singleton: true
     })

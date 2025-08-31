@@ -6,6 +6,7 @@ import dynamic from "next/dynamic"
 import { useAppStore } from "@/stores/app-store"
 import { LoadingSpinner } from "@/components/common/LoadingSpinner"
 import { InstructorVideoView } from "@/components/video/views/InstructorVideoView"
+import { getServiceWithFallback } from "@/lib/dependency-injection/helpers"
 
 // Dynamically import the VideoPlayer component with loading fallback
 const VideoPlayer = dynamic(
@@ -147,21 +148,35 @@ export default function InstructorVideoPage() {
   }
 
   useEffect(() => {
+    const domService = getServiceWithFallback('domService', () => ({
+      addEventListener: (target: any, type: string, listener: any) => {
+        target.addEventListener(type, listener)
+        return () => target.removeEventListener(type, listener)
+      },
+      setBodyStyle: (prop: string, value: string) => {
+        document.body.style.setProperty(prop, value)
+      },
+      removeBodyStyle: (prop: string) => {
+        document.body.style.removeProperty(prop)
+      }
+    }))
+    
+    const cleanupFns: Array<() => void> = []
+    
     if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove)
-      document.addEventListener('mouseup', handleMouseUp)
-      document.body.style.userSelect = 'none'
-      document.body.style.cursor = 'col-resize'
+      cleanupFns.push(domService.addEventListener(document, 'mousemove', handleMouseMove))
+      cleanupFns.push(domService.addEventListener(document, 'mouseup', handleMouseUp))
+      domService.setBodyStyle('user-select', 'none')
+      domService.setBodyStyle('cursor', 'col-resize')
     } else {
-      document.body.style.userSelect = ''
-      document.body.style.cursor = ''
+      domService.removeBodyStyle('user-select')
+      domService.removeBodyStyle('cursor')
     }
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-      document.body.style.userSelect = ''
-      document.body.style.cursor = ''
+      cleanupFns.forEach(cleanup => cleanup())
+      domService.removeBodyStyle('user-select')
+      domService.removeBodyStyle('cursor')
     }
   }, [isResizing])
 
@@ -205,8 +220,15 @@ export default function InstructorVideoPage() {
       }
     }
     
-    document.addEventListener('mouseleave', handleMouseLeave)
-    return () => document.removeEventListener('mouseleave', handleMouseLeave)
+    const domService = getServiceWithFallback('domService', () => ({
+      addEventListener: (target: any, type: string, listener: any) => {
+        target.addEventListener(type, listener)
+        return () => target.removeEventListener(type, listener)
+      }
+    }))
+    
+    const cleanup = domService.addEventListener(document, 'mouseleave', handleMouseLeave)
+    return cleanup
   }, [hasInteractedWithExit, user])
 
   // Show loading state first

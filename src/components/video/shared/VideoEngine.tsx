@@ -56,10 +56,18 @@ export const VideoEngine = forwardRef<VideoEngineRef, VideoEngineProps>(
 
       // Load the YouTube iframe API script
       if (!window.YT) {
-        const tag = document.createElement('script')
-        tag.src = 'https://www.youtube.com/iframe_api'
-        const firstScriptTag = document.getElementsByTagName('script')[0]
-        firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag)
+        // Use DOM service to inject script
+        const domService = getServiceWithFallback('domService', () => ({
+          injectScript: async (src: string) => {
+            const tag = document.createElement('script')
+            tag.src = src
+            const firstScriptTag = document.getElementsByTagName('script')[0]
+            firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag)
+          }
+        }))
+        
+        // Note: We don't await here because YouTube API loads asynchronously
+        domService.injectScript('https://www.youtube.com/iframe_api')
       }
 
       // Create player when API is ready
