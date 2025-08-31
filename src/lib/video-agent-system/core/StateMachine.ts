@@ -1347,4 +1347,34 @@ export class VideoAgentStateMachine {
       }
     })
   }
+
+  /**
+   * Cleanup method for proper instance destruction
+   * Added for Phase 1.2 - Instance-based state machine
+   */
+  destroy() {
+    console.log('[SM] Destroying state machine instance')
+    
+    // Clear all subscribers
+    this.subscribers.clear()
+    
+    // Clear command queue
+    this.commandQueue.clear()
+    
+    // Reset context to initial state
+    this.context = {
+      state: SystemState.VIDEO_PAUSED,
+      videoState: { isPlaying: false, currentTime: 0, duration: 0 },
+      agentState: { currentUnactivatedId: null, currentSystemMessageId: null, activeType: null },
+      segmentState: { inPoint: null, outPoint: null, isComplete: false, sentToChat: false },
+      recordingState: { isRecording: false, isPaused: false },
+      messages: [],
+      errors: []
+    }
+    
+    // Clear references
+    this.videoController = null as any
+    this.messageManager = null as any
+    this.commandQueue = null as any
+  }
 }

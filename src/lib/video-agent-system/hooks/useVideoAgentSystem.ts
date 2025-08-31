@@ -3,6 +3,8 @@ import { VideoAgentStateMachine } from '../core/StateMachine'
 import { SystemContext, SystemState, Action } from '../types/states'
 import { VideoRef } from '../core/VideoController'
 import { discoveryLogger } from '@/utils/discovery-logger'
+import { isFeatureEnabled } from '@/utils/feature-flags'
+import { getGlobalCompatibilityInstance, StateMachineManager } from '../core/ManagedStateMachine'
 
 let globalStateMachine: VideoAgentStateMachine | null = null
 
@@ -10,11 +12,18 @@ export function useVideoAgentSystem() {
   const [context, setContext] = useState<SystemContext | null>(null)
   
   useEffect(() => {
-    // Create singleton state machine
-    discoveryLogger.logSingletonAccess('VideoAgentStateMachine', globalStateMachine)
-    if (!globalStateMachine) {
-      globalStateMachine = new VideoAgentStateMachine()
-      discoveryLogger.logSingletonAccess('VideoAgentStateMachine-Created', globalStateMachine)
+    // Use managed instance if feature flag is enabled
+    if (isFeatureEnabled('USE_INSTANCE_STATE_MACHINE')) {
+      console.log('🔄 Using managed state machine instance')
+      globalStateMachine = getGlobalCompatibilityInstance()
+      discoveryLogger.logSingletonAccess('ManagedStateMachine', globalStateMachine)
+    } else {
+      // Original implementation: Create singleton state machine
+      discoveryLogger.logSingletonAccess('VideoAgentStateMachine', globalStateMachine)
+      if (!globalStateMachine) {
+        globalStateMachine = new VideoAgentStateMachine()
+        discoveryLogger.logSingletonAccess('VideoAgentStateMachine-Created', globalStateMachine)
+      }
     }
     
     // Subscribe to updates
@@ -25,6 +34,7 @@ export function useVideoAgentSystem() {
     
     return () => {
       unsubscribe()
+      // Note: We don't destroy the global instance here since it might be used by other components
     }
   }, [])
   

@@ -83,10 +83,10 @@ export default function VideoV2DemoPage() {
           videoUrl={demoVideo.videoUrl}
           title={demoVideo.title}
           videoId={demoVideo.videoId}
-          onTimeUpdate={(time) => console.log("Demo: Time update", time)}
-          onPause={(time) => console.log("Demo: Paused at", time)}
-          onPlay={() => console.log("Demo: Playing")}
-          onEnded={() => console.log("Demo: Video ended")}
+          onTimeUpdate={(time) => {/* console.log("Demo: Time update", time) */}}
+          onPause={(time) => {/* console.log("Demo: Paused at", time) */}}
+          onPlay={() => {/* console.log("Demo: Playing") */}}
+          onEnded={() => {/* console.log("Demo: Video ended") */}}
         />
       </div>
     </div>

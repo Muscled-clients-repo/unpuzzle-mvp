@@ -247,8 +247,21 @@ export const VideoEngine = forwardRef<VideoEngineRef, VideoEngineProps>(
         src={videoUrl}
         className="w-full h-full pointer-events-none object-cover"
         style={{ margin: 0, padding: 0 }}
+        preload="auto"
+        playsInline
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
+        onCanPlay={() => {
+          // Video has enough data to start playing
+          const video = videoRef.current
+          if (video && video.currentTime === 0 && video.duration > 0) {
+            // Seek to 0.1s to avoid black frame at start
+            video.currentTime = 0.1
+          }
+        }}
+        onWaiting={() => {
+          // Video is waiting for more data
+        }}
         onEnded={onEnded}
         onPlay={onPlay}
         onPause={onPause}

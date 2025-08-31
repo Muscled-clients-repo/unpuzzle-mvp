@@ -122,6 +122,7 @@ This plan follows the principles from File 2 and addresses all critical issues f
 
 **Verification**: State stays synchronized across all sources
 **Rollback**: Remove coordinator
+**CHECKPOINT**: ⚠️ STOP - Get explicit user confirmation before proceeding to Step 2.2
 
 ### Step 2.2: Eliminate Duplicate State Updates
 **Action**: Remove redundant state setters
@@ -132,6 +133,7 @@ This plan follows the principles from File 2 and addresses all critical issues f
 
 **Verification**: Single update per user action
 **Rollback**: Restore all update paths
+**CHECKPOINT**: ⚠️ STOP - Get explicit user confirmation before proceeding to Step 2.3
 
 ### Step 2.3: Fix Race Conditions
 **Action**: Add proper sequencing
@@ -147,6 +149,7 @@ This plan follows the principles from File 2 and addresses all critical issues f
 
 **Verification**: No timing-dependent bugs
 **Rollback**: Restore original timing
+**CHECKPOINT**: ⚠️ STOP - Get explicit user confirmation before proceeding to Phase 3
 
 ## Phase 3: Dependency Injection (Day 13-17)
 **Goal**: Replace global access with explicit dependencies
@@ -167,6 +170,7 @@ This plan follows the principles from File 2 and addresses all critical issues f
 
 **Verification**: Services accessible without globals
 **Rollback**: Remove container, use globals
+**CHECKPOINT**: ⚠️ STOP - Get explicit user confirmation before proceeding to Step 3.2
 
 ### Step 3.2: Replace Direct DOM Access
 **Action**: Create DOM abstraction layer
@@ -183,6 +187,7 @@ This plan follows the principles from File 2 and addresses all critical issues f
 
 **Verification**: DOM operations still work
 **Rollback**: Restore direct DOM calls
+**CHECKPOINT**: ⚠️ STOP - Get explicit user confirmation before proceeding to Step 3.3
 
 ### Step 3.3: Break Circular Dependencies
 **Action**: Introduce mediator pattern
@@ -197,6 +202,7 @@ This plan follows the principles from File 2 and addresses all critical issues f
 
 **Verification**: No circular imports detected
 **Rollback**: Restore bidirectional imports
+**CHECKPOINT**: ⚠️ STOP - Get explicit user confirmation before proceeding to Phase 4
 
 ## Phase 4: Safe Architecture Migration (Day 18-25)
 **Goal**: Improve architecture without breaking anything
@@ -211,6 +217,7 @@ This plan follows the principles from File 2 and addresses all critical issues f
 
 **Verification**: Both old and new slices work
 **Rollback**: Delete new slice files
+**CHECKPOINT**: ⚠️ STOP - Get explicit user confirmation before proceeding to Step 4.2
 
 ### Step 4.2: Create Migration Adapters
 **Action**: Build bridges between old and new
@@ -221,6 +228,7 @@ This plan follows the principles from File 2 and addresses all critical issues f
 
 **Verification**: Components work with both
 **Rollback**: Remove adapters
+**CHECKPOINT**: ⚠️ STOP - Get explicit user confirmation before proceeding to Step 4.3
 
 ### Step 4.3: Migrate Leaf Components First
 **Action**: Update simplest components
@@ -238,6 +246,7 @@ This plan follows the principles from File 2 and addresses all critical issues f
 
 **Verification**: Each component works after migration
 **Rollback**: Restore old component version
+**CHECKPOINT**: ⚠️ STOP - Get explicit user confirmation before proceeding to Phase 5
 
 ## Phase 5: Cleanup and Optimization (Day 26-30)
 **Goal**: Remove old code and optimize
@@ -253,6 +262,7 @@ This plan follows the principles from File 2 and addresses all critical issues f
 **Prerequisite**: All components migrated
 **Verification**: App still works without compatibility code
 **Rollback**: Restore from git
+**CHECKPOINT**: ⚠️ STOP - Get explicit user confirmation before proceeding to Step 5.2
 
 ### Step 5.2: Performance Optimization
 **Action**: Fix discovered performance issues
@@ -263,6 +273,7 @@ This plan follows the principles from File 2 and addresses all critical issues f
 
 **Verification**: Performance metrics improve
 **Rollback**: Remove optimizations
+**CHECKPOINT**: ⚠️ STOP - Get explicit user confirmation before proceeding to Step 5.3
 
 ### Step 5.3: Add Error Boundaries
 **Action**: Wrap critical components
@@ -273,6 +284,7 @@ This plan follows the principles from File 2 and addresses all critical issues f
 
 **Verification**: Errors caught gracefully
 **Rollback**: Remove error boundaries
+**CHECKPOINT**: ⚠️ STOP - Get explicit user confirmation before proceeding to completion
 
 ## Critical Success Checkpoints
 
@@ -285,11 +297,12 @@ This plan follows the principles from File 2 and addresses all critical issues f
 - **⚠️ WAIT FOR USER CONFIRMATION BEFORE PROCEEDING**
 
 ### Phase Gates (Stop if Failed)
-- **End of Phase 0**: Logging works without breaking
-- **End of Phase 1**: Critical dependencies addressed
-- **End of Phase 2**: State synchronized properly
-- **End of Phase 3**: No global dependencies
-- **End of Phase 4**: New architecture working
+- **End of Phase 0**: Logging works without breaking ⚠️ CHECKPOINT
+- **End of Phase 1**: Critical dependencies addressed ⚠️ CHECKPOINT
+- **End of Phase 2**: State synchronized properly ⚠️ CHECKPOINT
+- **End of Phase 3**: No global dependencies ⚠️ CHECKPOINT
+- **End of Phase 4**: New architecture working ⚠️ CHECKPOINT
+- **End of Phase 5**: Cleanup and optimization complete ⚠️ FINAL CHECKPOINT
 
 ## Risk Mitigation Strategies
 

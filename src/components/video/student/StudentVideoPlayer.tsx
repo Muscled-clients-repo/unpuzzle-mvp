@@ -7,6 +7,7 @@ import { VideoEngine, VideoEngineRef } from "../shared/VideoEngine"
 import { VideoControls } from "../shared/VideoControls"
 import { VideoSeeker } from "../shared/VideoSeeker"
 import { TranscriptPanel } from "../shared/TranscriptPanel"
+import { useDocumentEventListener } from "@/hooks/useTrackedEventListener"
 
 export interface StudentVideoPlayerRef {
   pause: () => void
@@ -120,51 +121,49 @@ export const StudentVideoPlayer = forwardRef<
   // Load student-specific video data when component mounts
   // Removed the video sync effect since it was causing issues
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const isInInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)
-      if (isInInput) return
+  // Keyboard shortcuts with tracked listener
+  const handleKeyDown = (e: KeyboardEvent) => {
+    const isInInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)
+    if (isInInput) return
 
-      switch (e.key) {
-        case ' ':
-          e.preventDefault()
-          handlePlayPause()
-          break
-        case 'ArrowLeft':
-          e.preventDefault()
-          handleSkip(-5)
-          break
-        case 'ArrowRight':
-          e.preventDefault()
-          handleSkip(5)
-          break
-        case 'm':
-        case 'M':
-          e.preventDefault()
-          handleMuteToggle()
-          break
-        case 'i':
-        case 'I':
-          e.preventDefault()
-          handleSetInPoint()
-          break
-        case 'o':
-        case 'O':
-          e.preventDefault()
-          handleSetOutPoint()
-          break
-        case 'f':
-        case 'F':
-          e.preventDefault()
-          handleFullscreen()
-          break
-      }
+    switch (e.key) {
+      case ' ':
+        e.preventDefault()
+        handlePlayPause()
+        break
+      case 'ArrowLeft':
+        e.preventDefault()
+        handleSkip(-5)
+        break
+      case 'ArrowRight':
+        e.preventDefault()
+        handleSkip(5)
+        break
+      case 'm':
+      case 'M':
+        e.preventDefault()
+        handleMuteToggle()
+        break
+      case 'i':
+      case 'I':
+        e.preventDefault()
+        handleSetInPoint()
+        break
+      case 'o':
+      case 'O':
+        e.preventDefault()
+        handleSetOutPoint()
+        break
+      case 'f':
+      case 'F':
+        e.preventDefault()
+        handleFullscreen()
+        break
     }
-
-    document.addEventListener("keydown", handleKeyDown)
-    return () => document.removeEventListener("keydown", handleKeyDown)
-  })
+  }
+  
+  // Use tracked event listener that will be automatically cleaned up
+  useDocumentEventListener('keydown', handleKeyDown, undefined, 'StudentVideoPlayer')
 
   const handlePlayPause = () => {
     if (!videoEngineRef.current) return

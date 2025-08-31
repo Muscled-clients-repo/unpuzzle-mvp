@@ -6,6 +6,7 @@ import { TimelineControls } from './timeline/TimelineControls'
 import { TimelineRuler } from './timeline/TimelineRuler'
 import { TimelineClips } from './timeline/TimelineClips'
 import { TimelineScrubber } from './timeline/TimelineScrubber'
+import { useDocumentEventListener, useWindowEventListener, useTrackedEventListener } from '@/hooks/useTrackedEventListener'
 
 interface TimelineProps {
   clips: Clip[]

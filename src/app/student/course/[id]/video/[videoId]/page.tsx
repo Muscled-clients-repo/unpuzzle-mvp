@@ -162,11 +162,11 @@ export default function VideoPlayerPage() {
 
   const handleTimeUpdate = (time: number) => {
     // VideoEngine automatically updates store.currentTime - no action needed
-    console.log('Time update:', time)
+    // console.log('Time update:', time)
   }
 
   const handlePause = (time: number) => {
-    console.log('Paused at', time)
+    // console.log('Paused at', time)
   }
 
   const handlePlay = () => {
