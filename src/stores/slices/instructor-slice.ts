@@ -1,4 +1,7 @@
 import { StateCreator } from 'zustand'
+import { InstructorCourse } from '@/types/domain'
+import { FEATURES } from '@/lib/config/features'
+import { supabaseCourseService } from '@/services/supabase/course-service'
 
 export interface CourseAnalytics {
   courseId: string
@@ -118,6 +121,8 @@ export interface InstructorSlice {
   courseAnalytics: CourseAnalytics[]
   courses: InstructorCourse[]
   studentInsights: StudentInsight[]
+  loading: boolean
+  error: string | null
   topLearners: TopLearner[]
   similarConfusions: SimilarConfusion[]
   allSpecializations: string[]
@@ -138,7 +143,7 @@ export interface InstructorSlice {
   
   // Actions
   loadInstructorData: () => void
-  loadCourses: () => void
+  loadCourses: (instructorId?: string) => Promise<void>
   respondToConfusion: (confusionId: string, response: string) => void
   markConfusionResolved: (confusionId: string) => void
   getConfusionHeatmap: (courseId: string) => Array<{time: string, count: number}>
@@ -154,6 +159,8 @@ export const createInstructorSlice: StateCreator<InstructorSlice> = (set, get) =
   courseAnalytics: [],
   courses: [],
   studentInsights: [],
+  loading: false,
+  error: null,
   topLearners: [],
   similarConfusions: [],
   allSpecializations: ['React', 'JavaScript', 'CSS', 'Python', 'Node.js', 'TypeScript', 'Data Science', 'Machine Learning'],
@@ -387,51 +394,85 @@ export const createInstructorSlice: StateCreator<InstructorSlice> = (set, get) =
     })
   },
 
-  loadCourses: () => {
-    // Initialize with mock data (temporary until backend)
-    set({
-      courses: [
-        {
-          id: '1',
-          title: 'React Masterclass',
-          thumbnail: '/api/placeholder/400/225',
-          status: 'published',
-          students: 423,
-          completionRate: 67,
-          revenue: 25380,
-          lastUpdated: '2 days ago',
-          totalVideos: 48,
-          totalDuration: '12h 30m',
-          pendingConfusions: 3
-        },
-        {
-          id: '2',
-          title: 'Python for Data Science',
-          thumbnail: '/api/placeholder/400/225',
-          status: 'published',
-          students: 312,
-          completionRate: 72,
-          revenue: 18720,
-          lastUpdated: '1 week ago',
-          totalVideos: 36,
-          totalDuration: '9h 15m',
-          pendingConfusions: 1
-        },
-        {
-          id: '3',
-          title: 'Advanced TypeScript',
-          thumbnail: '/api/placeholder/400/225',
-          status: 'draft',
-          students: 0,
-          completionRate: 0,
-          revenue: 0,
-          lastUpdated: '3 hours ago',
-          totalVideos: 12,
-          totalDuration: '3h 45m',
-          pendingConfusions: 0
-        }
-      ]
-    })
+  loadCourses: async (instructorId?: string) => {
+    // Mock data for fallback
+    const mockCourses: InstructorCourse[] = [
+      {
+        id: '1',
+        title: 'React Masterclass',
+        thumbnail: '/api/placeholder/400/225',
+        status: 'published',
+        students: 423,
+        completionRate: 67,
+        revenue: 25380,
+        lastUpdated: '2 days ago',
+        totalVideos: 48,
+        totalDuration: '12h 30m',
+        pendingConfusions: 3
+      },
+      {
+        id: '2',
+        title: 'Python for Data Science',
+        thumbnail: '/api/placeholder/400/225',
+        status: 'published',
+        students: 312,
+        completionRate: 72,
+        revenue: 18720,
+        lastUpdated: '1 week ago',
+        totalVideos: 36,
+        totalDuration: '9h 15m',
+        pendingConfusions: 1
+      },
+      {
+        id: '3',
+        title: 'Advanced TypeScript',
+        thumbnail: '/api/placeholder/400/225',
+        status: 'draft',
+        students: 0,
+        completionRate: 0,
+        revenue: 0,
+        lastUpdated: '3 hours ago',
+        totalVideos: 12,
+        totalDuration: '3h 45m',
+        pendingConfusions: 0
+      }
+    ]
+    
+    // Set loading state
+    set({ loading: true, error: null })
+    
+    try {
+      let courses: InstructorCourse[]
+      
+      // Check feature flag
+      if (FEATURES.USE_REAL_COURSES_DATA && instructorId) {
+        // Use real Supabase data
+        console.log('[INSTRUCTOR SLICE] Loading courses from Supabase for instructor:', instructorId)
+        courses = await supabaseCourseService.getInstructorCourses(instructorId)
+        console.log('[DATA SOURCE] Loaded', courses.length, 'courses from Supabase')
+      } else {
+        // Use mock data
+        console.log('[DATA SOURCE] Loading courses from mock data (feature flag off or no instructor ID)')
+        courses = mockCourses
+      }
+      
+      set({ courses, loading: false, error: null })
+      
+    } catch (error: any) {
+      console.error('[INSTRUCTOR SLICE] Error loading courses:', error)
+      
+      // Fallback to mock data on error
+      if (FEATURES.FALLBACK_TO_MOCK_ON_ERROR) {
+        console.log('[FALLBACK] Using mock data due to error')
+        set({ courses: mockCourses, loading: false, error: null })
+      } else {
+        set({ 
+          courses: [], 
+          loading: false, 
+          error: error.message || 'Failed to load courses' 
+        })
+      }
+    }
   },
 
   respondToConfusion: (confusionId: string, response: string) => {

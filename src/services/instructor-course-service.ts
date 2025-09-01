@@ -2,6 +2,7 @@
 import { apiClient, useMockData } from '@/lib/api-client'
 import { 
   Course, 
+  InstructorCourse,
   Video,
   Lesson,
   // InstructorLessonData,  // TODO: Currently unused - no UI calls this
@@ -11,49 +12,55 @@ import {
 import { mockCourses } from '@/data/mock/courses'
 
 export class InstructorCourseService {
-  async getInstructorCourses(instructorId: string): Promise<ServiceResult<Course[]>> {
+  async getInstructorCourses(instructorId: string): Promise<ServiceResult<InstructorCourse[]>> {
     if (useMockData) {
-      // Transform mock courses to match domain Course type
-      const transformedCourses: Course[] = mockCourses.map(course => ({
-        id: course.id,
-        title: course.title,
-        description: course.description,
-        thumbnailUrl: course.thumbnail,
-        instructor: {
-          id: instructorId,
-          name: course.instructor.name,
-          email: `${course.instructor.name.toLowerCase().replace(' ', '.')}@example.com`,
-          avatar: course.instructor.avatar
+      // Return mock courses with instructor slice structure (UI-compatible)
+      const instructorMockCourses: InstructorCourse[] = [
+        {
+          id: '1',
+          title: 'React Masterclass',
+          thumbnail: '/api/placeholder/400/225',
+          status: 'published',
+          students: 423,
+          completionRate: 67,
+          revenue: 25380,
+          lastUpdated: '2 days ago',
+          totalVideos: 48,
+          totalDuration: '12h 30m',
+          pendingConfusions: 3
         },
-        price: course.price,
-        duration: parseInt(course.duration) || 0,
-        difficulty: course.level,
-        tags: [course.category],
-        videos: course.videos.map(v => ({
-          id: v.id,
-          courseId: course.id,
-          title: v.title,
-          description: v.description,
-          duration: parseInt(v.duration) || 600,
-          order: parseInt(v.id),
-          videoUrl: v.videoUrl,
-          thumbnailUrl: v.thumbnailUrl,
-          transcript: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        })),
-        enrollmentCount: course.students,
-        rating: course.rating,
-        isPublished: true,
-        isFree: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }))
+        {
+          id: '2',
+          title: 'Python for Data Science',
+          thumbnail: '/api/placeholder/400/225',
+          status: 'published',
+          students: 312,
+          completionRate: 72,
+          revenue: 18720,
+          lastUpdated: '1 week ago',
+          totalVideos: 36,
+          totalDuration: '9h 15m',
+          pendingConfusions: 1
+        },
+        {
+          id: '3',
+          title: 'Advanced TypeScript',
+          thumbnail: '/api/placeholder/400/225',
+          status: 'draft',
+          students: 0,
+          completionRate: 0,
+          revenue: 0,
+          lastUpdated: '3 hours ago',
+          totalVideos: 12,
+          totalDuration: '3h 45m',
+          pendingConfusions: 0
+        }
+      ]
       
-      return { data: transformedCourses }
+      return { data: instructorMockCourses }
     }
 
-    const response = await apiClient.get<Course[]>(`/api/instructor/courses`)
+    const response = await apiClient.get<InstructorCourse[]>(`/api/instructor/courses`)
     return response.error
       ? { error: response.error }
       : { data: response.data }

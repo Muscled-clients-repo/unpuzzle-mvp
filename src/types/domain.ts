@@ -171,6 +171,33 @@ export interface Course {
   updatedAt: string
 }
 
+// Instructor-specific course interface that matches UI expectations
+export interface InstructorCourse {
+  id: string
+  title: string
+  thumbnail: string           // matches UI field name
+  status: 'published' | 'draft' | 'under_review'
+  students: number            // matches UI field name  
+  completionRate: number      // matches UI field name
+  revenue: number             // matches UI field name
+  totalVideos: number         // matches UI field name
+  totalDuration: string       // matches UI field name (formatted)
+  pendingConfusions: number   // matches UI field name
+  lastUpdated: string         // matches UI field name (formatted)
+  
+  // Optional fields for extended functionality
+  description?: string
+  instructor?: Instructor
+  price?: number
+  difficulty?: 'beginner' | 'intermediate' | 'advanced'
+  tags?: string[]
+  videos?: Video[]
+  rating?: number
+  isFree?: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+
 export interface Instructor {
   id: string  // This was missing before!
   name: string

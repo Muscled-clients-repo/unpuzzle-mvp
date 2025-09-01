@@ -5,16 +5,28 @@
 
 ---
 
-## 🎯 Core Principle: Speed Without Sacrifice
+## 🎯 Core Principles: Speed Without Sacrifice
 
 **The Mantra:** Build fast, but build right. Every shortcut today is tomorrow's technical debt.
+
+### 🎨 **UI Preservation Principle (CRITICAL)**
+**The existing UI is approved and perfect - adapt everything else to it.**
+
+- **Instructor courses page is the gold standard** - Beautiful, functional, stakeholder-approved
+- **Never change working UI components** - Any pixel change requires stakeholder re-approval  
+- **InstructorCourse interface matches UI exactly** - `students`, `completionRate`, `revenue`, `totalVideos`, `totalDuration`, `pendingConfusions`, `lastUpdated`
+- **Backend serves data in UI-expected format** - Database schema and APIs must match UI field names and types
+- **Domain types follow UI, not database convenience** - If UI expects `totalDuration: string`, backend provides formatted strings
+- **Adapter layers bridge format differences** - Never force UI to transform data it shouldn't care about
+
+**Why this matters:** UI changes require design review, stakeholder approval, and user testing. Backend changes don't. The path of least resistance is always backend adaptation.
 
 ---
 
 ## 📐 Architecture Principles for Rapid Development
 
-### 1. **Database-First Development**
-Start with Supabase schema design. The database IS your backend. Supabase provides instant APIs from your tables - no manual endpoint writing needed. Design tables correctly upfront and you get REST APIs, real-time subscriptions, and authentication for free.
+### 1. **Database-First Development (UI-Compatible)**
+Start with Supabase schema design that matches existing UI expectations. The database IS your backend, but it must serve data in the format the approved UI already consumes. Supabase provides instant APIs from your tables - design them to match your InstructorCourse interface exactly. Get REST APIs, real-time subscriptions, and authentication for free, all returning UI-ready data.
 
 ### 2. **Leverage Platform Services**
 Don't build what you can buy. Supabase handles auth, Backblaze handles storage, Bunny handles CDN. Your job is orchestration, not infrastructure. Every hour spent on infrastructure is an hour not spent on features.
@@ -35,7 +47,7 @@ Supabase Auth provides the user ID that connects everything. Every table should 
 ### **The Three-Layer Model**
 
 **Layer 1: Data Foundation (Supabase)**
-This is your source of truth. Users, courses, progress, enrollments - all structured data lives here. Supabase gives you instant CRUD operations, real-time updates, and built-in auth. Design your schema to match your domain types exactly.
+This is your source of truth, designed to serve your existing UI perfectly. Users, courses, progress, enrollments - all structured data lives here with field names and formats that match your approved InstructorCourse interface. Supabase gives you instant CRUD operations, real-time updates, and built-in auth. Schema columns like `students`, `completion_rate`, `total_videos`, `pending_confusions` align exactly with UI expectations.
 
 **Layer 2: Media Pipeline (Backblaze + Bunny)**
 Videos upload directly to Backblaze using presigned URLs - never touch your server. Bunny.net pulls from Backblaze on-demand and caches globally. Users stream from the nearest edge location, not your origin.

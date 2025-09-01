@@ -4,14 +4,14 @@ import { usePathname } from "next/navigation"
 import { Header } from "@/components/layout/header"
 import { Sidebar } from "@/components/layout/sidebar"
 import { CourseSelector } from "@/components/instructor/course-selector"
-import { mockUsers } from "@/data/mock"
+import { useAuth } from "@/contexts/AuthContext"
 
 export default function InstructorLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const instructor = mockUsers.instructors[0]
+  const { user } = useAuth()
   const pathname = usePathname()
   
   // Hide sidebar on studio page and video pages
@@ -19,7 +19,15 @@ export default function InstructorLayout({
   
   return (
     <div className="min-h-screen">
-      {!isFullscreenPage && <Header user={{ name: instructor.name, email: instructor.email, role: instructor.role }} />}
+      {!isFullscreenPage && (
+        <Header 
+          user={{ 
+            name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Instructor', 
+            email: user?.email || '', 
+            role: 'instructor' 
+          }} 
+        />
+      )}
       {!isFullscreenPage && <Sidebar role="instructor" />}
       <div className={isFullscreenPage ? "" : "md:pl-64 pt-16"}>
         {!isFullscreenPage && <CourseSelector />}

@@ -1,11 +1,11 @@
 // src/stores/slices/instructor-course-slice.ts
 import { StateCreator } from 'zustand'
-import { Course, Video } from '@/types/domain'
+import { Course, InstructorCourse, Video } from '@/types/domain'
 import { instructorCourseService } from '@/services/instructor-course-service'
 
 export interface InstructorCourseState {
-  instructorCourses: Course[]
-  currentCourse: Course | null
+  instructorCourses: InstructorCourse[]
+  currentCourse: InstructorCourse | null
   currentCourseAnalytics: {
     enrollments: number
     completionRate: number
@@ -26,12 +26,12 @@ export interface InstructorCourseState {
 export interface InstructorCourseActions {
   loadInstructorCourses: (instructorId: string) => Promise<void>
   loadCourseAnalytics: (courseId: string) => Promise<void>
-  createCourse: (course: Partial<Course>) => Promise<void>
-  updateCourse: (courseId: string, updates: Partial<Course>) => Promise<void>
+  createCourse: (course: Partial<InstructorCourse>) => Promise<void>
+  updateCourse: (courseId: string, updates: Partial<InstructorCourse>) => Promise<void>
   publishCourse: (courseId: string) => Promise<void>
   unpublishCourse: (courseId: string) => Promise<void>
   addVideoToCourse: (courseId: string, video: Partial<Video>) => Promise<void>
-  setCurrentCourse: (course: Course | null) => void
+  setCurrentCourse: (course: InstructorCourse | null) => void
 }
 
 export interface InstructorCourseSlice extends InstructorCourseState, InstructorCourseActions {}

@@ -47,6 +47,31 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
+  // Role-based route protection
+  if (user && isProtectedPath) {
+    // Get user's role from profile
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (profile) {
+      const userRole = profile.role
+      
+      // Check role-based access
+      if (request.nextUrl.pathname.startsWith('/instructor') && userRole !== 'instructor') {
+        console.log(`[MIDDLEWARE] User with role '${userRole}' tried to access instructor route`)
+        return NextResponse.redirect(new URL('/student', request.url))
+      }
+      
+      if (request.nextUrl.pathname.startsWith('/admin') && userRole !== 'admin') {
+        console.log(`[MIDDLEWARE] User with role '${userRole}' tried to access admin route`)
+        return NextResponse.redirect(new URL('/student', request.url))
+      }
+    }
+  }
+
   // Redirect to dashboard if logged in and trying to access auth pages
   if (user && (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup')) {
     return NextResponse.redirect(new URL('/student', request.url))

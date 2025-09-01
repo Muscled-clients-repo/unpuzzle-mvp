@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAppStore } from "@/stores/app-store"
+import { useAuth } from "@/contexts/AuthContext"
 import { ErrorBoundary, LoadingSpinner, ErrorFallback } from "@/components/common"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -42,14 +43,16 @@ import {
 
 export default function TeachCoursesPage() {
   const router = useRouter()
+  const { user } = useAuth()
   const { courses, loadCourses, loading, error } = useAppStore()
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [sortBy, setSortBy] = useState("lastUpdated")
   
   useEffect(() => {
-    loadCourses()
-  }, [loadCourses])
+    // Pass instructor ID if available, otherwise loadCourses will use mock data
+    loadCourses(user?.id)
+  }, [loadCourses, user?.id])
 
   if (loading) return <LoadingSpinner />
   if (error) return <ErrorFallback error={error} />
