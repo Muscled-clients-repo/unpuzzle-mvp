@@ -2,26 +2,34 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { useAuth } from "@/contexts/AuthContext"
 
 interface SocialAuthButtonsProps {
   action: 'signup' | 'login'
 }
 
 export function SocialAuthButtons({ action }: SocialAuthButtonsProps) {
+  const { signInWithGoogle, signInWithGitHub } = useAuth()
   const [loading, setLoading] = useState<'google' | 'github' | null>(null)
 
   const handleGoogleAuth = async () => {
     setLoading('google')
-    // TODO: Implement Google OAuth with Supabase
-    console.log('Google auth not implemented yet')
-    setTimeout(() => setLoading(null), 1000)
+    try {
+      await signInWithGoogle()
+    } catch (error) {
+      console.error('Google auth error:', error)
+      setLoading(null)
+    }
   }
 
   const handleGithubAuth = async () => {
     setLoading('github')
-    // TODO: Implement GitHub OAuth with Supabase
-    console.log('GitHub auth not implemented yet')
-    setTimeout(() => setLoading(null), 1000)
+    try {
+      await signInWithGitHub()
+    } catch (error) {
+      console.error('GitHub auth error:', error)
+      setLoading(null)
+    }
   }
 
   const actionText = action === 'signup' ? 'Sign up' : 'Continue'

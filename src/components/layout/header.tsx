@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { useAuth } from "@/contexts/AuthContext"
 import { Badge } from "@/components/ui/badge"
 import { Bell, Search, User, Menu, Eye, Settings as SettingsIcon, LogOut, MessageCircle, GraduationCap, UserCheck, ChevronLeft } from "lucide-react"
 import {
@@ -31,6 +32,7 @@ interface HeaderProps {
 
 export function Header({ user, backButton }: HeaderProps) {
   const router = useRouter()
+  const { signOut } = useAuth()
   
   return (
     <header className="fixed top-0 z-50 w-full border-b bg-background">
@@ -138,7 +140,16 @@ export function Header({ user, backButton }: HeaderProps) {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-red-600">
+                  <DropdownMenuItem 
+                    className="text-red-600 cursor-pointer"
+                    onClick={async () => {
+                      try {
+                        await signOut()
+                      } catch (error) {
+                        console.error('Error signing out:', error)
+                      }
+                    }}
+                  >
                     <LogOut className="mr-2 h-4 w-4" />
                     Sign Out
                   </DropdownMenuItem>

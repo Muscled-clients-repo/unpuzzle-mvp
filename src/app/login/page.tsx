@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,7 +12,7 @@ import { SocialAuthButtons } from '@/components/auth/SocialAuthButtons'
 import { Brain, ArrowRight } from 'lucide-react'
 
 export default function LoginPage() {
-  const router = useRouter()
+  const { signIn } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
@@ -24,17 +24,14 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
     
-    // TODO: Replace with actual Supabase auth
-    // Simulate auth - replace with actual auth logic
-    setTimeout(() => {
-      // Check for mock credentials
-      if (email === 'demo@example.com' && password === 'password') {
-        router.push('/student')
-      } else {
-        setError('Invalid email or password')
-        setLoading(false)
-      }
-    }, 1000)
+    try {
+      await signIn(email, password)
+      // Navigation handled by AuthContext
+    } catch (err: any) {
+      setError(err.message || 'Invalid email or password')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -147,13 +144,6 @@ export default function LoginPage() {
             Create account
           </Link>
         </p>
-
-        {/* Demo Credentials (Remove in production) */}
-        <div className="text-center text-xs text-muted-foreground bg-muted p-3 rounded-lg">
-          <p className="font-medium mb-1">Demo Credentials</p>
-          <p>Email: demo@example.com</p>
-          <p>Password: password</p>
-        </div>
       </div>
     </AuthLayout>
   )

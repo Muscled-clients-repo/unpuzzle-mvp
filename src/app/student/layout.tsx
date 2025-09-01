@@ -3,14 +3,14 @@
 import { usePathname } from "next/navigation"
 import { Header } from "@/components/layout/header"
 import { Sidebar } from "@/components/layout/sidebar"
-import { mockUsers } from "@/data/mock"
+import { useAuth } from "@/contexts/AuthContext"
 
 export default function StudentLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const learner = mockUsers.learners[0]
+  const { user } = useAuth()
   const pathname = usePathname()
   
   // Hide sidebar on video pages for better viewing experience
@@ -33,7 +33,11 @@ export default function StudentLayout({
   return (
     <div className="min-h-screen">
       <Header 
-        user={{ name: learner.name, email: learner.email, role: learner.role }} 
+        user={{ 
+          name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Student', 
+          email: user?.email || '', 
+          role: 'learner' 
+        }} 
         backButton={backButton}
       />
       {!isVideoPage && <Sidebar role="learner" />}

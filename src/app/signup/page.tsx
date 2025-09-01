@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,6 +14,7 @@ import { Brain, ArrowRight } from 'lucide-react'
 
 export default function SignUpPage() {
   const router = useRouter()
+  const { signUp } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -43,12 +45,20 @@ export default function SignUpPage() {
 
     setLoading(true)
     
-    // TODO: Replace with actual Supabase auth
-    // Simulate auth - replace with actual auth logic
-    setTimeout(() => {
-      // Mock successful signup
-      router.push('/student')
-    }, 1000)
+    try {
+      const result = await signUp(email, password, fullName)
+      
+      if (result?.needsEmailConfirmation) {
+        setError('Please check your email to confirm your account')
+        setLoading(false)
+      } else {
+        // If no email confirmation needed, redirect
+        router.push('/student')
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to create account')
+      setLoading(false)
+    }
   }
 
   return (
@@ -147,14 +157,15 @@ export default function SignUpPage() {
             />
             <label
               htmlFor="terms"
-              className="text-sm font-medium leading-relaxed peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              className="text-sm font-medium leading-relaxed cursor-pointer select-none"
+              onClick={() => setAgreeToTerms(!agreeToTerms)}
             >
               I agree to the{' '}
-              <Link href="/terms" className="text-primary hover:underline">
+              <Link href="/terms" className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
                 Terms and Conditions
               </Link>
               {' '}and{' '}
-              <Link href="/privacy" className="text-primary hover:underline">
+              <Link href="/privacy" className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
                 Privacy Policy
               </Link>
             </label>
