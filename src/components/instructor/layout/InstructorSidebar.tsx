@@ -61,14 +61,6 @@ export function InstructorSidebar({ className }: InstructorSidebarProps) {
                 Student
               </Link>
             </Button>
-            {userRole === 'instructor' && (
-              <Button variant="outline" size="sm" className="w-full justify-start" asChild>
-                <Link href="/moderator">
-                  <Shield className="mr-2 h-3 w-3" />
-                  Moderator
-                </Link>
-              </Button>
-            )}
           </div>
         </div>
       )}

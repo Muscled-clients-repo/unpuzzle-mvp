@@ -2,7 +2,7 @@
 // Single source of truth for all domain types
 
 // ============= USER & ROLES =============
-export type UserRole = 'student' | 'instructor' | 'moderator' | 'admin'
+export type UserRole = 'student' | 'instructor' | 'admin'
 
 export interface User {
   id: string
@@ -11,15 +11,6 @@ export interface User {
   avatar?: string
   role: UserRole
   subscription: Subscription
-  moderatorStats?: {
-    responsesProvided: number
-    helpfulVotes: number
-    endorsedByInstructor: number
-    specialization: string[]
-    trustScore: number
-    promotedAt: string
-    promotedBy: string
-  }
   createdAt: string
   updatedAt: string
 }

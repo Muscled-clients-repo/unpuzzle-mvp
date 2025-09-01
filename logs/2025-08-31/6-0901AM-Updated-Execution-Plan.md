@@ -194,7 +194,7 @@ const actualDuration = videoDuration || duration || videoElement?.duration || 0
 **Rollback**: Set `USE_DEPENDENCY_INJECTION=false`
 **CHECKPOINT**: ✅ COMPLETED - User confirmed all features working
 
-### Step 3.2: Replace Direct DOM Access ✅ COMPLETED (Phase A & B)
+### Step 3.2: Replace Direct DOM Access ✅ COMPLETED
 **Action**: Create DOM abstraction layer
 - ✅ Created IDOMService interface
 - ✅ Implemented BrowserDOMService with cleanup tracking
@@ -202,17 +202,22 @@ const actualDuration = videoDuration || duration || videoElement?.duration || 0
 - ✅ Registered in ServiceContainer
 
 **DOM Access Points Migrated**:
+Phase A & B (Low-Risk):
 - ✅ VideoController - `document.querySelector('video')` (3 locations)
 - ✅ StudentVideoPlayer - fullscreen API calls
-- ⏳ document.createElement('script') - Phase C (not done yet)
-- ⏳ window.getSelection() - Phase D (not done yet)
-- ⏳ document.body.style - Phase C (not done yet)
 
-**Verification**: ✅ All video features working with DOM service
+Phase C (Medium-Risk):
+- ✅ VideoEngine - YouTube script injection with deduplication
+- ✅ Instructor page - body style modifications during resize
+- ✅ Instructor page - event listeners with automatic cleanup
+
+Phase D (High-Risk - Deferred):
+- ⏳ TranscriptPanel - window.getSelection() for text selection
+- ⏳ VideoStudio - complex drag-and-drop DOM manipulation
+
+**Verification**: ✅ All migrated features working perfectly
 **Rollback**: Set `USE_DOM_SERVICE=false`
-**CHECKPOINT**: ✅ Phase A & B COMPLETED - User confirmed working
-
-**Note**: Phase C (medium-risk) and Phase D (high-risk) deferred for later
+**CHECKPOINT**: ✅ COMPLETED - User confirmed all working and pushed to git
 
 ### Step 3.3: Break Circular Dependencies
 **Action**: Introduce mediator pattern

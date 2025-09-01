@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAppStore } from "@/stores/app-store"
+import { ErrorBoundary, LoadingSpinner, ErrorFallback } from "@/components/common"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -46,7 +47,7 @@ import { mockStudentJourneys } from "@/data/mock/instructor-mock-data"
 
 export default function InstructorEngagementPage() {
   const router = useRouter()
-  const { loadInstructorData, loadCourses } = useAppStore()
+  const { loadInstructorData, loadCourses, loading, error } = useAppStore()
   
   const [searchQuery, setSearchQuery] = useState("")
   const [filterType, setFilterType] = useState<'all' | 'reflections' | 'confusions' | 'quizzes'>('all')
@@ -58,6 +59,9 @@ export default function InstructorEngagementPage() {
     loadInstructorData()
     loadCourses()
   }, [loadInstructorData, loadCourses])
+
+  if (loading) return <LoadingSpinner />
+  if (error) return <ErrorFallback error={error} />
 
   // Use shared mock data
   const studentJourneys = mockStudentJourneys
@@ -137,7 +141,8 @@ export default function InstructorEngagementPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <ErrorBoundary>
+      <div className="container mx-auto p-6 space-y-6">
       {/* Page Title Section - Clear content boundary */}
       <div className="border-b pb-4 mb-6">
         <h1 className="text-2xl font-bold">Student Engagement</h1>
@@ -433,6 +438,7 @@ export default function InstructorEngagementPage() {
           ))
         )}
       </div>
-    </div>
+      </div>
+    </ErrorBoundary>
   )
 }

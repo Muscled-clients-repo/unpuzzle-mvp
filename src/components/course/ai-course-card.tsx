@@ -213,12 +213,12 @@ export function AICourseCard({
         <div className="mt-3 flex items-center justify-between border-t pt-3">
           <div className="flex items-center gap-2">
             <img
-              src={course.instructor.avatar || "/placeholder-avatar.jpg"}
-              alt={course.instructor.name}
+              src={course?.instructor?.avatar || "/placeholder-avatar.jpg"}
+              alt={course?.instructor?.name || "Instructor"}
               className="h-6 w-6 rounded-full"
             />
             <span className="text-xs text-muted-foreground">
-              {course.instructor.name}
+              {course?.instructor?.name || "Instructor"}
             </span>
           </div>
           {!isEnrolled && (
@@ -243,7 +243,7 @@ export function AICourseCard({
             )}
             
             <Button className="w-full group" asChild>
-              <Link href={`/student/course/${course.id}/video/${course.videos[0]?.id}`}>
+              <Link href={`/student/course/${course.id}/video/${course.videos?.[0]?.id || '1'}`}>
                 Continue Learning
                 <ChevronRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
               </Link>

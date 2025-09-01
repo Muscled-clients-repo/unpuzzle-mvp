@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useAppStore } from "@/stores/app-store"
+import { ErrorBoundary, LoadingSpinner, ErrorFallback } from "@/components/common"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -54,7 +55,9 @@ export default function ConfusionsPage() {
     loadInstructorData,
     selectedInstructorCourse,
     setSelectedInstructorCourse,
-    getFilteredAnalytics
+    getFilteredAnalytics,
+    loading,
+    error
   } = useAppStore()
   
   const [localCourseFilter, setLocalCourseFilter] = useState<string>("")
@@ -67,6 +70,9 @@ export default function ConfusionsPage() {
   useEffect(() => {
     loadInstructorData()
   }, [loadInstructorData])
+
+  if (loading) return <LoadingSpinner />
+  if (error) return <ErrorFallback error={error} />
 
   // Get confusions based on selected course from dropdown
   const filteredCourseAnalytics = selectedInstructorCourse === 'all' 
@@ -144,7 +150,8 @@ export default function ConfusionsPage() {
   }))
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <ErrorBoundary>
+      <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -368,17 +375,13 @@ export default function ConfusionsPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         {!confusion.resolved ? (
-                          <Button size="sm" asChild>
-                            <Link href={`/instructor/respond/${confusion.id}`}>
+                          <Button size="sm" onClick={() => console.log('Response feature coming soon')}>
                               Respond
                               <ArrowRight className="ml-2 h-3 w-3" />
-                            </Link>
                           </Button>
                         ) : (
-                          <Button size="sm" variant="outline" asChild>
-                            <Link href={`/instructor/respond/${confusion.id}`}>
+                          <Button size="sm" variant="outline" disabled>
                               View
-                            </Link>
                           </Button>
                         )}
                       </TableCell>
@@ -419,6 +422,7 @@ export default function ConfusionsPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </ErrorBoundary>
   )
 }

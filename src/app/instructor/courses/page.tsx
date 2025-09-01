@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAppStore } from "@/stores/app-store"
+import { ErrorBoundary, LoadingSpinner, ErrorFallback } from "@/components/common"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -41,7 +42,7 @@ import {
 
 export default function TeachCoursesPage() {
   const router = useRouter()
-  const { courses, loadCourses } = useAppStore()
+  const { courses, loadCourses, loading, error } = useAppStore()
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [sortBy, setSortBy] = useState("lastUpdated")
@@ -50,7 +51,10 @@ export default function TeachCoursesPage() {
     loadCourses()
   }, [loadCourses])
 
-  const filteredCourses = courses.filter(course => {
+  if (loading) return <LoadingSpinner />
+  if (error) return <ErrorFallback error={error} />
+
+  const filteredCourses = (courses || []).filter(course => {
     const matchesSearch = course.title.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesStatus = statusFilter === "all" || course.status === statusFilter
     return matchesSearch && matchesStatus
@@ -70,7 +74,8 @@ export default function TeachCoursesPage() {
   })
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <ErrorBoundary>
+      <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -93,9 +98,9 @@ export default function TeachCoursesPage() {
             <Video className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{courses.length}</div>
+            <div className="text-2xl font-bold">{(courses || []).length}</div>
             <p className="text-xs text-muted-foreground">
-              {courses.filter(c => c.status === 'published').length} published
+              {(courses || []).filter(c => c.status === 'published').length} published
             </p>
           </CardContent>
         </Card>
@@ -107,7 +112,7 @@ export default function TeachCoursesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {courses.reduce((acc, c) => acc + c.students, 0).toLocaleString()}
+              {(courses || []).reduce((acc, c) => acc + c.students, 0).toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
               Across all courses
@@ -122,7 +127,7 @@ export default function TeachCoursesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${courses.reduce((acc, c) => acc + c.revenue, 0).toLocaleString()}
+              ${(courses || []).reduce((acc, c) => acc + c.revenue, 0).toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
               Lifetime earnings
@@ -138,8 +143,8 @@ export default function TeachCoursesPage() {
           <CardContent>
             <div className="text-2xl font-bold">
               {Math.round(
-                courses.filter(c => c.status === 'published').reduce((acc, c) => acc + c.completionRate, 0) / 
-                courses.filter(c => c.status === 'published').length
+                (courses || []).filter(c => c.status === 'published').reduce((acc, c) => acc + c.completionRate, 0) / 
+                Math.max((courses || []).filter(c => c.status === 'published').length, 1)
               )}%
             </div>
             <p className="text-xs text-muted-foreground">
@@ -318,6 +323,7 @@ export default function TeachCoursesPage() {
           </div>
         </Card>
       )}
-    </div>
+      </div>
+    </ErrorBoundary>
   )
 }

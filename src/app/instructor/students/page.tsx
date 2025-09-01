@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useAppStore } from "@/stores/app-store"
+import { ErrorBoundary, LoadingSpinner, ErrorFallback } from "@/components/common"
 import { 
   Search,
   Filter,
@@ -32,7 +33,9 @@ export default function InstructorStudentsPage() {
     topLearners,
     loadInstructorData,
     loadCourses,
-    courses 
+    courses,
+    loading,
+    error 
   } = useAppStore()
   
   const [searchQuery, setSearchQuery] = useState("")
@@ -43,6 +46,9 @@ export default function InstructorStudentsPage() {
     loadInstructorData()
     loadCourses()
   }, [loadInstructorData, loadCourses])
+
+  if (loading) return <LoadingSpinner />
+  if (error) return <ErrorFallback error={error} />
 
   // Combine student insights and top learners to create a comprehensive list
   const allStudents = [
@@ -175,7 +181,8 @@ export default function InstructorStudentsPage() {
   }
 
   return (
-    <div className="flex-1 p-6">
+    <ErrorBoundary>
+      <div className="flex-1 p-6">
           <div className="mb-8">
             <h1 className="text-3xl font-bold mb-2">Students</h1>
             <p className="text-muted-foreground">
@@ -393,6 +400,7 @@ export default function InstructorStudentsPage() {
               </Table>
             </CardContent>
           </Card>
-    </div>
+      </div>
+    </ErrorBoundary>
   )
 }

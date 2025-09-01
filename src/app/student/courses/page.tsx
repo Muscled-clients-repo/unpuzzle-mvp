@@ -1,5 +1,6 @@
 "use client"
 import { useEffect } from "react"
+import { ErrorBoundary } from "@/components/common"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -43,7 +44,7 @@ export default function MyCoursesPage() {
   
   useEffect(() => {
     // Load progress for each enrolled course
-    enrolledCourses.forEach(course => {
+    (enrolledCourses || []).forEach(course => {
       loadCourseProgress(userId, course.id)
     })
   }, [enrolledCourses, userId, loadCourseProgress])
@@ -90,7 +91,8 @@ export default function MyCoursesPage() {
   if (error) return <ErrorFallback error={error} />
 
   return (
-    <div className="flex-1 p-6">
+    <ErrorBoundary>
+      <div className="flex-1 p-6">
           <div className="mb-8">
             <h1 className="text-3xl font-bold mb-2">My Courses</h1>
             <p className="text-muted-foreground">
@@ -116,14 +118,14 @@ export default function MyCoursesPage() {
           {/* Course Tabs */}
           <Tabs defaultValue="all" className="mb-8">
             <TabsList>
-              <TabsTrigger value="all">All Courses ({enrolledCourses.length})</TabsTrigger>
+              <TabsTrigger value="all">All Courses ({(enrolledCourses || []).length})</TabsTrigger>
               <TabsTrigger value="in-progress">In Progress (2)</TabsTrigger>
               <TabsTrigger value="completed">Completed (0)</TabsTrigger>
             </TabsList>
 
             <TabsContent value="all" className="mt-6">
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {enrolledCourses.map((course) => {
+                {(enrolledCourses || []).map((course) => {
                   const progress = mockProgressData[course.id as keyof typeof mockProgressData] || {
                     progress: 0,
                     lastAccessed: "Never",
@@ -250,7 +252,7 @@ export default function MyCoursesPage() {
 
             <TabsContent value="in-progress" className="mt-6">
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {enrolledCourses.slice(0, 2).map((course) => {
+                {(enrolledCourses || []).slice(0, 2).map((course) => {
                   const progress = mockProgressData[course.id as keyof typeof mockProgressData] || {
                     progress: 0,
                     lastAccessed: "Never",
@@ -316,7 +318,7 @@ export default function MyCoursesPage() {
                     <BookOpen className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">{enrolledCourses.length}</p>
+                    <p className="text-2xl font-bold">{(enrolledCourses || []).length}</p>
                     <p className="text-xs text-muted-foreground">Active Courses</p>
                   </div>
                 </div>
@@ -365,6 +367,7 @@ export default function MyCoursesPage() {
               </CardContent>
             </Card>
           </div>
-    </div>
+      </div>
+    </ErrorBoundary>
   )
 }

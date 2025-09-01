@@ -3,7 +3,6 @@ import { devtools, subscribeWithSelector } from 'zustand/middleware'
 import { UserSlice, createUserSlice } from './slices/user-slice'
 import { AISlice, createAISlice } from './slices/ai-slice'
 import { InstructorSlice, createInstructorSlice } from './slices/instructor-slice'
-import { ModeratorSlice, createModeratorSlice } from './slices/moderator-slice'
 import { CourseCreationSlice, createCourseCreationSlice } from './slices/course-creation-slice'
 import { LessonSlice, createLessonSlice } from './slices/lesson-slice'
 import { BlogSlice, createBlogSlice } from './slices/blog-slice'
@@ -19,7 +18,6 @@ export interface AppStore extends
   UserSlice, 
   AISlice, 
   InstructorSlice, 
-  ModeratorSlice, 
   CourseCreationSlice, 
   LessonSlice, 
   BlogSlice,
@@ -36,7 +34,6 @@ export const useAppStore = create<AppStore>()(
         ...createUserSlice(...args),
         ...createAISlice(...args),
         ...createInstructorSlice(...args),
-        ...createModeratorSlice(...args),
         ...createCourseCreationSlice(...args),
         ...createLessonSlice(...args),
         ...createBlogSlice(...args),

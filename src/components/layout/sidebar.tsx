@@ -27,7 +27,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 
 interface SidebarProps {
-  role?: "learner" | "instructor" | "admin" | "moderator"
+  role?: "learner" | "instructor" | "admin"
 }
 
 const learnerNavItems = [
@@ -45,13 +45,7 @@ const instructorNavItems = [
   { href: "/instructor/engagement", label: "Engagement", icon: TrendingUp },
 ]
 
-const moderatorNavItems = [
-  { href: "/moderator", label: "Dashboard", icon: Home },
-  { href: "/moderator/queue", label: "Queue", icon: MessageSquare },
-  { href: "/moderator/assignments", label: "My Assignments", icon: Target },
-  { href: "/moderator/responses", label: "Responses", icon: MessageSquare },
-  { href: "/moderator/leaderboard", label: "Leaderboard", icon: Trophy },
-]
+// Moderator features removed - not part of MVP
 
 const adminNavItems = [
   { href: "/admin", label: "Dashboard", icon: Home },
@@ -66,12 +60,11 @@ const adminNavItems = [
 export function Sidebar({ role = "learner" }: SidebarProps) {
   const pathname = usePathname()
   const profile = useAppStore((state) => state.profile)
-  const { pendingConfusions, instructorStats, moderationQueue, myAssignments } = useAppStore()
+  const { pendingConfusions, instructorStats } = useAppStore()
   
   const navItems = 
     role === "admin" ? adminNavItems :
     role === "instructor" ? instructorNavItems :
-    role === "moderator" ? moderatorNavItems :
     learnerNavItems
 
   // Get AI usage info

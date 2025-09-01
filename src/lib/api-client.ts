@@ -1,7 +1,7 @@
 // src/lib/api-client.ts
 // Centralized API client with mock data support
 
-export const useMockData = process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true' || true // Default to mock for now
+export const useMockData = process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true'
 
 interface ApiResponse<T> {
   data?: T

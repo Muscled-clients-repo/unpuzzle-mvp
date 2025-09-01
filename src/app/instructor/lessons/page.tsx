@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { ErrorBoundary, LoadingSpinner, ErrorFallback } from "@/components/common"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAppStore } from "@/stores/app-store"
@@ -45,7 +46,7 @@ import {
 
 export default function TeachLessonsPage() {
   const router = useRouter()
-  const { lessons, loadLessons, deleteLesson, generateShareLink } = useAppStore()
+  const { lessons, loadLessons, deleteLesson, generateShareLink, loading, error } = useAppStore()
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [copiedLink, setCopiedLink] = useState<string | null>(null)
@@ -54,7 +55,10 @@ export default function TeachLessonsPage() {
     loadLessons()
   }, [loadLessons])
 
-  const filteredLessons = lessons.filter(lesson => {
+  if (loading) return <LoadingSpinner />
+  if (error) return <ErrorFallback error={error} />
+
+  const filteredLessons = (lessons || []).filter(lesson => {
     const matchesSearch = lesson.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           lesson.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
     const matchesStatus = statusFilter === "all" || lesson.status === statusFilter
@@ -75,7 +79,8 @@ export default function TeachLessonsPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <ErrorBoundary>
+      <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -98,9 +103,9 @@ export default function TeachLessonsPage() {
             <Video className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{lessons.length}</div>
+            <div className="text-2xl font-bold">{(lessons || []).length}</div>
             <p className="text-xs text-muted-foreground">
-              {lessons.filter(l => l.status === 'published').length} published
+              {(lessons || []).filter(l => l.status === 'published').length} published
             </p>
           </CardContent>
         </Card>
@@ -112,7 +117,7 @@ export default function TeachLessonsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {lessons.reduce((acc, l) => acc + l.views, 0).toLocaleString()}
+              {(lessons || []).reduce((acc, l) => acc + l.views, 0).toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
               Across all lessons
@@ -127,7 +132,7 @@ export default function TeachLessonsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {lessons.reduce((acc, l) => acc + l.aiInteractions, 0).toLocaleString()}
+              {(lessons || []).reduce((acc, l) => acc + l.aiInteractions, 0).toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
               Student engagements
@@ -142,8 +147,8 @@ export default function TeachLessonsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {lessons.length > 0 
-                ? Math.round(lessons.reduce((acc, l) => acc + l.completionRate, 0) / lessons.length)
+              {(lessons || []).length > 0 
+                ? Math.round((lessons || []).reduce((acc, l) => acc + l.completionRate, 0) / (lessons || []).length)
                 : 0}%
             </div>
             <p className="text-xs text-muted-foreground">
@@ -350,6 +355,7 @@ export default function TeachLessonsPage() {
           </div>
         </Card>
       )}
-    </div>
+      </div>
+    </ErrorBoundary>
   )
 }
