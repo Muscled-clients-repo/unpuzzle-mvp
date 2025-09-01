@@ -22,7 +22,7 @@ export interface AppStore extends
   LessonSlice, 
   BlogSlice,
   StudentCourseSlice,    // NEW - role-specific
-  InstructorCourseSlice, // NEW - role-specific
+  // InstructorCourseSlice, // NEW - role-specific - temporarily disabled
   StudentVideoSlice,     // NEW - role-specific
   InstructorVideoSlice   // NEW - role-specific
 {}
@@ -39,7 +39,7 @@ export const useAppStore = create<AppStore>()(
         ...createBlogSlice(...args),
         // New role-specific slices
         ...createStudentCourseSlice(...args),
-        ...createInstructorCourseSlice(...args),
+        // ...createInstructorCourseSlice(...args), // Temporarily disabled to avoid publishCourse conflict
         ...createStudentVideoSlice(...args),
         ...createInstructorVideoSlice(...args),
       })

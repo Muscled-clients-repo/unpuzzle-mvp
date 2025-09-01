@@ -50,7 +50,8 @@ export class SupabaseCourseService {
         : 0,
       pending_confusions: 0,
       price: courseData.price || 0,
-      difficulty: courseData.difficulty || 'beginner'
+      difficulty: courseData.difficulty || 'beginner',
+      is_free: (courseData.price || 0) === 0
     }
     
     const { data, error } = await supabase

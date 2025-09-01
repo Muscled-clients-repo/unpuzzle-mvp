@@ -44,6 +44,10 @@ export default function EditCoursePage() {
     createChapter,
     updateChapter,
     deleteChapter,
+    addVideosToQueue,
+    updateVideoName,
+    removeVideo,
+    moveVideoToChapter,
     saveDraft,
     isAutoSaving,
     loadCourses,
@@ -68,12 +72,49 @@ export default function EditCoursePage() {
     try {
       await saveDraft()
       setHasChanges(false)
-      // Show success message
-      setTimeout(() => {
-        router.push('/instructor')
-      }, 1000)
+      // Show success message - stay on edit page for continued editing
+      console.log('Course saved successfully - staying on edit page')
     } catch (error) {
       console.error('Failed to save course:', error)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!courseCreation?.id) {
+      console.error('No course ID to delete')
+      return
+    }
+
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete "${courseCreation.title}"? This action cannot be undone.`
+    )
+    
+    if (!confirmDelete) return
+
+    setIsSaving(true)
+    try {
+      // Use the real backend deletion
+      const useRealBackend = process.env.NEXT_PUBLIC_USE_REAL_COURSE_DELETION === 'true'
+      
+      if (useRealBackend) {
+        const { supabaseCourseService } = await import('@/services/supabase/course-service')
+        console.log('[SUPABASE] Deleting course...', courseCreation.id)
+        await supabaseCourseService.deleteCourse(courseCreation.id)
+        console.log('[SUPABASE] Course deleted successfully')
+      } else {
+        console.log('[MOCK] Deleting course...', courseCreation.title)
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        console.log('[MOCK] Course deleted!')
+      }
+      
+      // Redirect to courses list after successful deletion
+      router.push('/instructor/courses')
+      
+    } catch (error: any) {
+      console.error('[ERROR] Failed to delete course:', error)
+      alert('Failed to delete course. Please try again.')
     } finally {
       setIsSaving(false)
     }
@@ -98,6 +139,33 @@ export default function EditCoursePage() {
   const handleDeleteChapter = (chapterId: string) => {
     if (confirm('Are you sure you want to delete this chapter?')) {
       deleteChapter(chapterId)
+      setHasChanges(true)
+    }
+  }
+
+  const handleVideoUpload = (chapterId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (files && files.length > 0) {
+      addVideosToQueue(files)
+      // Move uploaded videos to the specific chapter
+      Array.from(files).forEach((file, index) => {
+        const videoId = `video-${Date.now()}-${index}`
+        setTimeout(() => {
+          moveVideoToChapter(videoId, chapterId)
+        }, 100) // Small delay to ensure video is added first
+      })
+      setHasChanges(true)
+    }
+  }
+
+  const handleVideoTitleChange = (videoId: string, newTitle: string) => {
+    updateVideoName(videoId, newTitle)
+    setHasChanges(true)
+  }
+
+  const handleVideoDelete = (videoId: string) => {
+    if (confirm('Are you sure you want to delete this video?')) {
+      removeVideo(videoId)
       setHasChanges(true)
     }
   }
@@ -152,22 +220,33 @@ export default function EditCoursePage() {
             </Badge>
           )}
           
-          <Button
-            onClick={handleSave}
-            disabled={!hasChanges || isSaving}
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="mr-2 h-4 w-4" />
-                Save Changes
-              </>
-            )}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={handleSave}
+              disabled={!hasChanges || isSaving}
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Save Changes
+                </>
+              )}
+            </Button>
+            
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={isSaving}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Course
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -324,9 +403,81 @@ export default function EditCoursePage() {
                           </Button>
                         </div>
                         
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span>{chapter.videos.length} videos</span>
-                          {chapter.duration && <span>{chapter.duration}</span>}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            <span>{chapter.videos.length} videos</span>
+                            {chapter.duration && <span>{chapter.duration}</span>}
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="file"
+                              accept="video/*"
+                              multiple
+                              onChange={(e) => handleVideoUpload(chapter.id, e)}
+                              className="hidden"
+                              id={`video-upload-${chapter.id}`}
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => document.getElementById(`video-upload-${chapter.id}`)?.click()}
+                            >
+                              <Plus className="mr-1 h-3 w-3" />
+                              Add Videos
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Videos in Chapter */}
+                        <div className="space-y-2">
+                          {chapter.videos.length === 0 ? (
+                            <div className="text-center py-6 text-sm text-muted-foreground bg-muted/50 rounded-lg">
+                              <Video className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                              <p>No videos in this chapter yet.</p>
+                              <p className="text-xs">Click "Add Videos" to upload content.</p>
+                            </div>
+                          ) : (
+                            chapter.videos.map((video, videoIndex) => (
+                              <div
+                                key={video.id}
+                                className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg border"
+                              >
+                                <GripVertical className="h-4 w-4 text-muted-foreground mt-1" />
+                                
+                                <div className="flex-1 space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground font-mono">
+                                      {videoIndex + 1}.
+                                    </span>
+                                    <Input
+                                      value={video.name}
+                                      onChange={(e) => handleVideoTitleChange(video.id, e.target.value)}
+                                      placeholder="Video title"
+                                      className="text-sm"
+                                    />
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                    {video.duration && <span>{video.duration}</span>}
+                                    <span className="capitalize">{video.status}</span>
+                                    {video.progress !== undefined && (
+                                      <span>{video.progress}% uploaded</span>
+                                    )}
+                                  </div>
+                                </div>
+                                
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleVideoDelete(video.id)}
+                                  className="h-8 w-8 text-destructive hover:text-destructive"
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ))
+                          )}
                         </div>
                       </div>
                     </div>

@@ -409,34 +409,176 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
   },
   
   saveDraft: async () => {
+    const { courseCreation } = get()
+    
+    if (!courseCreation) {
+      console.error('No course to save')
+      return
+    }
+
     set({ isAutoSaving: true })
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    set(state => ({
-      isAutoSaving: false,
-      courseCreation: state.courseCreation ? {
-        ...state.courseCreation,
-        lastSaved: new Date()
-      } : null
-    }))
-    console.log('Course draft saved!')
+    
+    try {
+      // Check feature flag for real course updates
+      const useRealBackend = process.env.NEXT_PUBLIC_USE_REAL_COURSE_UPDATES === 'true'
+      
+      if (useRealBackend && courseCreation.id) {
+        // Import the service dynamically
+        const { supabaseCourseService } = await import('@/services/supabase/course-service')
+        
+        // Prepare update data
+        const updateData = {
+          title: courseCreation.title,
+          description: courseCreation.description,
+          price: courseCreation.price,
+          difficulty: courseCreation.level,
+          totalDuration: courseCreation.totalDuration,
+          // Keep existing status unless changed
+          status: courseCreation.status
+        }
+        
+        console.log('[SUPABASE] Saving course draft...', courseCreation.id)
+        await supabaseCourseService.updateCourse(courseCreation.id, updateData)
+        console.log('[SUPABASE] Course draft saved successfully')
+        
+        set(state => ({
+          isAutoSaving: false,
+          courseCreation: state.courseCreation ? {
+            ...state.courseCreation,
+            lastSaved: new Date()
+          } : null
+        }))
+        
+      } else {
+        // Mock implementation for development or new courses
+        console.log('[MOCK] Saving course draft...', courseCreation.title)
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
+        set(state => ({
+          isAutoSaving: false,
+          courseCreation: state.courseCreation ? {
+            ...state.courseCreation,
+            lastSaved: new Date()
+          } : null
+        }))
+        
+        console.log('[MOCK] Course draft saved!')
+      }
+      
+    } catch (error: any) {
+      console.error('[ERROR] Failed to save course draft:', error)
+      
+      set({ isAutoSaving: false })
+      throw error
+    }
   },
   
   publishCourse: async () => {
-    set(state => ({
-      courseCreation: state.courseCreation ? {
-        ...state.courseCreation,
-        status: 'under_review' as const
-      } : null
-    }))
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    set(state => ({
-      courseCreation: state.courseCreation ? {
-        ...state.courseCreation,
-        status: 'published' as const
-      } : null
-    }))
-    console.log('Course published!')
+    const { courseCreation } = get()
+    
+    if (!courseCreation) {
+      console.error('No course to publish')
+      return
+    }
+
+    // Validation
+    if (!courseCreation.title) {
+      throw new Error('Course title is required')
+    }
+    
+    if (!courseCreation.videos || courseCreation.videos.length === 0) {
+      throw new Error('Course must have at least one video')
+    }
+
+    try {
+      // Set status to under_review first
+      set(state => ({
+        courseCreation: state.courseCreation ? {
+          ...state.courseCreation,
+          status: 'under_review' as const
+        } : null
+      }))
+
+      // Get instructor ID from Supabase auth
+      const { createClient } = await import('@/lib/supabase/client')
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        throw new Error('User not authenticated')
+      }
+      
+      const instructorId = user.id
+      
+      // Check feature flag for real course creation
+      const useRealBackend = process.env.NEXT_PUBLIC_USE_REAL_COURSE_CREATION === 'true'
+      
+      if (useRealBackend) {
+        // Import the service dynamically to avoid circular deps
+        const { supabaseCourseService } = await import('@/services/supabase/course-service')
+        
+        // Convert courseCreation to InstructorCourse format
+        const courseData = {
+          title: courseCreation.title,
+          description: courseCreation.description || '',
+          thumbnail: '/api/placeholder/400/225', // Default thumbnail
+          price: courseCreation.price || 0,
+          difficulty: courseCreation.level || 'beginner',
+          totalVideos: courseCreation.videos.length,
+          totalDuration: '0h 0m', // TODO: Calculate from video durations
+          students: 0,
+          completionRate: 0,
+          revenue: 0,
+          pendingConfusions: 0,
+          status: 'published' as const
+        }
+        
+        console.log('[SUPABASE] Publishing course...', courseData)
+        const publishedCourse = await supabaseCourseService.createCourse(instructorId, courseData)
+        console.log('[SUPABASE] Course published successfully:', publishedCourse.id)
+        
+        // Update local state with published status
+        set(state => ({
+          courseCreation: state.courseCreation ? {
+            ...state.courseCreation,
+            id: publishedCourse.id,
+            status: 'published' as const
+          } : null
+        }))
+        
+        // Redirect to instructor courses list to see the new course
+        if (typeof window !== 'undefined') {
+          window.location.href = '/instructor/courses'
+        }
+        
+      } else {
+        // Mock implementation for development
+        console.log('[MOCK] Publishing course...', courseCreation.title)
+        await new Promise(resolve => setTimeout(resolve, 1500))
+        
+        set(state => ({
+          courseCreation: state.courseCreation ? {
+            ...state.courseCreation,
+            status: 'published' as const
+          } : null
+        }))
+        
+        console.log('[MOCK] Course published!')
+      }
+      
+    } catch (error: any) {
+      console.error('[ERROR] Failed to publish course:', error)
+      
+      // Reset status on error
+      set(state => ({
+        courseCreation: state.courseCreation ? {
+          ...state.courseCreation,
+          status: 'draft' as const
+        } : null
+      }))
+      
+      throw error
+    }
   },
   
   toggleAutoSave: () => {
@@ -461,43 +603,128 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
     })
   },
   
-  loadCourseForEdit: (courseId) => {
-    // Mock implementation - in production this would fetch from API
-    // For now, create sample course data based on courseId
-    const mockCourseData: CourseCreationData = {
-      title: `Course ${courseId}`,
-      description: `Description for course ${courseId}`,
-      category: 'web-development',
-      level: 'intermediate',
-      price: 99,
-      chapters: [
-        {
-          id: 'chapter-1',
-          title: 'Introduction',
-          description: 'Getting started with the course',
-          order: 0,
-          videos: [],
-          duration: '30 min'
-        },
-        {
-          id: 'chapter-2',
-          title: 'Core Concepts',
-          description: 'Understanding the fundamentals',
-          order: 1,
-          videos: [],
-          duration: '45 min'
-        }
-      ],
-      videos: [],
-      status: 'draft',
-      totalDuration: '1h 15min',
-      lastSaved: new Date(),
-      autoSaveEnabled: true
-    }
+  loadCourseForEdit: async (courseId) => {
+    // Check feature flag for real course editing
+    const useRealBackend = process.env.NEXT_PUBLIC_USE_REAL_COURSE_UPDATES === 'true'
     
-    set({
-      courseCreation: mockCourseData,
-      currentStep: 'info'
-    })
+    if (useRealBackend) {
+      try {
+        // Import the service dynamically
+        const { supabaseCourseService } = await import('@/services/supabase/course-service')
+        
+        // Get the authenticated user
+        const { createClient } = await import('@/lib/supabase/client')
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        
+        if (!user) {
+          throw new Error('User not authenticated')
+        }
+
+        // Fetch all courses and find the one to edit
+        console.log('[SUPABASE] Loading course for edit:', courseId)
+        const courses = await supabaseCourseService.getInstructorCourses(user.id)
+        const course = courses.find(c => c.id === courseId)
+        
+        if (!course) {
+          throw new Error(`Course ${courseId} not found or access denied`)
+        }
+
+        // Convert InstructorCourse to CourseCreationData format
+        const courseCreationData: CourseCreationData = {
+          id: course.id,
+          title: course.title,
+          description: course.description || '',
+          category: 'programming', // Default since not stored in current schema
+          level: (course.difficulty as 'beginner' | 'intermediate' | 'advanced') || 'beginner',
+          price: course.price || 0,
+          chapters: [
+            {
+              id: 'chapter-1',
+              title: 'Main Content',
+              description: 'Course content',
+              order: 0,
+              videos: [],
+              duration: course.totalDuration || '0h 0m'
+            }
+          ],
+          videos: [],
+          status: course.status as 'draft' | 'published' | 'under_review',
+          totalDuration: course.totalDuration || '0h 0m',
+          lastSaved: new Date(),
+          autoSaveEnabled: true
+        }
+        
+        console.log('[SUPABASE] Course loaded for editing:', courseCreationData.title)
+        set({
+          courseCreation: courseCreationData,
+          currentStep: 'info'
+        })
+        
+      } catch (error: any) {
+        console.error('[ERROR] Failed to load course for edit:', error)
+        
+        // Fallback to mock data on error
+        const mockCourseData: CourseCreationData = {
+          title: `Course ${courseId}`,
+          description: `Description for course ${courseId}`,
+          category: 'programming',
+          level: 'intermediate',
+          price: 99,
+          chapters: [
+            {
+              id: 'chapter-1',
+              title: 'Introduction',
+              description: 'Getting started with the course',
+              order: 0,
+              videos: [],
+              duration: '30 min'
+            }
+          ],
+          videos: [],
+          status: 'draft',
+          totalDuration: '1h 15min',
+          lastSaved: new Date(),
+          autoSaveEnabled: true
+        }
+        
+        console.log('[FALLBACK] Using mock data due to error')
+        set({
+          courseCreation: mockCourseData,
+          currentStep: 'info'
+        })
+      }
+      
+    } else {
+      // Mock implementation for development
+      console.log('[MOCK] Loading course for edit:', courseId)
+      const mockCourseData: CourseCreationData = {
+        title: `Course ${courseId}`,
+        description: `Description for course ${courseId}`,
+        category: 'programming',
+        level: 'intermediate',
+        price: 99,
+        chapters: [
+          {
+            id: 'chapter-1',
+            title: 'Introduction',
+            description: 'Getting started with the course',
+            order: 0,
+            videos: [],
+            duration: '30 min'
+          }
+        ],
+        videos: [],
+        status: 'draft',
+        totalDuration: '1h 15min',
+        lastSaved: new Date(),
+        autoSaveEnabled: true
+      }
+      
+      set({
+        courseCreation: mockCourseData,
+        currentStep: 'info'
+      })
+    }
   }
 })

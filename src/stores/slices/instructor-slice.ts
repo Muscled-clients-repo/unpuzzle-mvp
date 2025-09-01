@@ -144,6 +144,13 @@ export interface InstructorSlice {
   // Actions
   loadInstructorData: () => void
   loadCourses: (instructorId?: string) => Promise<void>
+  
+  // CRUD Operations
+  createCourse: (instructorId: string, courseData: Partial<InstructorCourse>) => Promise<InstructorCourse>
+  updateCourse: (courseId: string, updates: Partial<InstructorCourse>) => Promise<InstructorCourse>
+  deleteCourse: (courseId: string) => Promise<void>
+  updateCourseStatus: (courseId: string, status: 'published' | 'draft' | 'under_review') => Promise<void>
+  
   respondToConfusion: (confusionId: string, response: string) => void
   markConfusionResolved: (confusionId: string) => void
   getConfusionHeatmap: (courseId: string) => Array<{time: string, count: number}>
@@ -579,5 +586,136 @@ export const createInstructorSlice: StateCreator<InstructorSlice> = (set, get) =
     
     const percentChange = ((currentSum - compareSum) / compareSum) * 100
     return Math.round(percentChange * 10) / 10
+  },
+
+  // CRUD Operations Implementation
+  createCourse: async (instructorId: string, courseData: Partial<InstructorCourse>) => {
+    try {
+      set({ loading: true, error: null })
+      
+      if (FEATURES.USE_REAL_COURSE_CREATION) {
+        const newCourse = await supabaseCourseService.createCourse(instructorId, courseData)
+        
+        set(state => ({
+          courses: [newCourse, ...state.courses],
+          loading: false,
+          error: null
+        }))
+        
+        console.log('[INSTRUCTOR SLICE] Created new course:', newCourse.id)
+        return newCourse
+      } else {
+        // Mock implementation for development
+        const mockCourse: InstructorCourse = {
+          id: Date.now().toString(),
+          title: courseData.title || 'New Course',
+          thumbnail: '/api/placeholder/400/225',
+          status: 'draft',
+          students: 0,
+          completionRate: 0,
+          revenue: 0,
+          totalVideos: 0,
+          totalDuration: '0m',
+          pendingConfusions: 0,
+          lastUpdated: 'Just now'
+        }
+        
+        set(state => ({
+          courses: [mockCourse, ...state.courses],
+          loading: false,
+          error: null
+        }))
+        
+        console.log('[INSTRUCTOR SLICE] Created mock course')
+        return mockCourse
+      }
+    } catch (error: any) {
+      console.error('[INSTRUCTOR SLICE] Error creating course:', error)
+      set({ loading: false, error: error.message || 'Failed to create course' })
+      throw error
+    }
+  },
+
+  updateCourse: async (courseId: string, updates: Partial<InstructorCourse>) => {
+    try {
+      set({ loading: true, error: null })
+      
+      if (FEATURES.USE_REAL_COURSE_UPDATES) {
+        const updatedCourse = await supabaseCourseService.updateCourse(courseId, updates)
+        
+        set(state => ({
+          courses: state.courses.map(course => 
+            course.id === courseId ? updatedCourse : course
+          ),
+          loading: false,
+          error: null
+        }))
+        
+        console.log('[INSTRUCTOR SLICE] Updated course:', courseId)
+        return updatedCourse
+      } else {
+        // Mock implementation
+        set(state => ({
+          courses: state.courses.map(course => 
+            course.id === courseId ? { ...course, ...updates, lastUpdated: 'Just now' } : course
+          ),
+          loading: false,
+          error: null
+        }))
+        
+        const updatedCourse = get().courses.find(c => c.id === courseId)!
+        console.log('[INSTRUCTOR SLICE] Updated mock course')
+        return updatedCourse
+      }
+    } catch (error: any) {
+      console.error('[INSTRUCTOR SLICE] Error updating course:', error)
+      set({ loading: false, error: error.message || 'Failed to update course' })
+      throw error
+    }
+  },
+
+  deleteCourse: async (courseId: string) => {
+    try {
+      set({ loading: true, error: null })
+      
+      if (FEATURES.USE_REAL_COURSE_DELETION) {
+        await supabaseCourseService.deleteCourse(courseId)
+      }
+      
+      // Remove from local state regardless of backend
+      set(state => ({
+        courses: state.courses.filter(course => course.id !== courseId),
+        loading: false,
+        error: null
+      }))
+      
+      console.log('[INSTRUCTOR SLICE] Deleted course:', courseId)
+    } catch (error: any) {
+      console.error('[INSTRUCTOR SLICE] Error deleting course:', error)
+      set({ loading: false, error: error.message || 'Failed to delete course' })
+      throw error
+    }
+  },
+
+  updateCourseStatus: async (courseId: string, status: 'published' | 'draft' | 'under_review') => {
+    try {
+      if (FEATURES.USE_REAL_COURSE_UPDATES) {
+        await supabaseCourseService.updateCourseStatus(courseId, status)
+      }
+      
+      // Update local state
+      set(state => ({
+        courses: state.courses.map(course => 
+          course.id === courseId 
+            ? { ...course, status, lastUpdated: 'Just now' }
+            : course
+        )
+      }))
+      
+      console.log('[INSTRUCTOR SLICE] Updated course status:', courseId, status)
+    } catch (error: any) {
+      console.error('[INSTRUCTOR SLICE] Error updating course status:', error)
+      throw error
+    }
   }
 })
