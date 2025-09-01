@@ -11,29 +11,43 @@ import { AuthLayout } from '@/components/auth/AuthLayout'
 import { SocialAuthButtons } from '@/components/auth/SocialAuthButtons'
 import { Brain, ArrowRight } from 'lucide-react'
 
-export default function LoginPage() {
+export default function SignUpPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [rememberMe, setRememberMe] = useState(false)
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [agreeToTerms, setAgreeToTerms] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
     setError('')
+
+    // Validation
+    if (password !== confirmPassword) {
+      setError('Passwords do not match')
+      return
+    }
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters')
+      return
+    }
+
+    if (!agreeToTerms) {
+      setError('Please agree to the terms and conditions')
+      return
+    }
+
+    setLoading(true)
     
     // TODO: Replace with actual Supabase auth
     // Simulate auth - replace with actual auth logic
     setTimeout(() => {
-      // Check for mock credentials
-      if (email === 'demo@example.com' && password === 'password') {
-        router.push('/student')
-      } else {
-        setError('Invalid email or password')
-        setLoading(false)
-      }
+      // Mock successful signup
+      router.push('/student')
     }, 1000)
   }
 
@@ -49,10 +63,10 @@ export default function LoginPage() {
         {/* Form Header */}
         <div className="space-y-2 text-center lg:text-left">
           <h2 className="text-3xl font-bold tracking-tight">
-            Welcome back
+            Create your account
           </h2>
           <p className="text-muted-foreground">
-            Enter your credentials to access your account
+            Start your learning journey today
           </p>
         </div>
 
@@ -65,6 +79,20 @@ export default function LoginPage() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="fullName">Full Name</Label>
+            <Input
+              id="fullName"
+              type="text"
+              placeholder="John Doe"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              required
+              className="h-11"
+              autoComplete="name"
+            />
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input
@@ -80,15 +108,7 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password">Password</Label>
-              <Link 
-                href="/forgot-password" 
-                className="text-sm text-primary hover:underline"
-              >
-                Forgot password?
-              </Link>
-            </div>
+            <Label htmlFor="password">Password</Label>
             <Input
               id="password"
               type="password"
@@ -97,28 +117,53 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               className="h-11"
-              autoComplete="current-password"
+              autoComplete="new-password"
+            />
+            <p className="text-xs text-muted-foreground">
+              Must be at least 8 characters
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword">Confirm Password</Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              placeholder="••••••••"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              className="h-11"
+              autoComplete="new-password"
             />
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex items-start space-x-2">
             <Checkbox 
-              id="remember" 
-              checked={rememberMe}
-              onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+              id="terms" 
+              checked={agreeToTerms}
+              onCheckedChange={(checked) => setAgreeToTerms(checked as boolean)}
+              className="mt-1"
             />
             <label
-              htmlFor="remember"
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              htmlFor="terms"
+              className="text-sm font-medium leading-relaxed peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
             >
-              Remember me for 30 days
+              I agree to the{' '}
+              <Link href="/terms" className="text-primary hover:underline">
+                Terms and Conditions
+              </Link>
+              {' '}and{' '}
+              <Link href="/privacy" className="text-primary hover:underline">
+                Privacy Policy
+              </Link>
             </label>
           </div>
 
           <Button
             type="submit"
             className="w-full h-11"
-            disabled={loading}
+            disabled={loading || !agreeToTerms}
           >
             {loading ? (
               <span className="flex items-center justify-center">
@@ -126,11 +171,11 @@ export default function LoginPage() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
-                Signing in...
+                Creating account...
               </span>
             ) : (
               <>
-                Sign In
+                Create Account
                 <ArrowRight className="ml-2 h-4 w-4" />
               </>
             )}
@@ -138,22 +183,15 @@ export default function LoginPage() {
         </form>
 
         {/* Social Auth */}
-        <SocialAuthButtons action="login" />
+        <SocialAuthButtons action="signup" />
 
-        {/* Sign Up Link */}
+        {/* Login Link */}
         <p className="text-center text-sm text-muted-foreground">
-          Don't have an account?{' '}
-          <Link href="/signup" className="font-medium text-primary hover:underline">
-            Create account
+          Already have an account?{' '}
+          <Link href="/login" className="font-medium text-primary hover:underline">
+            Sign in
           </Link>
         </p>
-
-        {/* Demo Credentials (Remove in production) */}
-        <div className="text-center text-xs text-muted-foreground bg-muted p-3 rounded-lg">
-          <p className="font-medium mb-1">Demo Credentials</p>
-          <p>Email: demo@example.com</p>
-          <p>Password: password</p>
-        </div>
       </div>
     </AuthLayout>
   )
