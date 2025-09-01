@@ -30,7 +30,8 @@ import {
   Clock,
   Users,
   Award,
-  CreditCard
+  CreditCard,
+  CheckCircle2
 } from 'lucide-react'
 
 interface EnrollmentDialogProps {
@@ -46,7 +47,8 @@ export function EnrollmentDialog({ course, isOpen, onClose, onSuccess }: Enrollm
   const [couponCode, setCouponCode] = useState('')
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [appliedDiscount, setAppliedDiscount] = useState(0)
-  const [paymentStep, setPaymentStep] = useState<'enrollment' | 'payment'>('enrollment')
+  const [paymentStep, setPaymentStep] = useState<'enrollment' | 'payment' | 'success'>('enrollment')
+  const [countdown, setCountdown] = useState(5)
 
   const {
     enrollInCourse,
@@ -88,11 +90,14 @@ export function EnrollmentDialog({ course, isOpen, onClose, onSuccess }: Enrollm
       const result = await initiateEnrollment(course.id)
       
       if (result.is_free && result.success) {
-        // Free course - enrollment success (no redirect)
-        onSuccess?.()
-        onClose()
+        // Free course - enrollment success
         console.log('✅ Free course enrollment successful:', course.title)
-        // Redirect disabled - user stays on current page
+        console.log('🔄 Setting paymentStep to success for free course...')
+        // Show success screen with countdown - handle everything internally
+        setPaymentStep('success')
+        setCountdown(5)
+        console.log('✅ PaymentStep set to success for free course, countdown set to 5')
+        // Don't call onSuccess here - we'll handle the redirect ourselves
       } else if (!result.is_free && result.client_secret) {
         // Paid course - transition to payment step
         console.log('🔄 Payment required for course:', course.title)
@@ -119,10 +124,12 @@ export function EnrollmentDialog({ course, isOpen, onClose, onSuccess }: Enrollm
 
   const handlePaymentSuccess = () => {
     console.log('✅ Payment successful!')
-    onSuccess?.()
-    onClose()
-    // Redirect to student courses page after successful payment
-    router.push('/student/courses')
+    console.log('🔄 Setting paymentStep to success...')
+    // Show success screen with countdown - handle everything internally
+    setPaymentStep('success')
+    setCountdown(5)
+    console.log('✅ PaymentStep set to success, countdown set to 5')
+    // Don't call onSuccess here - we'll handle the redirect ourselves
   }
 
   const handlePaymentError = (error: string) => {
@@ -152,6 +159,21 @@ export function EnrollmentDialog({ course, isOpen, onClose, onSuccess }: Enrollm
     }
   }
 
+  // Countdown logic for success screen
+  useEffect(() => {
+    if (paymentStep === 'success' && countdown > 0) {
+      const timer = setTimeout(() => {
+        setCountdown(prev => prev - 1)
+      }, 1000)
+      
+      return () => clearTimeout(timer)
+    } else if (paymentStep === 'success' && countdown === 0) {
+      // Redirect immediately when countdown reaches 0
+      onClose()
+      router.push('/student/courses')
+    }
+  }, [paymentStep, countdown, onClose, router])
+
   // Reset state when dialog opens/closes
   useEffect(() => {
     if (!isOpen) {
@@ -160,6 +182,7 @@ export function EnrollmentDialog({ course, isOpen, onClose, onSuccess }: Enrollm
       setTermsAccepted(false)
       setPaymentMethod('credit_card')
       setPaymentStep('enrollment')
+      setCountdown(5)
       // Clear payment state when closing dialog
       clearPaymentState()
     }
@@ -178,18 +201,81 @@ export function EnrollmentDialog({ course, isOpen, onClose, onSuccess }: Enrollm
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl">
-            <ShoppingCart className="inline-block mr-2 h-5 w-5" />
-            {paymentStep === 'enrollment' ? 'Enroll in Course' : 'Complete Payment'}
+            {(() => {
+              console.log('🔍 Current paymentStep:', paymentStep)
+              return paymentStep === 'success' ? (
+                <>
+                  <CheckCircle2 className="inline-block mr-2 h-5 w-5 text-green-600" />
+                  Enrollment Successful!
+                </>
+              ) : (
+                <>
+                  <ShoppingCart className="inline-block mr-2 h-5 w-5" />
+                  {paymentStep === 'enrollment' ? 'Enroll in Course' : 'Complete Payment'}
+                </>
+              )
+            })()}
           </DialogTitle>
           <DialogDescription>
-            {paymentStep === 'enrollment' 
-              ? 'Join thousands of students learning with AI assistance'
-              : 'Enter your payment details to complete enrollment'
+            {paymentStep === 'success' 
+              ? 'Welcome to your new course! Get ready to start learning.'
+              : paymentStep === 'enrollment' 
+                ? 'Join thousands of students learning with AI assistance'
+                : 'Enter your payment details to complete enrollment'
             }
           </DialogDescription>
         </DialogHeader>
 
-        {paymentStep === 'enrollment' ? (
+        {paymentStep === 'success' ? (
+          /* Success Screen with Countdown */
+          <div className="space-y-6 text-center">
+            {/* Success Icon and Course Info */}
+            <div className="space-y-4">
+              <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                <CheckCircle2 className="h-8 w-8 text-green-600" />
+              </div>
+              
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">{course.title}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {isFree ? 'Free enrollment completed' : `Payment of $${finalPrice.toFixed(2)} processed`}
+                </p>
+              </div>
+            </div>
+
+            {/* What's Next */}
+            <div className="bg-green-50 rounded-lg p-4 space-y-3">
+              <h4 className="font-medium text-green-900">What&apos;s next?</h4>
+              <div className="space-y-2">
+                <div className="flex items-center justify-center gap-2 text-sm text-green-700">
+                  <Check className="h-4 w-4" />
+                  Start with your first lesson
+                </div>
+                <div className="flex items-center justify-center gap-2 text-sm text-green-700">
+                  <Check className="h-4 w-4" />
+                  Access AI-powered learning assistance
+                </div>
+                <div className="flex items-center justify-center gap-2 text-sm text-green-700">
+                  <Check className="h-4 w-4" />
+                  Track your progress and earn certificates
+                </div>
+              </div>
+            </div>
+
+            {/* Countdown */}
+            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <p className="text-sm text-blue-700 font-medium mb-2">
+                Redirecting to My Courses in {countdown} second{countdown !== 1 ? 's' : ''}...
+              </p>
+              <div className="w-full bg-blue-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-1000 ease-linear"
+                  style={{ width: `${((5 - countdown) / 5) * 100}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        ) : paymentStep === 'enrollment' ? (
           /* Enrollment Step */
           <div className="space-y-4">
           <div className="flex gap-4">
@@ -272,7 +358,7 @@ export function EnrollmentDialog({ course, isOpen, onClose, onSuccess }: Enrollm
             <Checkbox
               id="terms"
               checked={termsAccepted}
-              onCheckedChange={setTermsAccepted}
+              onCheckedChange={(checked) => setTermsAccepted(checked === true)}
               disabled={isEnrolling}
             />
             <Label htmlFor="terms" className="text-sm leading-relaxed cursor-pointer">
@@ -353,7 +439,17 @@ export function EnrollmentDialog({ course, isOpen, onClose, onSuccess }: Enrollm
         )}
 
         <DialogFooter className="flex gap-2">
-          {paymentStep === 'enrollment' ? (
+          {paymentStep === 'success' ? (
+            <Button 
+              onClick={() => {
+                onClose()
+                router.push('/student/courses')
+              }}
+              className="w-full"
+            >
+              Go to My Courses Now
+            </Button>
+          ) : paymentStep === 'enrollment' ? (
             <>
               <Button 
                 variant="outline" 
