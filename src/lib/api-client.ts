@@ -85,6 +85,19 @@ class ApiClient {
             console.warn('🔍 Resource not found:', endpoint)
             return { error: 'Resource not found', status: 404 }
           
+          case 429:
+            console.warn('🚫🚫🚫 NEW CODE: Rate limit exceeded - fixed version running! 🚫🚫🚫')
+            try {
+              const rateLimitData = JSON.parse(errorMessage)
+              return { 
+                error: 'rate_limit_exceeded', 
+                status: 429,
+                data: rateLimitData
+              }
+            } catch {
+              return { error: 'Rate limit exceeded', status: 429 }
+            }
+          
           case 500:
             console.error('🔥 Server error:', errorMessage)
             return { error: 'Internal server error. Please try again later.', status: 500 }

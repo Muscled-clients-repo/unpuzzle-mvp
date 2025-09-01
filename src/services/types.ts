@@ -3,6 +3,9 @@ export interface ServiceResult<T> {
   data?: T
   error?: string
   loading?: boolean
+  details?: any
+  upgrade_required?: boolean
+  upgrade_message?: string
 }
 
 export interface PaginationOptions {

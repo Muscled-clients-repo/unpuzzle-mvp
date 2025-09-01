@@ -247,8 +247,61 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
     })
   }
 
+  // Check for upgrade required errors
+  const upgradeError = context.errors.find(error => error.type === 'upgrade_required')
+
   return (
     <div className="flex h-full w-full overflow-hidden">
+      {/* Upgrade Required Notification */}
+      {upgradeError && (
+        <div className="absolute top-4 right-4 z-50">
+          <Card className="bg-yellow-50 border-yellow-200 max-w-sm">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
+                  <Sparkles className="h-5 w-5 text-yellow-600" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium text-yellow-800 mb-1">Upgrade Required</h4>
+                  <p className="text-sm text-yellow-700 mb-3">{upgradeError.message}</p>
+                  <div className="flex gap-2">
+                    <Button size="sm" className="bg-yellow-600 hover:bg-yellow-700">
+                      Upgrade Now
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="text-yellow-700 border-yellow-300 hover:bg-yellow-100"
+                      onClick={() => {
+                        // Remove the error from context
+                        const updatedErrors = context.errors.filter(e => e.id !== upgradeError.id)
+                        // We need to dispatch an action to update context - for now just refresh
+                        window.location.reload()
+                      }}
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-yellow-600 hover:text-yellow-800 hover:bg-yellow-100"
+                  onClick={() => {
+                    // Remove the error from context
+                    const updatedErrors = context.errors.filter(e => e.id !== upgradeError.id)
+                    // We need to dispatch an action to update context - for now just refresh
+                    window.location.reload()
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+      
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto">
         {/* Video Player Section */}

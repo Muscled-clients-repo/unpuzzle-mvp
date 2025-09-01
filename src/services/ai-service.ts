@@ -175,12 +175,6 @@ class RealAIService implements AIService {
   }
   
   private handleError(error: unknown): ServiceResult<never> {
-    if (error.response?.status === 429) {
-      return {
-        error: 'rate_limit_exceeded',
-        details: error.response.data.details
-      }
-    }
     return {
       error: error.message || 'An error occurred'
     }
@@ -214,12 +208,20 @@ class RealAIService implements AIService {
         error: response.error
       })
       
-      if (response.status === 429) {
-        return this.handleError({ response })
-      }
-      
       if (response.error) {
         console.log('AI API Error:', response.error)
+        
+        // For rate limit errors, return the complete response data
+        if (response.error === 'rate_limit_exceeded' && response.data) {
+          const rateLimitData = response.data
+          return {
+            error: 'rate_limit_exceeded',
+            details: rateLimitData.details || rateLimitData,
+            upgrade_required: rateLimitData.details?.upgrade_required || rateLimitData.upgrade_required || true,
+            upgrade_message: rateLimitData.details?.upgrade_message || rateLimitData.upgrade_message || rateLimitData.message
+          }
+        }
+        
         return { error: response.error }
       }
       
@@ -370,6 +372,16 @@ class RealAIService implements AIService {
       })
       
       if (response.error) {
+        // For rate limit errors, return the complete response data
+        if (response.error === 'rate_limit_exceeded' && response.data) {
+          const rateLimitData = response.data
+          return {
+            error: 'rate_limit_exceeded',
+            details: rateLimitData.details || rateLimitData,
+            upgrade_required: rateLimitData.details?.upgrade_required || rateLimitData.upgrade_required || true,
+            upgrade_message: rateLimitData.details?.upgrade_message || rateLimitData.upgrade_message || rateLimitData.message
+          }
+        }
         return { error: response.error }
       }
       
@@ -397,6 +409,16 @@ class RealAIService implements AIService {
       })
       
       if (response.error) {
+        // For rate limit errors, return the complete response data
+        if (response.error === 'rate_limit_exceeded' && response.data) {
+          const rateLimitData = response.data
+          return {
+            error: 'rate_limit_exceeded',
+            details: rateLimitData.details || rateLimitData,
+            upgrade_required: rateLimitData.details?.upgrade_required || rateLimitData.upgrade_required || true,
+            upgrade_message: rateLimitData.details?.upgrade_message || rateLimitData.upgrade_message || rateLimitData.message
+          }
+        }
         return { error: response.error }
       }
       
@@ -412,6 +434,16 @@ class RealAIService implements AIService {
       const response = await apiClient.get(`${this.baseUrl}/user/check-limits/`)
       
       if (response.error) {
+        // For rate limit errors, return the complete response data
+        if (response.error === 'rate_limit_exceeded' && response.data) {
+          const rateLimitData = response.data
+          return {
+            error: 'rate_limit_exceeded',
+            details: rateLimitData.details || rateLimitData,
+            upgrade_required: rateLimitData.details?.upgrade_required || rateLimitData.upgrade_required || true,
+            upgrade_message: rateLimitData.details?.upgrade_message || rateLimitData.upgrade_message || rateLimitData.message
+          }
+        }
         return { error: response.error }
       }
       

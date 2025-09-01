@@ -83,6 +83,13 @@ export interface Message {
   }
 }
 
+export interface SystemError {
+  id: string
+  type: 'upgrade_required' | 'network_error' | 'video_error' | 'ai_error'
+  message: string
+  timestamp: number
+}
+
 export interface SystemContext {
   state: SystemState
   videoState: {
@@ -108,7 +115,7 @@ export interface SystemContext {
     isPaused: boolean
   }
   messages: Message[]
-  errors: Error[]
+  errors: SystemError[]
 }
 
 export interface Action {

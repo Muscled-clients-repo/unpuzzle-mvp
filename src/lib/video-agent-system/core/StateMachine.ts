@@ -1,4 +1,4 @@
-import { SystemContext, SystemState, MessageState, Message, Action, QuizQuestion, QuizState } from '../types/states'
+import { SystemContext, SystemState, MessageState, Message, Action, QuizQuestion, QuizState, SystemError } from '../types/states'
 import { Command, CommandType } from '../types/commands'
 import { CommandQueue } from './CommandQueue'
 import { VideoController, VideoRef } from './VideoController'
@@ -629,6 +629,27 @@ export class VideoAgentStateMachine {
     // Generate AI response asynchronously
     const aiResponseText = await this.generateAIResponse(agentType)
     
+    // Check if upgrade is required
+    if (aiResponseText === '__UPGRADE_REQUIRED__') {
+      console.log('🚫 Upgrade required - removing loading message and keeping error in context')
+      // Remove loading message since we can't provide AI response
+      const updatedMessagesWithoutLoading = this.context.messages.filter(msg => 
+        msg.id !== loadingMessage.id
+      )
+      
+      this.updateContext({
+        ...this.context,
+        state: SystemState.AGENT_REJECTED, // Reset to rejected state
+        messages: updatedMessagesWithoutLoading,
+        agentState: {
+          ...this.context.agentState,
+          currentUnactivatedId: null,
+          activeType: null
+        }
+      })
+      return
+    }
+    
     // Replace loading message with actual AI response
     const aiResponse: Message = {
       id: `ai-${Date.now()}`,
@@ -768,7 +789,22 @@ export class VideoAgentStateMachine {
       
       if (result.error) {
         console.error('AI Service Error:', result.error)
-        // Fallback to default responses if AI service fails
+        
+        // Check for rate limit error and trigger upgrade widget
+        console.log('🔍 StateMachine checking result:', { 
+          error: result.error, 
+          upgrade_required: result.upgrade_required,
+          upgrade_message: result.upgrade_message 
+        })
+        if (result.error === 'rate_limit_exceeded' && result.upgrade_required) {
+          console.log('🚫🚫🚫 NEW STATEMACHINE CODE: Rate limit exceeded, triggering upgrade widget! 🚫🚫🚫')
+          // Add upgrade message to system context
+          this.addUpgradeMessage(result.upgrade_message || 'Daily AI limit reached. Upgrade to Premium for unlimited AI help!')
+          // Return special indicator to signal upgrade required
+          return '__UPGRADE_REQUIRED__'
+        }
+        
+        // Fallback to default responses for other errors
         return this.getDefaultResponse(agentType)
       }
       
@@ -789,6 +825,21 @@ export class VideoAgentStateMachine {
     }
   }
   
+  private addUpgradeMessage(message: string) {
+    // Add upgrade message to context - this can be handled by the UI
+    const upgradeError: SystemError = {
+      id: `upgrade-${Date.now()}`,
+      type: 'upgrade_required',
+      message,
+      timestamp: Date.now()
+    }
+    
+    this.updateContext({
+      ...this.context,
+      errors: [...this.context.errors, upgradeError]
+    })
+  }
+
   private getDefaultResponse(agentType: string | null): string {
     switch (agentType) {
       case 'hint':
