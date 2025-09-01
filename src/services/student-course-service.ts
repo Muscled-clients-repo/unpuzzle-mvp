@@ -586,6 +586,168 @@ export class StudentCourseService {
       ? { error: response.error }
       : { data: response.data }
   }
+
+  // New API endpoints from documentation
+
+  async getEnrolledCoursesV2(status?: 'not_started' | 'in_progress' | 'completed', sort?: string): Promise<ServiceResult<any>> {
+    if (useMockData) {
+      // Filter mock data based on status if provided
+      let filteredCourses = mockCourses.slice(0, 3)
+      
+      if (status === 'in_progress') {
+        filteredCourses = filteredCourses.slice(0, 2)
+      } else if (status === 'completed') {
+        filteredCourses = filteredCourses.slice(2, 3)
+      }
+
+      return {
+        data: {
+          count: filteredCourses.length,
+          results: filteredCourses.map(course => ({
+            enrollment_id: `enroll_${course.id}`,
+            course: {
+              id: course.id,
+              title: course.title,
+              thumbnail_url: course.thumbnail,
+              instructor_name: course.instructor.name,
+              total_duration_hours: parseInt(course.duration) / 60
+            },
+            progress: {
+              percentage: status === 'completed' ? 100 : status === 'in_progress' ? 45 : 0,
+              completed_lessons: status === 'completed' ? 10 : status === 'in_progress' ? 4 : 0,
+              total_lessons: 10,
+              last_accessed_at: new Date().toISOString(),
+              estimated_time_remaining_hours: status === 'completed' ? 0 : 6.8
+            },
+            enrolled_at: new Date().toISOString(),
+            completed_at: status === 'completed' ? new Date().toISOString() : null,
+            certificate_url: status === 'completed' ? `/certificates/${course.id}.pdf` : null
+          }))
+        }
+      }
+    }
+
+    let endpoint = '/api/v1/student/courses/'
+    const params: string[] = []
+    if (status) params.push(`status=${status}`)
+    if (sort) params.push(`sort=${sort}`)
+    
+    if (params.length > 0) {
+      endpoint += `?${params.join('&')}`
+    }
+
+    const response = await apiClient.get(endpoint)
+    return response.error
+      ? { error: response.error }
+      : { data: response.data }
+  }
+
+  async getCourseProgressDetailed(courseId: string): Promise<ServiceResult<any>> {
+    if (useMockData) {
+      return {
+        data: {
+          course_id: courseId,
+          overall_progress: 45,
+          sections: [
+            {
+              section_id: 'section_1',
+              title: 'Getting Started',
+              progress: 100,
+              completed_lessons: 6,
+              total_lessons: 6,
+              lessons: [
+                {
+                  lesson_id: 'lesson_1',
+                  title: 'Introduction',
+                  type: 'video',
+                  duration_minutes: 10,
+                  is_completed: true,
+                  completed_at: new Date().toISOString(),
+                  watch_time_seconds: 600
+                }
+              ]
+            }
+          ],
+          quizzes: {
+            total: 8,
+            completed: 3,
+            average_score: 85
+          },
+          last_accessed: {
+            lesson_id: 'lesson_4',
+            lesson_title: 'Variables and Data Types',
+            section_id: 'section_2',
+            timestamp: new Date().toISOString()
+          },
+          time_spent: {
+            total_minutes: 320,
+            this_week_minutes: 45,
+            today_minutes: 15
+          }
+        }
+      }
+    }
+
+    const response = await apiClient.get(`/api/v1/student/courses/${courseId}/progress/`)
+    return response.error
+      ? { error: response.error }
+      : { data: response.data }
+  }
+
+  async submitCourseReview(courseId: string, rating: number, review: string): Promise<ServiceResult<any>> {
+    if (useMockData) {
+      return {
+        data: {
+          id: `review_${Date.now()}`,
+          course_id: courseId,
+          rating,
+          review,
+          created_at: new Date().toISOString()
+        }
+      }
+    }
+
+    const response = await apiClient.post(`/api/v1/student/courses/${courseId}/review/`, {
+      rating,
+      review
+    })
+    return response.error
+      ? { error: response.error }
+      : { data: response.data }
+  }
+
+  async updateCourseReview(courseId: string, reviewId: string, rating: number, review: string): Promise<ServiceResult<any>> {
+    if (useMockData) {
+      return {
+        data: {
+          id: reviewId,
+          course_id: courseId,
+          rating,
+          review,
+          updated_at: new Date().toISOString()
+        }
+      }
+    }
+
+    const response = await apiClient.put(`/api/v1/student/courses/${courseId}/review/${reviewId}/`, {
+      rating,
+      review
+    })
+    return response.error
+      ? { error: response.error }
+      : { data: response.data }
+  }
+
+  async deleteCourseReview(courseId: string, reviewId: string): Promise<ServiceResult<void>> {
+    if (useMockData) {
+      return { data: undefined }
+    }
+
+    const response = await apiClient.delete(`/api/v1/student/courses/${courseId}/review/${reviewId}/`)
+    return response.error
+      ? { error: response.error }
+      : { data: response.data }
+  }
 }
 
 export const studentCourseService = new StudentCourseService()

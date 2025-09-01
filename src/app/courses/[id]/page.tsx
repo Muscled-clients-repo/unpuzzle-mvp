@@ -71,8 +71,9 @@ export default function CoursePreviewPage() {
   
   // Handle enrollment success
   const handleEnrollSuccess = () => {
-    setShowEnrollDialog(false)
-    router.push(`/student/courses/${courseId}`)
+    // Don't do anything here - let the EnrollmentDialog handle everything
+    // including countdown, dialog closing, and redirect
+    console.log('📝 Course page: handleEnrollSuccess called - letting dialog handle flow')
   }
   
   if (isLoadingCourse) {

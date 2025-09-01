@@ -11,6 +11,11 @@ interface ApiResponse<T> {
   status: number
 }
 
+interface ApiOptions {
+  protected?: boolean  // If true, will redirect to login on 401
+  headers?: Record<string, string>
+}
+
 class ApiClient {
   private baseUrl: string
   
@@ -18,7 +23,7 @@ class ApiClient {
     this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
   }
   
-  async get<T>(endpoint: string): Promise<ApiResponse<T>> {
+  async get<T>(endpoint: string, options?: ApiOptions): Promise<ApiResponse<T>> {
     if (useMockData) {
       console.log('🎭 Using mock data for:', endpoint)
       return { status: 200 } as ApiResponse<T>
@@ -33,6 +38,7 @@ class ApiClient {
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        ...options?.headers,
       }
       
       // Add authorization header if token exists
@@ -65,8 +71,8 @@ class ApiClient {
         switch (response.status) {
           case 401:
             console.warn('🚫 Unauthorized access - no auth token or expired')
-            // Only redirect if this is a protected resource, not public courses
-            if (!endpoint.includes('/api/v1/courses') || endpoint.includes('/student/')) {
+            // Only redirect if this endpoint is explicitly marked as protected
+            if (options?.protected) {
               handle401Error({ status: 401 }, 'Authentication required. Please login.')
             }
             return { error: 'Authentication required', status: 401 }
@@ -115,7 +121,7 @@ class ApiClient {
     }
   }
   
-  async post<T>(endpoint: string, body?: unknown, options?: { headers?: Record<string, string> }): Promise<ApiResponse<T>> {
+  async post<T>(endpoint: string, body?: unknown, options?: ApiOptions): Promise<ApiResponse<T>> {
     if (useMockData) {
       // Mock response - will be handled by service layer
       return { status: 200 } as ApiResponse<T>
@@ -198,7 +204,8 @@ class ApiClient {
         switch (response.status) {
           case 401:
             console.warn('🚫 Unauthorized POST - no auth token or expired')
-            if (!endpoint.includes('/api/v1/courses') || endpoint.includes('/student/')) {
+            // Only redirect if this endpoint is explicitly marked as protected
+            if (options?.protected) {
               handle401Error({ status: 401 }, 'Authentication required. Please login.')
             }
             return { error: 'Authentication required', status: 401 }
@@ -255,18 +262,29 @@ class ApiClient {
     }
   }
   
-  async put<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
+  async put<T>(endpoint: string, body?: unknown, options?: ApiOptions): Promise<ApiResponse<T>> {
     if (useMockData) {
       return { status: 200 } as ApiResponse<T>
     }
     
     try {
+      // Get auth token if available
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken')
+      
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        ...options?.headers,
+      }
+      
+      // Add authorization header if token exists
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+      
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
+        headers,
         credentials: 'include',
         mode: 'cors', // Explicitly set CORS mode
         body: body ? JSON.stringify(body) : undefined,
@@ -275,8 +293,10 @@ class ApiClient {
       if (!response.ok) {
         // Handle 401 Unauthorized errors
         if (response.status === 401) {
-          handle401Error({ status: 401 }, 'Your session has expired. Please login again.')
-          // Return error response so UI can handle it gracefully
+          // Only redirect if this endpoint is explicitly marked as protected
+          if (options?.protected) {
+            handle401Error({ status: 401 }, 'Your session has expired. Please login again.')
+          }
           return { error: 'Unauthorized', status: 401 }
         }
         
@@ -294,18 +314,29 @@ class ApiClient {
     }
   }
   
-  async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
+  async delete<T>(endpoint: string, options?: ApiOptions): Promise<ApiResponse<T>> {
     if (useMockData) {
       return { status: 200 } as ApiResponse<T>
     }
     
     try {
+      // Get auth token if available
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken')
+      
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        ...options?.headers,
+      }
+      
+      // Add authorization header if token exists
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+      
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
+        headers,
         credentials: 'include',
         mode: 'cors', // Explicitly set CORS mode
       })
@@ -313,8 +344,10 @@ class ApiClient {
       if (!response.ok) {
         // Handle 401 Unauthorized errors
         if (response.status === 401) {
-          handle401Error({ status: 401 }, 'Your session has expired. Please login again.')
-          // Return error response so UI can handle it gracefully
+          // Only redirect if this endpoint is explicitly marked as protected
+          if (options?.protected) {
+            handle401Error({ status: 401 }, 'Your session has expired. Please login again.')
+          }
           return { error: 'Unauthorized', status: 401 }
         }
         
@@ -332,9 +365,9 @@ class ApiClient {
     }
   }
 
-  // Course Section CRUD Methods
+  // Course Section CRUD Methods (Protected - Instructor only)
   async getCourseSections(courseId: string) {
-    return this.get(`/api/v1/content/courses/${courseId}/sections`)
+    return this.get(`/api/v1/content/courses/${courseId}/sections`, { protected: true })
   }
 
   async createCourseSection(courseId: string, data: {
@@ -344,7 +377,7 @@ class ApiClient {
     isPublished?: boolean
     isPreview?: boolean
   }) {
-    return this.post(`/api/v1/content/courses/${courseId}/sections`, data)
+    return this.post(`/api/v1/content/courses/${courseId}/sections`, data, { protected: true })
   }
 
   async updateCourseSection(sectionId: string, data: {
@@ -354,11 +387,11 @@ class ApiClient {
     isPublished?: boolean
     isPreview?: boolean
   }) {
-    return this.put(`/api/v1/content/sections/${sectionId}`, data)
+    return this.put(`/api/v1/content/sections/${sectionId}`, data, { protected: true })
   }
 
   async deleteCourseSection(sectionId: string) {
-    return this.delete(`/api/v1/content/sections/${sectionId}`)
+    return this.delete(`/api/v1/content/sections/${sectionId}`, { protected: true })
   }
 
   // Media File Assignment Methods
@@ -370,28 +403,28 @@ class ApiClient {
     isPreview?: boolean
     isPublished?: boolean
   }) {
-    return this.post(`/api/v1/content/sections/${sectionId}/media`, data)
+    return this.post(`/api/v1/content/sections/${sectionId}/media`, data, { protected: true })
   }
 
   async unassignMediaFromSection(mediaFileId: string) {
-    return this.post(`/api/v1/content/media/${mediaFileId}/unassign`)
+    return this.post(`/api/v1/content/media/${mediaFileId}/unassign`, undefined, { protected: true })
   }
 
   async reorderMediaInSection(sectionId: string, mediaOrder: string[]) {
     return this.put(`/api/v1/content/sections/${sectionId}/media/reorder`, {
       mediaOrder
-    })
+    }, { protected: true })
   }
 
   async getCourseMedia(courseId: string) {
-    return this.get(`/api/v1/content/courses/${courseId}/media`)
+    return this.get(`/api/v1/content/courses/${courseId}/media`, { protected: true })
   }
   
   async getSectionMedia(courseId: string, sectionId: string) {
-    return this.get(`/api/v1/content/courses/${courseId}/sections/${sectionId}/media/`)
+    return this.get(`/api/v1/content/courses/${courseId}/sections/${sectionId}/media/`, { protected: true })
   }
 
-  // Media Library Methods
+  // Media Library Methods (Protected - User must be authenticated)
   async getUserUnassignedVideos(params?: {
     page?: number
     limit?: number
@@ -400,7 +433,7 @@ class ApiClient {
     if (params?.page) query.append('page', params.page.toString())
     if (params?.limit) query.append('limit', params.limit.toString())
     
-    return this.get(`/api/v1/media/user/unassigned-videos?${query}`)
+    return this.get(`/api/v1/media/user/unassigned-videos?${query}`, { protected: true })
   }
 
   async getUserMedia(params?: {
@@ -413,34 +446,34 @@ class ApiClient {
     if (params?.limit) query.append('limit', params.limit.toString())
     if (params?.type) query.append('type', params.type)
     
-    return this.get(`/api/v1/media/user/media?${query}`)
+    return this.get(`/api/v1/media/user/media?${query}`, { protected: true })
   }
 
-  // Student Course Methods
+  // Student Course Methods (Protected - Student must be authenticated)
   async getStudentCourses() {
-    return this.get('/api/v1/student/courses')
+    return this.get('/api/v1/student/courses', { protected: true })
   }
   
   async enrollInCourse(courseId: string, data?: { 
     paymentMethod?: string
     couponCode?: string 
   }) {
-    return this.post(`/api/v1/student/courses/${courseId}/enroll`, data)
+    return this.post(`/api/v1/student/courses/${courseId}/enroll`, data, { protected: true })
   }
   
   async unenrollFromCourse(courseId: string) {
-    return this.post(`/api/v1/student/courses/${courseId}/unenroll`)
+    return this.post(`/api/v1/student/courses/${courseId}/unenroll`, undefined, { protected: true })
   }
   
   async getStudentCourseProgress(courseId: string) {
-    return this.get(`/api/v1/student/courses/${courseId}/progress`)
+    return this.get(`/api/v1/student/courses/${courseId}/progress`, { protected: true })
   }
   
   async submitCourseReview(courseId: string, review: {
     rating: number
     comment: string
   }) {
-    return this.post(`/api/v1/student/courses/${courseId}/review`, review)
+    return this.post(`/api/v1/student/courses/${courseId}/review`, review, { protected: true })
   }
 
   // Public Course Methods (No Auth Required)
@@ -537,9 +570,9 @@ class ApiClient {
     return this.get(url)
   }
 
-  // Authenticated Public Course Methods
+  // Authenticated Public Course Methods (Protected - requires login for personalized recommendations)
   async getRecommendedCourses() {
-    return this.get('/api/v1/courses/recommended')
+    return this.get('/api/v1/courses/recommended', { protected: true })
   }
 
 }

@@ -7,6 +7,66 @@ export interface OAuthProvider {
   icon: string
 }
 
+export interface SignUpRequest {
+  email: string
+  password: string
+  full_name: string
+  metadata?: {
+    source?: string
+    referral_code?: string
+  }
+}
+
+export interface SignInRequest {
+  email: string
+  password: string
+}
+
+export interface AuthResponse {
+  user: {
+    id: string
+    email: string
+    full_name: string
+    created_at: string
+    roles?: string[]
+    subscription?: {
+      plan: string
+      ai_limit: number
+      ai_used: number
+    }
+  }
+  access_token: string
+  refresh_token: string
+  expires_at: string
+}
+
+export interface UserProfile {
+  id: string
+  email: string
+  full_name: string
+  avatar_url?: string
+  bio?: string
+  roles: string[]
+  subscription: {
+    plan: string
+    ai_limit: number
+    ai_used: number
+    valid_until?: string
+  }
+  created_at: string
+  updated_at: string
+}
+
+export interface ProfileUpdateData {
+  full_name?: string
+  bio?: string
+  avatar_url?: string
+  preferences?: {
+    email_notifications?: boolean
+    learning_reminders?: boolean
+  }
+}
+
 export interface OAuthResponse {
   success: boolean
   url: string
@@ -59,7 +119,113 @@ export interface Identity {
 
 class OAuthService {
   private baseUrl = '/api/v1/auth/oauth'
+  private authBaseUrl = '/api/v1/auth'
 
+  // Email/Password Authentication
+  async signUp(signUpData: SignUpRequest): Promise<AuthResponse> {
+    try {
+      const response = await apiClient.post(`${this.authBaseUrl}/signup/`, signUpData)
+      
+      const data = response.data as any
+      if (!data?.user || !data?.access_token) {
+        throw new Error('Invalid signup response')
+      }
+      
+      // Store tokens
+      this.storeTokens({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        expires_at: data.expires_at
+      })
+      
+      return data as AuthResponse
+    } catch (error: any) {
+      console.error('Signup failed:', error)
+      throw new Error(error.response?.data?.error || 'Signup failed. Please try again.')
+    }
+  }
+
+  async signIn(signInData: SignInRequest): Promise<AuthResponse> {
+    try {
+      const response = await apiClient.post(`${this.authBaseUrl}/signin/`, signInData)
+      
+      const data = response.data as any
+      if (!data?.user || !data?.access_token) {
+        throw new Error('Invalid signin response')
+      }
+      
+      // Store tokens
+      this.storeTokens({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        expires_at: data.expires_at
+      })
+      
+      return data as AuthResponse
+    } catch (error: any) {
+      console.error('Signin failed:', error)
+      throw new Error(error.response?.data?.error || 'Invalid email or password.')
+    }
+  }
+
+  async refreshToken(refreshToken: string): Promise<AuthResponse> {
+    try {
+      const response = await apiClient.post(`${this.authBaseUrl}/refresh/`, {
+        refresh_token: refreshToken
+      })
+      
+      const data = response.data as any
+      if (!data?.access_token) {
+        throw new Error('Invalid refresh response')
+      }
+      
+      // Store new tokens
+      this.storeTokens({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        expires_at: data.expires_at
+      })
+      
+      return data as AuthResponse
+    } catch (error: any) {
+      console.error('Token refresh failed:', error)
+      throw new Error(error.response?.data?.error || 'Session expired. Please sign in again.')
+    }
+  }
+
+  async getUserProfile(): Promise<UserProfile> {
+    try {
+      const response = await apiClient.get(`${this.authBaseUrl}/profile/`)
+      
+      const data = response.data as any
+      if (!data?.id) {
+        throw new Error('Invalid profile response')
+      }
+      
+      return data as UserProfile
+    } catch (error: any) {
+      console.error('Failed to fetch user profile:', error)
+      throw new Error(error.response?.data?.error || 'Failed to load profile.')
+    }
+  }
+
+  async updateUserProfile(profileData: ProfileUpdateData): Promise<UserProfile> {
+    try {
+      const response = await apiClient.put(`${this.authBaseUrl}/profile/update/`, profileData)
+      
+      const data = response.data as any
+      if (!data?.profile) {
+        throw new Error('Invalid profile update response')
+      }
+      
+      return data.profile as UserProfile
+    } catch (error: any) {
+      console.error('Failed to update user profile:', error)
+      throw new Error(error.response?.data?.error || 'Failed to update profile.')
+    }
+  }
+
+  // OAuth Methods
   async getProviders(): Promise<OAuthProvider[]> {
     try {
       const response = await apiClient.get(`${this.baseUrl}/providers/`)

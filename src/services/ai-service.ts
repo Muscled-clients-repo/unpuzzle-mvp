@@ -60,6 +60,60 @@ export interface LearningInsight {
   actionable: boolean
 }
 
+export interface LearningHint {
+  hint_id: string
+  hint: string
+  level: 'basic' | 'intermediate' | 'advanced'
+  next_hint_available: boolean
+  related_examples?: Array<{
+    code: string
+    explanation: string
+  }>
+}
+
+export interface QuizQuestion {
+  id: string
+  type: 'multiple_choice' | 'true_false' | 'short_answer'
+  question: string
+  options?: string[]
+  correct_answer?: number | string
+  explanation: string
+  difficulty: 'beginner' | 'intermediate' | 'advanced'
+  points: number
+}
+
+export interface GeneratedQuiz {
+  quiz_id: string
+  questions: QuizQuestion[]
+  total_points: number
+  passing_score: number
+  time_limit_minutes?: number
+}
+
+export interface UsageLimits {
+  subscription_plan: string
+  limits: {
+    daily_limit: number
+    monthly_limit: number
+  }
+  usage: {
+    daily_used: number
+    monthly_used: number
+    daily_remaining: number
+    monthly_remaining: number
+  }
+  reset_times: {
+    daily_reset: string
+    monthly_reset: string
+  }
+  features: {
+    gpt4_access: boolean
+    code_execution: boolean
+    image_generation: boolean
+    priority_queue: boolean
+  }
+}
+
 export interface AIPersonality {
   name: string
   role: 'tutor' | 'peer' | 'mentor' | 'coach'
@@ -76,6 +130,10 @@ export interface AIService {
   getPersonalizedSuggestions(userId: string, courseId: string): Promise<ServiceResult<string[]>>
   processTranscriptQuery(transcriptText: string, question: string): Promise<ServiceResult<AIResponse>>
   clearChatHistory(sessionId?: string): Promise<ServiceResult<void>>
+  // New AI Agent methods
+  generateLearningHint(lessonId: string, concept: string, difficultyLevel: 'struggling' | 'comfortable' | 'advanced', previousHints?: string[]): Promise<ServiceResult<LearningHint>>
+  generateQuizQuestions(lessonId: string, topics: string[], questionCount: number, difficulty: 'beginner' | 'intermediate' | 'advanced', questionTypes: ('multiple_choice' | 'true_false' | 'short_answer')[]): Promise<ServiceResult<GeneratedQuiz>>
+  checkUsageLimits(): Promise<ServiceResult<UsageLimits>>
 }
 
 // Real AI Service implementation
@@ -295,6 +353,73 @@ class RealAIService implements AIService {
       return this.handleError(error)
     }
   }
+
+  async generateLearningHint(
+    lessonId: string, 
+    concept: string, 
+    difficultyLevel: 'struggling' | 'comfortable' | 'advanced', 
+    previousHints?: string[]
+  ): Promise<ServiceResult<LearningHint>> {
+    try {
+      const { apiClient } = await import('@/lib/api-client')
+      const response = await apiClient.post(`${this.baseUrl}/agents/hint/`, {
+        lesson_id: lessonId,
+        concept,
+        difficulty_level: difficultyLevel,
+        previous_hints: previousHints
+      })
+      
+      if (response.error) {
+        return { error: response.error }
+      }
+      
+      return { data: response.data as LearningHint }
+    } catch (error) {
+      return this.handleError(error)
+    }
+  }
+
+  async generateQuizQuestions(
+    lessonId: string, 
+    topics: string[], 
+    questionCount: number, 
+    difficulty: 'beginner' | 'intermediate' | 'advanced',
+    questionTypes: ('multiple_choice' | 'true_false' | 'short_answer')[]
+  ): Promise<ServiceResult<GeneratedQuiz>> {
+    try {
+      const { apiClient } = await import('@/lib/api-client')
+      const response = await apiClient.post(`${this.baseUrl}/agents/quiz/`, {
+        lesson_id: lessonId,
+        topics,
+        question_count: questionCount,
+        difficulty,
+        question_types: questionTypes
+      })
+      
+      if (response.error) {
+        return { error: response.error }
+      }
+      
+      return { data: response.data as GeneratedQuiz }
+    } catch (error) {
+      return this.handleError(error)
+    }
+  }
+
+  async checkUsageLimits(): Promise<ServiceResult<UsageLimits>> {
+    try {
+      const { apiClient } = await import('@/lib/api-client')
+      const response = await apiClient.get(`${this.baseUrl}/user/check-limits/`)
+      
+      if (response.error) {
+        return { error: response.error }
+      }
+      
+      return { data: response.data as UsageLimits }
+    } catch (error) {
+      return this.handleError(error)
+    }
+  }
 }
 
 // Mock implementation
@@ -492,6 +617,133 @@ class MockAIService implements AIService {
       return { data: undefined }
     } catch (error) {
       return { error: 'Failed to clear chat history' }
+    }
+  }
+
+  async generateLearningHint(
+    lessonId: string, 
+    concept: string, 
+    difficultyLevel: 'struggling' | 'comfortable' | 'advanced', 
+    previousHints?: string[]
+  ): Promise<ServiceResult<LearningHint>> {
+    try {
+      await this.delay(800)
+      
+      const hints = {
+        'struggling': `Think about ${concept} as a way to simplify complex problems. Start with the basic definition and work your way up.`,
+        'comfortable': `You're doing well with ${concept}! Try applying it to a more complex scenario to deepen your understanding.`,
+        'advanced': `Since you understand ${concept} well, consider how it relates to other advanced topics and real-world applications.`
+      }
+      
+      const hint: LearningHint = {
+        hint_id: `hint_${Date.now()}`,
+        hint: hints[difficultyLevel],
+        level: difficultyLevel === 'struggling' ? 'basic' : difficultyLevel === 'comfortable' ? 'intermediate' : 'advanced',
+        next_hint_available: true,
+        related_examples: [
+          {
+            code: `// Example usage of ${concept}`,
+            explanation: `This demonstrates how ${concept} works in practice`
+          }
+        ]
+      }
+      
+      return { data: hint }
+    } catch (error) {
+      return { error: 'Failed to generate learning hint' }
+    }
+  }
+
+  async generateQuizQuestions(
+    lessonId: string, 
+    topics: string[], 
+    questionCount: number, 
+    difficulty: 'beginner' | 'intermediate' | 'advanced',
+    questionTypes: ('multiple_choice' | 'true_false' | 'short_answer')[]
+  ): Promise<ServiceResult<GeneratedQuiz>> {
+    try {
+      await this.delay(1200)
+      
+      const questions: QuizQuestion[] = []
+      
+      for (let i = 0; i < Math.min(questionCount, 5); i++) {
+        const topic = topics[i % topics.length]
+        const questionType = questionTypes[i % questionTypes.length]
+        
+        if (questionType === 'multiple_choice') {
+          questions.push({
+            id: `q_${i + 1}`,
+            type: 'multiple_choice',
+            question: `What is the primary purpose of ${topic}?`,
+            options: [
+              `To manage ${topic} efficiently`,
+              `To optimize ${topic} performance`,
+              `To simplify ${topic} implementation`,
+              `To debug ${topic} issues`
+            ],
+            correct_answer: 0,
+            explanation: `${topic} is primarily used to manage and organize functionality efficiently.`,
+            difficulty,
+            points: 10
+          })
+        } else if (questionType === 'true_false') {
+          questions.push({
+            id: `q_${i + 1}`,
+            type: 'true_false',
+            question: `${topic} is essential for modern development.`,
+            correct_answer: 'true',
+            explanation: `Yes, ${topic} plays a crucial role in modern development practices.`,
+            difficulty,
+            points: 5
+          })
+        }
+      }
+      
+      const quiz: GeneratedQuiz = {
+        quiz_id: `quiz_${Date.now()}`,
+        questions,
+        total_points: questions.reduce((sum, q) => sum + q.points, 0),
+        passing_score: Math.floor(questions.reduce((sum, q) => sum + q.points, 0) * 0.7),
+        time_limit_minutes: questionCount * 2
+      }
+      
+      return { data: quiz }
+    } catch (error) {
+      return { error: 'Failed to generate quiz questions' }
+    }
+  }
+
+  async checkUsageLimits(): Promise<ServiceResult<UsageLimits>> {
+    try {
+      await this.delay(300)
+      
+      const limits: UsageLimits = {
+        subscription_plan: 'free',
+        limits: {
+          daily_limit: 10,
+          monthly_limit: 100
+        },
+        usage: {
+          daily_used: 3,
+          monthly_used: 25,
+          daily_remaining: 7,
+          monthly_remaining: 75
+        },
+        reset_times: {
+          daily_reset: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          monthly_reset: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+        },
+        features: {
+          gpt4_access: false,
+          code_execution: true,
+          image_generation: false,
+          priority_queue: false
+        }
+      }
+      
+      return { data: limits }
+    } catch (error) {
+      return { error: 'Failed to check usage limits' }
     }
   }
 }
