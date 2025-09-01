@@ -1,16 +1,13 @@
 "use client"
 
 import { usePathname } from "next/navigation"
-import { Header } from "@/components/layout/header"
+import { Header } from "@/components/layout/Header"
 import { Sidebar } from "@/components/layout/sidebar"
-import { useAuth } from "@/contexts/AuthContext"
-
 export default function StudentLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const { user } = useAuth()
   const pathname = usePathname()
   
   // Hide sidebar on video pages for better viewing experience
@@ -32,15 +29,8 @@ export default function StudentLayout({
   
   return (
     <div className="min-h-screen">
-      <Header 
-        user={{ 
-          name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Student', 
-          email: user?.email || '', 
-          role: 'learner' 
-        }} 
-        backButton={backButton}
-      />
-      {!isVideoPage && <Sidebar role="learner" />}
+      <Header backButton={backButton} />
+      {!isVideoPage && <Sidebar role="student" />}
       <div className={isVideoPage ? "pt-16" : "md:pl-64 pt-16"}>
         <main className="min-h-[calc(100vh-4rem)]">
           {children}

@@ -1,5 +1,5 @@
 import { Metadata } from 'next'
-import { Header } from "@/components/layout/header"
+import { Header } from "@/components/layout/Header"
 
 interface LayoutProps {
   children: React.ReactNode

@@ -1,173 +1,234 @@
 "use client"
 
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/AuthContext"
+import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Bell, Search, User, Menu, Eye, Settings as SettingsIcon, LogOut, MessageCircle, GraduationCap, UserCheck, ChevronLeft } from "lucide-react"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { ThemeToggle } from "@/components/theme-toggle"
+import {
+  Bell, Search, User, Menu, Eye, LogOut, ChevronLeft
+} from "lucide-react"
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { 
+  getUserRole, getUserInfo, getHomeRoute, getSearchPlaceholder, 
+  getRoleSpecificMenuItems, getIconComponent, UserRole 
+} from "./header-utils"
 
 interface HeaderProps {
-  user?: {
-    name: string
-    email: string
-    role: "learner" | "instructor" | "admin"
-  }
   backButton?: {
     href: string
     label?: string
   }
 }
 
-export function Header({ user, backButton }: HeaderProps) {
-  const router = useRouter()
-  const { signOut } = useAuth()
+interface HeaderLeftProps {
+  backButton?: HeaderProps['backButton']
+  userRole: UserRole
+}
+
+interface HeaderActionsProps {
+  user: { name: string; email: string; avatar?: string } | null
+  userRole: UserRole
+  onSignOut: () => void
+}
+
+export function Header({ backButton }: HeaderProps) {
+  const { user, signOut, loading } = useAuth()
+  
+  // Show loading state to prevent auth flicker
+  if (loading) {
+    return (
+      <header className="fixed top-0 z-50 w-full border-b bg-background">
+        <div className="flex h-16 items-center px-4">
+          <div className="flex items-center gap-4 flex-1">
+            {/* Logo */}
+            <Link href="/" className="flex items-center space-x-2 font-bold text-xl">
+              <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                Unpuzzle
+              </span>
+            </Link>
+          </div>
+          <div className="flex-1 max-w-xl mx-8">
+            <div className="animate-pulse bg-muted rounded h-9 w-full" />
+          </div>
+          <div className="flex items-center gap-3 justify-end">
+            <div className="animate-pulse bg-muted rounded h-6 w-6" />
+            <div className="animate-pulse bg-muted rounded h-6 w-6" />
+            <div className="animate-pulse bg-muted rounded h-6 w-6" />
+          </div>
+        </div>
+      </header>
+    )
+  }
+  
+  // Derive user role and info from auth context
+  const userRole = getUserRole(user)
+  const userInfo = getUserInfo(user)
   
   return (
     <header className="fixed top-0 z-50 w-full border-b bg-background">
       <div className="flex h-16 items-center px-4">
-        {/* Left section - Logo and mobile menu */}
-        <div className="flex items-center gap-4 flex-1">
-          <Sheet>
-            <SheetTrigger asChild className="md:hidden">
-              <Button variant="ghost" size="icon">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-72">
-              {/* Mobile navigation handled by sidebar */}
-            </SheetContent>
-          </Sheet>
-
-          {/* Back button if provided */}
-          {backButton && (
-            <Button asChild variant="ghost" size="icon">
-              <Link href={backButton.href} title={backButton.label || "Go back"}>
-                <ChevronLeft className="h-5 w-5" />
-              </Link>
-            </Button>
-          )}
-
-          <Link href="/" className="flex items-center space-x-2 font-bold text-xl">
-            <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              Unpuzzle
-            </span>
-          </Link>
-        </div>
-
-        {/* Center section - Search bar */}
-        <div className="flex-1 max-w-xl mx-8">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search courses, students, lessons..."
-              className="w-full pl-10 pr-4 h-9 bg-secondary/50 border-input hover:bg-secondary/70 focus:bg-background transition-colors"
-            />
-          </div>
-        </div>
-
-        {/* Right section - Actions */}
-        <div className="flex items-center gap-3 justify-end">
-          {/* Mode Badge for Instructor */}
-          {user?.role === "instructor" && (
-            <Badge variant="default" className="gap-1">
-              <Eye className="h-3 w-3" />
-              INSTRUCTOR MODE
-            </Badge>
-          )}
-
-          <ThemeToggle />
-          
-          {user ? (
-            <>
-              <Button variant="ghost" size="icon">
-                <Bell className="h-5 w-5" />
-              </Button>
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon">
-                    <User className="h-5 w-5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>
-                    <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none">{user.name}</p>
-                      <p className="text-xs leading-none text-muted-foreground">
-                        {user.email}
-                      </p>
-                    </div>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  
-                  {/* Mode Switching for Instructors */}
-                  {user.role === "instructor" && (
-                    <>
-                      <DropdownMenuItem 
-                        onClick={() => router.push('/student')}
-                        className="cursor-pointer"
-                      >
-                        <GraduationCap className="mr-2 h-4 w-4" />
-                        Switch to Student Mode
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                    </>
-                  )}
-                  
-                  <DropdownMenuItem asChild>
-                    <Link href={user.role === "learner" ? "/learn/settings" : "/instructor/settings"}>
-                      <SettingsIcon className="mr-2 h-4 w-4" />
-                      Settings
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/help">
-                      <MessageCircle className="mr-2 h-4 w-4" />
-                      Help & Support
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem 
-                    className="text-red-600 cursor-pointer"
-                    onClick={async () => {
-                      try {
-                        await signOut()
-                      } catch (error) {
-                        console.error('Error signing out:', error)
-                      }
-                    }}
-                  >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Sign Out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </>
-          ) : (
-            <div className="flex items-center space-x-2">
-              <Button variant="ghost" asChild>
-                <Link href="/login">Log In</Link>
-              </Button>
-              <Button asChild>
-                <Link href="/signup">Sign Up</Link>
-              </Button>
-            </div>
-          )}
-        </div>
+        
+        {/* Left Section - Logo + Mobile Menu */}
+        <HeaderLeft 
+          backButton={backButton}
+          userRole={userRole}
+        />
+        
+        {/* Center Section - Role-specific Search */}
+        <HeaderSearch userRole={userRole} />
+        
+        {/* Right Section - Role-specific Actions */}
+        <HeaderActions 
+          user={userInfo}
+          userRole={userRole}
+          onSignOut={signOut}
+        />
+        
       </div>
     </header>
+  )
+}
+
+// Internal Components (not exported)
+function HeaderLeft({ backButton, userRole }: HeaderLeftProps) {
+  const homeRoute = getHomeRoute(userRole)
+  
+  return (
+    <div className="flex items-center gap-4 flex-1">
+      {/* Mobile menu */}
+      <Sheet>
+        <SheetTrigger asChild className="md:hidden">
+          <Button variant="ghost" size="icon">
+            <Menu className="h-5 w-5" />
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="left" className="w-72">
+          {/* Mobile navigation - role-specific sidebar content will be rendered here */}
+          <div className="mt-6">
+            <p className="text-sm text-muted-foreground mb-4">
+              Role: {userRole || 'Guest'}
+            </p>
+            {/* Sidebar navigation items will be imported and rendered here */}
+          </div>
+        </SheetContent>
+      </Sheet>
+      
+      {/* Back button */}
+      {backButton && (
+        <Button asChild variant="ghost" size="icon">
+          <Link href={backButton.href} title={backButton.label || "Go back"}>
+            <ChevronLeft className="h-5 w-5" />
+          </Link>
+        </Button>
+      )}
+      
+      {/* Logo */}
+      <Link href={homeRoute} className="flex items-center space-x-2 font-bold text-xl">
+        <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+          Unpuzzle
+        </span>
+      </Link>
+    </div>
+  )
+}
+
+function HeaderSearch({ userRole }: { userRole: UserRole }) {
+  const placeholder = getSearchPlaceholder(userRole)
+  
+  return (
+    <div className="flex-1 max-w-xl mx-8">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          type="search"
+          placeholder={placeholder}
+          className="w-full pl-10 pr-4 h-9 bg-secondary/50 border-input hover:bg-secondary/70 focus:bg-background transition-colors"
+        />
+      </div>
+    </div>
+  )
+}
+
+function HeaderActions({ user, userRole, onSignOut }: HeaderActionsProps) {
+  const menuItems = getRoleSpecificMenuItems(userRole)
+  
+  return (
+    <div className="flex items-center gap-3 justify-end">
+      
+      {/* Role-specific badge */}
+      {userRole === "instructor" && (
+        <Badge variant="default" className="gap-1">
+          <Eye className="h-3 w-3" />
+          INSTRUCTOR MODE
+        </Badge>
+      )}
+      
+      <ThemeToggle />
+      
+      {user ? (
+        <>
+          {/* Notifications */}
+          <Button variant="ghost" size="icon">
+            <Bell className="h-5 w-5" />
+          </Button>
+          
+          {/* User menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <User className="h-5 w-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium leading-none">{user.name}</p>
+                  <p className="text-xs leading-none text-muted-foreground">
+                    {user.email}
+                  </p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              
+              {menuItems.map((item) => {
+                const IconComponent = getIconComponent(item.icon)
+                return (
+                  <DropdownMenuItem key={item.href} asChild>
+                    <Link href={item.href}>
+                      <IconComponent className="mr-2 h-4 w-4" />
+                      {item.label}
+                    </Link>
+                  </DropdownMenuItem>
+                )
+              })}
+              
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                className="text-red-600 cursor-pointer"
+                onClick={onSignOut}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Sign Out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      ) : (
+        <div className="flex items-center space-x-2">
+          <Button variant="ghost" asChild>
+            <Link href="/login">Log In</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/signup">Sign Up</Link>
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }
