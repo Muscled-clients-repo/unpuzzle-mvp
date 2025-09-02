@@ -181,22 +181,22 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
           </CardTitle>
           
           <CardDescription className="text-lg">
-            {errorObjObj.userMessage}
+            {errorObj.userMessage}
           </CardDescription>
 
           <div className="flex justify-center gap-2 mt-4">
             <Badge variant="outline" className="capitalize">
-              {errorObjObj.type.replace('_', ' ')}
+              {errorObj.type.replace('_', ' ')}
             </Badge>
             
-            {errorObjObj.recoverable && (
+            {errorObj.recoverable && (
               <Badge variant="secondary">
                 Recoverable
               </Badge>
             )}
             
             <Badge variant="outline">
-              {errorObjObj.timestamp.toLocaleTimeString()}
+              {errorObj.timestamp.toLocaleTimeString()}
             </Badge>
           </div>
         </CardHeader>

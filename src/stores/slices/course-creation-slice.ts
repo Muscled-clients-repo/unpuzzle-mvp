@@ -1,4 +1,6 @@
 import { StateCreator } from 'zustand'
+import { videoUploadService } from '@/services/video/video-upload-service'
+import { getVideoDuration } from '@/utils/video-utils'
 
 export interface VideoUpload {
   id: string
@@ -106,7 +108,7 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
     }
   },
   
-  addVideosToQueue: (files) => {
+  addVideosToQueue: async (files) => {
     const state = get()
     
     // Create Chapter 1 if no chapters exist
@@ -117,16 +119,24 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
     // Get the first chapter (where we'll add videos by default)
     const firstChapterId = get().courseCreation?.chapters[0]?.id
     
-    const newVideos: VideoUpload[] = Array.from(files).map((file, index) => ({
-      id: `video-${Date.now()}-${index}`,
-      file,
-      name: file.name.replace(/\.[^/.]+$/, ''), // Remove extension
-      size: file.size,
-      status: 'pending' as const,
-      progress: 0,
-      order: get().uploadQueue.length + index,
-      chapterId: firstChapterId // Assign to first chapter automatically
-    }))
+    const newVideos: VideoUpload[] = await Promise.all(
+      Array.from(files).map(async (file, index) => {
+        // Extract video duration
+        const duration = await getVideoDuration(file)
+        
+        return {
+          id: `video-${Date.now()}-${index}`,
+          file,
+          name: file.name.replace(/\.[^/.]+$/, ''), // Remove extension
+          size: file.size,
+          status: 'pending' as const,
+          progress: 0,
+          order: get().uploadQueue.length + index,
+          chapterId: firstChapterId, // Assign to first chapter automatically
+          duration // Real duration from video file
+        }
+      })
+    )
     
     set(state => ({
       uploadQueue: [...state.uploadQueue, ...newVideos],
@@ -141,33 +151,84 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       } : null
     }))
     
-    // Start upload simulation
-    newVideos.forEach(video => {
-      setTimeout(() => {
+    // Start real Backblaze upload via API route
+    newVideos.forEach(async (video) => {
+      try {
+        // Get course ID - MUST have a real course ID for uploads to persist
+        const courseId = get().courseCreation?.id
+        
+        if (!courseId) {
+          console.error('Cannot upload video without course ID - save course first')
+          get().updateVideoStatus(video.id, 'error')
+          return
+        }
+        
+        // Upload via API route (server-side)
         get().updateVideoStatus(video.id, 'uploading')
-        // Simulate upload progress
-        let progress = 0
-        const interval = setInterval(() => {
-          progress += Math.random() * 30
-          if (progress >= 100) {
-            progress = 100
-            clearInterval(interval)
-            get().updateVideoStatus(video.id, 'complete')
-            // Add mock URL after "upload"
-            set(state => ({
-              courseCreation: state.courseCreation ? {
-                ...state.courseCreation,
-                videos: state.courseCreation.videos.map(v => 
-                  v.id === video.id 
-                    ? { ...v, url: `/videos/${video.id}.mp4`, thumbnailUrl: `/thumbs/${video.id}.jpg`, duration: '5:30' }
-                    : v
-                )
-              } : null
-            }))
+        get().updateVideoProgress(video.id, 0)
+        
+        const formData = new FormData()
+        formData.append('file', video.file!)
+        formData.append('courseId', courseId)
+        formData.append('chapterId', firstChapterId || 'chapter-1')
+        formData.append('videoId', video.id)
+        formData.append('videoName', video.name)
+        formData.append('duration', video.duration || '0:00')
+        
+        // Simulate progress updates since we can't track real progress from server
+        const progressInterval = setInterval(() => {
+          const currentProgress = get().courseCreation?.videos.find(v => v.id === video.id)?.progress || 0
+          if (currentProgress < 90) {
+            const increment = Math.floor(Math.random() * 20) + 5 // Add 5-25% each update
+            const newProgress = Math.min(currentProgress + increment, 90)
+            get().updateVideoProgress(video.id, Math.floor(newProgress))
           }
-          get().updateVideoProgress(video.id, Math.min(progress, 100))
         }, 500)
-      }, 100)
+        
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        })
+        
+        clearInterval(progressInterval)
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null)
+          console.error('Upload failed:', errorData)
+          throw new Error(errorData?.error || `Upload failed: ${response.statusText}`)
+        }
+        
+        const result = await response.json()
+        get().updateVideoProgress(video.id, 100)
+        get().updateVideoStatus(video.id, 'complete')
+        
+        // Update video with the uploaded URL and actual data
+        set(state => ({
+          courseCreation: state.courseCreation ? {
+            ...state.courseCreation,
+            videos: state.courseCreation.videos.map(v => 
+              v.id === video.id 
+                ? { ...v, url: result.url, duration: result.duration || undefined, status: 'complete' }
+                : v
+            ),
+            chapters: state.courseCreation.chapters.map(chapter => 
+              chapter.id === firstChapterId 
+                ? { 
+                    ...chapter, 
+                    videos: chapter.videos.map(v => 
+                      v.id === video.id 
+                        ? { ...v, url: result.url, duration: result.duration || undefined, status: 'complete' }
+                        : v
+                    )
+                  }
+                : chapter
+            )
+          } : null
+        }))
+      } catch (error) {
+        console.error(`Failed to upload video ${video.name}:`, error)
+        get().updateVideoStatus(video.id, 'error')
+      }
     })
   },
   
@@ -180,7 +241,14 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         ...state.courseCreation,
         videos: state.courseCreation.videos.map(v => 
           v.id === videoId ? { ...v, progress } : v
-        )
+        ),
+        // Also update progress in chapters
+        chapters: state.courseCreation.chapters.map(chapter => ({
+          ...chapter,
+          videos: chapter.videos.map(v => 
+            v.id === videoId ? { ...v, progress } : v
+          )
+        }))
       } : null
     }))
   },
@@ -194,7 +262,14 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         ...state.courseCreation,
         videos: state.courseCreation.videos.map(v => 
           v.id === videoId ? { ...v, status } : v
-        )
+        ),
+        // Also update status in chapters
+        chapters: state.courseCreation.chapters.map(chapter => ({
+          ...chapter,
+          videos: chapter.videos.map(v => 
+            v.id === videoId ? { ...v, status } : v
+          )
+        }))
       } : null
     }))
   },
@@ -216,7 +291,23 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
     }))
   },
   
-  removeVideo: (videoId) => {
+  removeVideo: async (videoId) => {
+    // First try to delete from backend if it exists
+    try {
+      const response = await fetch(`/api/delete-video?videoId=${videoId}`, {
+        method: 'DELETE'
+      })
+      
+      if (!response.ok) {
+        console.error('Failed to delete video from backend')
+      } else {
+        console.log('Video deleted from backend successfully')
+      }
+    } catch (error) {
+      console.error('Error deleting video:', error)
+    }
+    
+    // Always remove from UI state
     set(state => ({
       uploadQueue: state.uploadQueue.filter(v => v.id !== videoId),
       courseCreation: state.courseCreation ? {
@@ -630,6 +721,57 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           throw new Error(`Course ${courseId} not found or access denied`)
         }
 
+        // Fetch videos for this course
+        const { supabaseVideoService } = await import('@/services/supabase/video-service')
+        const courseVideos = await supabaseVideoService.getCourseVideos(courseId)
+        console.log(`[SUPABASE] Loaded ${courseVideos.length} videos for course`)
+
+        // Convert videos to VideoUpload format and group by chapter
+        const videoUploads: VideoUpload[] = courseVideos.map(v => ({
+          id: v.id,
+          name: v.title,
+          size: 0, // Not stored in current schema
+          duration: v.duration || '0:00',
+          status: 'complete' as const,
+          progress: 100,
+          url: v.url,
+          thumbnailUrl: v.thumbnailUrl,
+          chapterId: v.chapterId || 'chapter-1',
+          order: v.order || 0
+        }))
+
+        // Group videos by chapter
+        const chaptersMap = new Map<string, VideoUpload[]>()
+        videoUploads.forEach(video => {
+          const chapterId = video.chapterId || 'chapter-1'
+          if (!chaptersMap.has(chapterId)) {
+            chaptersMap.set(chapterId, [])
+          }
+          chaptersMap.get(chapterId)!.push(video)
+        })
+
+        // Create chapters array with videos
+        const chapters: Chapter[] = Array.from(chaptersMap.entries()).map(([chapterId, videos], index) => ({
+          id: chapterId,
+          title: `Chapter ${index + 1}`,
+          description: '',
+          order: index,
+          videos: videos.sort((a, b) => a.order - b.order),
+          duration: course.totalDuration || '0h 0m'
+        }))
+
+        // If no chapters exist, create default one
+        if (chapters.length === 0) {
+          chapters.push({
+            id: 'chapter-1',
+            title: 'Main Content',
+            description: 'Course content',
+            order: 0,
+            videos: [],
+            duration: course.totalDuration || '0h 0m'
+          })
+        }
+
         // Convert InstructorCourse to CourseCreationData format
         const courseCreationData: CourseCreationData = {
           id: course.id,
@@ -638,17 +780,8 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           category: 'programming', // Default since not stored in current schema
           level: (course.difficulty as 'beginner' | 'intermediate' | 'advanced') || 'beginner',
           price: course.price || 0,
-          chapters: [
-            {
-              id: 'chapter-1',
-              title: 'Main Content',
-              description: 'Course content',
-              order: 0,
-              videos: [],
-              duration: course.totalDuration || '0h 0m'
-            }
-          ],
-          videos: [],
+          chapters,
+          videos: videoUploads,
           status: course.status as 'draft' | 'published' | 'under_review',
           totalDuration: course.totalDuration || '0h 0m',
           lastSaved: new Date(),

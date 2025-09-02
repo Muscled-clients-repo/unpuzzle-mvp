@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Select,
@@ -57,6 +58,7 @@ export default function EditCoursePage() {
   const [isSaving, setIsSaving] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [activeTab, setActiveTab] = useState("info")
+  const [deletingVideos, setDeletingVideos] = useState<Set<string>>(new Set())
 
   // Load course data on mount
   useEffect(() => {
@@ -146,6 +148,11 @@ export default function EditCoursePage() {
   const handleVideoUpload = (chapterId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (files && files.length > 0) {
+      // Ensure the course has an ID set before uploading
+      if (!courseCreation?.id && courseId) {
+        setCourseInfo({ ...courseCreation, id: courseId })
+      }
+      
       addVideosToQueue(files)
       // Move uploaded videos to the specific chapter
       Array.from(files).forEach((file, index) => {
@@ -163,10 +170,19 @@ export default function EditCoursePage() {
     setHasChanges(true)
   }
 
-  const handleVideoDelete = (videoId: string) => {
-    if (confirm('Are you sure you want to delete this video?')) {
-      removeVideo(videoId)
-      setHasChanges(true)
+  const handleVideoDelete = async (videoId: string) => {
+    if (confirm('Are you sure you want to delete this video? This action cannot be undone.')) {
+      setDeletingVideos(prev => new Set(prev).add(videoId))
+      try {
+        await removeVideo(videoId)
+        setHasChanges(true)
+      } finally {
+        setDeletingVideos(prev => {
+          const next = new Set(prev)
+          next.delete(videoId)
+          return next
+        })
+      }
     }
   }
 
@@ -460,9 +476,27 @@ export default function EditCoursePage() {
                                   
                                   <div className="flex items-center gap-4 text-xs text-muted-foreground">
                                     {video.duration && <span>{video.duration}</span>}
-                                    <span className="capitalize">{video.status}</span>
-                                    {video.progress !== undefined && (
-                                      <span>{video.progress}% uploaded</span>
+                                    {video.status === 'uploading' && (
+                                      <div className="flex items-center gap-2 flex-1">
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                        <span>Uploading {video.progress}%</span>
+                                        <Progress value={video.progress} className="h-1 flex-1 max-w-[100px]" />
+                                      </div>
+                                    )}
+                                    {video.status === 'complete' && (
+                                      <Badge variant="outline" className="text-green-600 border-green-600">
+                                        <CheckCircle className="h-3 w-3 mr-1" />
+                                        Uploaded
+                                      </Badge>
+                                    )}
+                                    {video.status === 'error' && (
+                                      <Badge variant="outline" className="text-red-600 border-red-600">
+                                        <AlertCircle className="h-3 w-3 mr-1" />
+                                        Failed
+                                      </Badge>
+                                    )}
+                                    {video.status === 'pending' && (
+                                      <span className="text-muted-foreground">Waiting...</span>
                                     )}
                                   </div>
                                 </div>
@@ -471,9 +505,14 @@ export default function EditCoursePage() {
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => handleVideoDelete(video.id)}
+                                  disabled={deletingVideos.has(video.id)}
                                   className="h-8 w-8 text-destructive hover:text-destructive"
                                 >
-                                  <X className="h-3 w-3" />
+                                  {deletingVideos.has(video.id) ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <X className="h-3 w-3" />
+                                  )}
                                 </Button>
                               </div>
                             ))
