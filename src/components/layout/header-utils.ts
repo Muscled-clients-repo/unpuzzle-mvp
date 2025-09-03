@@ -1,16 +1,17 @@
 import { Settings, BarChart3, GraduationCap, TrendingUp, MessageCircle } from 'lucide-react'
+import { getClientActiveRole, getDatabaseRoleFromUser, type UserRole } from '@/lib/role-utils.client'
 
-export type UserRole = 'student' | 'instructor' | 'admin' | null
+export { type UserRole }
 
 type IconName = 'Settings' | 'BarChart3' | 'GraduationCap' | 'TrendingUp' | 'MessageCircle'
 
 export function getUserRole(user: any): UserRole {
-  if (!user) return null
-  
-  // Get from user metadata or profile
-  return user.user_metadata?.role || 
-         user.app_metadata?.role || 
-         'student' // default fallback
+  // Use the new client-side active role function
+  return getClientActiveRole(user)
+}
+
+export function getUserDatabaseRole(user: any): UserRole {
+  return getDatabaseRoleFromUser(user)
 }
 
 export function getUserInfo(user: any) {

@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import type { UserRole } from '@/lib/role-utils.server'
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -49,43 +50,62 @@ export async function middleware(request: NextRequest) {
 
   // Role-based route protection
   if (user && isProtectedPath) {
-    console.log('[MIDDLEWARE DEBUG] User ID:', user.id)
-    console.log('[MIDDLEWARE DEBUG] User email:', user.email)
-    console.log('[MIDDLEWARE DEBUG] Attempting route:', request.nextUrl.pathname)
+    // Check active role cookie first
+    const activeRoleCookie = request.cookies.get('active-role')
+    let activeRole = activeRoleCookie?.value
     
-    // Get user's role from profile
-    const { data: profile, error: profileError } = await supabase
+    // Get user's database role from profile for permission validation
+    const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single()
 
-    console.log('[MIDDLEWARE DEBUG] Profile query result:', { profile, profileError })
-    console.log('[MIDDLEWARE DEBUG] Profile role value:', profile?.role)
-    console.log('[MIDDLEWARE DEBUG] Profile role type:', typeof profile?.role)
-
     if (profile) {
-      const userRole = profile.role
-      console.log('[MIDDLEWARE DEBUG] Extracted userRole:', userRole)
-      console.log('[MIDDLEWARE DEBUG] userRole === "instructor":', userRole === 'instructor')
-      console.log('[MIDDLEWARE DEBUG] userRole !== "instructor":', userRole !== 'instructor')
+      const databaseRole = profile.role
       
-      // Check role-based access
-      if (request.nextUrl.pathname.startsWith('/instructor') && userRole !== 'instructor') {
-        console.log(`[MIDDLEWARE] User with role '${userRole}' tried to access instructor route`)
-        console.log('[MIDDLEWARE DEBUG] Redirecting to /student')
-        return NextResponse.redirect(new URL('/student', request.url))
+      // Validate active role against database permissions
+      if (activeRole) {
+        // If trying to use instructor mode, must have instructor permissions
+        if (activeRole === 'instructor' && databaseRole !== 'instructor' && databaseRole !== 'admin') {
+          activeRole = 'student'
+          // Clear the invalid cookie
+          response.cookies.delete('active-role')
+        }
+      } else {
+        // No active role cookie, use database role
+        activeRole = databaseRole
       }
       
-      if (request.nextUrl.pathname.startsWith('/admin') && userRole !== 'admin') {
-        console.log(`[MIDDLEWARE] User with role '${userRole}' tried to access admin route`)
-        console.log('[MIDDLEWARE DEBUG] Redirecting to /student')
-        return NextResponse.redirect(new URL('/student', request.url))
+      // Check route access based on active role - STRICT MODE ENFORCEMENT
+      // Like Upwork: when in one mode, you cannot access the other mode's routes
+      
+      if (request.nextUrl.pathname.startsWith('/instructor')) {
+        if (activeRole !== 'instructor') {
+          return NextResponse.redirect(new URL('/student', request.url))
+        }
+        // Also verify they have instructor permissions in database
+        if (databaseRole !== 'instructor' && databaseRole !== 'admin') {
+          return NextResponse.redirect(new URL('/student', request.url))
+        }
       }
       
-      console.log('[MIDDLEWARE DEBUG] Role check passed, allowing access')
-    } else {
-      console.log('[MIDDLEWARE DEBUG] No profile found for user:', user.id)
+      // STRICT: When in instructor mode, cannot access student routes
+      if (request.nextUrl.pathname.startsWith('/student')) {
+        if (activeRole === 'instructor') {
+          return NextResponse.redirect(new URL('/instructor', request.url))
+        }
+      }
+      
+      if (request.nextUrl.pathname.startsWith('/admin')) {
+        if (activeRole !== 'admin') {
+          return NextResponse.redirect(new URL('/student', request.url))
+        }
+        // Also verify they have admin permissions in database
+        if (databaseRole !== 'admin') {
+          return NextResponse.redirect(new URL('/student', request.url))
+        }
+      }
     }
   }
 

@@ -2,12 +2,13 @@
 
 import Link from "next/link"
 import { useAuth } from "@/contexts/AuthContext"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { ThemeToggle } from "@/components/theme-toggle"
 import {
-  Bell, Search, User, Menu, Eye, LogOut, ChevronLeft
+  Bell, Search, User, Menu, Eye, LogOut, ChevronLeft, GraduationCap, BookOpen
 } from "lucide-react"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -15,7 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { 
-  getUserRole, getUserInfo, getHomeRoute, getSearchPlaceholder, 
+  getUserRole, getUserDatabaseRole, getUserInfo, getHomeRoute, getSearchPlaceholder, 
   getRoleSpecificMenuItems, getIconComponent, UserRole 
 } from "./header-utils"
 
@@ -34,14 +35,16 @@ interface HeaderLeftProps {
 interface HeaderActionsProps {
   user: { name: string; email: string; avatar?: string } | null
   userRole: UserRole
+  userDatabaseRole: UserRole
   onSignOut: () => void
 }
 
 export function Header({ backButton }: HeaderProps) {
-  const { user, signOut, loading } = useAuth()
+  const { user, profile, signOut, loading } = useAuth()
   
-  // Show loading state to prevent auth flicker
-  if (loading) {
+  // Only show loading state if we're still loading AND don't have a user
+  // Once we have a user, show the header even if profile is still loading
+  if (loading && !user) {
     return (
       <header className="fixed top-0 z-50 w-full border-b bg-background">
         <div className="flex h-16 items-center px-4">
@@ -67,7 +70,14 @@ export function Header({ backButton }: HeaderProps) {
   }
   
   // Derive user role and info from auth context
+  // For active role, check cookie first
   const userRole = getUserRole(user)
+  // For database role, use the profile data OR fallback to user metadata
+  // This handles the case where profile hasn't loaded yet
+  const userDatabaseRole: UserRole = profile?.role || 
+                                     user?.user_metadata?.role || 
+                                     user?.app_metadata?.role || 
+                                     null
   const userInfo = getUserInfo(user)
   
   return (
@@ -87,6 +97,7 @@ export function Header({ backButton }: HeaderProps) {
         <HeaderActions 
           user={userInfo}
           userRole={userRole}
+          userDatabaseRole={userDatabaseRole}
           onSignOut={signOut}
         />
         
@@ -155,8 +166,34 @@ function HeaderSearch({ userRole }: { userRole: UserRole }) {
   )
 }
 
-function HeaderActions({ user, userRole, onSignOut }: HeaderActionsProps) {
+function HeaderActions({ user, userRole, userDatabaseRole, onSignOut }: HeaderActionsProps) {
   const menuItems = getRoleSpecificMenuItems(userRole)
+  const [currentPath, setCurrentPath] = useState<string>('')
+  
+  useEffect(() => {
+    // Set path only on client side to avoid hydration mismatch
+    setCurrentPath(window.location.pathname)
+  }, [])
+  
+  // Function to handle role switching
+  const handleRoleSwitch = async (newRole: 'student' | 'instructor') => {
+    try {
+      const response = await fetch('/api/switch-role', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ role: newRole }),
+      })
+
+      if (response.ok) {
+        const homeRoute = newRole === 'instructor' ? '/instructor' : '/student'
+        window.location.href = homeRoute
+      }
+    } catch (error) {
+      console.error('Error switching role:', error)
+    }
+  }
   
   return (
     <div className="flex items-center gap-3 justify-end">
@@ -195,6 +232,34 @@ function HeaderActions({ user, userRole, onSignOut }: HeaderActionsProps) {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              
+              {/* Role Switching Option - Only show for instructors */}
+              {userDatabaseRole === 'instructor' && currentPath && (
+                <>
+                  <DropdownMenuItem 
+                    className="cursor-pointer font-medium"
+                    onSelect={(e) => {
+                      e.preventDefault()
+                      const isInInstructorMode = currentPath.startsWith('/instructor')
+                      const targetRole = isInInstructorMode ? 'student' : 'instructor'
+                      handleRoleSwitch(targetRole)
+                    }}
+                  >
+                    {currentPath.startsWith('/instructor') ? (
+                      <>
+                        <GraduationCap className="mr-2 h-4 w-4" />
+                        Switch to Student
+                      </>
+                    ) : (
+                      <>
+                        <BookOpen className="mr-2 h-4 w-4" />
+                        Switch to Instructor
+                      </>
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
               
               {menuItems.map((item) => {
                 const IconComponent = getIconComponent(item.icon)

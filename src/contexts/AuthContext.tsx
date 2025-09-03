@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 
 interface AuthContextType {
   user: User | null
+  profile: any | null
   loading: boolean
   signUp: (email: string, password: string, fullName: string) => Promise<void>
   signIn: (email: string, password: string) => Promise<void>
@@ -19,9 +20,33 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [profile, setProfile] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const supabase = createClient()
+
+  // Helper function to fetch user profile
+  const fetchProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+      
+      if (!error && data) {
+        setProfile(data)
+        return data
+      } else if (error) {
+        console.error('Error fetching profile:', error)
+        setProfile(null)
+      }
+    } catch (error) {
+      console.error('Error fetching profile:', error)
+      setProfile(null)
+    }
+    return null
+  }
 
   useEffect(() => {
     // Check active sessions and sets the user
@@ -29,6 +54,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const { data: { session } } = await supabase.auth.getSession()
         setUser(session?.user ?? null)
+        if (session?.user) {
+          await fetchProfile(session.user.id)
+        }
       } catch (error) {
         console.error('Error getting session:', error)
       } finally {
@@ -42,6 +70,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         setUser(session?.user ?? null)
+        
+        if (session?.user) {
+          await fetchProfile(session.user.id)
+        } else {
+          setProfile(null)
+        }
+        
         setLoading(false)
         
         // Handle redirect after login
@@ -132,6 +167,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
+        profile,
         loading,
         signUp,
         signIn,
