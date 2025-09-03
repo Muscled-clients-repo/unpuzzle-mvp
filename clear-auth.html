@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Auth State</title>
+</head>
+<body>
+    <h1>Clearing Authentication State...</h1>
+    <div id="status"></div>
+    
+    <script>
+        // Clear all localStorage
+        localStorage.clear();
+        
+        // Clear all sessionStorage  
+        sessionStorage.clear();
+        
+        // Clear all cookies for localhost
+        document.cookie.split(";").forEach(function(c) { 
+            document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+        });
+        
+        // Clear IndexedDB (Supabase might use this)
+        if (window.indexedDB) {
+            indexedDB.databases().then(databases => {
+                databases.forEach(db => {
+                    indexedDB.deleteDatabase(db.name);
+                });
+            });
+        }
+        
+        document.getElementById('status').innerHTML = `
+            <h2>✅ All authentication data cleared!</h2>
+            <p>localStorage items cleared: ${Object.keys(localStorage).length === 0 ? 'Yes' : 'No'}</p>
+            <p>sessionStorage items cleared: ${Object.keys(sessionStorage).length === 0 ? 'Yes' : 'No'}</p>
+            <br>
+            <p><strong>Now do the following:</strong></p>
+            <ol>
+                <li>Go back to your app at <a href="http://localhost:3001">http://localhost:3001</a></li>
+                <li>You should be redirected to the login page</li>
+                <li>Sign up for a NEW account or login with existing Supabase credentials</li>
+                <li>Do NOT use any mock credentials</li>
+            </ol>
+        `;
+        
+        // Redirect after 5 seconds
+        setTimeout(() => {
+            window.location.href = 'http://localhost:3001/login';
+        }, 5000);
+    </script>
+</body>
+</html>
