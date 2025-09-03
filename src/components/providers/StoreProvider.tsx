@@ -22,10 +22,10 @@ interface StoreProviderProps {
 
 export function StoreProvider({ children }: StoreProviderProps) {
   useEffect(() => {
-    // Initialize with mock user for development
+    // Initialize with mock user for development only when using mock data
     if (isBrowser) {
       const store = useAppStore.getState()
-      if (!store.profile) {
+      if (!store.profile && !store.user && process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true') {
         // Set up a basic user for testing
         const mockUser = mockUsers.learners[0]
         store.setUser({

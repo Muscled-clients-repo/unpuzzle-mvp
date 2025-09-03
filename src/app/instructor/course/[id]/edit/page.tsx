@@ -32,6 +32,7 @@ import {
   Video
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { VideoPreviewModal } from "@/components/ui/video-preview-modal"
 
 export default function EditCoursePage() {
   const router = useRouter()
@@ -59,6 +60,7 @@ export default function EditCoursePage() {
   const [hasChanges, setHasChanges] = useState(false)
   const [activeTab, setActiveTab] = useState("info")
   const [deletingVideos, setDeletingVideos] = useState<Set<string>>(new Set())
+  const [previewVideo, setPreviewVideo] = useState<{ url: string; title: string; duration?: string } | null>(null)
 
   // Load course data on mount
   useEffect(() => {
@@ -501,19 +503,49 @@ export default function EditCoursePage() {
                                   </div>
                                 </div>
                                 
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleVideoDelete(video.id)}
-                                  disabled={deletingVideos.has(video.id)}
-                                  className="h-8 w-8 text-destructive hover:text-destructive"
-                                >
-                                  {deletingVideos.has(video.id) ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                <div className="flex gap-1">
+                                  {/* Always show preview button if there's any URL */}
+                                  {(video.url || video.cdn_url || video.videoUrl || video.video_url) ? (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        const videoUrl = video.url || video.cdn_url || video.videoUrl || video.video_url
+                                        console.log('🎥 Preview video clicked:', { 
+                                          video, 
+                                          videoUrl,
+                                          allProperties: Object.keys(video),
+                                          allValues: video
+                                        })
+                                        setPreviewVideo({ 
+                                          url: videoUrl!, 
+                                          title: video.name || 'Untitled Video',
+                                          duration: video.duration
+                                        })
+                                      }}
+                                      className="h-8 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                      title="Preview video"
+                                    >
+                                      <Video className="h-3 w-3 mr-1" />
+                                      Preview
+                                    </Button>
                                   ) : (
-                                    <X className="h-3 w-3" />
+                                    <span className="text-xs text-muted-foreground px-2">No video URL</span>
                                   )}
-                                </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleVideoDelete(video.id)}
+                                    disabled={deletingVideos.has(video.id)}
+                                    className="h-8 w-8 text-destructive hover:text-destructive"
+                                  >
+                                    {deletingVideos.has(video.id) ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <X className="h-3 w-3" />
+                                    )}
+                                  </Button>
+                                </div>
                               </div>
                             ))
                           )}
@@ -575,6 +607,17 @@ export default function EditCoursePage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Video Preview Modal */}
+      {previewVideo && (
+        <VideoPreviewModal
+          isOpen={!!previewVideo}
+          onClose={() => setPreviewVideo(null)}
+          videoUrl={previewVideo.url}
+          videoTitle={previewVideo.title}
+          videoDuration={previewVideo.duration}
+        />
+      )}
     </div>
   )
 }

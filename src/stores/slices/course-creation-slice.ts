@@ -734,9 +734,9 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           duration: v.duration || '0:00',
           status: 'complete' as const,
           progress: 100,
-          url: v.url,
-          thumbnailUrl: v.thumbnailUrl,
-          chapterId: v.chapterId || 'chapter-1',
+          url: v.video_url || v.url || v.videoUrl, // Check multiple property names
+          thumbnailUrl: v.thumbnailUrl || v.thumbnail_url,
+          chapterId: v.chapterId || v.chapter_id || 'chapter-1',
           order: v.order || 0
         }))
 

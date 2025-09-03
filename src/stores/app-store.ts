@@ -9,6 +9,7 @@ import { LessonSlice, createLessonSlice } from './slices/lesson-slice'
 import { BlogSlice, createBlogSlice } from './slices/blog-slice'
 // New role-specific slices
 import { StudentCourseSlice, createStudentCourseSlice } from './slices/student-course-slice'
+import { StudentLearningSlice, createStudentLearningSlice } from './slices/student-learning-slice'
 import { InstructorCourseSlice, createInstructorCourseSlice } from './slices/instructor-course-slice'
 import { StudentVideoSlice, createStudentVideoSlice } from './slices/student-video-slice'
 import { InstructorVideoSlice, createInstructorVideoSlice } from './slices/instructor-video-slice'
@@ -24,6 +25,7 @@ export interface AppStore extends
   LessonSlice, 
   BlogSlice,
   StudentCourseSlice,    // NEW - role-specific
+  // StudentLearningSlice,  // NEW - enhanced with database analytics - DISABLED to avoid conflicts
   // InstructorCourseSlice, // NEW - role-specific - temporarily disabled
   StudentVideoSlice,     // NEW - role-specific
   InstructorVideoSlice   // NEW - role-specific
@@ -42,6 +44,8 @@ export const useAppStore = create<AppStore>()(
         ...createBlogSlice(...args),
         // New role-specific slices
         ...createStudentCourseSlice(...args),
+        // TODO: Enable when ready to switch to database
+        // ...createStudentLearningSlice(...args), // Enhanced with database analytics - DISABLED to avoid conflicts
         // ...createInstructorCourseSlice(...args), // Temporarily disabled to avoid publishCourse conflict
         ...createStudentVideoSlice(...args),
         ...createInstructorVideoSlice(...args),

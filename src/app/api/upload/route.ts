@@ -65,7 +65,9 @@ export async function POST(request: NextRequest) {
     console.log(`[API] Uploading video: ${videoName} for course ${courseId} by user ${authResult.user.id}`)
     
     // 5. Convert File to the format Backblaze expects
-    const fileName = `courses/${courseId}/chapters/${chapterId}/${videoId}_${file.name}`
+    // Sanitize filename: replace spaces and special chars with underscores
+    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
+    const fileName = `courses/${courseId}/chapters/${chapterId}/${videoId}_${sanitizedFileName}`
     
     // Upload to Backblaze
     const uploadResult = await backblazeService.uploadVideo(

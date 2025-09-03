@@ -55,10 +55,96 @@ export class StudentCourseService {
       }
     }
 
-    const response = await apiClient.get<Course[]>(`/api/student/courses`)
-    return response.error
-      ? { error: response.error }
-      : { data: response.data }
+    // When not using mock data, query Supabase directly
+    try {
+      const { createClient } = await import('@/lib/supabase/client')
+      const supabase = createClient()
+      
+      console.log('Fetching enrollments for userId:', userId)
+      
+      // Get enrollments with course details
+      const { data: enrollments, error } = await supabase
+        .from('enrollments')
+        .select(`
+          *,
+          courses (
+            id,
+            title,
+            description,
+            thumbnail_url,
+            instructor_id,
+            total_duration_minutes,
+            total_videos,
+            price,
+            is_free,
+            status,
+            difficulty,
+            created_at,
+            updated_at
+          )
+        `)
+        .eq('user_id', userId)
+        .order('last_accessed_at', { ascending: false })
+
+      if (error) {
+        console.error('Error fetching enrollments:', error)
+        return { error: error.message }
+      }
+
+      console.log('Enrollments found:', enrollments?.length || 0)
+
+      if (!enrollments || enrollments.length === 0) {
+        console.log('No enrollments found for user:', userId)
+        return { data: [] }
+      }
+
+      // Get videos for each course
+      const courseIds = enrollments.map(e => e.course_id).filter(Boolean)
+      const { data: videos } = await supabase
+        .from('videos')
+        .select('*')
+        .in('course_id', courseIds)
+        .order('created_at')
+
+      // Group videos by course
+      const videosByCourse = videos?.reduce((acc, video) => {
+        if (!acc[video.course_id]) acc[video.course_id] = []
+        acc[video.course_id].push(video)
+        return acc
+      }, {} as Record<string, any[]>) || {}
+
+      // Transform to Course type
+      const courses: Course[] = enrollments
+        .filter(enrollment => enrollment.courses) // Only process if course data exists
+        .map(enrollment => ({
+          id: enrollment.courses.id,
+          title: enrollment.courses.title,
+          description: enrollment.courses.description || '',
+          thumbnailUrl: enrollment.courses.thumbnail_url || '',
+          instructor: {
+            id: enrollment.courses.instructor_id,
+            name: 'Instructor', // Will be populated from profiles
+            email: '',
+            avatar: ''
+          },
+          price: enrollment.courses.price || 0,
+          duration: enrollment.courses.total_duration_minutes || 0,
+          difficulty: (enrollment.courses.difficulty || 'beginner') as 'beginner' | 'intermediate' | 'advanced',
+          tags: [],  // Will be populated from courses.tags if needed
+          videos: videosByCourse[enrollment.course_id] || [],
+          enrollmentCount: 0,
+          rating: 0,
+          isPublished: enrollment.courses.status === 'published',
+          isFree: enrollment.courses.is_free || enrollment.courses.price === 0,
+          createdAt: enrollment.courses.created_at,
+          updatedAt: enrollment.courses.updated_at
+        }))
+
+      return { data: courses }
+    } catch (error) {
+      console.error('Service error:', error)
+      return { error: error instanceof Error ? error.message : 'Failed to fetch courses' }
+    }
   }
 
   async getCourseProgress(
@@ -78,12 +164,47 @@ export class StudentCourseService {
       }
     }
 
-    const response = await apiClient.get<CourseProgress>(
-      `/api/student/courses/${courseId}/progress`
-    )
-    return response.error
-      ? { error: response.error }
-      : { data: response.data }
+    // Query from Supabase instead of API
+    try {
+      const { createClient } = await import('@/lib/supabase/client')
+      const supabase = createClient()
+      
+      // Get enrollment progress for this course
+      const { data: enrollment, error } = await supabase
+        .from('enrollments')
+        .select('progress_percent, completed_videos, total_videos, last_accessed_at')
+        .eq('user_id', userId)
+        .eq('course_id', courseId)
+        .single()
+      
+      if (error || !enrollment) {
+        // Return default progress if not found
+        return {
+          data: {
+            userId,
+            courseId,
+            videosCompleted: 0,
+            totalVideos: 0,
+            percentComplete: 0,
+            lastAccessedAt: new Date().toISOString()
+          }
+        }
+      }
+      
+      return {
+        data: {
+          userId,
+          courseId,
+          videosCompleted: enrollment.completed_videos || 0,
+          totalVideos: enrollment.total_videos || 0,
+          percentComplete: enrollment.progress_percent || 0,
+          lastAccessedAt: enrollment.last_accessed_at || new Date().toISOString()
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching course progress:', error)
+      return { error: error instanceof Error ? error.message : 'Failed to fetch progress' }
+    }
   }
 
   async getNextVideo(

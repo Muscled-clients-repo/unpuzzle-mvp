@@ -1,5 +1,5 @@
 "use client"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { ErrorBoundary } from "@/components/common"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -22,45 +22,73 @@ import {
   Calendar,
   Target,
   Brain,
-  Sparkles
+  Sparkles,
+  Database,
+  ToggleLeft,
+  ToggleRight
 } from "lucide-react"
 import Link from "next/link"
 
-export default function MyCoursesPage() {
+// Feature flag for database usage
+const USE_DATABASE = false // Set to true to use real database
+
+export default function MyCoursesPageEnhanced() {
   const {
+    // Original store methods (for mock data)
     enrolledCourses,
     courseProgress,
+    
+    // Enhanced store methods (for database)
+    enrolledCoursesWithAnalytics,
+    userStats,
+    loadStudentLearningData,
+    
+    // Common
     loading,
     error,
     loadEnrolledCourses,
     loadCourseProgress,
+    
+    // Auth
     user,
     profile
   } = useAppStore()
   
-  // Get authenticated user ID
-  const userId = user?.id || profile?.id
+  const [showDataSource, setShowDataSource] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  
+  // Get user ID from auth or use mock
+  const userId = user?.id || profile?.id || 'user-1'
   
   useEffect(() => {
-    if (userId) {
+    if (USE_DATABASE && loadStudentLearningData) {
+      // Use new database method
+      loadStudentLearningData(userId)
+    } else {
+      // Use original mock data methods
       loadEnrolledCourses(userId)
     }
-  }, [userId, loadEnrolledCourses])
+  }, [userId, loadEnrolledCourses, loadStudentLearningData])
   
   useEffect(() => {
-    // Load progress for each enrolled course
-    if (userId && enrolledCourses) {
-      enrolledCourses.forEach(course => {
+    // Load progress for each enrolled course (only for mock data)
+    if (!USE_DATABASE) {
+      (enrolledCourses || []).forEach(course => {
         loadCourseProgress(userId, course.id)
       })
     }
   }, [enrolledCourses, userId, loadCourseProgress])
   
-  // Mock progress data for now - will come from courseProgress once loaded
+  // Prepare data based on source
+  const coursesData = USE_DATABASE 
+    ? enrolledCoursesWithAnalytics || []
+    : enrolledCourses || []
+  
+  // Mock progress data for non-database mode
   const mockProgressData = {
     "course-1": {
       progress: courseProgress?.percentComplete || 35,
-      lastAccessed: courseProgress?.lastAccessedAt ? "2 hours ago" : "2 hours ago",
+      lastAccessed: "2 hours ago",
       completedLessons: courseProgress?.videosCompleted || 2,
       totalLessons: courseProgress?.totalVideos || 5,
       currentLesson: "JavaScript Basics",
@@ -93,6 +121,22 @@ export default function MyCoursesPage() {
     }
   }
   
+  // Filter courses based on search
+  const filteredCourses = coursesData.filter(courseData => {
+    const course = USE_DATABASE ? courseData.course : courseData
+    return course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           course.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  })
+  
+  // Count courses by status
+  const inProgressCount = USE_DATABASE
+    ? coursesData.filter(c => c.progress > 0 && c.progress < 100).length
+    : 2
+  
+  const completedCount = USE_DATABASE
+    ? coursesData.filter(c => c.progress >= 100).length
+    : 0
+  
   if (loading) return <LoadingSpinner />
   
   if (error) return <ErrorFallback error={error} />
@@ -101,10 +145,63 @@ export default function MyCoursesPage() {
     <ErrorBoundary>
       <div className="flex-1 p-6">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2">My Courses</h1>
+            <div className="flex items-center justify-between mb-2">
+              <h1 className="text-3xl font-bold">My Courses</h1>
+              {/* Data Source Indicator */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDataSource(!showDataSource)}
+                className="flex items-center gap-2"
+              >
+                {USE_DATABASE ? (
+                  <>
+                    <Database className="h-4 w-4" />
+                    <span>Using Database</span>
+                    <ToggleRight className="h-4 w-4 text-green-500" />
+                  </>
+                ) : (
+                  <>
+                    <Brain className="h-4 w-4" />
+                    <span>Using Mock Data</span>
+                    <ToggleLeft className="h-4 w-4 text-gray-500" />
+                  </>
+                )}
+              </Button>
+            </div>
             <p className="text-muted-foreground">
               Continue your learning journey with personalized AI assistance
             </p>
+            
+            {/* User Stats (only when using database) */}
+            {USE_DATABASE && userStats && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold">{userStats.totalCoursesEnrolled}</div>
+                    <p className="text-xs text-muted-foreground">Total Courses</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold">{userStats.totalVideosCompleted}</div>
+                    <p className="text-xs text-muted-foreground">Videos Completed</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold">{userStats.totalWatchTimeFormatted}</div>
+                    <p className="text-xs text-muted-foreground">Watch Time</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold">{userStats.totalAIInteractions}</div>
+                    <p className="text-xs text-muted-foreground">AI Interactions</p>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </div>
 
           {/* Search and Filter Bar */}
@@ -114,6 +211,8 @@ export default function MyCoursesPage() {
               <Input
                 placeholder="Search your courses..."
                 className="pl-10"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
             <Button variant="outline">
@@ -125,25 +224,39 @@ export default function MyCoursesPage() {
           {/* Course Tabs */}
           <Tabs defaultValue="all" className="mb-8">
             <TabsList>
-              <TabsTrigger value="all">All Courses ({(enrolledCourses || []).length})</TabsTrigger>
-              <TabsTrigger value="in-progress">In Progress (2)</TabsTrigger>
-              <TabsTrigger value="completed">Completed (0)</TabsTrigger>
+              <TabsTrigger value="all">All Courses ({filteredCourses.length})</TabsTrigger>
+              <TabsTrigger value="in-progress">In Progress ({inProgressCount})</TabsTrigger>
+              <TabsTrigger value="completed">Completed ({completedCount})</TabsTrigger>
             </TabsList>
 
             <TabsContent value="all" className="mt-6">
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {(enrolledCourses || []).map((course) => {
-                  const progress = mockProgressData[course.id as keyof typeof mockProgressData] || {
-                    progress: 0,
-                    lastAccessed: "Never",
-                    completedLessons: 0,
-                    totalLessons: course.videos?.length || 5,
-                    currentLesson: "Not started",
-                    estimatedTimeLeft: `${course.duration} hours`,
-                    aiInteractionsUsed: 0,
-                    strugglingTopics: [],
-                    nextMilestone: "Start course"
-                  }
+                {filteredCourses.map((courseData) => {
+                  // Extract data based on source
+                  const course = USE_DATABASE ? courseData.course : courseData
+                  const progress = USE_DATABASE 
+                    ? {
+                        progress: courseData.progress,
+                        lastAccessed: courseData.lastAccessed,
+                        completedLessons: courseData.completedLessons,
+                        totalLessons: courseData.totalLessons,
+                        currentLesson: courseData.currentLesson,
+                        estimatedTimeLeft: courseData.estimatedTimeLeft,
+                        aiInteractionsUsed: courseData.aiInteractionsUsed,
+                        strugglingTopics: courseData.strugglingTopics,
+                        nextMilestone: courseData.nextMilestone
+                      }
+                    : mockProgressData[course.id as keyof typeof mockProgressData] || {
+                        progress: 0,
+                        lastAccessed: "Never",
+                        completedLessons: 0,
+                        totalLessons: course.videos?.length || 5,
+                        currentLesson: "Not started",
+                        estimatedTimeLeft: `${course.duration} hours`,
+                        aiInteractionsUsed: 0,
+                        strugglingTopics: [],
+                        nextMilestone: "Start course"
+                      }
                   
                   return (
                     <Card key={course.id} className="overflow-hidden hover:shadow-lg transition-shadow">
@@ -224,7 +337,11 @@ export default function MyCoursesPage() {
 
                         {/* Action Button */}
                         <Button asChild className="w-full">
-                          <Link href={`/student/course/${course.id}/video/${course.videos?.[progress.completedLessons]?.id || course.videos?.[0]?.id || '1'}`}>
+                          <Link href={`/student/course/${course.id}/video/${
+                            USE_DATABASE && courseData.currentVideoId 
+                              ? courseData.currentVideoId 
+                              : course.videos?.[progress.completedLessons]?.id || course.videos?.[0]?.id || '1'
+                          }`}>
                             <Play className="mr-2 h-4 w-4" />
                             Continue Learning
                           </Link>
@@ -235,6 +352,13 @@ export default function MyCoursesPage() {
                           <Clock className="h-3 w-3" />
                           Last accessed {progress.lastAccessed}
                         </div>
+                        
+                        {/* Data Source Badge (debug only) */}
+                        {showDataSource && (
+                          <Badge variant="outline" className="text-xs">
+                            {USE_DATABASE ? "From Database" : "Mock Data"}
+                          </Badge>
+                        )}
                       </CardContent>
                     </Card>
                   )
@@ -259,29 +383,22 @@ export default function MyCoursesPage() {
 
             <TabsContent value="in-progress" className="mt-6">
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {(enrolledCourses || []).slice(0, 2).map((course) => {
-                  const progress = mockProgressData[course.id as keyof typeof mockProgressData] || {
-                    progress: 0,
-                    lastAccessed: "Never",
-                    completedLessons: 0,
-                    totalLessons: course.videos?.length || 5,
-                    currentLesson: "Not started",
-                    estimatedTimeLeft: `${course.duration} hours`,
-                    aiInteractionsUsed: 0,
-                    strugglingTopics: [],
-                    nextMilestone: "Start course"
-                  }
+                {filteredCourses.filter(c => {
+                  const progress = USE_DATABASE ? c.progress : mockProgressData[c.id]?.progress || 0
+                  return progress > 0 && progress < 100
+                }).map((courseData) => {
+                  const course = USE_DATABASE ? courseData.course : courseData
+                  const progress = USE_DATABASE ? courseData.progress : mockProgressData[course.id]?.progress || 0
                   
                   return (
                     <Card key={course.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                      {/* Same card content as above */}
                       <div className="relative aspect-video bg-gradient-to-br from-primary/20 to-purple-500/20">
                         <div className="absolute inset-0 flex items-center justify-center">
                           <BookOpen className="h-12 w-12 text-primary/40" />
                         </div>
                         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background/90 to-transparent p-4">
-                          <Progress value={progress.progress} className="h-2" />
-                          <p className="text-xs text-white mt-1">{progress.progress}% Complete</p>
+                          <Progress value={progress} className="h-2" />
+                          <p className="text-xs text-white mt-1">{progress}% Complete</p>
                         </div>
                       </div>
                       <CardHeader>
@@ -304,76 +421,12 @@ export default function MyCoursesPage() {
               <div className="text-center py-12">
                 <CheckCircle2 className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                 <h3 className="text-lg font-semibold mb-2">No Completed Courses Yet</h3>
-                <p className="text-muted-foreground mb-4">
+                <p className="text-sm text-muted-foreground">
                   Keep learning to complete your first course!
                 </p>
-                <Button asChild>
-                  <Link href="/student">
-                    Go to Dashboard
-                  </Link>
-                </Button>
               </div>
             </TabsContent>
           </Tabs>
-
-          {/* Learning Stats Summary */}
-          <div className="grid gap-4 md:grid-cols-4">
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
-                    <BookOpen className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{(enrolledCourses || []).length}</p>
-                    <p className="text-xs text-muted-foreground">Active Courses</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
-                    <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">6</p>
-                    <p className="text-xs text-muted-foreground">Lessons Completed</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-purple-100 dark:bg-purple-900/20 flex items-center justify-center">
-                    <Brain className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">45</p>
-                    <p className="text-xs text-muted-foreground">AI Interactions</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center">
-                    <Clock className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">12.5h</p>
-                    <p className="text-xs text-muted-foreground">Total Study Time</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
       </div>
     </ErrorBoundary>
   )

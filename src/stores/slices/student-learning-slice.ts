@@ -205,8 +205,23 @@ export const createStudentLearningSlice: StateCreator<StudentLearningSlice> = (s
   // COMPATIBILITY METHODS (for existing UI)
   // ============================================================
   loadEnrolledCourses: async (userId: string) => {
-    // Use the main loader which gets everything
-    await get().loadStudentLearningData(userId)
+    // Check if we should use database (import feature flag)
+    const { FEATURE_FLAGS } = await import('@/config/features')
+    
+    if (FEATURE_FLAGS.USE_DB_FOR_ENROLLMENT) {
+      // Use the main loader which gets everything from database
+      await get().loadStudentLearningData(userId)
+    } else {
+      // Use existing mock data service
+      set({ loading: true, error: null })
+      const result = await studentCourseService.getEnrolledCourses(userId)
+      
+      if (result.error) {
+        set({ loading: false, error: result.error })
+      } else {
+        set({ loading: false, enrolledCourses: result.data || [], error: null })
+      }
+    }
   },
 
   loadRecommendedCourses: async (userId: string) => {

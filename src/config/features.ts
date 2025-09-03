@@ -1,203 +1,101 @@
 // src/config/features.ts
-import React from 'react'
-import { UserRole } from '@/types/domain'
-
-export interface FeatureFlags {
-  // Student-specific features
-  aiChat: boolean
-  reflections: boolean
-  quizzes: boolean
-  videoSegments: boolean
-  aiHints: boolean
-  
-  // Instructor-specific features
-  analytics: boolean
-  studentResponses: boolean
-  engagementDashboard: boolean
-  confusionTracking: boolean
-  
-  // Shared features with role differences
-  comments: boolean
-  videoDownload: boolean
-  communityAccess: boolean
-  
-  // System features
-  betaFeatures: boolean
-  debugMode: boolean
-}
+// Feature flags for gradual migration from mock data to database
 
 /**
- * Get feature flags based on user role and environment variables
+ * Feature Flags Configuration
+ * 
+ * Set these flags to true to enable database features.
+ * Keep them false to continue using mock data.
+ * 
+ * MIGRATION PLAN:
+ * Phase 1: Enable USE_DB_FOR_ENROLLMENT (current)
+ * Phase 2: Enable USE_DB_FOR_PROGRESS
+ * Phase 3: Enable USE_DB_FOR_ANALYTICS
+ * Phase 4: Enable USE_DB_FOR_AI_INTERACTIONS
+ * Phase 5: Remove mock data completely
  */
-export function getFeatureFlags(role: UserRole): FeatureFlags {
-  const isProduction = process.env.NODE_ENV === 'production'
+export const FEATURE_FLAGS = {
+  // Core features
+  USE_DB_FOR_ENROLLMENT: false,    // Student course enrollment data
+  USE_DB_FOR_PROGRESS: false,      // Video progress tracking
+  USE_DB_FOR_ANALYTICS: false,     // Learning analytics (struggles, milestones)
+  USE_DB_FOR_AI_INTERACTIONS: false, // AI chat and interactions
   
-  // Base flags that apply to all roles
-  const baseFlags: Partial<FeatureFlags> = {
-    comments: process.env.NEXT_PUBLIC_ENABLE_COMMENTS !== 'false',
-    communityAccess: process.env.NEXT_PUBLIC_ENABLE_COMMUNITY !== 'false',
-    betaFeatures: process.env.NEXT_PUBLIC_ENABLE_BETA_FEATURES === 'true',
-    debugMode: !isProduction && process.env.NEXT_PUBLIC_DEBUG_MODE === 'true'
+  // UI features
+  SHOW_DATA_SOURCE_BADGE: true,    // Show badge indicating data source
+  ENABLE_REAL_TIME_SYNC: false,    // Enable real-time database sync
+  
+  // Debug features
+  LOG_DATABASE_QUERIES: false,     // Log all database queries to console
+  SHOW_PERFORMANCE_METRICS: false, // Show performance metrics in UI
+} as const
+
+// Helper to check if any database feature is enabled
+export const isDatabaseEnabled = () => {
+  return Object.entries(FEATURE_FLAGS)
+    .filter(([key]) => key.startsWith('USE_DB'))
+    .some(([, value]) => value === true)
+}
+
+// Helper to get data source label
+export const getDataSourceLabel = () => {
+  if (isDatabaseEnabled()) {
+    const enabledFeatures = Object.entries(FEATURE_FLAGS)
+      .filter(([key, value]) => key.startsWith('USE_DB') && value)
+      .map(([key]) => key.replace('USE_DB_FOR_', ''))
+    
+    return `Database (${enabledFeatures.join(', ')})`
   }
-  
-  switch (role) {
-    case 'student':
-      return {
-        ...baseFlags,
-        // Student AI features
-        aiChat: process.env.NEXT_PUBLIC_ENABLE_STUDENT_AI_CHAT !== 'false',
-        reflections: process.env.NEXT_PUBLIC_ENABLE_STUDENT_REFLECTIONS !== 'false',
-        quizzes: process.env.NEXT_PUBLIC_ENABLE_STUDENT_QUIZZES !== 'false',
-        videoSegments: process.env.NEXT_PUBLIC_ENABLE_VIDEO_SEGMENTS !== 'false',
-        aiHints: process.env.NEXT_PUBLIC_ENABLE_AI_HINTS !== 'false',
-        
-        // Student cannot access instructor features
-        analytics: false,
-        studentResponses: false,
-        engagementDashboard: false,
-        confusionTracking: false,
-        
-        // Student-specific shared features
-        videoDownload: false, // Students don't download
-      } as FeatureFlags
-    
-    case 'instructor':
-      return {
-        ...baseFlags,
-        // Instructors don't use AI features (they see student activity instead)
-        aiChat: false,
-        reflections: false,
-        quizzes: false,
-        videoSegments: false,
-        aiHints: false,
-        
-        // Instructor-specific features
-        analytics: process.env.NEXT_PUBLIC_ENABLE_INSTRUCTOR_ANALYTICS !== 'false',
-        studentResponses: process.env.NEXT_PUBLIC_ENABLE_INSTRUCTOR_RESPONSES !== 'false',
-        engagementDashboard: process.env.NEXT_PUBLIC_ENABLE_ENGAGEMENT_DASHBOARD !== 'false',
-        confusionTracking: process.env.NEXT_PUBLIC_ENABLE_CONFUSION_TRACKING !== 'false',
-        
-        // Instructor-specific shared features
-        videoDownload: process.env.NEXT_PUBLIC_ENABLE_VIDEO_DOWNLOAD === 'true',
-      } as FeatureFlags
-    
-    case 'moderator':
-      return {
-        ...baseFlags,
-        // Moderators have limited feature access
-        aiChat: false,
-        reflections: false,
-        quizzes: false,
-        videoSegments: false,
-        aiHints: false,
-        
-        // Limited instructor features for moderation
-        analytics: process.env.NEXT_PUBLIC_ENABLE_MODERATOR_ANALYTICS === 'true',
-        studentResponses: true, // Moderators respond to student questions
-        engagementDashboard: false,
-        confusionTracking: true, // Moderators help with confusion
-        
-        videoDownload: false,
-      } as FeatureFlags
-    
-    case 'admin':
-      return {
-        ...baseFlags,
-        // Admins have access to all features for testing
-        aiChat: true,
-        reflections: true,
-        quizzes: true,
-        videoSegments: true,
-        aiHints: true,
-        analytics: true,
-        studentResponses: true,
-        engagementDashboard: true,
-        confusionTracking: true,
-        videoDownload: true,
-      } as FeatureFlags
-    
-    default:
-      // Public/unauthenticated users get minimal access
-      return {
-        ...baseFlags,
-        aiChat: false,
-        reflections: false,
-        quizzes: false,
-        videoSegments: false,
-        aiHints: false,
-        analytics: false,
-        studentResponses: false,
-        engagementDashboard: false,
-        confusionTracking: false,
-        videoDownload: false,
-      } as FeatureFlags
-  }
+  return 'Mock Data'
 }
 
-/**
- * Hook for accessing feature flags in components
- */
-export function useFeatureFlags(role: UserRole) {
-  return getFeatureFlags(role)
+// Environment-based overrides
+if (process.env.NODE_ENV === 'production') {
+  // In production, you might want to force certain features
+  // FEATURE_FLAGS.USE_DB_FOR_ENROLLMENT = true
 }
 
-/**
- * Component wrapper for feature flag conditional rendering
- */
-interface FeatureGateProps {
-  role: UserRole
-  feature: keyof FeatureFlags
-  children: React.ReactNode
-  fallback?: React.ReactNode
-}
-
-export function FeatureGate({ role, feature, children, fallback = null }: FeatureGateProps) {
-  const flags = getFeatureFlags(role)
-  
-  if (flags[feature]) {
-    return React.createElement(React.Fragment, null, children)
-  }
-  
-  return React.createElement(React.Fragment, null, fallback)
-}
-
-/**
- * Higher-order component for feature flag protection
- */
-export function withFeatureFlag<T extends object>(
-  WrappedComponent: React.ComponentType<T>,
-  feature: keyof FeatureFlags
-) {
-  return function FeatureFlaggedComponent(props: T & { userRole: UserRole }) {
-    const { userRole, ...componentProps } = props
-    const flags = getFeatureFlags(userRole)
-    
-    if (!flags[feature]) {
-      return null
+// Allow runtime override from localStorage (for testing)
+if (typeof window !== 'undefined') {
+  try {
+    const overrides = localStorage.getItem('unpuzzle-feature-overrides')
+    if (overrides) {
+      const parsed = JSON.parse(overrides)
+      Object.assign(FEATURE_FLAGS, parsed)
     }
-    
-    return React.createElement(WrappedComponent, componentProps as T)
+  } catch (e) {
+    // Ignore errors in localStorage parsing
   }
 }
 
-/**
- * Utility for checking features in non-component code
- */
-export function hasFeature(role: UserRole, feature: keyof FeatureFlags): boolean {
-  const flags = getFeatureFlags(role)
-  return flags[feature]
+// Export a function to toggle features at runtime
+export const toggleFeature = (feature: keyof typeof FEATURE_FLAGS, value?: boolean) => {
+  const newValue = value !== undefined ? value : !FEATURE_FLAGS[feature]
+  
+  // Update the flag
+  FEATURE_FLAGS[feature] = newValue
+  
+  // Save to localStorage for persistence
+  if (typeof window !== 'undefined') {
+    const current = JSON.parse(localStorage.getItem('unpuzzle-feature-overrides') || '{}')
+    current[feature] = newValue
+    localStorage.setItem('unpuzzle-feature-overrides', JSON.stringify(current))
+  }
+  
+  // Log the change
+  console.log(`Feature ${feature} is now ${newValue ? 'enabled' : 'disabled'}`)
+  
+  // Reload the page to apply changes
+  if (typeof window !== 'undefined') {
+    window.location.reload()
+  }
 }
 
-/**
- * Development helper to log all feature flags for a role
- */
-export function debugFeatureFlags(role: UserRole) {
-  if (process.env.NODE_ENV === 'development') {
-    const flags = getFeatureFlags(role)
-    console.group(`🏁 Feature Flags for ${role}`)
-    Object.entries(flags).forEach(([key, value]) => {
-      console.log(`${value ? '✅' : '❌'} ${key}: ${value}`)
-    })
-    console.groupEnd()
+// Export for console debugging
+if (typeof window !== 'undefined') {
+  (window as any).UNPUZZLE_FEATURES = {
+    flags: FEATURE_FLAGS,
+    toggle: toggleFeature,
+    status: getDataSourceLabel
   }
 }

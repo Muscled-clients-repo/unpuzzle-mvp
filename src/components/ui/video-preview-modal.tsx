@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useRef } from 'react'
-import { X, Play } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { X, Play, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -22,6 +22,10 @@ export function VideoPreviewModal({
 }: VideoPreviewModalProps) {
   const modalRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const [videoError, setVideoError] = useState(false)
+  
+  // URL encode the video URL to handle spaces and special characters
+  const encodedVideoUrl = videoUrl ? encodeURI(videoUrl) : undefined
 
   // Handle ESC key and click outside
   useEffect(() => {
@@ -48,11 +52,15 @@ export function VideoPreviewModal({
     }
   }, [isOpen, onClose])
 
-  // Pause video when modal closes
+  // Pause video when modal closes and reset error state
   useEffect(() => {
     if (!isOpen && videoRef.current) {
       videoRef.current.pause()
       videoRef.current.currentTime = 0
+    }
+    // Reset error state when modal opens
+    if (isOpen) {
+      setVideoError(false)
     }
   }, [isOpen])
 
@@ -92,35 +100,52 @@ export function VideoPreviewModal({
 
         {/* Video Player */}
         <div className="relative aspect-video bg-black">
-          {videoUrl ? (
+          {encodedVideoUrl && !videoError ? (
             <video
               ref={videoRef}
               className="w-full h-full"
               controls
               preload="metadata"
-              onError={(e) => {
-                console.error('Video playback error:', e)
+              onError={() => {
+                setVideoError(true)
+              }}
+              onLoadedMetadata={() => {
+                setVideoError(false)
               }}
             >
-              <source src={videoUrl} type="video/mp4" />
-              <source src={videoUrl} type="video/webm" />
-              <source src={videoUrl} type="video/ogg" />
+              <source src={encodedVideoUrl} type="video/mp4" />
+              <source src={encodedVideoUrl} type="video/webm" />
+              <source src={encodedVideoUrl} type="video/ogg" />
               Your browser does not support the video tag.
             </video>
-          ) : (
+          ) : videoError ? (
+            // Error state when video fails to load
+            <div className="flex flex-col items-center justify-center h-full text-white p-8">
+              <AlertCircle className="h-12 w-12 mb-4 text-red-500" />
+              <p className="text-lg font-semibold mb-2">Video Not Available</p>
+              <p className="text-sm text-gray-400 text-center mb-4">
+                This video file could not be loaded. It may have been moved or deleted.
+              </p>
+              <p className="text-xs text-gray-500 text-center break-all px-4">
+                {videoUrl}
+              </p>
+            </div>
+          ) : !encodedVideoUrl ? (
             // Fallback when no URL available
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
               <Play className="h-12 w-12 mb-4 opacity-50" />
               <p>Video not available</p>
               <p className="text-sm">Upload may still be in progress</p>
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Footer with helpful info */}
-        <div className="p-3 bg-muted/50 text-xs text-muted-foreground">
-          <p>Press ESC or click outside to close • Video will pause when closed</p>
-        </div>
+        {!videoError && (
+          <div className="p-3 bg-muted/50 text-xs text-muted-foreground">
+            <p>Press ESC or click outside to close • Video will pause when closed</p>
+          </div>
+        )}
       </div>
     </div>
   )

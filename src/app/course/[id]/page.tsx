@@ -51,7 +51,8 @@ export default function CoursePreviewPage() {
   // Load course data
   useEffect(() => {
     loadCourseById(courseId) // Load specific course details
-    loadEnrolledCourses('guest') // Check if user is already enrolled
+    // Only load enrolled courses if user is authenticated
+    // loadEnrolledCourses('guest') // Disabled - don't need this for course detail
   }, [courseId, loadCourseById, loadEnrolledCourses])
   
   // Use course from store only
