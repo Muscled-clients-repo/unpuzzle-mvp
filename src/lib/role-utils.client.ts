@@ -9,6 +9,9 @@ export type UserRole = 'student' | 'instructor' | 'admin' | null
  * Client-side version for getting active role from user object and cookies
  */
 export function getClientActiveRole(user: any): UserRole {
+  // If no user, return null
+  if (!user) return null
+  
   // Only check browser-specific things if we're on the client
   if (typeof window !== 'undefined') {
     // Check for active role cookie on client side
@@ -40,10 +43,9 @@ export function getClientActiveRole(user: any): UserRole {
   }
 
   // Fall back to user metadata/database role
-  if (!user) return null
-  
-  // Return null during SSR to prevent hydration mismatch
-  return null
+  return user.user_metadata?.role || 
+         user.app_metadata?.role || 
+         'student' // default fallback
 }
 
 /**

@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAppStore } from "@/stores/app-store"
-import { useAuth } from "@/contexts/AuthContext"
 import { ErrorBoundary, LoadingSpinner, ErrorFallback } from "@/components/common"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -43,7 +42,7 @@ import {
 
 export default function TeachCoursesPage() {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user } = useAppStore()
   const { courses, loadCourses, loading, error } = useAppStore()
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")

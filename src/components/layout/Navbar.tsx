@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAppStore } from '@/stores/app-store'
 import { Button } from '@/components/ui/button'
 import { Brain, LogOut, User } from 'lucide-react'
 import {
@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 export function Navbar() {
-  const { user, signOut, loading } = useAuth()
+  const { user, signOut, loading } = useAppStore()
 
   const handleSignOut = async () => {
     try {

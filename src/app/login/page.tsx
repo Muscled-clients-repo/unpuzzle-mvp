@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAppStore } from '@/stores/app-store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,7 +12,7 @@ import { SocialAuthButtons } from '@/components/auth/SocialAuthButtons'
 import { Brain, ArrowRight } from 'lucide-react'
 
 export default function LoginPage() {
-  const { signIn } = useAuth()
+  const { signIn } = useAppStore()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(false)

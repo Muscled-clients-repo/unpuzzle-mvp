@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { devtools, subscribeWithSelector } from 'zustand/middleware'
+import { AuthSlice, createAuthSlice } from './slices/auth-slice'
 import { UserSlice, createUserSlice } from './slices/user-slice'
 import { AISlice, createAISlice } from './slices/ai-slice'
 import { InstructorSlice, createInstructorSlice } from './slices/instructor-slice'
@@ -15,6 +16,7 @@ import { isDevelopment } from '@/config/env'
 
 // Clean architecture with role-specific stores
 export interface AppStore extends 
+  AuthSlice,
   UserSlice, 
   AISlice, 
   InstructorSlice, 
@@ -31,6 +33,7 @@ export const useAppStore = create<AppStore>()(
   devtools(
     subscribeWithSelector(
       (...args) => ({
+        ...createAuthSlice(...args),
         ...createUserSlice(...args),
         ...createAISlice(...args),
         ...createInstructorSlice(...args),

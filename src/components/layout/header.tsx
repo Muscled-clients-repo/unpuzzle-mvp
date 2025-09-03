@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useAuth } from "@/contexts/AuthContext"
+import { useAppStore } from "@/stores/app-store"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -40,11 +40,15 @@ interface HeaderActionsProps {
 }
 
 export function Header({ backButton }: HeaderProps) {
-  const { user, profile, signOut, loading } = useAuth()
+  const { user, profile, signOut, loading } = useAppStore()
+  const [hydrated, setHydrated] = useState(false)
   
-  // Only show loading state if we're still loading AND don't have a user
-  // Once we have a user, show the header even if profile is still loading
-  if (loading && !user) {
+  useEffect(() => {
+    setHydrated(true)
+  }, [])
+  
+  // Show loading during SSR, initial hydration, or when loading with no user
+  if (!hydrated || (loading && !user)) {
     return (
       <header className="fixed top-0 z-50 w-full border-b bg-background">
         <div className="flex h-16 items-center px-4">
@@ -79,6 +83,7 @@ export function Header({ backButton }: HeaderProps) {
                                      user?.app_metadata?.role || 
                                      null
   const userInfo = getUserInfo(user)
+
   
   return (
     <header className="fixed top-0 z-50 w-full border-b bg-background">
@@ -95,7 +100,7 @@ export function Header({ backButton }: HeaderProps) {
         
         {/* Right Section - Role-specific Actions */}
         <HeaderActions 
-          user={userInfo}
+          user={user ? userInfo : null}
           userRole={userRole}
           userDatabaseRole={userDatabaseRole}
           onSignOut={signOut}
@@ -197,14 +202,6 @@ function HeaderActions({ user, userRole, userDatabaseRole, onSignOut }: HeaderAc
   
   return (
     <div className="flex items-center gap-3 justify-end">
-      
-      {/* Role-specific badge */}
-      {userRole === "instructor" && (
-        <Badge variant="default" className="gap-1">
-          <Eye className="h-3 w-3" />
-          INSTRUCTOR MODE
-        </Badge>
-      )}
       
       <ThemeToggle />
       

@@ -2,14 +2,14 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { useAuth } from "@/contexts/AuthContext"
+import { useAppStore } from "@/stores/app-store"
 
 interface SocialAuthButtonsProps {
   action: 'signup' | 'login'
 }
 
 export function SocialAuthButtons({ action }: SocialAuthButtonsProps) {
-  const { signInWithGoogle, signInWithGitHub } = useAuth()
+  const { signInWithGoogle, signInWithGitHub } = useAppStore()
   const [loading, setLoading] = useState<'google' | 'github' | null>(null)
 
   const handleGoogleAuth = async () => {

@@ -13,7 +13,6 @@ interface UserState {
 }
 
 interface UserActions {
-  setUser: (profile: User) => void
   updatePreferences: (preferences: Partial<UIPreferences>) => void
   updateProgress: (courseId: string, progress: Partial<CourseProgress>) => void
   useAiInteraction: () => boolean
@@ -112,12 +111,6 @@ const initialUserState: UserState = {
 export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
   ...initialUserState,
   studentData: initialStudentData,
-
-  setUser: (profile: User) => 
-    set((state) => ({
-      id: profile.id,
-      profile,
-    })),
 
   updatePreferences: (preferences: Partial<UIPreferences>) =>
     set((state) => ({
