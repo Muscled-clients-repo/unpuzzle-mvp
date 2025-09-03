@@ -49,26 +49,43 @@ export async function middleware(request: NextRequest) {
 
   // Role-based route protection
   if (user && isProtectedPath) {
+    console.log('[MIDDLEWARE DEBUG] User ID:', user.id)
+    console.log('[MIDDLEWARE DEBUG] User email:', user.email)
+    console.log('[MIDDLEWARE DEBUG] Attempting route:', request.nextUrl.pathname)
+    
     // Get user's role from profile
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single()
 
+    console.log('[MIDDLEWARE DEBUG] Profile query result:', { profile, profileError })
+    console.log('[MIDDLEWARE DEBUG] Profile role value:', profile?.role)
+    console.log('[MIDDLEWARE DEBUG] Profile role type:', typeof profile?.role)
+
     if (profile) {
       const userRole = profile.role
+      console.log('[MIDDLEWARE DEBUG] Extracted userRole:', userRole)
+      console.log('[MIDDLEWARE DEBUG] userRole === "instructor":', userRole === 'instructor')
+      console.log('[MIDDLEWARE DEBUG] userRole !== "instructor":', userRole !== 'instructor')
       
       // Check role-based access
       if (request.nextUrl.pathname.startsWith('/instructor') && userRole !== 'instructor') {
         console.log(`[MIDDLEWARE] User with role '${userRole}' tried to access instructor route`)
+        console.log('[MIDDLEWARE DEBUG] Redirecting to /student')
         return NextResponse.redirect(new URL('/student', request.url))
       }
       
       if (request.nextUrl.pathname.startsWith('/admin') && userRole !== 'admin') {
         console.log(`[MIDDLEWARE] User with role '${userRole}' tried to access admin route`)
+        console.log('[MIDDLEWARE DEBUG] Redirecting to /student')
         return NextResponse.redirect(new URL('/student', request.url))
       }
+      
+      console.log('[MIDDLEWARE DEBUG] Role check passed, allowing access')
+    } else {
+      console.log('[MIDDLEWARE DEBUG] No profile found for user:', user.id)
     }
   }
 

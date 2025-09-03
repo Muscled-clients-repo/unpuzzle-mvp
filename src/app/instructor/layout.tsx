@@ -1,7 +1,7 @@
 "use client"
 
 import { usePathname } from "next/navigation"
-import { Header } from "@/components/layout/Header"
+import { Header } from "@/components/layout/header"
 import { Sidebar } from "@/components/layout/sidebar"
 import { CourseSelector } from "@/components/instructor/course-selector"
 export default function InstructorLayout({

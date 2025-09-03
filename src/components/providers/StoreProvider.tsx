@@ -46,9 +46,6 @@ export function StoreProvider({ children }: StoreProviderProps) {
         version: '1.0.0',
         timestamp: Date.now()
       }
-      
-      console.log('🏪 Zustand Store initialized. Access via window.__UNPUZZLE_DEV__.store')
-      console.log('📊 Open Redux DevTools to inspect store state and actions.')
     }
   }, [])
 

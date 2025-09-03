@@ -12,8 +12,6 @@ export function createClient() {
     })
     throw new Error('Missing Supabase environment variables')
   }
-
-  console.log('Creating Supabase client with URL:', supabaseUrl)
   
   return createBrowserClient<Database>(
     supabaseUrl,
