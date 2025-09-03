@@ -2,28 +2,69 @@ import { NextRequest, NextResponse } from 'next/server'
 import { backblazeService } from '@/services/video/backblaze-service'
 import { SupabaseVideoService } from '@/services/supabase/video-service'
 import { createServiceClient } from '@/lib/supabase/server'
+import { authenticateApiRequest, validateUploadRequest, verifyResourceOwnership } from '@/lib/auth/api-auth'
+import { checkRateLimit, rateLimitConfigs } from '@/lib/auth/rate-limit'
 import type { VideoUpload } from '@/stores/slices/course-creation-slice'
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData()
-    const file = formData.get('file') as File
-    const courseId = formData.get('courseId') as string
-    const chapterId = formData.get('chapterId') as string
-    const videoId = formData.get('videoId') as string
-    const videoName = formData.get('videoName') as string
-    const duration = formData.get('duration') as string || '0:00'
+    // 1. Check rate limit
+    const rateLimit = checkRateLimit(request, rateLimitConfigs.upload)
     
-    if (!file || !courseId || !chapterId || !videoId) {
+    if (!rateLimit.allowed) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { 
+          error: 'Rate limit exceeded. Too many upload requests.',
+          resetTime: rateLimit.resetTime
+        },
+        { 
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': rateLimitConfigs.upload.maxRequests.toString(),
+            'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+            'X-RateLimit-Reset': new Date(rateLimit.resetTime).toISOString()
+          }
+        }
+      )
+    }
+
+    // 2. Authenticate user and require instructor role
+    const authResult = await authenticateApiRequest(request, 'instructor')
+    
+    if (!authResult.success || !authResult.user) {
+      return NextResponse.json(
+        { error: authResult.error || 'Authentication required' },
+        { status: 401 }
+      )
+    }
+
+    // 3. Validate request data
+    const formData = await request.formData()
+    const validationResult = validateUploadRequest(formData)
+    
+    if (!validationResult.valid) {
+      return NextResponse.json(
+        { error: validationResult.error },
         { status: 400 }
       )
     }
 
-    console.log(`[API] Uploading video: ${videoName} for course ${courseId}`)
+    const { file, courseId, chapterId, videoId, videoName } = validationResult.data!
+    const duration = formData.get('duration') as string || '0:00'
+
+    // 4. Verify course ownership
+    const ownsResource = await verifyResourceOwnership(authResult.user.id, courseId)
     
-    // Convert File to the format Backblaze expects
+    if (!ownsResource) {
+      return NextResponse.json(
+        { error: 'Access denied. You can only upload videos to your own courses.' },
+        { status: 403 }
+      )
+    }
+
+    console.log(`[API] Uploading video: ${videoName} for course ${courseId} by user ${authResult.user.id}`)
+    
+    // 5. Convert File to the format Backblaze expects
     const fileName = `courses/${courseId}/chapters/${chapterId}/${videoId}_${file.name}`
     
     // Upload to Backblaze
@@ -37,15 +78,15 @@ export async function POST(request: NextRequest) {
     
     console.log(`[API] Upload complete: ${uploadResult.fileUrl}`)
     
-    // Create service client with elevated privileges for database insert
+    // 5. Create service client with elevated privileges for database insert
     const supabase = createServiceClient()
     const videoService = new SupabaseVideoService(supabase)
     
-    // Get existing videos to determine the order
+    // 6. Get existing videos to determine the order
     const existingVideos = await videoService.getChapterVideos(courseId, chapterId)
     const nextOrder = existingVideos.length // This will be the next order number
     
-    // Save to database - create VideoUpload object
+    // 7. Save to database - create VideoUpload object
     const videoUpload: VideoUpload = {
       id: videoId,
       name: videoName,

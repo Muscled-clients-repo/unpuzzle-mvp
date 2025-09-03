@@ -2,28 +2,70 @@ import { NextRequest, NextResponse } from 'next/server'
 import { backblazeService } from '@/services/video/backblaze-service'
 import { SupabaseVideoService } from '@/services/supabase/video-service'
 import { createServiceClient } from '@/lib/supabase/server'
+import { authenticateApiRequest, validateDeleteRequest, verifyVideoOwnership } from '@/lib/auth/api-auth'
+import { checkRateLimit, rateLimitConfigs } from '@/lib/auth/rate-limit'
 
 export async function DELETE(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const videoId = searchParams.get('videoId')
-    const fileId = searchParams.get('fileId')
-    const fileName = searchParams.get('fileName')
+    // 1. Check rate limit
+    const rateLimit = checkRateLimit(request, rateLimitConfigs.delete)
     
-    if (!videoId) {
+    if (!rateLimit.allowed) {
       return NextResponse.json(
-        { error: 'Video ID is required' },
+        { 
+          error: 'Rate limit exceeded. Too many delete requests.',
+          resetTime: rateLimit.resetTime
+        },
+        { 
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': rateLimitConfigs.delete.maxRequests.toString(),
+            'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+            'X-RateLimit-Reset': new Date(rateLimit.resetTime).toISOString()
+          }
+        }
+      )
+    }
+
+    // 2. Authenticate user and require instructor role
+    const authResult = await authenticateApiRequest(request, 'instructor')
+    
+    if (!authResult.success || !authResult.user) {
+      return NextResponse.json(
+        { error: authResult.error || 'Authentication required' },
+        { status: 401 }
+      )
+    }
+
+    // 3. Validate request parameters
+    const validationResult = validateDeleteRequest(request.url)
+    
+    if (!validationResult.valid) {
+      return NextResponse.json(
+        { error: validationResult.error },
         { status: 400 }
       )
     }
 
-    console.log(`[API] Deleting video: ${videoId}`)
+    const { videoId, fileId, fileName } = validationResult.data!
+
+    // 4. Verify video ownership
+    const ownershipResult = await verifyVideoOwnership(authResult.user.id, videoId)
     
-    // Delete from database first
+    if (!ownershipResult.owns) {
+      return NextResponse.json(
+        { error: 'Access denied. You can only delete your own videos.' },
+        { status: 403 }
+      )
+    }
+
+    console.log(`[API] Deleting video: ${videoId} by user ${authResult.user.id}`)
+    
+    // 5. Delete from database first
     const supabase = createServiceClient()
     const videoService = new SupabaseVideoService(supabase)
     
-    // Get video details from database if not provided
+    // 6. Get video details from database if not provided
     let backblazeFileId = fileId
     let backblazeFileName = fileName
     
@@ -39,11 +81,11 @@ export async function DELETE(request: NextRequest) {
       }
     }
     
-    // Delete from database
+    // 7. Delete from database
     await videoService.deleteVideo(videoId)
     console.log(`[API] Deleted from database: ${videoId}`)
     
-    // Delete from Backblaze if we have the file info
+    // 8. Delete from Backblaze if we have the file info
     if (backblazeFileId && backblazeFileName) {
       try {
         await backblazeService.deleteVideo(backblazeFileId, backblazeFileName)
