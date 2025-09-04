@@ -170,6 +170,9 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         // Get course ID - MUST have a real course ID for uploads to persist
         const courseId = get().courseCreation?.id
         
+        console.log('[VIDEO UPLOAD] Current courseCreation state:', get().courseCreation)
+        console.log('[VIDEO UPLOAD] Using course ID for upload:', courseId)
+        
         if (!courseId) {
           console.error('Cannot upload video without course ID - save course first')
           get().updateVideoStatus(video.id, 'error')
@@ -532,6 +535,12 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       console.error('No course to save')
       return
     }
+    
+    console.log('[SAVE DRAFT] Starting save for course:', {
+      id: courseCreation.id,
+      title: courseCreation.title,
+      videosCount: courseCreation.videos?.length || 0
+    })
 
     // Prevent concurrent saves
     if (isAutoSaving) {
@@ -587,6 +596,7 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         }))
         
         console.log('[SUPABASE] Course created with ID:', newCourse.id)
+        console.log('[SUPABASE] Updated courseCreation state:', get().courseCreation)
         return
       }
       
@@ -713,8 +723,12 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           } : null
         }))
         
-        // Redirect to instructor courses list to see the new course
-        if (typeof window !== 'undefined') {
+        // Redirect to edit the newly created course
+        if (typeof window !== 'undefined' && courseCreation.id) {
+          console.log('[PUBLISH] Redirecting to edit course:', courseCreation.id)
+          window.location.href = `/instructor/course/${courseCreation.id}/edit`
+        } else {
+          // Fallback to courses list if no ID
           window.location.href = '/instructor/courses'
         }
         
@@ -811,7 +825,11 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         // Fetch videos for this course using server action
         const { getCourseVideos } = await import('@/app/actions/get-course-videos')
         const courseVideos = await getCourseVideos(courseId)
-        console.log(`[SUPABASE] Loaded ${courseVideos.length} videos for course`)
+        console.log(`[SUPABASE] Loaded ${courseVideos.length} videos for course:`, courseId)
+        
+        if (courseVideos.length > 0) {
+          console.log('[SUPABASE] First video from DB:', courseVideos[0])
+        }
 
         // Convert videos to VideoUpload format and group by chapter
         const videoUploads: VideoUpload[] = courseVideos.map(v => ({
@@ -826,6 +844,11 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           chapterId: v.chapterId || v.chapter_id || 'chapter-1',
           order: v.order || 0
         }))
+        
+        console.log('[SUPABASE] Converted to VideoUploads:', videoUploads.length)
+        if (videoUploads.length > 0) {
+          console.log('[SUPABASE] First VideoUpload:', videoUploads[0])
+        }
 
         // Group videos by chapter
         const chaptersMap = new Map<string, VideoUpload[]>()

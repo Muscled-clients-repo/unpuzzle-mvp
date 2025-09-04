@@ -58,6 +58,7 @@ export default function CreateCoursePage() {
     saveDraft,
     publishCourse,
     setCurrentStep,
+    resetCourseCreation,
     toggleAutoSave
   } = useAppStore()
 
@@ -82,9 +83,14 @@ export default function CreateCoursePage() {
     }
   }, [courseCreation?.chapters[0]?.videos.length])
 
-  // Initialize course if not exists
+  // Initialize course on mount
   useEffect(() => {
-    if (!courseCreation) {
+    // Reset the course creation state when component mounts
+    // This ensures we don't show data from a previously created course
+    resetCourseCreation()
+    
+    // Set up a new empty course after a small delay to ensure reset completes
+    setTimeout(() => {
       setCourseInfo({
         title: '',
         description: '',
@@ -98,8 +104,11 @@ export default function CreateCoursePage() {
       })
       // Auto-create Chapter 1
       createChapter('Chapter 1')
-    }
-  }, [courseCreation, setCourseInfo, createChapter])
+    }, 100)
+    
+    // Only run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Handle file drop
   const handleFileDrop = useCallback((e: React.DragEvent) => {
@@ -520,15 +529,26 @@ export default function CreateCoursePage() {
                                 chapter.videos.map((video, videoIndex) => (
                                   <div
                                     key={video.id}
-                                    draggable
+                                    draggable={video.status !== 'uploading'}
                                     onDragStart={() => handleVideoDragStart(video.id)}
-                                    className="flex items-center gap-3 p-2 bg-background rounded cursor-move hover:bg-muted/50 group"
+                                    className={cn(
+                                      "flex items-center gap-3 p-2 bg-background rounded hover:bg-muted/50 group",
+                                      video.status === 'uploading' ? "opacity-70" : "cursor-move"
+                                    )}
                                   >
-                                    <GripVertical className="h-4 w-4 text-muted-foreground" />
+                                    {video.status === 'uploading' ? (
+                                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                    ) : (
+                                      <GripVertical className="h-4 w-4 text-muted-foreground" />
+                                    )}
                                     <span className="text-sm text-muted-foreground">
                                       {videoIndex + 1}.
                                     </span>
-                                    <FileVideo className="h-4 w-4" />
+                                    <FileVideo className={cn(
+                                      "h-4 w-4",
+                                      video.status === 'complete' ? "text-green-600" : 
+                                      video.status === 'error' ? "text-red-600" : ""
+                                    )} />
                                     <div className="flex-1">
                                       {editingVideo === video.id ? (
                                         <Input
@@ -561,11 +581,18 @@ export default function CreateCoursePage() {
                                           className="cursor-text hover:bg-muted px-2 py-0.5 -mx-2 rounded"
                                         >
                                           <p className="text-sm">{video.name}</p>
-                                          {video.duration && (
+                                          {video.status === 'uploading' ? (
+                                            <div className="flex items-center gap-2">
+                                              <Progress value={video.progress || 0} className="h-1 flex-1" />
+                                              <span className="text-xs text-muted-foreground">
+                                                {video.progress || 0}%
+                                              </span>
+                                            </div>
+                                          ) : video.duration ? (
                                             <p className="text-xs text-muted-foreground">
                                               {video.duration}
                                             </p>
-                                          )}
+                                          ) : null}
                                         </div>
                                       )}
                                     </div>

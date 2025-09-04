@@ -23,6 +23,8 @@ export interface VideoData {
 export async function getCourseVideos(courseId: string): Promise<VideoData[]> {
   const supabase = await createClient()
   
+  console.log('[Server Action] Fetching videos for course:', courseId)
+  
   try {
     const { data, error } = await supabase
       .from('videos')
@@ -33,6 +35,16 @@ export async function getCourseVideos(courseId: string): Promise<VideoData[]> {
     if (error) {
       console.error('[Server Action] Error fetching videos:', error)
       return []
+    }
+    
+    console.log('[Server Action] Found videos:', data?.length || 0, 'for course:', courseId)
+    if (data && data.length > 0) {
+      console.log('[Server Action] First video:', {
+        id: data[0].id,
+        title: data[0].title,
+        course_id: data[0].course_id,
+        chapter_id: data[0].chapter_id
+      })
     }
     
     return data || []

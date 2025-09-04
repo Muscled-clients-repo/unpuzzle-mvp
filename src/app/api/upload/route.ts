@@ -113,11 +113,20 @@ export async function POST(request: NextRequest) {
     // Pass the Backblaze filename separately to the service
     const uploadWithFilename = { ...videoUpload, backblazeFileName: fileName } as any
     
-    await videoService.createVideoFromUpload(
+    console.log('[API] Saving video to database:', {
+      courseId,
+      chapterId,
+      videoName,
+      videoId
+    })
+    
+    const savedVideo = await videoService.createVideoFromUpload(
       courseId,
       chapterId,
       uploadWithFilename
     )
+    
+    console.log('[API] Video saved to database:', savedVideo)
     
     return NextResponse.json({
       success: true,

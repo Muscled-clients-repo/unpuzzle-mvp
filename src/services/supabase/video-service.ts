@@ -84,7 +84,8 @@ function rowToVideoUpload(row: VideoRow): VideoUpload {
     progress: row.progress,
     url: row.video_url,
     thumbnailUrl: row.thumbnail_url,
-    chapterId: row.chapter_id
+    chapterId: row.chapter_id,
+    order: row.order || 0
   }
 }
 
@@ -123,6 +124,8 @@ export class SupabaseVideoService {
         backblaze_file_id: videoUpload.backblazeFileId // Store for deletion
       }
       
+      console.log('[SUPABASE VIDEO] Attempting to insert:', insertData)
+      
       const { data, error } = await this.supabase
         .from('videos')
         .insert([insertData])
@@ -131,7 +134,18 @@ export class SupabaseVideoService {
       
       if (error) {
         console.error('[SUPABASE VIDEO] Create error:', error)
+        console.error('[SUPABASE VIDEO] Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
         throw error
+      }
+      
+      if (!data) {
+        console.error('[SUPABASE VIDEO] No data returned from insert')
+        throw new Error('Video insert failed - no data returned')
       }
       
       console.log('[SUPABASE VIDEO] Video created successfully:', data.id)
