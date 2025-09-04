@@ -113,13 +113,14 @@ export class SupabaseVideoService {
         description: '',
         duration: videoUpload.duration || '0:00',
         duration_seconds: videoUpload.duration ? parseDuration(videoUpload.duration) : 0,
-        filename: `${videoUpload.name}.${videoUpload.file?.name.split('.').pop() || 'mp4'}`,
+        filename: (videoUpload as any).backblazeFileName || `${videoUpload.name}.${videoUpload.file?.name.split('.').pop() || 'mp4'}`,
         file_size: videoUpload.size,
         status: videoUpload.status,
         progress: videoUpload.progress,
         order: videoUpload.order || 0, // Use provided order
         video_url: videoUpload.url,
-        thumbnail_url: videoUpload.thumbnailUrl
+        thumbnail_url: videoUpload.thumbnailUrl,
+        backblaze_file_id: videoUpload.backblazeFileId // Store for deletion
       }
       
       const { data, error } = await this.supabase
@@ -164,6 +165,8 @@ export class SupabaseVideoService {
       if (updates.url !== undefined) dbUpdates.video_url = updates.url
       if (updates.thumbnailUrl !== undefined) dbUpdates.thumbnail_url = updates.thumbnailUrl
       if (updates.chapterId !== undefined) dbUpdates.chapter_id = updates.chapterId
+      if ((updates as any).backblaze_file_id !== undefined) dbUpdates.backblaze_file_id = (updates as any).backblaze_file_id
+      if ((updates as any).backblaze_url !== undefined) dbUpdates.backblaze_url = (updates as any).backblaze_url
       
       const { data, error } = await this.supabase
         .from('videos')
@@ -288,6 +291,13 @@ export class SupabaseVideoService {
       }
       
       console.log(`[SUPABASE VIDEO] Found ${data?.length || 0} videos for course`)
+      if (data && data.length > 0) {
+        console.log('[SUPABASE VIDEO] Video details:', data.map(v => ({ 
+          id: v.id, 
+          title: v.title,
+          status: v.status 
+        })))
+      }
       return data ? data.map(rowToVideo) : []
       
     } catch (error) {
@@ -372,14 +382,57 @@ export class SupabaseVideoService {
     try {
       console.log(`[SUPABASE VIDEO] Deleting video: ${id}`)
       
-      const { error } = await this.supabase
+      // First check if the video exists and get course info
+      const { data: existingVideo, error: fetchError } = await this.supabase
+        .from('videos')
+        .select('id, title, course_id')
+        .eq('id', id)
+        .single()
+      
+      if (fetchError) {
+        console.error('[SUPABASE VIDEO] Could not fetch video to delete:', fetchError)
+      } else {
+        console.log('[SUPABASE VIDEO] Found video to delete:', existingVideo)
+        
+        // Check course ownership
+        if (existingVideo?.course_id) {
+          const { data: course } = await this.supabase
+            .from('courses')
+            .select('id, instructor_id')
+            .eq('id', existingVideo.course_id)
+            .single()
+          
+          const { data: { user } } = await this.supabase.auth.getUser()
+          console.log('[SUPABASE VIDEO] Course instructor:', course?.instructor_id, 'Current user:', user?.id)
+        }
+      }
+      
+      // Attempt deletion
+      const { data, error, count } = await this.supabase
         .from('videos')
         .delete()
         .eq('id', id)
+        .select() // Return deleted rows to confirm
       
       if (error) {
         console.error('[SUPABASE VIDEO] Delete error:', error)
         throw error
+      }
+      
+      console.log('[SUPABASE VIDEO] Delete response - data:', data, 'count:', count)
+      
+      // Verify deletion
+      const { data: checkVideo, error: checkError } = await this.supabase
+        .from('videos')
+        .select('id')
+        .eq('id', id)
+        .single()
+      
+      if (!checkError && checkVideo) {
+        console.error('[SUPABASE VIDEO] Video still exists after delete!', checkVideo)
+        throw new Error('Video deletion failed - video still exists')
+      } else if (checkError?.code === 'PGRST116') {
+        console.log('[SUPABASE VIDEO] Video confirmed deleted (not found)')
       }
       
       console.log('[SUPABASE VIDEO] Video deleted successfully')
@@ -445,6 +498,30 @@ export class SupabaseVideoService {
     } catch (error) {
       console.error('[SUPABASE VIDEO] Update order failed:', error)
       throw error
+    }
+  }
+  
+  /**
+   * Get raw video row from database (internal use)
+   */
+  async getVideoRow(id: string): Promise<VideoRow | null> {
+    try {
+      const { data, error } = await this.supabase
+        .from('videos')
+        .select('*')
+        .eq('id', id)
+        .single()
+      
+      if (error) {
+        if (error.code === 'PGRST116') return null
+        throw error
+      }
+      
+      return data as VideoRow
+      
+    } catch (error) {
+      console.error('[SUPABASE VIDEO] Get video row failed:', error)
+      return null
     }
   }
 }

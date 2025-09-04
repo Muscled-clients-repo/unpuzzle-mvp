@@ -15,6 +15,7 @@ export interface VideoUpload {
   chapterId?: string
   order: number
   transcript?: string
+  backblazeFileId?: string // For deletion later
 }
 
 export interface Chapter {
@@ -292,22 +293,9 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
   },
   
   removeVideo: async (videoId) => {
-    // First try to delete from backend if it exists
-    try {
-      const response = await fetch(`/api/delete-video?videoId=${videoId}`, {
-        method: 'DELETE'
-      })
-      
-      if (!response.ok) {
-        console.error('Failed to delete video from backend')
-      } else {
-        console.log('Video deleted from backend successfully')
-      }
-    } catch (error) {
-      console.error('Error deleting video:', error)
-    }
+    console.log('[STORE] Attempting to delete video:', videoId)
     
-    // Always remove from UI state
+    // Zustand way: Optimistically update UI first
     set(state => ({
       uploadQueue: state.uploadQueue.filter(v => v.id !== videoId),
       courseCreation: state.courseCreation ? {
@@ -319,6 +307,30 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         }))
       } : null
     }))
+    
+    // Professional pattern: Client only sends ID, server handles everything
+    try {
+      console.log('[STORE] Calling delete API for video:', videoId)
+      
+      const response = await fetch(`/api/delete-video/${videoId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      const result = await response.json()
+      
+      if (!response.ok) {
+        console.error('[STORE] Failed to delete video:', result.error)
+        // Could revert UI here if needed by calling loadCourseForEdit
+      } else {
+        console.log('[STORE] Video deleted successfully:', result.message)
+      }
+    } catch (error) {
+      console.error('[STORE] Error calling delete API:', error)
+      // Could revert UI here by calling loadCourseForEdit
+    }
   },
   
   createChapter: (title) => {

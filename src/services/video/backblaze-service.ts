@@ -190,15 +190,30 @@ export class BackblazeService {
     try {
       console.log(`[BACKBLAZE] Deleting file: ${fileName} (ID: ${fileId})`)
       
-      await this.b2.deleteFileVersion({
-        fileId,
-        fileName
-      })
+      // B2 API only needs fileId and fileName for deleteFileVersion
+      // The fileName parameter is just for identification, not matching
+      const deleteParams = {
+        fileId: fileId,
+        fileName: fileName.replace(/\+/g, ' ') // Decode + back to spaces
+      }
+      
+      console.log('[BACKBLAZE] Delete params:', deleteParams)
+      
+      await this.b2.deleteFileVersion(deleteParams)
       
       console.log(`[BACKBLAZE] File deleted successfully: ${fileName}`)
       
-    } catch (error) {
+    } catch (error: any) {
       console.error(`[BACKBLAZE] Delete failed for ${fileName}:`, error)
+      
+      // Log more details about the error
+      if (error.response) {
+        console.error('[BACKBLAZE] Error response:', {
+          status: error.response.status,
+          data: error.response.data
+        })
+      }
+      
       throw error
     }
   }

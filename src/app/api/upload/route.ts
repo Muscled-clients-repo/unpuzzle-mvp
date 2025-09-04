@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     const existingVideos = await videoService.getChapterVideos(courseId, chapterId)
     const nextOrder = existingVideos.length // This will be the next order number
     
-    // 7. Save to database - create VideoUpload object
+    // 7. Save to database - create VideoUpload object with Backblaze file ID
     const videoUpload: VideoUpload = {
       id: videoId,
       name: videoName,
@@ -99,13 +99,17 @@ export async function POST(request: NextRequest) {
       chapterId: chapterId,
       order: nextOrder,
       duration: duration, // Real duration from client
-      thumbnailUrl: undefined
+      thumbnailUrl: undefined,
+      backblazeFileId: uploadResult.fileId // Store the Backblaze file ID for deletion
     }
+    
+    // Pass the Backblaze filename separately to the service
+    const uploadWithFilename = { ...videoUpload, backblazeFileName: fileName } as any
     
     await videoService.createVideoFromUpload(
       courseId,
       chapterId,
-      videoUpload
+      uploadWithFilename
     )
     
     return NextResponse.json({

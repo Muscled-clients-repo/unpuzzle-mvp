@@ -1,5 +1,5 @@
 "use client"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { ErrorBoundary } from "@/components/common"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -41,20 +41,27 @@ export default function MyCoursesPage() {
   // Get authenticated user ID
   const userId = user?.id || profile?.id
   
+  // Track if initial load has completed
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false)
+  
   useEffect(() => {
     if (userId) {
-      loadEnrolledCourses(userId)
+      loadEnrolledCourses(userId).finally(() => {
+        setInitialLoadComplete(true)
+      })
     }
-  }, [userId, loadEnrolledCourses])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]) // Remove loadEnrolledCourses from deps - it's stable
   
   useEffect(() => {
     // Load progress for each enrolled course
-    if (userId && enrolledCourses) {
+    if (userId && enrolledCourses && enrolledCourses.length > 0) {
       enrolledCourses.forEach(course => {
         loadCourseProgress(userId, course.id)
       })
     }
-  }, [enrolledCourses, userId, loadCourseProgress])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enrolledCourses?.length, userId]) // Only re-run when course count changes
   
   // Mock progress data for now - will come from courseProgress once loaded
   const mockProgressData = {
@@ -93,7 +100,7 @@ export default function MyCoursesPage() {
     }
   }
   
-  if (loading) return <LoadingSpinner />
+  if (loading || !initialLoadComplete) return <LoadingSpinner />
   
   if (error) return <ErrorFallback error={error} />
 

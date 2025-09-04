@@ -90,10 +90,12 @@ export class VideoUploadService {
         }
       )
       
-      // Update database with B2 metadata
+      // Update database with B2 metadata including file ID for deletion
       await supabaseVideoService.updateVideo(savedVideo.id, {
         ...savedVideo,
-        url: uploadResult.fileUrl
+        url: uploadResult.fileUrl,
+        backblaze_file_id: uploadResult.fileId,
+        backblaze_url: uploadResult.fileUrl
       })
       
       console.log(`[VIDEO UPLOAD] Complete: ${savedVideo.name}`)
@@ -127,17 +129,25 @@ export class VideoUploadService {
     try {
       console.log(`[VIDEO UPLOAD] Deleting video: ${videoUpload.name}`)
       
-      // Get video from database to get Backblaze file ID
-      const video = await supabaseVideoService.getVideoUpload(videoUpload.id)
+      // Get full video details from database to get Backblaze file ID
+      const videoRow = await supabaseVideoService.getVideoRow(videoUpload.id)
       
-      if (video) {
-        // Delete from database first
-        await supabaseVideoService.deleteVideo(video.id)
+      if (videoRow) {
+        // Delete from Backblaze first if we have the file ID
+        if (videoRow.backblaze_file_id && videoRow.filename) {
+          try {
+            console.log(`[VIDEO UPLOAD] Deleting from Backblaze: ${videoRow.filename}`)
+            await backblazeService.deleteVideo(videoRow.backblaze_file_id, videoRow.filename)
+            console.log(`[VIDEO UPLOAD] Deleted from Backblaze: ${videoRow.filename}`)
+          } catch (b2Error) {
+            console.error(`[VIDEO UPLOAD] Failed to delete from Backblaze:`, b2Error)
+            // Continue with database deletion even if B2 fails
+          }
+        }
         
-        // If we have backend storage info, delete from Backblaze
-        // Note: We'll need to store backblaze_file_id in the database for this to work
-        // For now, we'll skip B2 deletion to avoid errors
-        console.log(`[VIDEO UPLOAD] Deleted from database: ${video.name}`)
+        // Delete from database
+        await supabaseVideoService.deleteVideo(videoUpload.id)
+        console.log(`[VIDEO UPLOAD] Deleted from database: ${videoUpload.name}`)
       }
       
     } catch (error) {
