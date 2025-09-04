@@ -151,6 +151,8 @@ export default function EditCoursePage() {
       }
       
       addVideosToQueue(files)
+      // Reset the input so the same file can be selected again
+      e.target.value = ''
       // Move uploaded videos to the specific chapter
       Array.from(files).forEach((file, index) => {
         const videoId = `video-${Date.now()}-${index}`

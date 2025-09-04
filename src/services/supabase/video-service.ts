@@ -108,6 +108,7 @@ export class SupabaseVideoService {
       console.log('[SUPABASE VIDEO] Creating video record:', videoUpload.name)
       
       const insertData = {
+        id: videoUpload.id, // IMPORTANT: Use the provided UUID
         course_id: courseId,
         chapter_id: chapterId,
         title: videoUpload.name,

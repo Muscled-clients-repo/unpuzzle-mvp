@@ -107,6 +107,8 @@ export default function CreateCoursePage() {
     const files = e.target.files
     if (files && files.length > 0) {
       addVideosToQueue(files)
+      // Reset the input so the same file can be selected again
+      e.target.value = ''
     }
   }
 

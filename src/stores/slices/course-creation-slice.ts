@@ -153,8 +153,12 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         // Extract video duration
         const duration = await getVideoDuration(file)
         
+        // Generate a proper UUID for the video
+        // crypto.randomUUID() is available in modern browsers and Node.js
+        const videoId = crypto.randomUUID()
+        
         return {
-          id: `video-${Date.now()}-${index}`,
+          id: videoId,
           file,
           name: file.name.replace(/\.[^/.]+$/, ''), // Remove extension
           size: file.size,
