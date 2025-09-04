@@ -40,6 +40,7 @@ export default function EditCoursePage() {
   const courseId = params.id as string
   
   const {
+    user,
     courses,
     courseCreation,
     setCourseInfo,
@@ -69,8 +70,10 @@ export default function EditCoursePage() {
     loadCourseForEdit(courseId)
     
     // Also load instructor courses to get additional metadata if needed
-    loadCourses()
-  }, [courseId, loadCourseForEdit, loadCourses])
+    if (user?.id) {
+      loadCourses(user.id)
+    }
+  }, [courseId, loadCourseForEdit, loadCourses, user?.id])
 
   const handleSave = async () => {
     setIsSaving(true)

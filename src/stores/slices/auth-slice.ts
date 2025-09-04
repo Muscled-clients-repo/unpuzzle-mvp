@@ -1,6 +1,10 @@
 import { StateCreator } from 'zustand'
-import { createClient } from '@/lib/supabase/client'
-import { User } from '@supabase/supabase-js'
+
+interface User {
+  id: string
+  email?: string
+  user_metadata?: any
+}
 
 interface AuthState {
   user: User | null
@@ -22,8 +26,6 @@ interface AuthActions {
 }
 
 export interface AuthSlice extends AuthState, AuthActions {}
-
-const supabase = createClient()
 
 // Get initial auth state from localStorage if available
 const getInitialAuthState = () => {
@@ -78,27 +80,10 @@ export const createAuthSlice: StateCreator<AuthSlice> = (set, get) => ({
   setLoading: (loading: boolean) => set({ loading }),
 
   fetchProfile: async (userId: string) => {
-    if (typeof window === 'undefined') return null
-
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single()
-      
-      if (!error && data) {
-        get().setProfile(data)
-        return data
-      } else if (error) {
-        console.error('Error fetching profile:', error)
-        get().setProfile(null)
-      }
-    } catch (error) {
-      console.error('Error fetching profile:', error)
-      get().setProfile(null)
-    }
-    return null
+    // Profile is now fetched via server-side session API
+    // This method is kept for compatibility but delegates to initializeAuth
+    await get().initializeAuth()
+    return get().profile
   },
 
   initializeAuth: async () => {
@@ -109,89 +94,85 @@ export const createAuthSlice: StateCreator<AuthSlice> = (set, get) => ({
     }
 
     try {
-      const { data: { session }, error } = await supabase.auth.getSession()
+      // Get session from server-side auth API instead of client-side Supabase
+      const response = await fetch('/api/auth/session')
+      const data = await response.json()
       
-      get().setUser(session?.user ?? null)
-      
-      if (session?.user) {
-        await get().fetchProfile(session.user.id)
+      if (data.user) {
+        get().setUser(data.user)
+        get().setProfile(data.profile)
       } else {
-        // Clear profile if no user - this handles expired sessions
-        get().setProfile(null)
+        // No authenticated user
         get().setUser(null)
+        get().setProfile(null)
       }
     } catch (error) {
-      console.error('Error getting session:', error)
+      console.error('[AUTH] Failed to fetch session from server:', error)
+      // Clear state on error
+      get().setUser(null)
+      get().setProfile(null)
     } finally {
       set({ loading: false })
     }
   },
 
   signUp: async (email: string, password: string, fullName: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-        },
-      },
-    })
-    
-    if (error) throw error
-    
-    // If signup successful and user is confirmed, sign them in
-    if (data?.user && !data.session) {
-      // User needs to confirm email
-      return { needsEmailConfirmation: true }
-    }
-    
-    // If we have a session, they're already signed in
-    if (data?.session) {
-      get().setUser(data.session.user)
-    }
-    
-    return { needsEmailConfirmation: false }
+    // TODO: Implement server-side signup
+    throw new Error('Signup not yet implemented with server-side auth')
   },
 
   signIn: async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+    const response = await fetch('/api/auth/signin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
     })
     
-    if (error) throw error
+    const data = await response.json()
+    
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to sign in')
+    }
+    
+    // Set user and profile in store
+    if (data.user) {
+      get().setUser(data.user)
+      get().setProfile(data.profile)
+    }
+    
+    // Redirect based on user role
+    const redirectPath = data.profile?.role === 'instructor' ? '/instructor' : '/student'
+    window.location.href = redirectPath
   },
 
   signOut: async () => {
-    const { error } = await supabase.auth.signOut()
-    if (error) throw error
-    
-    // Clear local state and storage
-    get().setUser(null)
-    get().setProfile(null)
-    
+    try {
+      const response = await fetch('/api/auth/signout', { method: 'POST' })
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to sign out')
+      }
+      
+      // Clear local state and storage
+      get().setUser(null)
+      get().setProfile(null)
+      
+      // Redirect to login
+      window.location.href = '/login'
+    } catch (error) {
+      console.error('[AUTH] Sign out error:', error)
+      throw error
+    }
   },
 
   signInWithGoogle: async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
-    
-    if (error) throw error
+    // TODO: Implement server-side OAuth
+    window.location.href = '/api/auth/google'
   },
 
   signInWithGitHub: async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'github',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
-    
-    if (error) throw error
+    // TODO: Implement server-side OAuth
+    window.location.href = '/api/auth/github'
   },
 })

@@ -29,14 +29,17 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Authenticate user and require instructor role
+    console.log('[API] Authenticating upload request...')
     const authResult = await authenticateApiRequest(request, 'instructor')
     
     if (!authResult.success || !authResult.user) {
+      console.error('[API] Authentication failed:', authResult.error)
       return NextResponse.json(
-        { error: authResult.error || 'Authentication required' },
+        { error: authResult.error || 'Authentication failed' },
         { status: 401 }
       )
     }
+    console.log('[API] Authentication successful for user:', authResult.user.id)
 
     // 3. Validate request data
     const formData = await request.formData()

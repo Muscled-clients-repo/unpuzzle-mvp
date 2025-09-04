@@ -42,14 +42,14 @@ import {
 
 export default function TeachCoursesPage() {
   const router = useRouter()
-  const { user } = useAppStore()
-  const { courses, loadCourses, loading, error } = useAppStore()
+  const { user, courses, loadCourses, loading, error } = useAppStore()
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [sortBy, setSortBy] = useState("lastUpdated")
   
   useEffect(() => {
-    // Pass instructor ID if available, otherwise loadCourses will use mock data
+    // Always call loadCourses - it will use mock data if no user
+    // This ensures loading state is properly cleared
     loadCourses(user?.id)
   }, [loadCourses, user?.id])
 

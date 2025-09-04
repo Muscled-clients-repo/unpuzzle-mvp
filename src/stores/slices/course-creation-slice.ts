@@ -87,6 +87,9 @@ export interface CourseCreationSlice {
   loadCourseForEdit: (courseId: string) => void
 }
 
+// Debounce timer for auto-save
+let autoSaveTimer: NodeJS.Timeout | null = null
+
 export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set, get) => ({
   courseCreation: null,
   uploadQueue: [],
@@ -102,10 +105,19 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       } as CourseCreationData
     }))
     
-    // Trigger auto-save if enabled
+    // Debounced auto-save if enabled
     const { courseCreation } = get()
     if (courseCreation?.autoSaveEnabled) {
-      get().saveDraft()
+      // Clear existing timer
+      if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer)
+      }
+      
+      // Set new timer for 2 seconds after last change
+      autoSaveTimer = setTimeout(() => {
+        console.log('[AUTO-SAVE] Triggering debounced save')
+        get().saveDraft()
+      }, 2000)
     }
   },
   
@@ -188,7 +200,8 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         
         const response = await fetch('/api/upload', {
           method: 'POST',
-          body: formData
+          body: formData,
+          credentials: 'include' // Include cookies for authentication
         })
         
         clearInterval(progressInterval)
@@ -316,7 +329,8 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json'
-        }
+        },
+        credentials: 'include' // Include cookies for authentication
       })
       
       const result = await response.json()
@@ -512,20 +526,71 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
   },
   
   saveDraft: async () => {
-    const { courseCreation } = get()
+    const { courseCreation, isAutoSaving } = get()
     
     if (!courseCreation) {
       console.error('No course to save')
       return
     }
 
+    // Prevent concurrent saves
+    if (isAutoSaving) {
+      console.log('[SAVE] Already saving, skipping duplicate save request')
+      return
+    }
+
     set({ isAutoSaving: true })
     
     try {
-      // Check feature flag for real course updates
-      const useRealBackend = process.env.NEXT_PUBLIC_USE_REAL_COURSE_UPDATES === 'true'
+      // Check feature flags for real backend
+      const useRealUpdates = process.env.NEXT_PUBLIC_USE_REAL_COURSE_UPDATES === 'true'
+      const useRealCreation = process.env.NEXT_PUBLIC_USE_REAL_COURSE_CREATION === 'true'
       
-      if (useRealBackend && courseCreation.id) {
+      // If it's a new course without ID and real creation is enabled, create it first
+      if (!courseCreation.id && useRealCreation) {
+        // Check if we're already creating (prevent duplicate creation)
+        const currentState = get()
+        if (currentState.courseCreation?.id) {
+          console.log('[SUPABASE] Course already has ID, skipping creation')
+          set({ isAutoSaving: false })
+          return
+        }
+        
+        console.log('[SUPABASE] Creating new course...', courseCreation.title)
+        
+        // Get user from store
+        const storeState = get() as any
+        const user = storeState.user
+        
+        if (!user?.id) {
+          throw new Error('User not authenticated - please log in')
+        }
+        
+        // Create the course
+        const { createCourse } = await import('@/app/actions/create-course')
+        const newCourse = await createCourse({
+          title: courseCreation.title || 'Untitled Course',
+          description: courseCreation.description || '',
+          status: 'draft' as const,
+          totalVideos: 0,
+          totalDuration: '0h 0m'
+        })
+        
+        // Update the courseCreation with the new ID
+        set(state => ({
+          courseCreation: state.courseCreation ? {
+            ...state.courseCreation,
+            id: newCourse.id,
+            lastSaved: new Date()
+          } : null,
+          isAutoSaving: false
+        }))
+        
+        console.log('[SUPABASE] Course created with ID:', newCourse.id)
+        return
+      }
+      
+      if (useRealUpdates && courseCreation.id) {
         // Import the service dynamically
         const { supabaseCourseService } = await import('@/services/supabase/course-service')
         
@@ -602,13 +667,12 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         } : null
       }))
 
-      // Get instructor ID from Supabase auth
-      const { createClient } = await import('@/lib/supabase/client')
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
+      // Get instructor ID from Zustand (already authenticated via server)
+      const storeState = get() as any
+      const user = storeState.user
       
-      if (!user) {
-        throw new Error('User not authenticated')
+      if (!user?.id) {
+        throw new Error('User not authenticated - please log in')
       }
       
       const instructorId = user.id
@@ -617,8 +681,6 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       const useRealBackend = process.env.NEXT_PUBLIC_USE_REAL_COURSE_CREATION === 'true'
       
       if (useRealBackend) {
-        // Import the service dynamically to avoid circular deps
-        const { supabaseCourseService } = await import('@/services/supabase/course-service')
         
         // Convert courseCreation to InstructorCourse format
         const courseData = {
@@ -637,7 +699,9 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         }
         
         console.log('[SUPABASE] Publishing course...', courseData)
-        const publishedCourse = await supabaseCourseService.createCourse(instructorId, courseData)
+        // Use server action instead of client-side service
+        const { createCourse } = await import('@/app/actions/create-course')
+        const publishedCourse = await createCourse(courseData)
         console.log('[SUPABASE] Course published successfully:', publishedCourse.id)
         
         // Update local state with published status
@@ -712,30 +776,41 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
     
     if (useRealBackend) {
       try {
-        // Import the service dynamically
-        const { supabaseCourseService } = await import('@/services/supabase/course-service')
+        // Get user from Zustand (already authenticated via server)
+        const storeState = get() as any
+        const user = storeState.user
         
-        // Get the authenticated user
-        const { createClient } = await import('@/lib/supabase/client')
-        const supabase = createClient()
-        const { data: { user } } = await supabase.auth.getUser()
-        
-        if (!user) {
-          throw new Error('User not authenticated')
+        if (!user?.id) {
+          console.error('[COURSE EDIT] No authenticated user in store')
+          // Set a default state instead of throwing
+          set({ 
+            courseCreation: {
+              id: courseId,
+              title: 'Loading...',
+              description: '',
+              status: 'draft' as const,
+              chapters: [],
+              lastSaved: new Date()
+            }
+          })
+          return
         }
 
-        // Fetch all courses and find the one to edit
+        // Import the service dynamically
+        const { getInstructorCourses } = await import('@/app/actions/get-instructor-courses')
+        
+        // Fetch all courses using server action
         console.log('[SUPABASE] Loading course for edit:', courseId)
-        const courses = await supabaseCourseService.getInstructorCourses(user.id)
+        const courses = await getInstructorCourses(user.id)
         const course = courses.find(c => c.id === courseId)
         
         if (!course) {
           throw new Error(`Course ${courseId} not found or access denied`)
         }
 
-        // Fetch videos for this course
-        const { supabaseVideoService } = await import('@/services/supabase/video-service')
-        const courseVideos = await supabaseVideoService.getCourseVideos(courseId)
+        // Fetch videos for this course using server action
+        const { getCourseVideos } = await import('@/app/actions/get-course-videos')
+        const courseVideos = await getCourseVideos(courseId)
         console.log(`[SUPABASE] Loaded ${courseVideos.length} videos for course`)
 
         // Convert videos to VideoUpload format and group by chapter

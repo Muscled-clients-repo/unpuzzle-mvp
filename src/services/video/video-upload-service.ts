@@ -5,7 +5,8 @@
  */
 
 import { backblazeService } from './backblaze-service'
-import { supabaseVideoService } from '@/services/supabase/video-service'
+import { SupabaseVideoService } from '@/services/supabase/video-service'
+import { createClient } from '@/lib/supabase/client'
 import type { VideoUpload } from '@/stores/slices/course-creation-slice'
 
 export interface VideoUploadProgress {
@@ -16,6 +17,13 @@ export interface VideoUploadProgress {
 }
 
 export class VideoUploadService {
+  private supabaseVideoService: SupabaseVideoService
+  
+  constructor() {
+    // This service is only used client-side, so we use client auth
+    const supabase = createClient()
+    this.supabaseVideoService = new SupabaseVideoService(supabase)
+  }
   /**
    * Upload video file to Backblaze B2 and save metadata to database
    */
@@ -80,7 +88,7 @@ export class VideoUploadService {
       }
       
       // Save to database
-      const savedVideo = await supabaseVideoService.createVideoFromUpload(
+      const savedVideo = await this.this.supabaseVideoService.createVideoFromUpload(
         courseId,
         chapterId,
         {
@@ -91,7 +99,7 @@ export class VideoUploadService {
       )
       
       // Update database with B2 metadata including file ID for deletion
-      await supabaseVideoService.updateVideo(savedVideo.id, {
+      await this.this.supabaseVideoService.updateVideo(savedVideo.id, {
         ...savedVideo,
         url: uploadResult.fileUrl,
         backblaze_file_id: uploadResult.fileId,
@@ -130,7 +138,7 @@ export class VideoUploadService {
       console.log(`[VIDEO UPLOAD] Deleting video: ${videoUpload.name}`)
       
       // Get full video details from database to get Backblaze file ID
-      const videoRow = await supabaseVideoService.getVideoRow(videoUpload.id)
+      const videoRow = await this.supabaseVideoService.getVideoRow(videoUpload.id)
       
       if (videoRow) {
         // Delete from Backblaze first if we have the file ID
@@ -146,7 +154,7 @@ export class VideoUploadService {
         }
         
         // Delete from database
-        await supabaseVideoService.deleteVideo(videoUpload.id)
+        await this.supabaseVideoService.deleteVideo(videoUpload.id)
         console.log(`[VIDEO UPLOAD] Deleted from database: ${videoUpload.name}`)
       }
       
@@ -161,7 +169,7 @@ export class VideoUploadService {
    */
   async getVideoUploadStatus(videoId: string): Promise<VideoUpload | null> {
     try {
-      return await supabaseVideoService.getVideoUpload(videoId)
+      return await this.supabaseVideoService.getVideoUpload(videoId)
     } catch (error) {
       console.error(`[VIDEO UPLOAD] Failed to get status for ${videoId}:`, error)
       return null
@@ -173,7 +181,7 @@ export class VideoUploadService {
    */
   async getCourseVideoUploads(courseId: string): Promise<VideoUpload[]> {
     try {
-      return await supabaseVideoService.getCourseVideoUploads(courseId)
+      return await this.supabaseVideoService.getCourseVideoUploads(courseId)
     } catch (error) {
       console.error(`[VIDEO UPLOAD] Failed to get course videos:`, error)
       return []

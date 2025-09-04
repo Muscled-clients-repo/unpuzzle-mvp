@@ -26,7 +26,7 @@ export async function authenticateApiRequest(
 ): Promise<AuthResult> {
   try {
     // Create Supabase client with user session (not service client)
-    const supabase = createClient()
+    const supabase = await createClient()
     
     // Get authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -90,7 +90,7 @@ export async function verifyResourceOwnership(
   courseId: string
 ): Promise<boolean> {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
     
     const { data, error } = await supabase
       .from('courses')
@@ -120,7 +120,7 @@ export async function verifyVideoOwnership(
   videoId: string
 ): Promise<{ owns: boolean, courseId?: string }> {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
     
     // Get video with course information
     const { data: video, error: videoError } = await supabase

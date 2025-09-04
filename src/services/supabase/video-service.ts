@@ -527,4 +527,6 @@ export class SupabaseVideoService {
 }
 
 // Export singleton instance
-export const supabaseVideoService = new SupabaseVideoService()
+// Don't export singleton - require explicit client creation
+// export const supabaseVideoService = new SupabaseVideoService()
+// Use: new SupabaseVideoService(supabaseClient) in server context

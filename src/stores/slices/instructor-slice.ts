@@ -2,6 +2,7 @@ import { StateCreator } from 'zustand'
 import { InstructorCourse } from '@/types/domain'
 import { FEATURES } from '@/lib/config/features'
 import { supabaseCourseService } from '@/services/supabase/course-service'
+import { getInstructorCourses } from '@/app/actions/get-instructor-courses'
 
 export interface CourseAnalytics {
   courseId: string
@@ -451,15 +452,15 @@ export const createInstructorSlice: StateCreator<InstructorSlice> = (set, get) =
     try {
       let courses: InstructorCourse[]
       
-      // Check feature flag
+      // Check feature flag and instructor ID
       if (FEATURES.USE_REAL_COURSES_DATA && instructorId) {
-        // Use real Supabase data
+        // Use real Supabase data via server action (no client-side auth)
         console.log('[INSTRUCTOR SLICE] Loading courses from Supabase for instructor:', instructorId)
-        courses = await supabaseCourseService.getInstructorCourses(instructorId)
+        courses = await getInstructorCourses(instructorId)
         console.log('[DATA SOURCE] Loaded', courses.length, 'courses from Supabase')
       } else {
         // Use mock data
-        console.log('[DATA SOURCE] Loading courses from mock data (feature flag off or no instructor ID)')
+        console.log('[DATA SOURCE] Loading courses from mock data (feature flag:', FEATURES.USE_REAL_COURSES_DATA, ', instructor ID:', instructorId, ')')
         courses = mockCourses
       }
       

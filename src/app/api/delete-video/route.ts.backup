@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { backblazeService } from '@/services/video/backblaze-service'
-import { supabaseVideoService } from '@/services/supabase/video-service'
+import { SupabaseVideoService } from '@/services/supabase/video-service'
+import { createServiceClient } from '@/lib/supabase/server'
 import { authenticateApiRequest, validateDeleteRequest, verifyVideoOwnership } from '@/lib/auth/api-auth'
 import { checkRateLimit, rateLimitConfigs } from '@/lib/auth/rate-limit'
 
@@ -74,6 +75,9 @@ export async function DELETE(request: NextRequest) {
     
     if (!backblazeFileId || !backblazeFileName) {
       try {
+        // Create service with proper auth context
+        const supabase = createServiceClient()
+        const supabaseVideoService = new SupabaseVideoService(supabase)
         const video = await supabaseVideoService.getVideoRow(videoId)
         if (video) {
           backblazeFileId = video.backblaze_file_id
