@@ -53,7 +53,8 @@ export default function EditCoursePage() {
     saveDraft,
     isAutoSaving,
     loadCourses,
-    loadCourseForEdit
+    loadCourseForEdit,
+    deleteCourse
   } = useAppStore()
 
   const [isSaving, setIsSaving] = useState(false)
@@ -99,19 +100,10 @@ export default function EditCoursePage() {
 
     setIsSaving(true)
     try {
-      // Use the real backend deletion
-      const useRealBackend = process.env.NEXT_PUBLIC_USE_REAL_COURSE_DELETION === 'true'
-      
-      if (useRealBackend) {
-        const { supabaseCourseService } = await import('@/services/supabase/course-service')
-        console.log('[SUPABASE] Deleting course...', courseCreation.id)
-        await supabaseCourseService.deleteCourse(courseCreation.id)
-        console.log('[SUPABASE] Course deleted successfully')
-      } else {
-        console.log('[MOCK] Deleting course...', courseCreation.title)
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        console.log('[MOCK] Course deleted!')
-      }
+      // Use the instructor store's deleteCourse which now uses the professional pattern
+      console.log('[EDIT PAGE] Deleting course...', courseCreation.id)
+      await deleteCourse(courseCreation.id)
+      console.log('[EDIT PAGE] Course deleted successfully')
       
       // Redirect to courses list after successful deletion
       router.push('/instructor/courses')

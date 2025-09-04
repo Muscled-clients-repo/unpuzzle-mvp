@@ -675,24 +675,42 @@ export const createInstructorSlice: StateCreator<InstructorSlice> = (set, get) =
   },
 
   deleteCourse: async (courseId: string) => {
+    console.log('[INSTRUCTOR SLICE] Deleting course:', courseId)
+    
+    // Professional pattern: Optimistic update first for instant UI feedback
+    const originalCourses = get().courses // Store for potential rollback
+    
+    // 1. Immediately update UI (optimistic update)
+    set(state => ({
+      courses: state.courses.filter(course => course.id !== courseId),
+      error: null // Clear any previous errors
+    }))
+    
+    // 2. Call Server Action (modern professional pattern - no API routes needed)
     try {
-      set({ loading: true, error: null })
-      
       if (FEATURES.USE_REAL_COURSE_DELETION) {
-        await supabaseCourseService.deleteCourse(courseId)
+        // Import and call the server action
+        const { deleteCourse } = await import('@/app/actions/course-actions')
+        const result = await deleteCourse(courseId)
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to delete course')
+        }
+        
+        console.log('[INSTRUCTOR SLICE] Course deleted successfully:', result.message)
+        console.log(`[INSTRUCTOR SLICE] ${result.videosDeleted} videos cleaned up`)
+      } else {
+        console.log('[INSTRUCTOR SLICE] Mock deletion completed')
       }
-      
-      // Remove from local state regardless of backend
-      set(state => ({
-        courses: state.courses.filter(course => course.id !== courseId),
-        loading: false,
-        error: null
-      }))
-      
-      console.log('[INSTRUCTOR SLICE] Deleted course:', courseId)
     } catch (error: any) {
       console.error('[INSTRUCTOR SLICE] Error deleting course:', error)
-      set({ loading: false, error: error.message || 'Failed to delete course' })
+      
+      // Rollback on failure
+      set({
+        courses: originalCourses,
+        error: error.message || 'Failed to delete course'
+      })
+      
       throw error
     }
   },
