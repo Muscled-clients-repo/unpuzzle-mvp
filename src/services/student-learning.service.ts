@@ -2,7 +2,7 @@
 // Step 4: Student Learning Service - Backend Connection
 // This service queries the real database tables created in migrations 005-007
 
-import { createClient } from '@/lib/supabase/client'
+// Removed client import - now uses server actions
 import type { ServiceResult } from '@/types/domain'
 
 // ============================================================
@@ -86,7 +86,7 @@ interface UserLearningStatsData {
 // SERVICE CLASS
 // ============================================================
 export class StudentLearningService {
-  private supabase = createClient()
+  // No longer needs direct Supabase client - uses server actions
 
   /**
    * Get all enrolled courses with full analytics for a student
@@ -94,77 +94,14 @@ export class StudentLearningService {
    */
   async getStudentCoursesWithAnalytics(userId: string): Promise<ServiceResult<EnrollmentWithAnalytics[]>> {
     try {
-      // Query enrollments with course details and analytics
-      const { data: enrollments, error } = await this.supabase
-        .from('enrollments')
-        .select(`
-          *,
-          courses!course_id (
-            id,
-            title,
-            description,
-            thumbnail_url,
-            instructor_id,
-            total_duration,
-            difficulty,
-            price,
-            is_published,
-            created_at,
-            updated_at,
-            videos (
-              id,
-              title,
-              duration,
-              sequence_num
-            )
-          )
-        `)
-        .eq('user_id', userId)
-        .order('last_accessed_at', { ascending: false })
-
-      if (error) {
-        console.error('Error fetching enrollments:', error)
-        return { error: error.message }
-      }
-
-      if (!enrollments || enrollments.length === 0) {
-        return { data: [] }
-      }
-
-      // Get learning struggles for all enrolled courses
-      const courseIds = enrollments.map(e => e.course_id).filter(Boolean)
+      // Use server action instead of direct client query
+      const { getEnrolledCoursesWithAnalytics } = await import('@/app/actions/student-learning-actions')
+      const data = await getEnrolledCoursesWithAnalytics()
       
-      const { data: struggles } = await this.supabase
-        .from('learning_struggles')
-        .select('course_id, concept_name, difficulty_level, status')
-        .eq('user_id', userId)
-        .in('course_id', courseIds)
-        .eq('status', 'active')
-
-      // Get learning milestones
-      const { data: milestones } = await this.supabase
-        .from('learning_milestones')
-        .select('course_id, title, is_achieved, progress_percent')
-        .eq('user_id', userId)
-        .in('course_id', courseIds)
-        .eq('is_achieved', false)
-        .order('sequence_order')
-        .limit(1) // Get next milestone for each course
-
-      // Map struggles and milestones to courses
-      const enrichedEnrollments = enrollments.map(enrollment => {
-        const courseStruggles = struggles?.filter(s => s.course_id === enrollment.course_id) || []
-        const courseMilestones = milestones?.filter(m => m.course_id === enrollment.course_id) || []
-
-        return {
-          ...enrollment,
-          course: enrollment.courses,
-          learning_struggles: courseStruggles,
-          learning_milestones: courseMilestones
-        }
-      })
-
-      return { data: enrichedEnrollments as EnrollmentWithAnalytics[] }
+      return {
+        success: true,
+        data: data as EnrollmentWithAnalytics[]
+      }
     } catch (error) {
       console.error('Service error:', error)
       return { error: error instanceof Error ? error.message : 'Unknown error occurred' }
@@ -176,50 +113,14 @@ export class StudentLearningService {
    */
   async enrollInCourse(userId: string, courseId: string): Promise<ServiceResult<{ success: boolean; enrollmentId: string }>> {
     try {
-      // Check if already enrolled
-      const { data: existing } = await this.supabase
-        .from('enrollments')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('course_id', courseId)
-        .single()
-
-      if (existing) {
-        return { data: { success: true, enrollmentId: existing.id } }
+      // Use server action instead of direct client query
+      const { enrollInCourse } = await import('@/app/actions/student-learning-actions')
+      const result = await enrollInCourse(courseId)
+      
+      return {
+        success: true,
+        data: result
       }
-
-      // Get total videos for the course
-      const { data: videos } = await this.supabase
-        .from('videos')
-        .select('id')
-        .eq('course_id', courseId)
-
-      const totalVideos = videos?.length || 0
-
-      // Create new enrollment
-      const { data: enrollment, error } = await this.supabase
-        .from('enrollments')
-        .insert({
-          user_id: userId,
-          course_id: courseId,
-          total_videos: totalVideos,
-          progress_percent: 0,
-          completed_videos: 0,
-          current_lesson_title: 'Getting Started',
-          estimated_time_remaining_formatted: 'Calculating...'
-        })
-        .select()
-        .single()
-
-      if (error) {
-        console.error('Error creating enrollment:', error)
-        return { error: error.message }
-      }
-
-      // Initialize learning milestones for the course
-      await this.initializeCourseMilestones(userId, courseId)
-
-      return { data: { success: true, enrollmentId: enrollment.id } }
     } catch (error) {
       console.error('Enrollment error:', error)
       return { error: error instanceof Error ? error.message : 'Failed to enroll in course' }
@@ -237,27 +138,14 @@ export class StudentLearningService {
     positionSeconds: number
   ): Promise<ServiceResult<void>> {
     try {
-      const { error } = await this.supabase
-        .from('video_progress')
-        .upsert({
-          user_id: userId,
-          course_id: courseId,
-          video_id: videoId,
-          progress_percent: progressPercent,
-          last_position_seconds: positionSeconds,
-          max_position_reached_seconds: positionSeconds,
-          completed_at: progressPercent >= 95 ? new Date().toISOString() : null,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id,video_id'
-        })
-
-      if (error) {
-        console.error('Error updating video progress:', error)
-        return { error: error.message }
+      // Use server action instead of direct client query
+      const { updateVideoProgress } = await import('@/app/actions/student-learning-actions')
+      const success = await updateVideoProgress(videoId, positionSeconds, positionSeconds * 100 / progressPercent)
+      
+      if (!success) {
+        return { error: 'Failed to update progress' }
       }
 
-      // The database triggers will automatically update enrollment progress
       return { data: undefined }
     } catch (error) {
       console.error('Progress update error:', error)
@@ -270,17 +158,10 @@ export class StudentLearningService {
    */
   async getUserLearningStats(userId: string): Promise<ServiceResult<UserLearningStatsData | null>> {
     try {
-      const { data, error } = await this.supabase
-        .from('user_learning_stats')
-        .select('*')
-        .eq('user_id', userId)
-        .single()
-
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
-        console.error('Error fetching user stats:', error)
-        return { error: error.message }
-      }
-
+      // Use server action instead of direct client query
+      const { getUserLearningStats } = await import('@/app/actions/student-learning-actions')
+      const data = await getUserLearningStats()
+      
       return { data }
     } catch (error) {
       console.error('Stats fetch error:', error)
@@ -300,24 +181,14 @@ export class StudentLearningService {
     response: string
   ): Promise<ServiceResult<void>> {
     try {
-      const { error } = await this.supabase
-        .from('ai_interactions')
-        .insert({
-          user_id: userId,
-          course_id: courseId,
-          video_id: videoId,
-          interaction_type: interactionType,
-          prompt,
-          response,
-          created_at: new Date().toISOString()
-        })
-
-      if (error) {
-        console.error('Error recording AI interaction:', error)
-        return { error: error.message }
+      // Use server action instead of direct client query
+      const { recordAIInteraction } = await import('@/app/actions/student-learning-actions')
+      const result = await recordAIInteraction(courseId, '', videoId || '', prompt, response, interactionType)
+      
+      if (!result) {
+        return { error: 'Failed to record interaction' }
       }
 
-      // The database trigger will automatically increment counters
       return { data: undefined }
     } catch (error) {
       console.error('AI interaction error:', error)
@@ -336,103 +207,18 @@ export class StudentLearningService {
     evidenceType: 'multiple_rewinds' | 'pause_duration' | 'ai_help_requests' | 'quiz_failures' | 'slow_progress'
   ): Promise<ServiceResult<void>> {
     try {
-      // Check if struggle already exists
-      const { data: existing } = await this.supabase
-        .from('learning_struggles')
-        .select('id, difficulty_level')
-        .eq('user_id', userId)
-        .eq('course_id', courseId)
-        .eq('concept_name', conceptName)
-        .eq('status', 'active')
-        .single()
-
-      if (existing) {
-        // Update existing struggle
-        const { error } = await this.supabase
-          .from('learning_struggles')
-          .update({
-            difficulty_level: Math.min(5, existing.difficulty_level + 1),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existing.id)
-
-        if (error) return { error: error.message }
-      } else {
-        // Create new struggle
-        const { error } = await this.supabase
-          .from('learning_struggles')
-          .insert({
-            user_id: userId,
-            course_id: courseId,
-            video_id: videoId,
-            concept_name: conceptName,
-            evidence_type: evidenceType,
-            difficulty_level: 1,
-            status: 'active'
-          })
-
-        if (error) return { error: error.message }
+      // Use server action instead of direct client query
+      const { detectLearningStruggle } = await import('@/app/actions/student-learning-actions')
+      const result = await detectLearningStruggle(courseId, videoId, conceptName, evidenceType)
+      
+      if (!result) {
+        return { error: 'Failed to record struggle' }
       }
 
       return { data: undefined }
     } catch (error) {
       console.error('Struggle detection error:', error)
       return { error: error instanceof Error ? error.message : 'Failed to record struggle' }
-    }
-  }
-
-  /**
-   * Initialize default milestones for a course enrollment
-   */
-  private async initializeCourseMilestones(userId: string, courseId: string): Promise<void> {
-    try {
-      // Get course videos count
-      const { data: videos } = await this.supabase
-        .from('videos')
-        .select('id')
-        .eq('course_id', courseId)
-        .order('sequence_num')
-
-      const totalVideos = videos?.length || 0
-      
-      // Create default milestones
-      const milestones = [
-        {
-          user_id: userId,
-          course_id: courseId,
-          milestone_type: 'module_completion',
-          title: 'Complete first video',
-          target_value: 1,
-          current_value: 0,
-          sequence_order: 1
-        },
-        {
-          user_id: userId,
-          course_id: courseId,
-          milestone_type: 'module_completion',
-          title: 'Complete 50% of course',
-          target_value: Math.floor(totalVideos / 2),
-          current_value: 0,
-          sequence_order: 2
-        },
-        {
-          user_id: userId,
-          course_id: courseId,
-          milestone_type: 'course_completion',
-          title: 'Complete the course',
-          target_value: totalVideos,
-          current_value: 0,
-          sequence_order: 3
-        }
-      ]
-
-      await this.supabase
-        .from('learning_milestones')
-        .insert(milestones)
-        
-    } catch (error) {
-      console.error('Error initializing milestones:', error)
-      // Non-critical error, don't fail enrollment
     }
   }
 

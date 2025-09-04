@@ -408,17 +408,8 @@ export class SupabaseVideoService {
       } else {
         console.log('[SUPABASE VIDEO] Found video to delete:', existingVideo)
         
-        // Check course ownership
-        if (existingVideo?.course_id) {
-          const { data: course } = await this.supabase
-            .from('courses')
-            .select('id, instructor_id')
-            .eq('id', existingVideo.course_id)
-            .single()
-          
-          const { data: { user } } = await this.supabase.auth.getUser()
-          console.log('[SUPABASE VIDEO] Course instructor:', course?.instructor_id, 'Current user:', user?.id)
-        }
+        // Course ownership should be verified by the calling API route, not here
+        console.log('[SUPABASE VIDEO] Deleting video for course:', existingVideo?.course_id)
       }
       
       // Attempt deletion

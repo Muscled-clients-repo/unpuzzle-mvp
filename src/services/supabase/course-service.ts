@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/client'
+// Client import removed - now uses server actions
 import { InstructorCourse } from '@/types/domain'
 import { parseDurationToMinutes } from '@/lib/adapters/course-adapter'
 
@@ -7,25 +7,19 @@ export class SupabaseCourseService {
    * Get all courses for an instructor using the view that returns UI-ready format
    */
   async getInstructorCourses(instructorId: string): Promise<InstructorCourse[]> {
-    const supabase = createClient()
+    // Use server action instead of direct client query
+    const { getInstructorCourses } = await import('@/app/actions/get-instructor-courses')
     
-    // Query the view that returns UI-ready format with all field names matching InstructorCourse
-    const { data, error } = await supabase
-      .from('instructor_courses_view')
-      .select('*')
-      .eq('instructor_id', instructorId)
-      .order('updated_at', { ascending: false })
+    console.log('[SupabaseCourseService] Fetching courses via server action for instructor:', instructorId)
     
-    if (error) {
-      console.error('[SupabaseCourseService] Error fetching courses:', error)
+    try {
+      const courses = await getInstructorCourses()
+      console.log('[SupabaseCourseService] Fetched courses from server action:', courses?.length || 0)
+      return courses || []
+    } catch (error) {
+      console.error('[SupabaseCourseService] Error fetching courses via server action:', error)
       throw error
     }
-    
-    console.log('[SupabaseCourseService] Fetched courses from Supabase:', data?.length || 0)
-    
-    // Data from view already matches InstructorCourse interface exactly
-    // Fields like completionRate, totalVideos, totalDuration, pendingConfusions come pre-formatted
-    return data || []
   }
   
   /**
