@@ -42,19 +42,36 @@ import {
 
 export default function TeachCoursesPage() {
   const router = useRouter()
-  const { user, courses, loadCourses, loading, error } = useAppStore()
+  const { 
+    // Auth state - now with unique property names
+    user, 
+    authLoading, 
+    authError,
+    // Course state (from instructor slice)
+    courses, 
+    loadCourses, 
+    loading: coursesLoading,
+    error: coursesError
+  } = useAppStore()
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [sortBy, setSortBy] = useState("lastUpdated")
+  const [hasInitialized, setHasInitialized] = useState(false)
   
   useEffect(() => {
-    // Always call loadCourses - it will use mock data if no user
-    // This ensures loading state is properly cleared
-    loadCourses(user?.id)
-  }, [loadCourses, user?.id])
+    // Only load courses after auth is complete and we haven't initialized yet
+    if (!authLoading && !hasInitialized) {
+      loadCourses(user?.id)
+      setHasInitialized(true)
+    }
+  }, [authLoading, hasInitialized, loadCourses, user?.id])
 
-  if (loading) return <LoadingSpinner />
-  if (error) return <ErrorFallback error={error} />
+  // Show error state if there's an error
+  const hasError = authError || coursesError
+  
+  if (hasError) return <ErrorFallback error={hasError} />
+  
+  // Use skeleton loading instead of full-page spinner for better UX
 
   const filteredCourses = (courses || []).filter(course => {
     const matchesSearch = course.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -75,6 +92,9 @@ export default function TeachCoursesPage() {
     }
   })
 
+  // Don't show empty state until we've fully initialized and confirmed no courses
+  const shouldShowEmptyState = hasInitialized && !authLoading && !coursesLoading && sortedCourses.length === 0
+
   return (
     <ErrorBoundary>
       <div className="container mx-auto p-6 space-y-6">
@@ -93,68 +113,87 @@ export default function TeachCoursesPage() {
       </div>
 
       {/* Stats Overview */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Courses</CardTitle>
-            <Video className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{(courses || []).length}</div>
-            <p className="text-xs text-muted-foreground">
-              {(courses || []).filter(c => c.status === 'published').length} published
-            </p>
-          </CardContent>
-        </Card>
+      {!hasInitialized || authLoading || coursesLoading ? (
+        // Skeleton loading for stats
+        <div className="grid gap-4 md:grid-cols-4">
+          {[1,2,3,4].map((i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div className="h-4 bg-gradient-to-r from-muted to-muted/50 rounded w-20 animate-pulse" />
+                <div className="h-4 w-4 bg-gradient-to-r from-muted to-muted/50 rounded animate-pulse" />
+              </CardHeader>
+              <CardContent>
+                <div className="h-8 bg-gradient-to-r from-muted to-muted/50 rounded w-12 animate-pulse mb-2" />
+                <div className="h-3 bg-gradient-to-r from-muted to-muted/50 rounded w-16 animate-pulse" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        // Actual stats
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Courses</CardTitle>
+              <Video className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{(courses || []).length}</div>
+              <p className="text-xs text-muted-foreground">
+                {(courses || []).filter(c => c.status === 'published').length} published
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Students</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {(courses || []).reduce((acc, c) => acc + c.students, 0).toLocaleString()}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Across all courses
-            </p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Students</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {(courses || []).reduce((acc, c) => acc + c.students, 0).toLocaleString()}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Across all courses
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              ${(courses || []).reduce((acc, c) => acc + c.revenue, 0).toLocaleString()}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Lifetime earnings
-            </p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                ${(courses || []).reduce((acc, c) => acc + c.revenue, 0).toLocaleString()}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Lifetime earnings
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Completion</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {Math.round(
-                (courses || []).filter(c => c.status === 'published').reduce((acc, c) => acc + c.completionRate, 0) / 
-                Math.max((courses || []).filter(c => c.status === 'published').length, 1)
-              )}%
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Student success rate
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Avg Completion</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {Math.round(
+                  (courses || []).filter(c => c.status === 'published').reduce((acc, c) => acc + c.completionRate, 0) / 
+                  Math.max((courses || []).filter(c => c.status === 'published').length, 1)
+                )}%
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Student success rate
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Filters and Search */}
       <div className="flex flex-col sm:flex-row gap-4">
@@ -193,8 +232,38 @@ export default function TeachCoursesPage() {
       </div>
 
       {/* Courses Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {sortedCourses.map((course) => (
+      {!hasInitialized || authLoading || coursesLoading ? (
+        // Skeleton loading for courses grid
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {[1,2,3,4,5,6].map((i) => (
+            <Card key={i} className="overflow-hidden">
+              <div className="aspect-video bg-gradient-to-r from-muted to-muted/50 animate-pulse" />
+              <CardHeader>
+                <div className="h-6 bg-gradient-to-r from-muted to-muted/50 rounded w-3/4 animate-pulse" />
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {[1,2,3,4,5].map((j) => (
+                    <div key={j} className="flex justify-between">
+                      <div className="h-4 bg-gradient-to-r from-muted to-muted/50 rounded w-20 animate-pulse" />
+                      <div className="h-4 bg-gradient-to-r from-muted to-muted/50 rounded w-12 animate-pulse" />
+                    </div>
+                  ))}
+                  <div className="pt-3 border-t">
+                    <div className="h-3 bg-gradient-to-r from-muted to-muted/50 rounded w-24 animate-pulse" />
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="h-10 bg-gradient-to-r from-muted to-muted/50 rounded flex-1 animate-pulse" />
+                    <div className="h-10 bg-gradient-to-r from-muted to-muted/50 rounded flex-1 animate-pulse" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {sortedCourses.map((course) => (
           <Card key={course.id} className="overflow-hidden">
             <div className="aspect-video relative bg-muted">
               {/* Thumbnail would go here */}
@@ -302,11 +371,12 @@ export default function TeachCoursesPage() {
               </div>
             </CardContent>
           </Card>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Empty State */}
-      {sortedCourses.length === 0 && (
+      {shouldShowEmptyState && (
         <Card className="p-12">
           <div className="text-center">
             <Video className="mx-auto h-12 w-12 text-muted-foreground" />

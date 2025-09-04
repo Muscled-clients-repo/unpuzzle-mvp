@@ -124,8 +124,24 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
   addVideosToQueue: async (files) => {
     const state = get()
     
+    // Check if course has been saved (has an ID)
+    if (!state.courseCreation?.id) {
+      // If we have the required fields, auto-save the course
+      if (state.courseCreation?.title && state.courseCreation?.description) {
+        console.log('[VIDEO UPLOAD] Auto-saving course before video upload...')
+        await get().saveDraft()
+        // Wait for save to complete and ID to be assigned
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      } else {
+        // Can't upload without saving the course first
+        console.error('[VIDEO UPLOAD] Cannot upload videos - please fill in course title and description, then save the course first')
+        alert('Please fill in the course title and description, then click "Save Draft" before uploading videos.')
+        return
+      }
+    }
+    
     // Create Chapter 1 if no chapters exist
-    if (!state.courseCreation?.chapters.length) {
+    if (!get().courseCreation?.chapters.length) {
       get().createChapter('Chapter 1')
     }
     

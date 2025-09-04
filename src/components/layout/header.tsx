@@ -40,15 +40,15 @@ interface HeaderActionsProps {
 }
 
 export function Header({ backButton }: HeaderProps) {
-  const { user, profile, signOut, loading } = useAppStore()
+  const { user, profile, signOut, authLoading } = useAppStore()
   const [hydrated, setHydrated] = useState(false)
   
   useEffect(() => {
     setHydrated(true)
   }, [])
   
-  // Show loading during SSR, initial hydration, or when loading with no user
-  if (!hydrated || (loading && !user)) {
+  // Show loading skeleton only during initial auth check
+  if (!hydrated || authLoading) {
     return (
       <header className="fixed top-0 z-50 w-full border-b bg-background">
         <div className="flex h-16 items-center px-4">

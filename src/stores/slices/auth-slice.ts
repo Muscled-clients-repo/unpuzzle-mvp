@@ -9,7 +9,8 @@ interface User {
 interface AuthState {
   user: User | null
   profile: any | null
-  loading: boolean
+  authLoading: boolean
+  authError: string | null
 }
 
 interface AuthActions {
@@ -22,62 +23,40 @@ interface AuthActions {
   fetchProfile: (userId: string) => Promise<any>
   setUser: (user: User | null) => void
   setProfile: (profile: any | null) => void
-  setLoading: (loading: boolean) => void
+  setAuthLoading: (loading: boolean) => void
+  setAuthError: (error: string | null) => void
 }
 
 export interface AuthSlice extends AuthState, AuthActions {}
 
-// Get initial auth state from localStorage if available
-const getInitialAuthState = () => {
-  if (typeof window === 'undefined') {
-    return { user: null, profile: null, loading: false }
-  }
-  
-  try {
-    const storedUser = localStorage.getItem('unpuzzle-user')
-    const storedProfile = localStorage.getItem('unpuzzle-profile')
-    
-    // Always start with loading true on client to verify with server
-    return {
-      user: storedUser ? JSON.parse(storedUser) : null,
-      profile: storedProfile ? JSON.parse(storedProfile) : null,
-      loading: true
-    }
-  } catch {
-    return { user: null, profile: null, loading: true }
-  }
+// Server-side first approach - no localStorage persistence
+// Start with clean state and let server-side auth hydrate
+const initialState = {
+  user: null,
+  profile: null,
+  authLoading: true, // Always start loading to fetch from server
+  authError: null
 }
-
-const initialState = getInitialAuthState()
 
 export const createAuthSlice: StateCreator<AuthSlice> = (set, get) => ({
   user: initialState.user,
   profile: initialState.profile,
-  loading: initialState.loading,
+  authLoading: initialState.authLoading,
+  authError: initialState.authError,
 
   setUser: (user: User | null) => {
     set({ user })
-    if (typeof window !== 'undefined') {
-      if (user) {
-        localStorage.setItem('unpuzzle-user', JSON.stringify(user))
-      } else {
-        localStorage.removeItem('unpuzzle-user')
-      }
-    }
+    // No localStorage persistence - server-side state is the source of truth
   },
 
   setProfile: (profile: any | null) => {
     set({ profile })
-    if (typeof window !== 'undefined') {
-      if (profile) {
-        localStorage.setItem('unpuzzle-profile', JSON.stringify(profile))
-      } else {
-        localStorage.removeItem('unpuzzle-profile')
-      }
-    }
+    // No localStorage persistence - server-side state is the source of truth
   },
 
-  setLoading: (loading: boolean) => set({ loading }),
+  setAuthLoading: (authLoading: boolean) => set({ authLoading }),
+
+  setAuthError: (authError: string | null) => set({ authError }),
 
   fetchProfile: async (userId: string) => {
     // Profile is now fetched via server-side session API
@@ -89,30 +68,49 @@ export const createAuthSlice: StateCreator<AuthSlice> = (set, get) => ({
   initializeAuth: async () => {
     if (typeof window === 'undefined') {
       // On server, immediately set loading to false
-      set({ loading: false })
+      set({ authLoading: false, authError: null })
       return
     }
+
+    // Clear any previous errors and ensure loading state
+    set({ authLoading: true, authError: null })
 
     try {
       // Get session from server-side auth API instead of client-side Supabase
       const response = await fetch('/api/auth/session')
+      
+      if (!response.ok) {
+        throw new Error(`Session fetch failed: ${response.status}`)
+      }
+      
       const data = await response.json()
       
       if (data.user) {
         get().setUser(data.user)
         get().setProfile(data.profile)
       } else {
-        // No authenticated user
+        // No authenticated user - this is normal, not an error
         get().setUser(null)
         get().setProfile(null)
       }
+      
+      // Clear any previous errors on successful auth check
+      set({ authError: null })
     } catch (error) {
       console.error('[AUTH] Failed to fetch session from server:', error)
-      // Clear state on error
-      get().setUser(null)
-      get().setProfile(null)
+      
+      // Set error state but don't clear user/profile immediately
+      // This allows the UI to show error while maintaining any existing state
+      const errorMessage = error instanceof Error ? error.message : 'Authentication failed'
+      set({ authError: errorMessage })
+      
+      // Only clear user state if we can't reach the server at all
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        get().setUser(null)
+        get().setProfile(null)
+      }
     } finally {
-      set({ loading: false })
+      set({ authLoading: false })
     }
   },
 

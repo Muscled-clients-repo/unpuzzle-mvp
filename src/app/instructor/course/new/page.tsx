@@ -83,28 +83,11 @@ export default function CreateCoursePage() {
     }
   }, [courseCreation?.chapters[0]?.videos.length])
 
-  // Initialize course on mount
+  // Initialize course on mount - but don't save anything until user interacts
   useEffect(() => {
     // Reset the course creation state when component mounts
     // This ensures we don't show data from a previously created course
     resetCourseCreation()
-    
-    // Set up a new empty course after a small delay to ensure reset completes
-    setTimeout(() => {
-      setCourseInfo({
-        title: '',
-        description: '',
-        category: '',
-        level: 'beginner',
-        price: 0,
-        chapters: [],
-        videos: [],
-        status: 'draft',
-        autoSaveEnabled: true
-      })
-      // Auto-create Chapter 1
-      createChapter('Chapter 1')
-    }, 100)
     
     // Only run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -193,7 +176,11 @@ export default function CreateCoursePage() {
               Saving...
             </div>
           )}
-          <Button variant="outline" onClick={saveDraft}>
+          <Button 
+            variant="outline" 
+            onClick={saveDraft}
+            disabled={!courseCreation?.title || !courseCreation?.description}
+          >
             <Save className="mr-2 h-4 w-4" />
             Save Draft
           </Button>
@@ -219,20 +206,24 @@ export default function CreateCoursePage() {
         </button>
         <ChevronRight className="h-4 w-4 text-muted-foreground" />
         <button
-          onClick={() => setCurrentStep('content')}
+          onClick={() => courseCreation?.id && setCurrentStep('content')}
+          disabled={!courseCreation?.id}
           className={cn(
             "flex items-center gap-2 px-4 py-2 rounded-lg transition-colors",
-            currentStep === 'content' ? "bg-primary text-primary-foreground" : "bg-muted"
+            currentStep === 'content' ? "bg-primary text-primary-foreground" : 
+            !courseCreation?.id ? "bg-muted opacity-50 cursor-not-allowed" : "bg-muted"
           )}
         >
           <span className="font-medium">2. Content</span>
         </button>
         <ChevronRight className="h-4 w-4 text-muted-foreground" />
         <button
-          onClick={() => setCurrentStep('review')}
+          onClick={() => courseCreation?.id && (courseCreation?.videos?.length > 0) && setCurrentStep('review')}
+          disabled={!courseCreation?.id || !courseCreation?.videos?.length}
           className={cn(
             "flex items-center gap-2 px-4 py-2 rounded-lg transition-colors",
-            currentStep === 'review' ? "bg-primary text-primary-foreground" : "bg-muted"
+            currentStep === 'review' ? "bg-primary text-primary-foreground" : 
+            (!courseCreation?.id || !courseCreation?.videos?.length) ? "bg-muted opacity-50 cursor-not-allowed" : "bg-muted"
           )}
         >
           <span className="font-medium">3. Review</span>
@@ -256,7 +247,26 @@ export default function CreateCoursePage() {
                   id="title"
                   placeholder="e.g., React Masterclass"
                   value={courseCreation?.title || ''}
-                  onChange={(e) => setCourseInfo({ title: e.target.value })}
+                  onChange={(e) => {
+                    // Initialize course on first interaction
+                    if (!courseCreation) {
+                      setCourseInfo({
+                        title: e.target.value,
+                        description: '',
+                        category: '',
+                        level: 'beginner',
+                        price: 0,
+                        chapters: [],
+                        videos: [],
+                        status: 'draft',
+                        autoSaveEnabled: false // Don't auto-save on creation page
+                      })
+                      // Create first chapter
+                      setTimeout(() => createChapter('Chapter 1'), 100)
+                    } else {
+                      setCourseInfo({ title: e.target.value })
+                    }
+                  }}
                 />
               </div>
               <div className="space-y-2">
@@ -266,7 +276,25 @@ export default function CreateCoursePage() {
                   type="number"
                   placeholder="97"
                   value={courseCreation?.price || 0}
-                  onChange={(e) => setCourseInfo({ price: parseFloat(e.target.value) })}
+                  onChange={(e) => {
+                    // Initialize course on first interaction if not already done
+                    if (!courseCreation) {
+                      setCourseInfo({
+                        title: '',
+                        description: '',
+                        category: '',
+                        level: 'beginner',
+                        price: parseFloat(e.target.value) || 0,
+                        chapters: [],
+                        videos: [],
+                        status: 'draft',
+                        autoSaveEnabled: false
+                      })
+                      setTimeout(() => createChapter('Chapter 1'), 100)
+                    } else {
+                      setCourseInfo({ price: parseFloat(e.target.value) || 0 })
+                    }
+                  }}
                 />
               </div>
             </div>
@@ -277,7 +305,25 @@ export default function CreateCoursePage() {
                 id="description"
                 placeholder="What will students learn in this course?"
                 value={courseCreation?.description || ''}
-                onChange={(e) => setCourseInfo({ description: e.target.value })}
+                onChange={(e) => {
+                  // Initialize course on first interaction if not already done
+                  if (!courseCreation) {
+                    setCourseInfo({
+                      title: '',
+                      description: e.target.value,
+                      category: '',
+                      level: 'beginner',
+                      price: 0,
+                      chapters: [],
+                      videos: [],
+                      status: 'draft',
+                      autoSaveEnabled: false
+                    })
+                    setTimeout(() => createChapter('Chapter 1'), 100)
+                  } else {
+                    setCourseInfo({ description: e.target.value })
+                  }
+                }}
                 rows={4}
               />
             </div>
@@ -320,7 +366,17 @@ export default function CreateCoursePage() {
             </div>
 
             <div className="flex justify-end">
-              <Button onClick={() => setCurrentStep('content')}>
+              <Button 
+                onClick={() => {
+                  // Save draft when moving to content step if we have required fields
+                  if (courseCreation?.title && courseCreation?.description && courseCreation?.price !== undefined) {
+                    saveDraft().then(() => {
+                      setCurrentStep('content')
+                    })
+                  }
+                }}
+                disabled={!courseCreation?.title || !courseCreation?.description || courseCreation?.price === undefined || courseCreation?.price === null}
+              >
                 Next: Add Content
                 <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
