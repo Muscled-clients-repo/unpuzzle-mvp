@@ -160,9 +160,10 @@ export class BackblazeService {
       const result: UploadResult = {
         fileId: response.data.fileId,
         fileName: response.data.fileName,
+        // Use Bunny CDN if configured, fallback to direct B2 URLs
         fileUrl: process.env.BUNNY_CDN_URL 
-          ? `${process.env.BUNNY_CDN_URL}/${response.data.fileName}`
-          : `https://f000.backblazeb2.com/file/${process.env.BACKBLAZE_BUCKET_NAME}/${response.data.fileName}`,
+          ? `${process.env.BUNNY_CDN_URL}/file/${process.env.BACKBLAZE_BUCKET_NAME}/${response.data.fileName}`
+          : `https://f005.backblazeb2.com/file/${process.env.BACKBLAZE_BUCKET_NAME}/${response.data.fileName}`,
         contentLength: response.data.contentLength,
         contentSha1: response.data.contentSha1,
         uploadTimestamp: response.data.uploadTimestamp
