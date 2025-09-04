@@ -591,8 +591,8 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       }
       
       if (useRealUpdates && courseCreation.id) {
-        // Import the service dynamically
-        const { supabaseCourseService } = await import('@/services/supabase/course-service')
+        // Import the server action dynamically
+        const { updateCourse } = await import('@/app/actions/course-actions')
         
         // Prepare update data
         const updateData = {
@@ -606,7 +606,7 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         }
         
         console.log('[SUPABASE] Saving course draft...', courseCreation.id)
-        await supabaseCourseService.updateCourse(courseCreation.id, updateData)
+        await updateCourse(courseCreation.id, updateData)
         console.log('[SUPABASE] Course draft saved successfully')
         
         set(state => ({

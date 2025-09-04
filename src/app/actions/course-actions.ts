@@ -13,6 +13,66 @@ export interface DeleteCourseResult {
 }
 
 /**
+ * Server Action to update a course
+ * Ensures proper authentication and ownership verification
+ */
+export async function updateCourse(courseId: string, updates: any) {
+  const supabase = await createClient()
+  
+  try {
+    // Get authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !user) {
+      throw new Error('Not authenticated')
+    }
+    
+    console.log('[Server Action] Updating course:', courseId, 'by user:', user.id)
+    
+    // First verify ownership
+    const { data: course, error: fetchError } = await supabase
+      .from('courses')
+      .select('instructor_id')
+      .eq('id', courseId)
+      .single()
+    
+    if (fetchError || !course) {
+      console.error('[Server Action] Course not found:', courseId)
+      throw new Error('Course not found')
+    }
+    
+    if (course.instructor_id !== user.id) {
+      console.error('[Server Action] Access denied - user', user.id, 'does not own course', courseId)
+      throw new Error('Access denied - you do not own this course')
+    }
+    
+    // Update the course  
+    const { data, error } = await supabase
+      .from('courses')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', courseId)
+      .eq('instructor_id', user.id) // Extra safety check
+      .select()
+      .single()
+    
+    if (error) {
+      console.error('[Server Action] Error updating course:', error)
+      throw error
+    }
+    
+    console.log('[Server Action] Course updated successfully:', courseId)
+    return data
+    
+  } catch (error) {
+    console.error('[Server Action] Failed to update course:', error)
+    throw error
+  }
+}
+
+/**
  * Server Action to delete a course and all associated resources
  * This follows the professional pattern used by YouTube/Netflix
  * - Authentication is automatic via cookies

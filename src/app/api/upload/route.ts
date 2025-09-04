@@ -56,9 +56,13 @@ export async function POST(request: NextRequest) {
     const duration = formData.get('duration') as string || '0:00'
 
     // 4. Verify course ownership
+    console.log('[API] Verifying ownership - User:', authResult.user.id, 'Course:', courseId)
     const ownsResource = await verifyResourceOwnership(authResult.user.id, courseId)
+    console.log('[API] Ownership check result:', ownsResource)
     
     if (!ownsResource) {
+      // Add more debug info
+      console.error('[API] Ownership check failed for user:', authResult.user.id, 'course:', courseId)
       return NextResponse.json(
         { error: 'Access denied. You can only upload videos to your own courses.' },
         { status: 403 }

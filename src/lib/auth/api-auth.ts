@@ -90,6 +90,7 @@ export async function verifyResourceOwnership(
   courseId: string
 ): Promise<boolean> {
   try {
+    console.log('[API_AUTH] Checking ownership - userId:', userId, 'courseId:', courseId)
     const supabase = await createClient()
     
     const { data, error } = await supabase
@@ -98,11 +99,20 @@ export async function verifyResourceOwnership(
       .eq('id', courseId)
       .single()
 
+    console.log('[API_AUTH] Course query result:', { data, error })
+    
     if (error || !data) {
+      console.error('[API_AUTH] Course not found or error:', error)
       return false
     }
 
-    return data.instructor_id === userId
+    const ownsIt = data.instructor_id === userId
+    console.log('[API_AUTH] Ownership check:', {
+      course_instructor_id: data.instructor_id,
+      requesting_user_id: userId,
+      owns: ownsIt
+    })
+    return ownsIt
   } catch (error) {
     console.error('[API_AUTH] Ownership verification error:', error)
     return false
