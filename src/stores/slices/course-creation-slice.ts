@@ -16,6 +16,7 @@ export interface VideoUpload {
   order: number
   transcript?: string
   backblazeFileId?: string // For deletion later
+  markedForDeletion?: boolean // For deferred deletion
 }
 
 export interface Chapter {
@@ -504,16 +505,62 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
   },
   
   reorderVideosInChapter: (chapterId, videos) => {
-    set(state => ({
-      courseCreation: state.courseCreation ? {
-        ...state.courseCreation,
-        chapters: state.courseCreation.chapters.map(ch => 
-          ch.id === chapterId 
-            ? { ...ch, videos: videos.map((v, index) => ({ ...v, order: index })) }
-            : ch
-        )
-      } : null
-    }))
+    console.log('[REORDER] Called with videos:', videos.map((v, i) => ({ 
+      index: i, 
+      id: v.id, 
+      name: v.name,
+      currentOrder: v.order 
+    })))
+    
+    set(state => {
+      if (!state.courseCreation) return state
+      
+      // Create properly ordered videos with sequential order values
+      const reorderedVideos = videos.map((video, index) => ({
+        ...video,
+        order: index,
+        chapterId: chapterId
+      }))
+      
+      // Create a map for quick lookup
+      const videoMap = new Map(reorderedVideos.map(v => [v.id, v]))
+      
+      // Update the main videos array
+      const updatedMainVideos = state.courseCreation.videos.map(v => {
+        const updatedVideo = videoMap.get(v.id)
+        if (updatedVideo) {
+          // Return the updated video with new order
+          return updatedVideo
+        }
+        // Keep videos from other chapters unchanged
+        return v
+      })
+      
+      // Update chapters
+      const updatedChapters = state.courseCreation.chapters.map(chapter => {
+        if (chapter.id === chapterId) {
+          return {
+            ...chapter,
+            videos: reorderedVideos
+          }
+        }
+        return chapter
+      })
+      
+      console.log('[REORDER] After reorder - main videos:', updatedMainVideos.map(v => ({ 
+        id: v.id, 
+        name: v.name, 
+        order: v.order 
+      })))
+      
+      return {
+        courseCreation: {
+          ...state.courseCreation,
+          videos: updatedMainVideos,
+          chapters: updatedChapters
+        }
+      }
+    })
   },
   
   moveVideoBetweenChapters: (videoId, fromChapterId, toChapterId, newIndex) => {
@@ -622,30 +669,70 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       
       if (useRealUpdates && courseCreation.id) {
         // Import the server action dynamically
-        const { updateCourse } = await import('@/app/actions/course-actions')
+        const courseActions = await import('@/app/actions/course-actions')
         
-        // Prepare update data
-        const updateData = {
-          title: courseCreation.title,
-          description: courseCreation.description,
-          price: courseCreation.price,
-          difficulty: courseCreation.level,
-          totalDuration: courseCreation.totalDuration,
-          // Keep existing status unless changed
-          status: courseCreation.status
+        // Prepare update data - ensure all fields are valid and match database columns
+        const updateData: any = {}
+        
+        if (courseCreation.title !== undefined) updateData.title = courseCreation.title
+        if (courseCreation.description !== undefined) updateData.description = courseCreation.description
+        if (courseCreation.price !== undefined) updateData.price = courseCreation.price
+        if (courseCreation.level) updateData.difficulty = courseCreation.level
+        // Note: totalDuration is a formatted string like "2h 30m", not directly saveable
+        // We would need to convert it to minutes if we want to save it
+        if (courseCreation.status) updateData.status = courseCreation.status
+        
+        // Update video count if we have videos
+        if (courseCreation.videos) {
+          updateData.total_videos = courseCreation.videos.filter(v => v.status === 'complete').length
         }
         
         console.log('[SUPABASE] Saving course draft...', courseCreation.id)
-        await updateCourse(courseCreation.id, updateData)
-        console.log('[SUPABASE] Course draft saved successfully')
+        console.log('[SUPABASE] Update data:', updateData)
         
-        set(state => ({
-          isAutoSaving: false,
-          courseCreation: state.courseCreation ? {
-            ...state.courseCreation,
-            lastSaved: new Date()
-          } : null
-        }))
+        try {
+          await courseActions.updateCourse(courseCreation.id, updateData)
+        
+          // Also save video metadata (name, order, chapter) if there are videos
+          if (courseCreation.videos && courseCreation.videos.length > 0 && courseActions.updateVideoOrders) {
+            console.log('[SUPABASE] Updating video metadata...')
+            console.log('[SUPABASE] Current videos in state:', courseCreation.videos.map(v => ({
+              id: v.id,
+              name: v.name,
+              order: v.order,
+              chapterId: v.chapterId
+            })))
+            
+            // Prepare video data including names - SORT by order to ensure correct sequence
+            const videoUpdates = courseCreation.videos
+              .filter(v => v.id && v.status === 'complete')
+              .sort((a, b) => (a.order || 0) - (b.order || 0))  // Sort by order
+              .map(v => ({
+                id: v.id,
+                title: v.name,  // Include the video name
+                order: v.order !== undefined ? v.order : 0,
+                chapter_id: v.chapterId || 'chapter-1'
+              }))
+            
+            if (videoUpdates.length > 0) {
+              console.log('[SUPABASE] Video updates being sent to database (sorted by order):', JSON.stringify(videoUpdates, null, 2))
+              await courseActions.updateVideoOrders(courseCreation.id, videoUpdates)
+            }
+          }
+          
+          console.log('[SUPABASE] Course draft saved successfully')
+          
+          set(state => ({
+            isAutoSaving: false,
+            courseCreation: state.courseCreation ? {
+              ...state.courseCreation,
+              lastSaved: new Date()
+            } : null
+          }))
+        } catch (error) {
+          console.error('[SUPABASE] Save error details:', error)
+          throw error
+        }
         
       } else {
         // Mock implementation for development or new courses
@@ -712,43 +799,61 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       
       if (useRealBackend) {
         
-        // Convert courseCreation to InstructorCourse format
-        const courseData = {
-          title: courseCreation.title,
-          description: courseCreation.description || '',
-          thumbnail: '/api/placeholder/400/225', // Default thumbnail
-          price: courseCreation.price || 0,
-          difficulty: courseCreation.level || 'beginner',
-          totalVideos: courseCreation.videos.length,
-          totalDuration: '0h 0m', // TODO: Calculate from video durations
-          students: 0,
-          completionRate: 0,
-          revenue: 0,
-          pendingConfusions: 0,
-          status: 'published' as const
+        // Check if course already exists
+        if (courseCreation.id) {
+          // Course already exists, just update its status to published
+          console.log('[SUPABASE] Publishing existing course...', courseCreation.id)
+          
+          const { updateCourse } = await import('@/app/actions/course-actions')
+          await updateCourse(courseCreation.id, { status: 'published' })
+          
+          console.log('[SUPABASE] Course published successfully:', courseCreation.id)
+          
+          // Update local state with published status
+          set(state => ({
+            courseCreation: state.courseCreation ? {
+              ...state.courseCreation,
+              status: 'published' as const
+            } : null
+          }))
+          
+        } else {
+          // This shouldn't happen - course should be created when saving draft
+          // But handle it just in case
+          console.log('[SUPABASE] Creating and publishing new course...')
+          
+          const courseData = {
+            title: courseCreation.title,
+            description: courseCreation.description || '',
+            thumbnail: '/api/placeholder/400/225', // Default thumbnail
+            price: courseCreation.price || 0,
+            difficulty: courseCreation.level || 'beginner',
+            totalVideos: courseCreation.videos.length,
+            totalDuration: '0h 0m', // TODO: Calculate from video durations
+            students: 0,
+            completionRate: 0,
+            revenue: 0,
+            pendingConfusions: 0,
+            status: 'published' as const
+          }
+          
+          const { createCourse } = await import('@/app/actions/create-course')
+          const publishedCourse = await createCourse(courseData)
+          console.log('[SUPABASE] Course created and published:', publishedCourse.id)
+          
+          // Update local state with published status and ID
+          set(state => ({
+            courseCreation: state.courseCreation ? {
+              ...state.courseCreation,
+              id: publishedCourse.id,
+              status: 'published' as const
+            } : null
+          }))
         }
         
-        console.log('[SUPABASE] Publishing course...', courseData)
-        // Use server action instead of client-side service
-        const { createCourse } = await import('@/app/actions/create-course')
-        const publishedCourse = await createCourse(courseData)
-        console.log('[SUPABASE] Course published successfully:', publishedCourse.id)
-        
-        // Update local state with published status
-        set(state => ({
-          courseCreation: state.courseCreation ? {
-            ...state.courseCreation,
-            id: publishedCourse.id,
-            status: 'published' as const
-          } : null
-        }))
-        
-        // Redirect to edit the newly created course
-        if (typeof window !== 'undefined' && courseCreation.id) {
-          console.log('[PUBLISH] Redirecting to edit course:', courseCreation.id)
-          window.location.href = `/instructor/course/${courseCreation.id}/edit`
-        } else {
-          // Fallback to courses list if no ID
+        // Redirect to courses list after publishing
+        if (typeof window !== 'undefined') {
+          console.log('[PUBLISH] Course published! Redirecting to courses list')
           window.location.href = '/instructor/courses'
         }
         
@@ -861,13 +966,14 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           progress: 100,
           url: v.video_url || v.url || v.videoUrl, // Check multiple property names
           thumbnailUrl: v.thumbnailUrl || v.thumbnail_url,
-          chapterId: v.chapterId || v.chapter_id || 'chapter-1',
+          chapterId: v.chapter_id || v.chapterId || 'chapter-1', // Check chapter_id first (database field name)
           order: v.order || 0
         }))
         
         console.log('[SUPABASE] Converted to VideoUploads:', videoUploads.length)
         if (videoUploads.length > 0) {
           console.log('[SUPABASE] First VideoUpload:', videoUploads[0])
+          console.log('[SUPABASE] Video chapter IDs:', videoUploads.map(v => v.chapterId))
         }
 
         // Group videos by chapter
@@ -879,6 +985,8 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           }
           chaptersMap.get(chapterId)!.push(video)
         })
+        
+        console.log('[SUPABASE] Chapters found:', Array.from(chaptersMap.keys()))
 
         // Create chapters array with videos
         const chapters: Chapter[] = Array.from(chaptersMap.entries()).map(([chapterId, videos], index) => ({
@@ -886,7 +994,7 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           title: `Chapter ${index + 1}`,
           description: '',
           order: index,
-          videos: videos.sort((a, b) => a.order - b.order),
+          videos: videos.sort((a, b) => a.order - b.order),  // Sort videos by order
           duration: course.totalDuration || '0h 0m'
         }))
 
@@ -911,7 +1019,7 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           level: (course.difficulty as 'beginner' | 'intermediate' | 'advanced') || 'beginner',
           price: course.price || 0,
           chapters,
-          videos: videoUploads,
+          videos: videoUploads.sort((a, b) => a.order - b.order),  // Sort main videos array by order too
           status: course.status as 'draft' | 'published' | 'under_review',
           totalDuration: course.totalDuration || '0h 0m',
           lastSaved: new Date(),

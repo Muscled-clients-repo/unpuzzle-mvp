@@ -92,8 +92,10 @@ export async function POST(request: NextRequest) {
     const videoService = new SupabaseVideoService(supabase)
     
     // 6. Get existing videos to determine the order
+    console.log(`[API] Getting existing videos for chapter ${chapterId}`)
     const existingVideos = await videoService.getChapterVideos(courseId, chapterId)
     const nextOrder = existingVideos.length // This will be the next order number
+    console.log(`[API] Found ${existingVideos.length} existing videos, next order will be ${nextOrder}`)
     
     // 7. Save to database - create VideoUpload object with Backblaze file ID
     const videoUpload: VideoUpload = {
@@ -120,13 +122,30 @@ export async function POST(request: NextRequest) {
       videoId
     })
     
-    const savedVideo = await videoService.createVideoFromUpload(
-      courseId,
-      chapterId,
-      uploadWithFilename
-    )
-    
-    console.log('[API] Video saved to database:', savedVideo)
+    try {
+      const savedVideo = await videoService.createVideoFromUpload(
+        courseId,
+        chapterId,
+        uploadWithFilename
+      )
+      
+      console.log('[API] Video saved to database successfully:', {
+        id: savedVideo.id,
+        name: savedVideo.name,
+        chapterId: savedVideo.chapterId
+      })
+    } catch (dbError) {
+      console.error('[API] Failed to save video to database:', dbError)
+      console.error('[API] Database error details:', {
+        message: dbError instanceof Error ? dbError.message : 'Unknown error',
+        stack: dbError instanceof Error ? dbError.stack : undefined
+      })
+      
+      // Video is uploaded to Backblaze but not saved to DB
+      // We should probably delete from Backblaze here, but for now just log
+      console.warn('[API] Video uploaded to Backblaze but not saved to database')
+      throw new Error('Failed to save video metadata to database')
+    }
     
     return NextResponse.json({
       success: true,

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAppStore } from "@/stores/app-store"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -8,9 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Select,
   SelectContent,
@@ -18,25 +15,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { 
-  Upload,
-  Plus,
-  Video,
-  Folder,
-  GripVertical,
-  X,
-  Save,
-  ChevronRight,
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  Loader2,
-  FileVideo,
-  ChevronDown,
-  Edit2,
-  Trash2
-} from "lucide-react"
+import { Save, ChevronRight, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+
+// Import our new reusable components
+import { VideoUploader } from "@/components/course/VideoUploader"
+import { ChapterManager } from "@/components/course/ChapterManager"
+import { VideoPreviewModal } from "@/components/course/VideoPreviewModal"
+import { useVideoPreview } from "@/hooks/useVideoPreview"
 
 export default function CreateCoursePage() {
   const router = useRouter()
@@ -59,107 +45,81 @@ export default function CreateCoursePage() {
     publishCourse,
     setCurrentStep,
     resetCourseCreation,
-    toggleAutoSave
   } = useAppStore()
 
-  const [draggedVideo, setDraggedVideo] = useState<string | null>(null)
-  const [draggedChapter, setDraggedChapter] = useState<string | null>(null)
-  const [dragOverChapter, setDragOverChapter] = useState<string | null>(null)
-  const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set())
-  const [editingChapter, setEditingChapter] = useState<string | null>(null)
-  const [chapterTitle, setChapterTitle] = useState("")
-  const [editingVideo, setEditingVideo] = useState<string | null>(null)
-  const [videoTitle, setVideoTitle] = useState("")
-
-  // Auto-expand first chapter when it has videos
-  useEffect(() => {
-    const firstChapter = courseCreation?.chapters[0]
-    if (firstChapter?.id && firstChapter.videos.length > 0) {
-      setExpandedChapters(prev => {
-        const next = new Set(prev)
-        next.add(firstChapter.id)
-        return next
-      })
-    }
-  }, [courseCreation?.chapters[0]?.videos.length])
+  // Use the video preview hook
+  const { previewVideo, isPreviewOpen, openPreview, closePreview } = useVideoPreview()
 
   // Initialize course on mount - but don't save anything until user interacts
   useEffect(() => {
-    // Reset the course creation state when component mounts
-    // This ensures we don't show data from a previously created course
     resetCourseCreation()
+  }, [resetCourseCreation])
+
+  // Handle initial course creation when user starts typing
+  const initializeCourseIfNeeded = (field: any) => {
+    if (!courseCreation) {
+      setCourseInfo({
+        title: '',
+        description: '',
+        category: '',
+        level: 'beginner',
+        price: 0,
+        chapters: [],
+        videos: [],
+        status: 'draft',
+        autoSaveEnabled: false
+      })
+      // Create first chapter after a delay
+      setTimeout(() => createChapter('Chapter 1'), 100)
+    }
+    return field
+  }
+
+  // Handle video upload for a specific chapter
+  const handleVideoUpload = (chapterId: string, files: FileList) => {
+    // Initialize course if needed
+    if (!courseCreation) {
+      alert('Please fill in the course title and description first.')
+      return
+    }
     
-    // Only run once on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Handle file drop
-  const handleFileDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    const files = e.dataTransfer.files
-    if (files.length > 0) {
-      addVideosToQueue(files)
-    }
-  }, [addVideosToQueue])
-
-  // Handle file input
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (files && files.length > 0) {
-      addVideosToQueue(files)
-      // Reset the input so the same file can be selected again
-      e.target.value = ''
-    }
-  }
-
-  // Toggle chapter expansion
-  const toggleChapter = (chapterId: string) => {
-    setExpandedChapters(prev => {
-      const next = new Set(prev)
-      if (next.has(chapterId)) {
-        next.delete(chapterId)
+    // Check if course has been saved
+    if (!courseCreation.id) {
+      if (courseCreation.title && courseCreation.description) {
+        // Auto-save before upload
+        saveDraft().then(() => {
+          addVideosToQueue(files)
+          // Move videos to specific chapter after upload starts
+          setTimeout(() => {
+            Array.from(files).forEach((_, index) => {
+              const videoId = uploadQueue[uploadQueue.length - files.length + index]?.id
+              if (videoId) {
+                moveVideoToChapter(videoId, chapterId)
+              }
+            })
+          }, 100)
+        })
       } else {
-        next.add(chapterId)
+        alert('Please fill in the course title and description, then save the course first.')
       }
-      return next
-    })
-  }
-
-  // Handle video drag start
-  const handleVideoDragStart = (videoId: string) => {
-    setDraggedVideo(videoId)
-  }
-
-  // Handle video drop on chapter
-  const handleVideoDropOnChapter = (chapterId: string) => {
-    if (draggedVideo) {
-      moveVideoToChapter(draggedVideo, chapterId)
-      setDraggedVideo(null)
+    } else {
+      addVideosToQueue(files)
+      // Move videos to specific chapter after upload starts
+      setTimeout(() => {
+        Array.from(files).forEach((_, index) => {
+          const videoId = uploadQueue[uploadQueue.length - files.length + index]?.id
+          if (videoId) {
+            moveVideoToChapter(videoId, chapterId)
+          }
+        })
+      }, 100)
     }
   }
 
-  // Handle chapter reordering
-  const handleChapterDragStart = (chapterId: string) => {
-    setDraggedChapter(chapterId)
+  // Handle moving video between chapters
+  const handleMoveVideo = (videoId: string, fromChapterId: string, toChapterId: string) => {
+    moveVideoToChapter(videoId, toChapterId)
   }
-
-  const handleChapterDrop = (targetChapterId: string) => {
-    if (draggedChapter && draggedChapter !== targetChapterId && courseCreation) {
-      const chapters = [...courseCreation.chapters]
-      const draggedIndex = chapters.findIndex(c => c.id === draggedChapter)
-      const targetIndex = chapters.findIndex(c => c.id === targetChapterId)
-      
-      if (draggedIndex !== -1 && targetIndex !== -1) {
-        const [removed] = chapters.splice(draggedIndex, 1)
-        chapters.splice(targetIndex, 0, removed)
-        reorderChapters(chapters)
-      }
-    }
-    setDraggedChapter(null)
-  }
-
-  // Unassigned videos (not in any chapter)
-  const unassignedVideos = courseCreation?.videos.filter(v => !v.chapterId) || []
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
@@ -250,24 +210,8 @@ export default function CreateCoursePage() {
                   placeholder="e.g., React Masterclass"
                   value={courseCreation?.title || ''}
                   onChange={(e) => {
-                    // Initialize course on first interaction
-                    if (!courseCreation) {
-                      setCourseInfo({
-                        title: e.target.value,
-                        description: '',
-                        category: '',
-                        level: 'beginner',
-                        price: 0,
-                        chapters: [],
-                        videos: [],
-                        status: 'draft',
-                        autoSaveEnabled: false // Don't auto-save on creation page
-                      })
-                      // Create first chapter
-                      setTimeout(() => createChapter('Chapter 1'), 100)
-                    } else {
-                      setCourseInfo({ title: e.target.value })
-                    }
+                    initializeCourseIfNeeded(e.target.value)
+                    setCourseInfo({ title: e.target.value })
                   }}
                 />
               </div>
@@ -279,23 +223,8 @@ export default function CreateCoursePage() {
                   placeholder="97"
                   value={courseCreation?.price || 0}
                   onChange={(e) => {
-                    // Initialize course on first interaction if not already done
-                    if (!courseCreation) {
-                      setCourseInfo({
-                        title: '',
-                        description: '',
-                        category: '',
-                        level: 'beginner',
-                        price: parseFloat(e.target.value) || 0,
-                        chapters: [],
-                        videos: [],
-                        status: 'draft',
-                        autoSaveEnabled: false
-                      })
-                      setTimeout(() => createChapter('Chapter 1'), 100)
-                    } else {
-                      setCourseInfo({ price: parseFloat(e.target.value) || 0 })
-                    }
+                    initializeCourseIfNeeded(e.target.value)
+                    setCourseInfo({ price: parseFloat(e.target.value) || 0 })
                   }}
                 />
               </div>
@@ -308,23 +237,8 @@ export default function CreateCoursePage() {
                 placeholder="What will students learn in this course?"
                 value={courseCreation?.description || ''}
                 onChange={(e) => {
-                  // Initialize course on first interaction if not already done
-                  if (!courseCreation) {
-                    setCourseInfo({
-                      title: '',
-                      description: e.target.value,
-                      category: '',
-                      level: 'beginner',
-                      price: 0,
-                      chapters: [],
-                      videos: [],
-                      status: 'draft',
-                      autoSaveEnabled: false
-                    })
-                    setTimeout(() => createChapter('Chapter 1'), 100)
-                  } else {
-                    setCourseInfo({ description: e.target.value })
-                  }
+                  initializeCourseIfNeeded(e.target.value)
+                  setCourseInfo({ description: e.target.value })
                 }}
                 rows={4}
               />
@@ -334,7 +248,7 @@ export default function CreateCoursePage() {
               <div className="space-y-2">
                 <Label htmlFor="category">Category</Label>
                 <Select 
-                  value={courseCreation?.category || ''}
+                  value={courseCreation?.category || undefined}
                   onValueChange={(value) => setCourseInfo({ category: value })}
                 >
                   <SelectTrigger>
@@ -370,7 +284,6 @@ export default function CreateCoursePage() {
             <div className="flex justify-end">
               <Button 
                 onClick={() => {
-                  // Save draft when moving to content step if we have required fields
                   if (courseCreation?.title && courseCreation?.description && courseCreation?.price !== undefined) {
                     saveDraft().then(() => {
                       setCurrentStep('content')
@@ -389,302 +302,42 @@ export default function CreateCoursePage() {
 
       {currentStep === 'content' && (
         <div className="grid gap-6 lg:grid-cols-3">
-          {/* Left: Video Upload & Unassigned Videos */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* Upload Area */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Upload Videos</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div
-                  className="border-2 border-dashed rounded-lg p-8 text-center hover:border-primary transition-colors"
-                  onDrop={handleFileDrop}
-                  onDragOver={(e) => e.preventDefault()}
-                >
-                  <Upload className="mx-auto h-12 w-12 text-muted-foreground" />
-                  <p className="mt-2 text-sm font-medium">
-                    Drag & drop video files here
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    or click to browse
-                  </p>
-                  <input
-                    type="file"
-                    multiple
-                    accept="video/*"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                    id="video-upload"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-4"
-                    onClick={() => document.getElementById('video-upload')?.click()}
-                  >
-                    Select Files
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Upload Queue */}
-            {uploadQueue.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Uploading</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {uploadQueue.map((video) => (
-                    <div key={video.id} className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm truncate">{video.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {video.progress}%
-                        </span>
-                      </div>
-                      <Progress value={video.progress} className="h-2" />
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
-
+          {/* Left: Video Upload Area */}
+          <div className="lg:col-span-1">
+            <VideoUploader
+              onFilesSelected={(files) => {
+                if (courseCreation?.chapters?.length) {
+                  handleVideoUpload(courseCreation.chapters[0].id, files)
+                } else {
+                  createChapter('Chapter 1')
+                  setTimeout(() => {
+                    if (courseCreation?.chapters?.[0]) {
+                      handleVideoUpload(courseCreation.chapters[0].id, files)
+                    }
+                  }, 100)
+                }
+              }}
+              uploadQueue={uploadQueue}
+            />
           </div>
 
-          {/* Right: Chapter Organization */}
+          {/* Right: Chapter Management */}
           <div className="lg:col-span-2">
             <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle>Course Structure</CardTitle>
-                    <CardDescription>
-                      Organize your videos into chapters
-                    </CardDescription>
-                  </div>
-                  <Button onClick={() => createChapter(`Chapter ${(courseCreation?.chapters.length || 0) + 1}`)}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Chapter
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                    {courseCreation?.chapters.map((chapter, index) => (
-                      <div
-                        key={chapter.id}
-                        draggable
-                        onDragStart={() => handleChapterDragStart(chapter.id)}
-                        onDrop={() => handleChapterDrop(chapter.id)}
-                        onDragOver={(e) => {
-                          e.preventDefault()
-                          setDragOverChapter(chapter.id)
-                        }}
-                        onDragLeave={() => setDragOverChapter(null)}
-                        className={cn(
-                          "border rounded-lg transition-colors",
-                          dragOverChapter === chapter.id && "border-primary bg-primary/5"
-                        )}
-                      >
-                        <div className="p-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <GripVertical className="h-4 w-4 text-muted-foreground cursor-move" />
-                              <button
-                                onClick={() => toggleChapter(chapter.id)}
-                                className="flex items-center gap-2"
-                              >
-                                {expandedChapters.has(chapter.id) ? (
-                                  <ChevronDown className="h-4 w-4" />
-                                ) : (
-                                  <ChevronRight className="h-4 w-4" />
-                                )}
-                                {editingChapter === chapter.id ? (
-                                  <Input
-                                    value={chapterTitle}
-                                    onChange={(e) => setChapterTitle(e.target.value)}
-                                    onBlur={() => {
-                                      updateChapter(chapter.id, { title: chapterTitle })
-                                      setEditingChapter(null)
-                                    }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        updateChapter(chapter.id, { title: chapterTitle })
-                                        setEditingChapter(null)
-                                      }
-                                    }}
-                                    className="h-8 w-48"
-                                    autoFocus
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
-                                ) : (
-                                  <h3 className="font-medium">
-                                    {index + 1}. {chapter.title}
-                                  </h3>
-                                )}
-                              </button>
-                              <Badge variant="secondary">
-                                {chapter.videos.length} videos
-                              </Badge>
-                              {chapter.duration && (
-                                <span className="text-sm text-muted-foreground">
-                                  {chapter.duration}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setEditingChapter(chapter.id)
-                                  setChapterTitle(chapter.title)
-                                }}
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={() => {
-                                  if (chapter.videos.length > 0) {
-                                    const remainingChapters = courseCreation?.chapters.filter(ch => ch.id !== chapter.id) || []
-                                    const targetChapter = remainingChapters[0]?.title || 'New Chapter 1'
-                                    if (confirm(`Delete "${chapter.title}"? ${chapter.videos.length} video(s) will be moved to "${targetChapter}".`)) {
-                                      deleteChapter(chapter.id)
-                                    }
-                                  } else {
-                                    deleteChapter(chapter.id)
-                                  }
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-
-                          {/* Chapter Videos */}
-                          {expandedChapters.has(chapter.id) && (
-                            <div
-                              className="mt-4 space-y-2 min-h-[100px] p-3 bg-muted/50 rounded-lg"
-                              onDrop={(e) => {
-                                e.preventDefault()
-                                e.stopPropagation()
-                                handleVideoDropOnChapter(chapter.id)
-                              }}
-                              onDragOver={(e) => e.preventDefault()}
-                            >
-                              {chapter.videos.length === 0 ? (
-                                <p className="text-sm text-muted-foreground text-center py-8">
-                                  Drag videos here to add them to this chapter
-                                </p>
-                              ) : (
-                                chapter.videos.map((video, videoIndex) => (
-                                  <div
-                                    key={video.id}
-                                    draggable={video.status !== 'uploading'}
-                                    onDragStart={() => handleVideoDragStart(video.id)}
-                                    className={cn(
-                                      "flex items-center gap-3 p-2 bg-background rounded hover:bg-muted/50 group",
-                                      video.status === 'uploading' ? "opacity-70" : "cursor-move"
-                                    )}
-                                  >
-                                    {video.status === 'uploading' ? (
-                                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                                    ) : (
-                                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                                    )}
-                                    <span className="text-sm text-muted-foreground">
-                                      {videoIndex + 1}.
-                                    </span>
-                                    <FileVideo className={cn(
-                                      "h-4 w-4",
-                                      video.status === 'complete' ? "text-green-600" : 
-                                      video.status === 'error' ? "text-red-600" : ""
-                                    )} />
-                                    <div className="flex-1">
-                                      {editingVideo === video.id ? (
-                                        <Input
-                                          value={videoTitle}
-                                          onChange={(e) => setVideoTitle(e.target.value)}
-                                          onBlur={() => {
-                                            updateVideoName(video.id, videoTitle)
-                                            setEditingVideo(null)
-                                          }}
-                                          onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                              updateVideoName(video.id, videoTitle)
-                                              setEditingVideo(null)
-                                            }
-                                            if (e.key === 'Escape') {
-                                              setEditingVideo(null)
-                                            }
-                                          }}
-                                          className="h-7 text-sm"
-                                          autoFocus
-                                          onClick={(e) => e.stopPropagation()}
-                                        />
-                                      ) : (
-                                        <div
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            setEditingVideo(video.id)
-                                            setVideoTitle(video.name)
-                                          }}
-                                          className="cursor-text hover:bg-muted px-2 py-0.5 -mx-2 rounded"
-                                        >
-                                          <p className="text-sm">{video.name}</p>
-                                          {video.status === 'uploading' ? (
-                                            <div className="flex items-center gap-2">
-                                              <Progress value={video.progress || 0} className="h-1 flex-1" />
-                                              <span className="text-xs text-muted-foreground">
-                                                {video.progress || 0}%
-                                              </span>
-                                            </div>
-                                          ) : video.duration ? (
-                                            <p className="text-xs text-muted-foreground">
-                                              {video.duration}
-                                            </p>
-                                          ) : null}
-                                        </div>
-                                      )}
-                                    </div>
-                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-6 w-6"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          setEditingVideo(video.id)
-                                          setVideoTitle(video.name)
-                                        }}
-                                      >
-                                        <Edit2 className="h-3 w-3" />
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-6 w-6"
-                                        onClick={() => removeVideo(video.id)}
-                                      >
-                                        <X className="h-3 w-3" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ))
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+              <CardContent className="pt-6">
+                <ChapterManager
+                  chapters={courseCreation?.chapters || []}
+                  onCreateChapter={createChapter}
+                  onUpdateChapter={updateChapter}
+                  onDeleteChapter={deleteChapter}
+                  onReorderChapters={reorderChapters}
+                  onVideoUpload={handleVideoUpload}
+                  onVideoRename={updateVideoName}
+                  onVideoDelete={removeVideo}
+                  onVideoPreview={openPreview}
+                  onMoveVideo={handleMoveVideo}
+                  uploadQueue={uploadQueue}
+                />
               </CardContent>
             </Card>
           </div>
@@ -747,6 +400,13 @@ export default function CreateCoursePage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Video Preview Modal */}
+      <VideoPreviewModal
+        video={previewVideo}
+        isOpen={isPreviewOpen}
+        onClose={closePreview}
+      />
     </div>
   )
 }

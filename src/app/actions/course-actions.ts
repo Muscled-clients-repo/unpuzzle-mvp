@@ -73,6 +73,108 @@ export async function updateCourse(courseId: string, updates: any) {
 }
 
 /**
+ * Server Action to update video metadata in a course
+ * Used when reordering videos, renaming them, or moving between chapters
+ */
+export async function updateVideoOrders(
+  courseId: string, 
+  videoOrders: Array<{ id: string; title?: string; order: number; chapter_id: string }>
+) {
+  const supabase = await createClient()
+  
+  try {
+    // Get authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !user) {
+      throw new Error('Not authenticated')
+    }
+    
+    console.log('[Server Action] Updating video orders for course:', courseId)
+    console.log('[Server Action] Video updates received:', videoOrders)
+    
+    // Verify ownership of the course
+    const { data: course, error: fetchError } = await supabase
+      .from('courses')
+      .select('instructor_id')
+      .eq('id', courseId)
+      .single()
+    
+    if (fetchError || !course) {
+      throw new Error('Course not found')
+    }
+    
+    if (course.instructor_id !== user.id) {
+      throw new Error('Access denied - you do not own this course')
+    }
+    
+    // First, temporarily set all videos to have order = -1 to avoid unique constraint conflicts
+    // This is necessary because we can't have duplicate orders while updating
+    const videoIds = videoOrders.map(v => v.id)
+    
+    const { error: resetError } = await supabase
+      .from('videos')
+      .update({ 
+        order: -1,
+        updated_at: new Date().toISOString()
+      })
+      .in('id', videoIds)
+      .eq('course_id', courseId)
+    
+    if (resetError) {
+      console.error('[Server Action] Failed to reset video orders:', resetError)
+    }
+    
+    // Now update each video with its new metadata
+    for (const video of videoOrders) {
+      const updateData: any = {
+        order: video.order,  // This will be properly escaped as "order" by Supabase
+        chapter_id: video.chapter_id,
+        updated_at: new Date().toISOString()
+      }
+      
+      // Only update title if it's provided
+      if (video.title !== undefined) {
+        updateData.title = video.title
+      }
+      
+      console.log(`[Server Action] Updating video ${video.id} with order ${video.order}`)
+      
+      const { data: updatedVideo, error: updateError } = await supabase
+        .from('videos')
+        .update(updateData)
+        .eq('id', video.id)
+        .eq('course_id', courseId) // Extra safety check
+        .select()
+        .single()
+      
+      if (updateError) {
+        console.error(`[Server Action] Failed to update video ${video.id}:`, updateError)
+        console.error('[Server Action] Error details:', {
+          message: updateError.message,
+          details: updateError.details,
+          hint: updateError.hint
+        })
+        // Continue updating other videos even if one fails
+      } else {
+        console.log(`[Server Action] Successfully updated video:`, {
+          id: updatedVideo.id,
+          title: updatedVideo.title,
+          order: updatedVideo.order
+        })
+      }
+    }
+    
+    console.log('[Server Action] Video orders updated successfully')
+    return { success: true }
+    
+  } catch (error) {
+    console.error('[Server Action] Failed to update video orders:', error)
+    throw error
+  }
+}
+
+/**
  * Server Action to delete a course and all associated resources
  * This follows the professional pattern used by YouTube/Netflix
  * - Authentication is automatic via cookies

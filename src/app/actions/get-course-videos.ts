@@ -39,12 +39,12 @@ export async function getCourseVideos(courseId: string): Promise<VideoData[]> {
     
     console.log('[Server Action] Found videos:', data?.length || 0, 'for course:', courseId)
     if (data && data.length > 0) {
-      console.log('[Server Action] First video:', {
-        id: data[0].id,
-        title: data[0].title,
-        course_id: data[0].course_id,
-        chapter_id: data[0].chapter_id
-      })
+      console.log('[Server Action] Videos with order:', data.map(v => ({
+        id: v.id,
+        title: v.title,
+        order: v.order,
+        chapter_id: v.chapter_id
+      })))
     }
     
     return data || []
