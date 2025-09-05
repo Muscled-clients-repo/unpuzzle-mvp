@@ -12,6 +12,13 @@ Instead of replacing everything at once, we'll:
 4. Clean up types as we go
 5. Delete old state only when everything works
 
+## ⚠️ IMPORTANT: Checkpoint Process
+**Each phase has a CHECKPOINT where work MUST stop for verification.**
+- Claude Code will complete the phase then STOP
+- You must test and verify everything works
+- Give explicit permission to continue to next phase
+- If something breaks, we fix it before moving forward
+
 ## Phase 1: Create Clean Normalized Types (Day 1)
 **Goal:** Define proper types for the NEW structure only
 
@@ -65,6 +72,14 @@ export interface NormalizedState {
 - **Single source of truth:** Each video's `order` field is the ONLY place order is stored
 - **No redundant arrays:** No separate videoOrder array that could conflict
 
+### 🔴 CHECKPOINT 1: Types Verification
+**STOP HERE - Do not proceed to Phase 2 until:**
+- [ ] Run `npm run build` - must compile without errors
+- [ ] Check `/src/types/normalized.ts` exists with correct types
+- [ ] User confirms: "Types look good, continue to Phase 2"
+
+---
+
 ## Phase 2: Build Parallel Normalized Store (Day 1-2)
 **Goal:** Add normalized state without breaking existing state
 
@@ -99,6 +114,15 @@ export interface AppStore extends
 - Old UI keeps working
 - Can test normalized state separately
 - No risk of breaking existing features
+
+### 🔴 CHECKPOINT 2: Parallel Store Verification
+**STOP HERE - Do not proceed to Phase 3 until:**
+- [ ] App still runs without any errors
+- [ ] Existing features work exactly as before
+- [ ] Console shows both old and new state structures
+- [ ] User confirms: "App still works, continue to Phase 3"
+
+---
 
 ## Phase 3: Create Compatibility Selectors (Day 2)
 **Goal:** Make normalized state look like old state to UI
@@ -138,6 +162,15 @@ export function getAllVideosOrdered(state: NormalizedState): any[] {
 - Normalized state fixes ordering issues
 - Can return 'any' to avoid type conflicts
 
+### 🔴 CHECKPOINT 3: Selectors Working
+**STOP HERE - Do not proceed to Phase 4 until:**
+- [ ] Selectors return correct data format
+- [ ] Test selector output matches old state structure
+- [ ] No TypeScript errors with selectors
+- [ ] User confirms: "Selectors work, continue to Phase 4"
+
+---
+
 ## Phase 4: Migrate Features Incrementally (Days 3-7)
 **Goal:** Switch features to normalized state one at a time
 
@@ -157,12 +190,26 @@ const reorderVideos = (videos: any[]) => {
 }
 ```
 
+### 🔴 CHECKPOINT 4A: Video Reordering Fixed
+**STOP HERE after implementing video reordering - Do not proceed until:**
+- [ ] Drag and drop videos to reorder
+- [ ] Click save - order persists
+- [ ] Reload page - order is maintained
+- [ ] User confirms: "VIDEO REORDERING WORKS! Continue to next feature"
+
 ### Step 4.2: Migration Order
-1. **Video Reordering** (broken, fix first)
-2. **Video Upload** (create in normalized from start)
-3. **Course Edit** (high value feature)
-4. **Course List** (read-only, easy)
-5. **Course Creation** (complex, do last)
+1. **Video Reordering** (broken, fix first) - CHECKPOINT 4A
+2. **Video Upload** (create in normalized from start) - CHECKPOINT 4B  
+3. **Course Edit** (high value feature) - CHECKPOINT 4C
+4. **Course List** (read-only, easy) - CHECKPOINT 4D
+5. **Course Creation** (complex, do last) - CHECKPOINT 4E
+
+### 🔴 CHECKPOINT 4B-4E: After Each Feature Migration
+**STOP after EACH feature - verify:**
+- [ ] Feature works with normalized state
+- [ ] Old features still work
+- [ ] No console errors
+- [ ] User confirms: "Feature X works, continue"
 
 ### Step 4.3: Component Migration Pattern
 For each component:
@@ -216,6 +263,14 @@ Before removing old state:
 2. Run app for a day
 3. If no issues, delete old state
 4. Celebrate! 🎉
+
+### 🔴 CHECKPOINT 5: Final Verification
+**STOP HERE - Final checks before removing old state:**
+- [ ] ALL features work with normalized state
+- [ ] Video reordering is perfect
+- [ ] No references to old state remain
+- [ ] Run full app test for 24 hours
+- [ ] User confirms: "Everything works! Remove old state"
 
 ## Implementation Timeline
 
@@ -306,9 +361,23 @@ Start with Phase 1 (normalized types) and Phase 2 (parallel state). You'll see i
 ## Next Concrete Steps
 
 1. Create `/src/types/normalized.ts` with clean types
-2. Add normalized slice to store (keep old slice!)
-3. Fix video reordering using normalized state
-4. Verify it works
-5. Continue migration at comfortable pace
+2. **WAIT FOR CHECKPOINT 1 APPROVAL**
+3. Add normalized slice to store (keep old slice!)
+4. **WAIT FOR CHECKPOINT 2 APPROVAL**
+5. Create selectors
+6. **WAIT FOR CHECKPOINT 3 APPROVAL**
+7. Fix video reordering using normalized state
+8. **WAIT FOR CHECKPOINT 4A APPROVAL** 
+9. Continue migration with remaining features
+10. **WAIT FOR APPROVAL AFTER EACH FEATURE**
+
+## 🛑 Critical Rule for Implementation
+
+**Claude Code MUST STOP at each checkpoint and wait for explicit user permission to continue.**
+
+Example interaction:
+- Claude: "Phase 1 complete. Types created. CHECKPOINT 1 reached. Please test and confirm to continue."
+- User: "Tested, everything compiles. Continue to Phase 2."
+- Claude: "Starting Phase 2..."
 
 Remember: **Working software with messy types beats broken software with perfect types!**
