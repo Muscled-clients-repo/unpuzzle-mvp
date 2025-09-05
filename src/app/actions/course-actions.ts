@@ -27,7 +27,6 @@ export async function updateCourse(courseId: string, updates: any) {
       throw new Error('Not authenticated')
     }
     
-    console.log('[Server Action] Updating course:', courseId, 'by user:', user.id)
     
     // First verify ownership
     const { data: course, error: fetchError } = await supabase
@@ -37,12 +36,10 @@ export async function updateCourse(courseId: string, updates: any) {
       .single()
     
     if (fetchError || !course) {
-      console.error('[Server Action] Course not found:', courseId)
       throw new Error('Course not found')
     }
     
     if (course.instructor_id !== user.id) {
-      console.error('[Server Action] Access denied - user', user.id, 'does not own course', courseId)
       throw new Error('Access denied - you do not own this course')
     }
     
@@ -59,15 +56,12 @@ export async function updateCourse(courseId: string, updates: any) {
       .single()
     
     if (error) {
-      console.error('[Server Action] Error updating course:', error)
       throw error
     }
     
-    console.log('[Server Action] Course updated successfully:', courseId)
     return data
     
   } catch (error) {
-    console.error('[Server Action] Failed to update course:', error)
     throw error
   }
 }
@@ -90,8 +84,6 @@ export async function updateVideoOrders(
       throw new Error('Not authenticated')
     }
     
-    console.log('[Server Action] Updating video orders for course:', courseId)
-    console.log('[Server Action] Video updates received:', videoOrders)
     
     // Verify ownership of the course
     const { data: course, error: fetchError } = await supabase
@@ -108,25 +100,32 @@ export async function updateVideoOrders(
       throw new Error('Access denied - you do not own this course')
     }
     
-    // First, temporarily set all videos to have order = -1 to avoid unique constraint conflicts
-    // This is necessary because we can't have duplicate orders while updating
-    const videoIds = videoOrders.map(v => v.id)
+    // First, temporarily set ALL videos in affected chapters to have order = NULL
+    // This avoids the unique constraint violation (course_id, chapter_id, order)
+    const chapterIds = [...new Set(videoOrders.map(v => v.chapter_id))]
     
     const { error: resetError } = await supabase
       .from('videos')
       .update({ 
-        order: -1,
+        order: null,  // Use NULL instead of -1 to avoid constraint violation
         updated_at: new Date().toISOString()
       })
-      .in('id', videoIds)
+      .in('chapter_id', chapterIds)
       .eq('course_id', courseId)
     
     if (resetError) {
-      console.error('[Server Action] Failed to reset video orders:', resetError)
+      throw resetError
     }
     
     // Now update each video with its new metadata
-    for (const video of videoOrders) {
+    // IMPORTANT: Sort by order to update in sequence (0, 1, 2, etc)
+    // Filter out any videos that might have null order from previous operations
+    const sortedVideoOrders = [...videoOrders]
+      .filter(v => v.order !== null && v.order !== undefined)
+      .sort((a, b) => a.order - b.order)
+    
+    
+    for (const video of sortedVideoOrders) {
       const updateData: any = {
         order: video.order,  // This will be properly escaped as "order" by Supabase
         chapter_id: video.chapter_id,
@@ -138,7 +137,6 @@ export async function updateVideoOrders(
         updateData.title = video.title
       }
       
-      console.log(`[Server Action] Updating video ${video.id} with order ${video.order}`)
       
       const { data: updatedVideo, error: updateError } = await supabase
         .from('videos')
@@ -149,27 +147,14 @@ export async function updateVideoOrders(
         .single()
       
       if (updateError) {
-        console.error(`[Server Action] Failed to update video ${video.id}:`, updateError)
-        console.error('[Server Action] Error details:', {
-          message: updateError.message,
-          details: updateError.details,
-          hint: updateError.hint
-        })
-        // Continue updating other videos even if one fails
-      } else {
-        console.log(`[Server Action] Successfully updated video:`, {
-          id: updatedVideo.id,
-          title: updatedVideo.title,
-          order: updatedVideo.order
-        })
+        throw updateError
       }
     }
     
-    console.log('[Server Action] Video orders updated successfully')
+    
     return { success: true }
     
   } catch (error) {
-    console.error('[Server Action] Failed to update video orders:', error)
     throw error
   }
 }
@@ -183,10 +168,8 @@ export async function updateVideoOrders(
  * - Backblaze cleanup handled server-side
  */
 export async function deleteCourse(courseId: string): Promise<DeleteCourseResult> {
-  console.log('[SERVER ACTION] deleteCourse function called with ID:', courseId)
   
   try {
-    console.log('[SERVER ACTION] Starting delete process for course:', courseId)
     
     // Get authenticated user from cookies (automatic with server client)
     const supabase = await createClient()
@@ -228,15 +211,12 @@ export async function deleteCourse(courseId: string): Promise<DeleteCourseResult
       }
     }
     
-    console.log(`[SERVER ACTION] User ${user.id} authorized to delete course ${courseId}`)
     
     // Use service client for deletion (bypasses RLS)
     let serviceClient;
     try {
       serviceClient = createServiceClient()
-      console.log('[SERVER ACTION] Service client created successfully')
     } catch (error) {
-      console.error('[SERVER ACTION] Failed to create service client:', error)
       return {
         success: false,
         error: 'Service configuration error'
@@ -250,10 +230,8 @@ export async function deleteCourse(courseId: string): Promise<DeleteCourseResult
       .eq('course_id', courseId)
     
     if (videosError) {
-      console.error('[SERVER ACTION] Failed to fetch videos:', videosError)
+      // Continue with deletion even if video fetch fails
     }
-    
-    console.log(`[SERVER ACTION] Found ${videos?.length || 0} videos to clean up`)
     
     // 2. Delete course from database (cascades to videos, enrollments, and other relations)
     // Note: The database triggers have been fixed to properly handle DELETE operations
@@ -263,39 +241,27 @@ export async function deleteCourse(courseId: string): Promise<DeleteCourseResult
       .eq('id', courseId)
     
     if (deleteError) {
-      console.error('[SERVER ACTION] Course deletion failed:', deleteError)
-      console.error('[SERVER ACTION] Delete error details:', {
-        message: deleteError.message,
-        details: deleteError.details,
-        hint: deleteError.hint,
-        code: deleteError.code
-      })
       return {
         success: false,
         error: `Failed to delete course: ${deleteError.message || 'Database error'}`
       }
     }
     
-    console.log('[SERVER ACTION] Course deleted from database successfully')
     
     // 3. Clean up Backblaze files in parallel
     if (videos && videos.length > 0) {
-      console.log('[SERVER ACTION] Starting Backblaze cleanup')
       
       const deletionPromises = videos.map(async (video) => {
         if (video.backblaze_file_id && video.filename) {
           try {
             await backblazeService.deleteVideo(video.backblaze_file_id, video.filename)
-            console.log(`[SERVER ACTION] Deleted video file: ${video.filename}`)
           } catch (error) {
-            console.error(`[SERVER ACTION] Failed to delete ${video.filename}:`, error)
-            // Don't fail the whole operation
+            // Don't fail the whole operation - continue with other deletions
           }
         }
       })
       
       await Promise.all(deletionPromises)
-      console.log('[SERVER ACTION] Backblaze cleanup completed')
     }
     
     // 4. Revalidate the courses page to reflect changes
@@ -309,7 +275,6 @@ export async function deleteCourse(courseId: string): Promise<DeleteCourseResult
     }
     
   } catch (error) {
-    console.error('[SERVER ACTION] Unexpected error:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'An unexpected error occurred'

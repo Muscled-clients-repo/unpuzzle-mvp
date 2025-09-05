@@ -37,12 +37,14 @@ export async function getCourseVideos(courseId: string): Promise<VideoData[]> {
       return []
     }
     
-    console.log('[Server Action] Found videos:', data?.length || 0, 'for course:', courseId)
+    console.log('[RCA-GET-VIDEOS] Found videos:', data?.length || 0, 'for course:', courseId)
     if (data && data.length > 0) {
-      console.log('[Server Action] Videos with order:', data.map(v => ({
+      console.log('[RCA-GET-VIDEOS] RAW DATA from Supabase:', JSON.stringify(data, null, 2))
+      console.log('[RCA-GET-VIDEOS] Videos with order (should be sorted):', data.map(v => ({
         id: v.id,
         title: v.title,
         order: v.order,
+        orderType: typeof v.order,
         chapter_id: v.chapter_id
       })))
     }

@@ -1,6 +1,7 @@
 import { StateCreator } from 'zustand'
 import { videoUploadService } from '@/services/video/video-upload-service'
 import { getVideoDuration } from '@/utils/video-utils'
+import { getAllVideosOrdered } from '../selectors/course-selectors'
 
 export interface VideoUpload {
   id: string
@@ -116,7 +117,6 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       
       // Set new timer for 2 seconds after last change
       autoSaveTimer = setTimeout(() => {
-        console.log('[AUTO-SAVE] Triggering debounced save')
         get().saveDraft()
       }, 2000)
     }
@@ -129,7 +129,6 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
     if (!state.courseCreation?.id) {
       // If we have the required fields, auto-save the course
       if (state.courseCreation?.title && state.courseCreation?.description) {
-        console.log('[VIDEO UPLOAD] Auto-saving course before video upload...')
         await get().saveDraft()
         // Wait for save to complete and ID to be assigned
         await new Promise(resolve => setTimeout(resolve, 1000))
@@ -190,9 +189,6 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       try {
         // Get course ID - MUST have a real course ID for uploads to persist
         const courseId = get().courseCreation?.id
-        
-        console.log('[VIDEO UPLOAD] Current courseCreation state:', get().courseCreation)
-        console.log('[VIDEO UPLOAD] Using course ID for upload:', courseId)
         
         if (!courseId) {
           console.error('Cannot upload video without course ID - save course first')
@@ -330,7 +326,6 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
   },
   
   removeVideo: async (videoId) => {
-    console.log('[STORE] Attempting to delete video:', videoId)
     
     // Zustand way: Optimistically update UI first
     set(state => ({
@@ -347,7 +342,6 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
     
     // Professional pattern: Client only sends ID, server handles everything
     try {
-      console.log('[STORE] Calling delete API for video:', videoId)
       
       const response = await fetch(`/api/delete-video/${videoId}`, {
         method: 'DELETE',
@@ -363,8 +357,7 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         console.error('[STORE] Failed to delete video:', result.error)
         // Could revert UI here if needed by calling loadCourseForEdit
       } else {
-        console.log('[STORE] Video deleted successfully:', result.message)
-      }
+        }
     } catch (error) {
       console.error('[STORE] Error calling delete API:', error)
       // Could revert UI here by calling loadCourseForEdit
@@ -505,12 +498,6 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
   },
   
   reorderVideosInChapter: (chapterId, videos) => {
-    console.log('[REORDER] Called with videos:', videos.map((v, i) => ({ 
-      index: i, 
-      id: v.id, 
-      name: v.name,
-      currentOrder: v.order 
-    })))
     
     set(state => {
       if (!state.courseCreation) return state
@@ -547,11 +534,6 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         return chapter
       })
       
-      console.log('[REORDER] After reorder - main videos:', updatedMainVideos.map(v => ({ 
-        id: v.id, 
-        name: v.name, 
-        order: v.order 
-      })))
       
       return {
         courseCreation: {
@@ -603,15 +585,9 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       return
     }
     
-    console.log('[SAVE DRAFT] Starting save for course:', {
-      id: courseCreation.id,
-      title: courseCreation.title,
-      videosCount: courseCreation.videos?.length || 0
-    })
 
     // Prevent concurrent saves
     if (isAutoSaving) {
-      console.log('[SAVE] Already saving, skipping duplicate save request')
       return
     }
 
@@ -627,12 +603,10 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         // Check if we're already creating (prevent duplicate creation)
         const currentState = get()
         if (currentState.courseCreation?.id) {
-          console.log('[SUPABASE] Course already has ID, skipping creation')
-          set({ isAutoSaving: false })
+            set({ isAutoSaving: false })
           return
         }
         
-        console.log('[SUPABASE] Creating new course...', courseCreation.title)
         
         // Get user from store
         const storeState = get() as any
@@ -662,8 +636,6 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           isAutoSaving: false
         }))
         
-        console.log('[SUPABASE] Course created with ID:', newCourse.id)
-        console.log('[SUPABASE] Updated courseCreation state:', get().courseCreation)
         return
       }
       
@@ -687,21 +659,37 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           updateData.total_videos = courseCreation.videos.filter(v => v.status === 'complete').length
         }
         
-        console.log('[SUPABASE] Saving course draft...', courseCreation.id)
-        console.log('[SUPABASE] Update data:', updateData)
         
         try {
           await courseActions.updateCourse(courseCreation.id, updateData)
         
           // Also save video metadata (name, order, chapter) if there are videos
-          if (courseCreation.videos && courseCreation.videos.length > 0 && courseActions.updateVideoOrders) {
-            console.log('[SUPABASE] Updating video metadata...')
-            console.log('[SUPABASE] Current videos in state:', courseCreation.videos.map(v => ({
-              id: v.id,
-              name: v.name,
-              order: v.order,
-              chapterId: v.chapterId
-            })))
+          // CHECK NORMALIZED STATE FIRST for video orders (if available)
+          const state = get() as any
+          const normalizedState = state.normalizedState
+          const hasNormalizedVideos = normalizedState && Object.keys(normalizedState.videos).length > 0
+          
+          
+          if (hasNormalizedVideos && courseActions.updateVideoOrders) {
+            
+            // Get videos from normalized state - they're already properly ordered!
+            const normalizedVideos = getAllVideosOrdered(normalizedState)
+            
+            // Prepare video updates from normalized state
+            const videoUpdates = normalizedVideos
+              .filter(v => v.status === 'ready') // Only save videos that are ready
+              .map(v => ({
+                id: v.id,
+                title: v.title,
+                order: v.order,
+                chapter_id: v.chapterId || 'chapter-1'
+              }))
+            
+            if (videoUpdates.length > 0) {
+              await courseActions.updateVideoOrders(courseCreation.id, videoUpdates)
+            }
+          } else if (courseCreation.videos && courseCreation.videos.length > 0 && courseActions.updateVideoOrders) {
+            // Fallback to old state if normalized state not available
             
             // Prepare video data including names - SORT by order to ensure correct sequence
             const videoUpdates = courseCreation.videos
@@ -715,12 +703,10 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
               }))
             
             if (videoUpdates.length > 0) {
-              console.log('[SUPABASE] Video updates being sent to database (sorted by order):', JSON.stringify(videoUpdates, null, 2))
               await courseActions.updateVideoOrders(courseCreation.id, videoUpdates)
             }
           }
           
-          console.log('[SUPABASE] Course draft saved successfully')
           
           set(state => ({
             isAutoSaving: false,
@@ -736,7 +722,6 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         
       } else {
         // Mock implementation for development or new courses
-        console.log('[MOCK] Saving course draft...', courseCreation.title)
         await new Promise(resolve => setTimeout(resolve, 1000))
         
         set(state => ({
@@ -747,7 +732,6 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           } : null
         }))
         
-        console.log('[MOCK] Course draft saved!')
       }
       
     } catch (error: any) {
@@ -802,13 +786,11 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         // Check if course already exists
         if (courseCreation.id) {
           // Course already exists, just update its status to published
-          console.log('[SUPABASE] Publishing existing course...', courseCreation.id)
-          
+            
           const { updateCourse } = await import('@/app/actions/course-actions')
           await updateCourse(courseCreation.id, { status: 'published' })
           
-          console.log('[SUPABASE] Course published successfully:', courseCreation.id)
-          
+            
           // Update local state with published status
           set(state => ({
             courseCreation: state.courseCreation ? {
@@ -820,8 +802,7 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         } else {
           // This shouldn't happen - course should be created when saving draft
           // But handle it just in case
-          console.log('[SUPABASE] Creating and publishing new course...')
-          
+            
           const courseData = {
             title: courseCreation.title,
             description: courseCreation.description || '',
@@ -839,8 +820,7 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           
           const { createCourse } = await import('@/app/actions/create-course')
           const publishedCourse = await createCourse(courseData)
-          console.log('[SUPABASE] Course created and published:', publishedCourse.id)
-          
+            
           // Update local state with published status and ID
           set(state => ({
             courseCreation: state.courseCreation ? {
@@ -853,13 +833,11 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         
         // Redirect to courses list after publishing
         if (typeof window !== 'undefined') {
-          console.log('[PUBLISH] Course published! Redirecting to courses list')
           window.location.href = '/instructor/courses'
         }
         
       } else {
         // Mock implementation for development
-        console.log('[MOCK] Publishing course...', courseCreation.title)
         await new Promise(resolve => setTimeout(resolve, 1500))
         
         set(state => ({
@@ -869,7 +847,6 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           } : null
         }))
         
-        console.log('[MOCK] Course published!')
       }
       
     } catch (error: any) {
@@ -939,7 +916,6 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         const { getInstructorCourses } = await import('@/app/actions/get-instructor-courses')
         
         // Fetch all courses using server action
-        console.log('[SUPABASE] Loading course for edit:', courseId)
         const courses = await getInstructorCourses(user.id)
         const course = courses.find(c => c.id === courseId)
         
@@ -950,10 +926,8 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
         // Fetch videos for this course using server action
         const { getCourseVideos } = await import('@/app/actions/get-course-videos')
         const courseVideos = await getCourseVideos(courseId)
-        console.log(`[SUPABASE] Loaded ${courseVideos.length} videos for course:`, courseId)
         
         if (courseVideos.length > 0) {
-          console.log('[SUPABASE] First video from DB:', courseVideos[0])
         }
 
         // Convert videos to VideoUpload format and group by chapter
@@ -970,11 +944,7 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           order: v.order || 0
         }))
         
-        console.log('[SUPABASE] Converted to VideoUploads:', videoUploads.length)
-        if (videoUploads.length > 0) {
-          console.log('[SUPABASE] First VideoUpload:', videoUploads[0])
-          console.log('[SUPABASE] Video chapter IDs:', videoUploads.map(v => v.chapterId))
-        }
+        
 
         // Group videos by chapter
         const chaptersMap = new Map<string, VideoUpload[]>()
@@ -986,7 +956,6 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           chaptersMap.get(chapterId)!.push(video)
         })
         
-        console.log('[SUPABASE] Chapters found:', Array.from(chaptersMap.keys()))
 
         // Create chapters array with videos
         const chapters: Chapter[] = Array.from(chaptersMap.entries()).map(([chapterId, videos], index) => ({
@@ -1026,7 +995,6 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           autoSaveEnabled: true
         }
         
-        console.log('[SUPABASE] Course loaded for editing:', courseCreationData.title)
         set({
           courseCreation: courseCreationData,
           currentStep: 'info'
@@ -1059,7 +1027,6 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
           autoSaveEnabled: true
         }
         
-        console.log('[FALLBACK] Using mock data due to error')
         set({
           courseCreation: mockCourseData,
           currentStep: 'info'
@@ -1068,7 +1035,6 @@ export const createCourseCreationSlice: StateCreator<CourseCreationSlice> = (set
       
     } else {
       // Mock implementation for development
-      console.log('[MOCK] Loading course for edit:', courseId)
       const mockCourseData: CourseCreationData = {
         title: `Course ${courseId}`,
         description: `Description for course ${courseId}`,

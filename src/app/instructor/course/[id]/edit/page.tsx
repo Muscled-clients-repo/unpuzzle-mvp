@@ -32,6 +32,9 @@ import { ChapterManager } from "@/components/course/ChapterManager"
 import { VideoPreviewModal } from "@/components/course/VideoPreviewModal"
 import { useVideoPreview } from "@/hooks/useVideoPreview"
 
+// Import the normalized reorder hook (THE FIX!)
+import { useNormalizedVideoReorder, useMigrateCourseToNormalized } from "@/hooks/useNormalizedVideoReorder"
+
 export default function EditCoursePage() {
   const router = useRouter()
   const params = useParams()
@@ -50,7 +53,7 @@ export default function EditCoursePage() {
     removeVideo,
     moveVideoToChapter,
     reorderChapters,
-    reorderVideosInChapter,
+    reorderVideosInChapter: oldReorderVideosInChapter, // Keep old function as backup
     saveDraft,
     publishCourse,
     loadCourseForEdit,
@@ -65,14 +68,24 @@ export default function EditCoursePage() {
   
   // Use the video preview hook
   const { previewVideo, isPreviewOpen, openPreview, closePreview } = useVideoPreview()
+  
+  // Use the NORMALIZED video reorder hook (THE FIX!)
+  const { reorderVideosInChapter, isUsingNormalized } = useNormalizedVideoReorder()
+  const { migrateCourse } = useMigrateCourseToNormalized()
 
   // Load course for editing on mount - but only after user is loaded
   useEffect(() => {
     if (courseId && user?.id && !authLoading) {
-      console.log('[COURSE EDIT] Loading course:', courseId)
       loadCourseForEdit(courseId)
     }
   }, [courseId, user?.id, authLoading, loadCourseForEdit])
+  
+  // Migrate course data to normalized state when it loads
+  useEffect(() => {
+    if (courseCreation && courseId) {
+      migrateCourse(courseCreation)
+    }
+  }, [courseCreation, courseId, migrateCourse])
 
   // Get current course from courseCreation or courses list
   const currentCourse = courseCreation || courses?.find(c => c.id === courseId)
@@ -193,6 +206,7 @@ export default function EditCoursePage() {
           </Button>
         </div>
       </div>
+
 
       {/* Content Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>

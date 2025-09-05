@@ -7,6 +7,8 @@ import { InstructorSlice, createInstructorSlice } from './slices/instructor-slic
 import { CourseCreationSlice, createCourseCreationSlice } from './slices/course-creation-slice'
 import { LessonSlice, createLessonSlice } from './slices/lesson-slice'
 import { BlogSlice, createBlogSlice } from './slices/blog-slice'
+// Normalized state slice (parallel to existing state)
+import { NormalizedCourseSlice, createNormalizedCourseSlice } from './slices/normalized-course-slice'
 // New role-specific slices
 import { StudentCourseSlice, createStudentCourseSlice } from './slices/student-course-slice'
 import { StudentLearningSlice, createStudentLearningSlice } from './slices/student-learning-slice'
@@ -21,7 +23,8 @@ export interface AppStore extends
   UserSlice, 
   AISlice, 
   InstructorSlice, 
-  CourseCreationSlice, 
+  CourseCreationSlice,     // KEEP EXISTING - still works
+  NormalizedCourseSlice,   // ADD PARALLEL - new normalized state
   LessonSlice, 
   BlogSlice,
   StudentCourseSlice,    // NEW - role-specific
@@ -39,7 +42,8 @@ export const useAppStore = create<AppStore>()(
         ...createUserSlice(...args),
         ...createAISlice(...args),
         ...createInstructorSlice(...args),
-        ...createCourseCreationSlice(...args),
+        ...createCourseCreationSlice(...args),  // KEEP EXISTING
+        ...createNormalizedCourseSlice(...args), // ADD PARALLEL
         ...createLessonSlice(...args),
         ...createBlogSlice(...args),
         // New role-specific slices
