@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAppStore } from "@/stores/app-store"
+import { useCoursePrefetch } from "@/hooks/use-course-queries"
 import { ErrorBoundary, LoadingSpinner, ErrorFallback } from "@/components/common"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -53,6 +54,7 @@ export default function TeachCoursesPage() {
     loading: coursesLoading,
     error: coursesError
   } = useAppStore()
+  const { prefetchCourse } = useCoursePrefetch()
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [sortBy, setSortBy] = useState("lastUpdated")
@@ -298,7 +300,10 @@ export default function TeachCoursesPage() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => router.push(`/instructor/course/${course.id}/edit`)}>
+                    <DropdownMenuItem 
+                      onClick={() => router.push(`/instructor/course/${course.id}/edit`)}
+                      onMouseEnter={() => prefetchCourse(course.id)}
+                    >
                       <Edit className="mr-2 h-4 w-4" />
                       Edit Course
                     </DropdownMenuItem>
@@ -356,6 +361,7 @@ export default function TeachCoursesPage() {
                     className="flex-1" 
                     variant="outline"
                     onClick={() => router.push(`/instructor/course/${course.id}/edit`)}
+                    onMouseEnter={() => prefetchCourse(course.id)}
                   >
                     <Edit className="mr-2 h-4 w-4" />
                     Edit

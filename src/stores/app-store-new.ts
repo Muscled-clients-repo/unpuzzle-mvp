@@ -45,11 +45,12 @@ import { shallow } from 'zustand/shallow'
 export const useWizardState = () => {
   const currentStep = useAppStore((state) => state.currentWizardStep)
   const isTransitioning = useAppStore((state) => state.isWizardTransitioning)
+  const setWizardStep = useAppStore((state) => state.setWizardStep)
   const next = useAppStore((state) => state.nextWizardStep)
   const prev = useAppStore((state) => state.prevWizardStep)
   const reset = useAppStore((state) => state.resetWizard)
   
-  return { currentStep, isTransitioning, next, prev, reset }
+  return { currentStep, isTransitioning, setWizardStep, next, prev, reset }
 }
 
 export const useModalState = (modalId: string) => {
@@ -83,10 +84,12 @@ export const useFormState = () => {
   const isDirty = useAppStore((state) => state.isDirty)
   const setError = useAppStore((state) => state.setFormError)
   const clearError = useAppStore((state) => state.clearFormError)
+  const clearAllFormErrors = useAppStore((state) => state.clearAllFormErrors)
   const setTouched = useAppStore((state) => state.setFormTouched)
+  const setFormDirty = useAppStore((state) => state.setFormDirty)
   const reset = useAppStore((state) => state.resetFormState)
   
-  return { errors, touched, isDirty, setError, clearError, setTouched, reset }
+  return { errors, touched, isDirty, setError, clearError, clearAllFormErrors, setTouched, setFormDirty, reset }
 }
 
 export const usePreferences = () => {

@@ -80,7 +80,7 @@ export async function createCourseAction(data: {
 /**
  * Get a single course with videos
  */
-export async function getCourseAction(courseId: string) {
+export async function getCourseAction(courseId: string): Promise<ActionResult> {
   try {
     const user = await requireAuth()
     const supabase = await createClient()
@@ -92,7 +92,6 @@ export async function getCourseAction(courseId: string) {
         videos (
           id,
           title,
-          url,
           thumbnail_url,
           duration,
           order,
@@ -117,10 +116,13 @@ export async function getCourseAction(courseId: string) {
       course.videos.sort((a: any, b: any) => (a.order || 0) - (b.order || 0))
     }
     
-    return course
+    return { success: true, data: course }
   } catch (error) {
     console.error('Get course error:', error)
-    throw error
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to get course' 
+    }
   }
 }
 

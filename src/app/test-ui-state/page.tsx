@@ -190,25 +190,50 @@ export default function TestUIStatePage() {
         <h2 className="text-xl font-bold mb-4">Form State</h2>
         <p>Is Dirty: {form.isDirty ? 'Yes' : 'No'}</p>
         <p>Has Unsaved Changes: {hasUnsavedChanges ? 'Yes' : 'No'}</p>
-        <p>Errors: {JSON.stringify(form.errors)}</p>
-        <div className="flex gap-2 mt-2">
+        <div className="mb-2">
+          <p className="font-semibold">Errors:</p>
+          {Object.keys(form.errors).length === 0 ? (
+            <p className="text-gray-500">No errors</p>
+          ) : (
+            <ul className="list-disc ml-5">
+              {Object.entries(form.errors).map(([field, errors]) => (
+                <li key={field} className="text-red-600">
+                  {field}: {errors.join(', ')}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="flex gap-2 mt-2 flex-wrap">
           <button 
             onClick={() => form.setError('title', ['Title is required'])}
             className="px-4 py-2 bg-red-500 text-white rounded"
           >
-            Add Error
+            Add Title Error
+          </button>
+          <button 
+            onClick={() => form.setError('price', ['Price must be positive', 'Price is required'])}
+            className="px-4 py-2 bg-red-500 text-white rounded"
+          >
+            Add Price Errors
+          </button>
+          <button 
+            onClick={() => form.setError('description', ['Description too short'])}
+            className="px-4 py-2 bg-red-500 text-white rounded"
+          >
+            Add Description Error
           </button>
           <button 
             onClick={() => form.clearError('title')}
             className="px-4 py-2 bg-green-500 text-white rounded"
           >
-            Clear Error
+            Clear Title
           </button>
           <button 
             onClick={form.reset}
             className="px-4 py-2 bg-gray-500 text-white rounded"
           >
-            Reset Form
+            Reset All
           </button>
         </div>
       </section>
@@ -236,6 +261,14 @@ export default function TestUIStatePage() {
               <option value="dark">Dark</option>
               <option value="system">System</option>
             </select>
+            <span className="ml-2 px-2 py-1 rounded text-sm" style={{
+              backgroundColor: preferences.theme === 'dark' ? '#1f2937' : 
+                              preferences.theme === 'light' ? '#f3f4f6' : '#60a5fa',
+              color: preferences.theme === 'dark' ? 'white' : 
+                     preferences.theme === 'light' ? 'black' : 'white'
+            }}>
+              Current: {preferences.theme}
+            </span>
           </div>
           <label className="flex items-center gap-2">
             <input 
@@ -245,6 +278,17 @@ export default function TestUIStatePage() {
             />
             Sidebar collapsed
           </label>
+        </div>
+        <div className="mt-4 p-3 rounded" style={{
+          backgroundColor: preferences.theme === 'dark' ? '#111827' : 
+                          preferences.theme === 'light' ? '#f9fafb' : '#dbeafe',
+          color: preferences.theme === 'dark' ? '#f3f4f6' : '#111827'
+        }}>
+          <p className="text-sm">
+            This box changes color based on theme! 
+            Try changing the theme dropdown and watch this box change.
+            The theme persists after page refresh.
+          </p>
         </div>
       </section>
       

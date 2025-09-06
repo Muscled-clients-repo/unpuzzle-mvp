@@ -29,13 +29,34 @@ async function requireAuth() {
  * Upload a video to Backblaze and create database record
  */
 export async function uploadVideoAction(
-  file: File,
-  courseId: string,
-  chapterId: string = 'chapter-1'
+  formData: FormData
 ): Promise<ActionResult> {
   try {
     const user = await requireAuth()
     const supabase = await createClient()
+    
+    // Extract parameters from FormData
+    const file = formData.get('file') as File
+    const courseId = formData.get('courseId') as string
+    const chapterId = formData.get('chapterId') as string || 'chapter-1'
+    
+    if (!file || !courseId) {
+      throw new Error('Missing required fields: file and courseId')
+    }
+    
+    console.log('[SERVER ACTION] Processing upload:', {
+      fileName: file.name,
+      fileSize: file.size,
+      courseId,
+      chapterId
+    })
+    
+    console.log('[SERVER ACTION] Environment check:', {
+      hasBackblazeKeyId: !!process.env.BACKBLAZE_APPLICATION_KEY_ID,
+      hasBackblazeKey: !!process.env.BACKBLAZE_APPLICATION_KEY,
+      hasBucketName: !!process.env.BACKBLAZE_BUCKET_NAME,
+      hasBucketId: !!process.env.BACKBLAZE_BUCKET_ID
+    })
     
     // Verify course ownership
     const { data: course, error: courseError } = await supabase
@@ -52,42 +73,66 @@ export async function uploadVideoAction(
       throw new Error('Unauthorized: You do not own this course')
     }
     
-    // Convert File to Buffer for Backblaze
-    const arrayBuffer = await file.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
+    // Generate structured file path like professional platforms
+    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
+    const structuredPath = `courses/${courseId}/chapters/${chapterId}/${crypto.randomUUID()}_${sanitizedFileName}`
     
-    // Upload to Backblaze
-    const uploadResult = await backblazeService.uploadVideo(buffer, file.name)
+    console.log('[SERVER ACTION] Structured path:', structuredPath)
     
-    if (!uploadResult.success) {
-      throw new Error(uploadResult.error || 'Failed to upload to Backblaze')
+    // Upload to Backblaze with structured path
+    console.log('[SERVER ACTION] Starting Backblaze upload...')
+    const uploadResult = await backblazeService.uploadVideo(file, structuredPath)
+    console.log('[SERVER ACTION] Backblaze upload result:', uploadResult)
+    
+    // uploadResult returns { fileId, fileName, fileUrl, ... }
+    if (!uploadResult.fileUrl) {
+      throw new Error('Failed to upload to Backblaze - no file URL returned')
     }
     
-    // Get next order position
-    const { data: lastVideo } = await supabase
+    // Get next order position - handle both null and numeric orders
+    const { data: existingVideos, error: orderError } = await supabase
       .from('videos')
       .select('order')
       .eq('course_id', courseId)
       .eq('chapter_id', chapterId)
-      .order('order', { ascending: false })
-      .limit(1)
-      .single()
+      .order('order', { ascending: false, nullsFirst: false })
     
-    const nextOrder = (lastVideo?.order || -1) + 1
+    if (orderError) {
+      console.log('[SERVER ACTION] Order query error:', orderError)
+      throw orderError
+    }
+    
+    // Calculate next order - handle both existing videos and null orders
+    let nextOrder = 0
+    if (existingVideos && existingVideos.length > 0) {
+      // Find the highest non-null order
+      const validOrders = existingVideos
+        .map(v => v.order)
+        .filter(order => order !== null && typeof order === 'number')
+        .sort((a, b) => b - a) // Sort descending
+      
+      nextOrder = validOrders.length > 0 ? validOrders[0] + 1 : existingVideos.length
+    }
+    
+    console.log('[SERVER ACTION] Order calculation:', {
+      existingVideosCount: existingVideos?.length || 0,
+      existingOrders: existingVideos?.map(v => v.order) || [],
+      nextOrder
+    })
     
     // Create video record
     const { data: video, error: videoError } = await supabase
       .from('videos')
       .insert({
         title: file.name.replace(/\.[^/.]+$/, ''), // Remove file extension
-        filename: file.name,
-        url: uploadResult.url,
+        filename: uploadResult.fileName, // Store Backblaze structured path for deletion
+        video_url: uploadResult.fileUrl, // Use video_url instead of url
         backblaze_file_id: uploadResult.fileId,
         course_id: courseId,
         chapter_id: chapterId,
         order: nextOrder,
         file_size: file.size,
-        status: 'ready',
+        status: 'complete',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
@@ -136,26 +181,46 @@ export async function deleteVideoAction(videoId: string): Promise<ActionResult> 
       throw new Error('Unauthorized: You do not own this video')
     }
     
-    // Delete from Backblaze
+    console.log('[SERVER ACTION] Starting video deletion:', {
+      videoId,
+      backblazeFileId: video.backblaze_file_id,
+      filename: video.filename,
+      hasBackblazeData: !!(video.backblaze_file_id && video.filename)
+    })
+    
+    // Delete from Backblaze - filename now contains the structured path
     if (video.backblaze_file_id && video.filename) {
       try {
+        console.log('[SERVER ACTION] Deleting from Backblaze:', {
+          fileId: video.backblaze_file_id,
+          fileName: video.filename
+        })
         await backblazeService.deleteVideo(video.backblaze_file_id, video.filename)
+        console.log('[SERVER ACTION] Backblaze deletion successful')
       } catch (error) {
-        console.error('Backblaze deletion error:', error)
+        console.error('[SERVER ACTION] Backblaze deletion error:', error)
         // Continue with database deletion even if Backblaze fails
       }
+    } else {
+      console.log('[SERVER ACTION] No Backblaze data found, skipping Backblaze deletion')
     }
     
     // Delete from database
+    console.log('[SERVER ACTION] Deleting from Supabase database:', videoId)
     const { error: deleteError } = await supabase
       .from('videos')
       .delete()
       .eq('id', videoId)
     
-    if (deleteError) throw deleteError
+    if (deleteError) {
+      console.error('[SERVER ACTION] Supabase deletion error:', deleteError)
+      throw deleteError
+    }
     
+    console.log('[SERVER ACTION] Supabase deletion successful')
     revalidatePath(`/instructor/course/${video.course_id}`)
     
+    console.log('[SERVER ACTION] Video deletion completed successfully')
     return { success: true, message: 'Video deleted successfully' }
   } catch (error) {
     console.error('Delete video error:', error)
@@ -428,26 +493,40 @@ export async function batchUpdateVideoOrdersAction(
       throw new Error('Unauthorized: You do not own this course')
     }
     
-    // Get all unique chapter IDs from updates
-    const chapterIds = [...new Set(updates.map(u => u.chapter_id))]
+    console.log('[SERVER ACTION] Batch updating videos:', updates)
     
-    // Reset orders for all affected chapters
-    const { error: resetError } = await supabase
-      .from('videos')
-      .update({ 
-        order: null,
+    // For title-only updates (no order/chapter changes), we can update directly
+    const titleOnlyUpdates = updates.filter(u => u.title !== undefined && u.order === undefined && u.chapter_id === undefined)
+    const orderUpdates = updates.filter(u => u.order !== undefined && u.chapter_id !== undefined)
+    
+    console.log('[SERVER ACTION] Title-only updates:', titleOnlyUpdates.length)
+    console.log('[SERVER ACTION] Order updates:', orderUpdates.length)
+    
+    // First, handle title-only updates (no constraint issues)
+    for (const update of titleOnlyUpdates) {
+      const updateData: any = {
+        title: update.title,
         updated_at: new Date().toISOString()
-      })
-      .eq('course_id', courseId)
-      .in('chapter_id', chapterIds)
+      }
+      
+      console.log(`[SERVER ACTION] Updating video ${update.id} title: ${update.title}`)
+      
+      const { error: updateError } = await supabase
+        .from('videos')
+        .update(updateData)
+        .eq('id', update.id)
+        .eq('course_id', courseId)
+      
+      if (updateError) {
+        console.error('[SERVER ACTION] Title update failed for video:', update.id, updateError)
+        throw updateError
+      }
+      
+      console.log(`[SERVER ACTION] Successfully updated video ${update.id} title`)
+    }
     
-    if (resetError) throw resetError
-    
-    // Sort updates by order to apply them sequentially
-    const sortedUpdates = [...updates].sort((a, b) => a.order - b.order)
-    
-    // Apply each update
-    for (const update of sortedUpdates) {
+    // Then handle order updates if any (with constraint handling)
+    for (const update of orderUpdates) {
       const updateData: any = {
         order: update.order,
         chapter_id: update.chapter_id,
@@ -456,6 +535,7 @@ export async function batchUpdateVideoOrdersAction(
       
       if (update.title !== undefined) {
         updateData.title = update.title
+        console.log(`[SERVER ACTION] Updating video ${update.id} title + order: ${update.title}`)
       }
       
       const { error: updateError } = await supabase
@@ -464,7 +544,12 @@ export async function batchUpdateVideoOrdersAction(
         .eq('id', update.id)
         .eq('course_id', courseId)
       
-      if (updateError) throw updateError
+      if (updateError) {
+        console.error('[SERVER ACTION] Order update failed for video:', update.id, updateError)
+        throw updateError
+      }
+      
+      console.log(`[SERVER ACTION] Successfully updated video ${update.id}`)
     }
     
     revalidatePath(`/instructor/course/${courseId}`)

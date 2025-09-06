@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardHeader, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,7 +17,7 @@ import {
 import { cn } from "@/lib/utils"
 import { VideoList } from "./VideoList"
 import { VideoUploader } from "./VideoUploader"
-import type { VideoUpload, Chapter } from "@/stores/slices/course-creation-slice"
+import type { VideoUpload, Chapter } from "@/types/course"
 
 interface ChapterManagerProps {
   chapters: Chapter[]
@@ -27,10 +27,13 @@ interface ChapterManagerProps {
   onReorderChapters: (chapters: Chapter[]) => void
   onVideoUpload: (chapterId: string, files: FileList) => void
   onVideoRename: (videoId: string, newName: string) => void
+  batchRenameMutation?: any // TanStack Query mutation
   onVideoDelete: (videoId: string) => void
   onVideoPreview?: (video: VideoUpload) => void
   onMoveVideo: (videoId: string, fromChapterId: string, toChapterId: string) => void
   onReorderVideosInChapter?: (chapterId: string, videos: VideoUpload[]) => void
+  onPendingChangesUpdate?: (hasChanges: boolean, changeCount: number, saveFunction: () => void, isSaving?: boolean) => void
+  onTabNavigation?: (currentId: string, currentType: 'chapter' | 'video', direction: 'next' | 'previous') => void
   className?: string
 }
 
@@ -42,13 +45,24 @@ export function ChapterManager({
   onReorderChapters,
   onVideoUpload,
   onVideoRename,
+  batchRenameMutation,
   onVideoDelete,
   onVideoPreview,
   onMoveVideo,
   onReorderVideosInChapter,
+  onPendingChangesUpdate,
+  onTabNavigation,
   className
 }: ChapterManagerProps) {
-  const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set())
+  // Always expand all chapters - initialize with all chapter IDs
+  const [expandedChapters, setExpandedChapters] = useState<Set<string>>(
+    new Set(chapters.map(chapter => chapter.id))
+  )
+
+  // Update expanded chapters when new chapters are added
+  useEffect(() => {
+    setExpandedChapters(new Set(chapters.map(chapter => chapter.id)))
+  }, [chapters])
   const [editingChapter, setEditingChapter] = useState<string | null>(null)
   const [chapterTitle, setChapterTitle] = useState("")
   const [draggedChapter, setDraggedChapter] = useState<string | null>(null)
@@ -267,6 +281,7 @@ export function ChapterManager({
                     <VideoList
                       videos={chapter.videos}
                       onVideoRename={onVideoRename}
+                      batchRenameMutation={batchRenameMutation}
                       onVideoDelete={onVideoDelete}
                       onVideoPreview={onVideoPreview}
                       onVideoDragStart={setDraggedVideo}
@@ -276,6 +291,8 @@ export function ChapterManager({
                           onReorderVideosInChapter(chapter.id, reorderedVideos)
                         }
                       }}
+                      onPendingChangesUpdate={onPendingChangesUpdate}
+                      onTabNavigation={onTabNavigation}
                     />
                   )}
                 </CardContent>

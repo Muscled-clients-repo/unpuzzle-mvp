@@ -4,11 +4,11 @@ import { AuthSlice, createAuthSlice } from './slices/auth-slice'
 import { UserSlice, createUserSlice } from './slices/user-slice'
 import { AISlice, createAISlice } from './slices/ai-slice'
 import { InstructorSlice, createInstructorSlice } from './slices/instructor-slice'
-import { CourseCreationSlice, createCourseCreationSlice } from './slices/course-creation-slice'
+// DEPRECATED: import { CourseCreationSlice, createCourseCreationSlice } from './slices/course-creation-slice'
 import { LessonSlice, createLessonSlice } from './slices/lesson-slice'
 import { BlogSlice, createBlogSlice } from './slices/blog-slice'
-// Normalized state slice (parallel to existing state)
-import { NormalizedCourseSlice, createNormalizedCourseSlice } from './slices/normalized-course-slice'
+// DEPRECATED: Normalized state slice (parallel to existing state)
+// import { NormalizedCourseSlice, createNormalizedCourseSlice } from './slices/normalized-course-slice'
 // New role-specific slices
 import { StudentCourseSlice, createStudentCourseSlice } from './slices/student-course-slice'
 import { StudentLearningSlice, createStudentLearningSlice } from './slices/student-learning-slice'
@@ -23,8 +23,8 @@ export interface AppStore extends
   UserSlice, 
   AISlice, 
   InstructorSlice, 
-  CourseCreationSlice,     // KEEP EXISTING - still works
-  NormalizedCourseSlice,   // ADD PARALLEL - new normalized state
+  // DEPRECATED: CourseCreationSlice,     // MIGRATED TO TanStack Query
+  // DEPRECATED: NormalizedCourseSlice,   // MIGRATED TO TanStack Query
   LessonSlice, 
   BlogSlice,
   StudentCourseSlice,    // NEW - role-specific
@@ -42,8 +42,8 @@ export const useAppStore = create<AppStore>()(
         ...createUserSlice(...args),
         ...createAISlice(...args),
         ...createInstructorSlice(...args),
-        ...createCourseCreationSlice(...args),  // KEEP EXISTING
-        ...createNormalizedCourseSlice(...args), // ADD PARALLEL
+        // DEPRECATED: ...createCourseCreationSlice(...args),  // MIGRATED TO TanStack Query
+        // DEPRECATED: ...createNormalizedCourseSlice(...args), // MIGRATED TO TanStack Query
         ...createLessonSlice(...args),
         ...createBlogSlice(...args),
         // New role-specific slices

@@ -1,8 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-// TODO: Switch to app-store-new after Phase 4 migration
-// import { useAppStore } from '@/stores/app-store-new'
-import { useAppStore } from '@/stores/app-store'
 import {
   uploadVideoAction,
   deleteVideoAction,
@@ -17,37 +14,21 @@ import {
  */
 export function useVideoMutations(courseId: string) {
   const queryClient = useQueryClient()
-  const { setUploadProgress, clearUploadProgress } = useAppStore()
   
-  // Upload video mutation with progress tracking
+  // Upload video mutation
   const uploadVideo = useMutation({
     mutationFn: async ({ file, chapterId }: { file: File, chapterId: string }) => {
-      const tempId = `temp-${Date.now()}`
+      console.log('🔄 Video mutation executing:', { fileName: file.name, chapterId, courseId })
       
-      // Start progress tracking
-      setUploadProgress(tempId, 0)
+      // Create FormData for server action
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('courseId', courseId)
+      formData.append('chapterId', chapterId)
       
-      // Simulate progress (in production, get real progress from upload)
-      const progressInterval = setInterval(() => {
-        setUploadProgress(tempId, prev => Math.min(prev + 10, 90))
-      }, 500)
-      
-      try {
-        const result = await uploadVideoAction(file, courseId, chapterId)
-        
-        clearInterval(progressInterval)
-        setUploadProgress(tempId, 100)
-        
-        setTimeout(() => {
-          clearUploadProgress(tempId)
-        }, 1000)
-        
-        return result
-      } catch (error) {
-        clearInterval(progressInterval)
-        clearUploadProgress(tempId)
-        throw error
-      }
+      const result = await uploadVideoAction(formData)
+      console.log('📊 Upload action result:', result)
+      return result
     },
     onMutate: async ({ file, chapterId }) => {
       // Optimistic update - add temporary video
@@ -74,16 +55,19 @@ export function useVideoMutations(courseId: string) {
       return { tempVideo }
     },
     onSuccess: (result, variables, context) => {
+      console.log('✅ Upload mutation success:', result)
       if (result.success) {
         // Replace temp video with real one
         queryClient.setQueryData(['course', courseId], (old: any) => {
           if (!old) return old
-          return {
+          const updatedData = {
             ...old,
             videos: old.videos.map((v: any) => 
               v.id === context?.tempVideo.id ? result.data : v
             )
           }
+          console.log('📄 Updated course data:', updatedData)
+          return updatedData
         })
         
         queryClient.invalidateQueries({ queryKey: ['course', courseId] })
@@ -91,6 +75,7 @@ export function useVideoMutations(courseId: string) {
         
         toast.success('Video uploaded successfully')
       } else {
+        console.error('❌ Upload failed:', result.error)
         // Remove temp video on failure
         queryClient.setQueryData(['course', courseId], (old: any) => {
           if (!old) return old
@@ -104,6 +89,7 @@ export function useVideoMutations(courseId: string) {
       }
     },
     onError: (error, variables, context) => {
+      console.error('❌ Upload mutation error:', error)
       // Remove temp video on error
       queryClient.setQueryData(['course', courseId], (old: any) => {
         if (!old) return old
@@ -253,12 +239,144 @@ export function useVideoMutations(courseId: string) {
       if (result.success) {
         queryClient.invalidateQueries({ queryKey: ['course', courseId] })
         queryClient.invalidateQueries({ queryKey: ['chapters', courseId] })
-      } else {
-        toast.error(result.error || 'Failed to update videos')
       }
+      // No toast here - let the caller handle it to avoid duplicates
     },
     onError: () => {
-      toast.error('Failed to update videos')
+      // No toast here - let the caller handle it to avoid duplicates
+    }
+  })
+
+  // Silent batch update for filename changes (no automatic toasts)
+  const batchUpdateVideoOrdersSilent = useMutation({
+    mutationFn: (updates: Array<{
+      id: string
+      order: number
+      chapter_id: string
+      title?: string
+    }>) => batchUpdateVideoOrdersAction(courseId, updates),
+    onMutate: async (updates) => {
+      console.log('🔄 [INVESTIGATION] Mutation starting with updates:', updates)
+      console.log('🔍 [INVESTIGATION] About to update cache key:', ['course', courseId])
+      console.log('🔍 [INVESTIGATION] Current course cache:', queryClient.getQueryData(['course', courseId]))
+      console.log('🔍 [INVESTIGATION] Current chapters cache:', queryClient.getQueryData(['chapters', courseId]))
+      
+      // Cancel outgoing refetches for BOTH cache keys
+      await queryClient.cancelQueries({ queryKey: ['course', courseId] })
+      await queryClient.cancelQueries({ queryKey: ['chapters', courseId] })
+
+      // Snapshot both previous values
+      const previousCourse = queryClient.getQueryData(['course', courseId])
+      const previousChapters = queryClient.getQueryData(['chapters', courseId])
+      console.log('📸 Previous course data:', previousCourse)
+      console.log('📸 Previous chapters data:', previousChapters)
+
+      // Update CHAPTERS cache (this is what the UI actually reads!)
+      queryClient.setQueryData(['chapters', courseId], (old: any) => {
+        if (!old || !Array.isArray(old)) {
+          console.log('⚠️ No chapters data found')
+          return old
+        }
+
+        const updatedChapters = old.map((chapter: any) => {
+          if (!chapter.videos || !Array.isArray(chapter.videos)) {
+            return chapter
+          }
+
+          const updatedVideos = chapter.videos.map((video: any) => {
+            const update = updates.find(u => u.id === video.id)
+            if (update && update.title) {
+              console.log(`📝 Optimistic update (chapters): ${video.id} "${video.title || video.name || video.filename}" → "${update.title}"`)
+              return { 
+                ...video, 
+                title: update.title, 
+                name: update.title,
+                filename: video.filename 
+              }
+            }
+            return video
+          })
+
+          return {
+            ...chapter,
+            videos: updatedVideos
+          }
+        })
+
+        console.log('✨ Chapters optimistic update applied successfully')
+        return updatedChapters
+      })
+
+      // Also update course cache for consistency (but UI doesn't read from this)
+      queryClient.setQueryData(['course', courseId], (old: any) => {
+        if (!old || !old.videos) {
+          console.log('⚠️ No old data or videos found')
+          return old
+        }
+
+        const updatedVideos = old.videos.map((video: any) => {
+          const update = updates.find(u => u.id === video.id)
+          if (update && update.title) {
+            console.log(`📝 Optimistic update: ${video.id} "${video.title || video.name || video.filename}" → "${update.title}"`)
+            return { 
+              ...video, 
+              title: update.title, 
+              name: update.title,
+              // Ensure filename fallback is preserved
+              filename: video.filename 
+            }
+          }
+          return video
+        })
+
+        const newData = {
+          ...old,
+          videos: updatedVideos
+        }
+        
+        console.log('✨ Optimistic update applied successfully')
+        console.log(`🎯 Updated ${updates.length} videos in cache`)
+        return newData
+      })
+
+      // Return context with both previous values for rollback
+      return { previousCourse, previousChapters }
+    },
+    onError: (err, newUpdates, context) => {
+      console.error('❌ Mutation failed, rolling back optimistic updates:', err)
+      // Roll back BOTH caches
+      if (context?.previousChapters) {
+        queryClient.setQueryData(['chapters', courseId], context.previousChapters)
+        console.log('🔄 Rolled back chapters cache')
+      }
+      if (context?.previousCourse) {
+        queryClient.setQueryData(['course', courseId], context.previousCourse)
+        console.log('🔄 Rolled back course cache')
+      }
+    },
+    onSuccess: (result, variables) => {
+      console.log('🎉 Mutation success:', result)
+      if (result.success) {
+        toast.success(`${variables.length} video name(s) updated successfully`)
+        
+        // Background reconciliation after delay - don't invalidate immediately
+        setTimeout(() => {
+          console.log('🔄 Background sync: Refetching both course and chapters data for reconciliation')
+          queryClient.refetchQueries({ queryKey: ['course', courseId] })
+          queryClient.refetchQueries({ queryKey: ['chapters', courseId] })
+        }, 2000) // Background sync after 2 seconds
+      } else {
+        console.error('❌ Server returned error:', result.error)
+        toast.error(result.error || 'Failed to update video names')
+      }
+    },
+    onError: (error) => {
+      console.error('❌ Mutation error:', error)
+      toast.error('Failed to update video names')
+    },
+    onSettled: () => {
+      // Don't invalidate immediately - trust optimistic updates
+      // Background sync happens in onSuccess after delay
     }
   })
   
@@ -268,6 +386,7 @@ export function useVideoMutations(courseId: string) {
     reorderVideos,
     moveVideoToChapter,
     updateVideo,
-    batchUpdateVideoOrders
+    batchUpdateVideoOrders,
+    batchUpdateVideoOrdersSilent
   }
 }

@@ -2,7 +2,16 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useAppStore } from "@/stores/app-store"
+import { useCourseMutations } from "@/hooks/use-course-mutations"
+import { useVideoMutations } from "@/hooks/use-video-mutations"
+import { 
+  useWizardState, 
+  useFormState, 
+  usePreferences,
+  useUploadProgress,
+  useModalState
+} from '@/stores/app-store-new'
+import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,99 +35,108 @@ import { useVideoPreview } from "@/hooks/useVideoPreview"
 
 export default function CreateCoursePage() {
   const router = useRouter()
-  const {
-    courseCreation,
-    currentStep,
-    uploadQueue,
-    isAutoSaving,
-    setCourseInfo,
-    addVideosToQueue,
-    updateVideoName,
-    removeVideo,
-    createChapter,
-    updateChapter,
-    deleteChapter,
-    moveVideoToChapter,
-    reorderVideosInChapter,
-    reorderChapters,
-    saveDraft,
-    publishCourse,
-    setCurrentStep,
-    resetCourseCreation,
-  } = useAppStore()
+  
+  // New architecture hooks
+  const { createCourse, saveDraft, publishCourse } = useCourseMutations()
+  const { uploadVideos, updateVideo, deleteVideo } = useVideoMutations()
+  
+  // UI state from new minimal store
+  const wizard = useWizardState()
+  const form = useFormState()
+  const preferences = usePreferences()
+  const uploadProgress = useUploadProgress()
+  const modal = useModalState()
+  
+  // Local state for the creation flow
+  const [currentCourseId, setCurrentCourseId] = useState<string | null>(null)
+  const [isAutoSaving, setIsAutoSaving] = useState(false)
+  
+  // Computed values from form state
+  const courseCreation = form.courseData
+  const currentStep = wizard.currentStep
+  const uploadQueue = uploadProgress.queue
 
   // Use the video preview hook
   const { previewVideo, isPreviewOpen, openPreview, closePreview } = useVideoPreview()
 
-  // Initialize course on mount - but don't save anything until user interacts
+  // Initialize wizard step on mount
   useEffect(() => {
-    resetCourseCreation()
-  }, [resetCourseCreation])
+    wizard.reset()
+    wizard.setWizardStep('info')
+    form.clearAllFormErrors()
+  }, [wizard, form])
 
   // Handle initial course creation when user starts typing
   const initializeCourseIfNeeded = (field: any) => {
     if (!courseCreation) {
-      setCourseInfo({
+      form.setCourseData({
         title: '',
         description: '',
         category: '',
         level: 'beginner',
         price: 0,
-        chapters: [],
-        videos: [],
-        status: 'draft',
-        autoSaveEnabled: false
+        status: 'draft'
       })
-      // Create first chapter after a delay
-      setTimeout(() => createChapter('Chapter 1'), 100)
     }
     return field
   }
 
   // Handle video upload for a specific chapter
-  const handleVideoUpload = (chapterId: string, files: FileList) => {
+  const handleVideoUpload = async (chapterId: string, files: FileList) => {
     // Initialize course if needed
     if (!courseCreation) {
-      alert('Please fill in the course title and description first.')
+      toast.error('Please fill in the course title and description first.')
       return
     }
     
     // Check if course has been saved
-    if (!courseCreation.id) {
+    if (!currentCourseId) {
       if (courseCreation.title && courseCreation.description) {
-        // Auto-save before upload
-        saveDraft().then(() => {
-          addVideosToQueue(files)
-          // Move videos to specific chapter after upload starts
-          setTimeout(() => {
-            Array.from(files).forEach((_, index) => {
-              const videoId = uploadQueue[uploadQueue.length - files.length + index]?.id
-              if (videoId) {
-                moveVideoToChapter(videoId, chapterId)
-              }
-            })
-          }, 100)
-        })
+        try {
+          // Auto-save before upload
+          const result = await createCourse.mutateAsync(courseCreation)
+          setCurrentCourseId(result.id)
+          
+          // Upload videos to the created course
+          const fileArray = Array.from(files)
+          await uploadVideos.mutateAsync({
+            courseId: result.id,
+            chapterId,
+            files: fileArray
+          })
+        } catch (error) {
+          console.error('Course creation or video upload failed:', error)
+          toast.error('Failed to create course and upload videos')
+        }
       } else {
-        alert('Please fill in the course title and description, then save the course first.')
+        toast.error('Please fill in the course title and description, then save the course first.')
       }
     } else {
-      addVideosToQueue(files)
-      // Move videos to specific chapter after upload starts
-      setTimeout(() => {
-        Array.from(files).forEach((_, index) => {
-          const videoId = uploadQueue[uploadQueue.length - files.length + index]?.id
-          if (videoId) {
-            moveVideoToChapter(videoId, chapterId)
-          }
+      try {
+        const fileArray = Array.from(files)
+        await uploadVideos.mutateAsync({
+          courseId: currentCourseId,
+          chapterId,
+          files: fileArray
         })
-      }, 100)
+      } catch (error) {
+        console.error('Video upload failed:', error)
+        toast.error('Failed to upload videos')
+      }
     }
   }
 
   // Handle moving video between chapters
-  const handleMoveVideo = (videoId: string, fromChapterId: string, toChapterId: string) => {
-    moveVideoToChapter(videoId, toChapterId)
+  const handleMoveVideo = async (videoId: string, fromChapterId: string, toChapterId: string) => {
+    try {
+      await updateVideo.mutateAsync({
+        videoId,
+        updates: { chapter_id: toChapterId }
+      })
+    } catch (error) {
+      console.error('Move video failed:', error)
+      toast.error('Failed to move video')
+    }
   }
 
   return (
@@ -132,7 +150,7 @@ export default function CreateCoursePage() {
           </p>
         </div>
         <div className="flex items-center gap-4">
-          {isAutoSaving && (
+          {(isAutoSaving || createCourse.isPending || saveDraft.isPending) && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Saving...
@@ -140,17 +158,52 @@ export default function CreateCoursePage() {
           )}
           <Button 
             variant="outline" 
-            onClick={saveDraft}
-            disabled={!courseCreation?.title || !courseCreation?.description}
+            onClick={async () => {
+              if (!courseCreation?.title || !courseCreation?.description) {
+                toast.error('Please fill in title and description')
+                return
+              }
+              
+              try {
+                if (currentCourseId) {
+                  await saveDraft.mutateAsync({ 
+                    courseId: currentCourseId, 
+                    data: courseCreation 
+                  })
+                } else {
+                  const result = await createCourse.mutateAsync(courseCreation)
+                  setCurrentCourseId(result.id)
+                }
+                toast.success('Course saved as draft')
+              } catch (error) {
+                console.error('Save failed:', error)
+                toast.error('Failed to save course')
+              }
+            }}
+            disabled={!courseCreation?.title || !courseCreation?.description || createCourse.isPending || saveDraft.isPending}
           >
             <Save className="mr-2 h-4 w-4" />
             Save Draft
           </Button>
           <Button 
-            onClick={publishCourse}
-            disabled={!courseCreation?.title || (courseCreation?.videos.length || 0) === 0}
+            onClick={async () => {
+              if (!currentCourseId) {
+                toast.error('Please save the course first')
+                return
+              }
+              
+              try {
+                await publishCourse.mutateAsync(currentCourseId)
+                toast.success('Course published successfully!')
+                router.push('/instructor/courses')
+              } catch (error) {
+                console.error('Publish failed:', error)
+                toast.error('Failed to publish course')
+              }
+            }}
+            disabled={!courseCreation?.title || !currentCourseId || publishCourse.isPending}
           >
-            Publish Course
+            {publishCourse.isPending ? 'Publishing...' : 'Publish Course'}
           </Button>
         </div>
       </div>
@@ -158,7 +211,7 @@ export default function CreateCoursePage() {
       {/* Progress Steps */}
       <div className="flex items-center gap-4 mb-8">
         <button
-          onClick={() => setCurrentStep('info')}
+          onClick={() => wizard.setWizardStep('info')}
           className={cn(
             "flex items-center gap-2 px-4 py-2 rounded-lg transition-colors",
             currentStep === 'info' ? "bg-primary text-primary-foreground" : "bg-muted"
@@ -168,24 +221,24 @@ export default function CreateCoursePage() {
         </button>
         <ChevronRight className="h-4 w-4 text-muted-foreground" />
         <button
-          onClick={() => courseCreation?.id && setCurrentStep('content')}
-          disabled={!courseCreation?.id}
+          onClick={() => currentCourseId && wizard.setWizardStep('content')}
+          disabled={!currentCourseId}
           className={cn(
             "flex items-center gap-2 px-4 py-2 rounded-lg transition-colors",
             currentStep === 'content' ? "bg-primary text-primary-foreground" : 
-            !courseCreation?.id ? "bg-muted opacity-50 cursor-not-allowed" : "bg-muted"
+            !currentCourseId ? "bg-muted opacity-50 cursor-not-allowed" : "bg-muted"
           )}
         >
           <span className="font-medium">2. Content</span>
         </button>
         <ChevronRight className="h-4 w-4 text-muted-foreground" />
         <button
-          onClick={() => courseCreation?.id && (courseCreation?.videos?.length > 0) && setCurrentStep('review')}
-          disabled={!courseCreation?.id || !courseCreation?.videos?.length}
+          onClick={() => currentCourseId && wizard.setWizardStep('review')}
+          disabled={!currentCourseId}
           className={cn(
             "flex items-center gap-2 px-4 py-2 rounded-lg transition-colors",
             currentStep === 'review' ? "bg-primary text-primary-foreground" : 
-            (!courseCreation?.id || !courseCreation?.videos?.length) ? "bg-muted opacity-50 cursor-not-allowed" : "bg-muted"
+            !currentCourseId ? "bg-muted opacity-50 cursor-not-allowed" : "bg-muted"
           )}
         >
           <span className="font-medium">3. Review</span>
@@ -211,7 +264,8 @@ export default function CreateCoursePage() {
                   value={courseCreation?.title || ''}
                   onChange={(e) => {
                     initializeCourseIfNeeded(e.target.value)
-                    setCourseInfo({ title: e.target.value })
+                    form.setCourseData({ title: e.target.value })
+                    form.setFormDirty()
                   }}
                 />
               </div>
@@ -224,7 +278,8 @@ export default function CreateCoursePage() {
                   value={courseCreation?.price || 0}
                   onChange={(e) => {
                     initializeCourseIfNeeded(e.target.value)
-                    setCourseInfo({ price: parseFloat(e.target.value) || 0 })
+                    form.setCourseData({ price: parseFloat(e.target.value) || 0 })
+                    form.setFormDirty()
                   }}
                 />
               </div>
@@ -238,7 +293,8 @@ export default function CreateCoursePage() {
                 value={courseCreation?.description || ''}
                 onChange={(e) => {
                   initializeCourseIfNeeded(e.target.value)
-                  setCourseInfo({ description: e.target.value })
+                  form.setCourseData({ description: e.target.value })
+                  form.setFormDirty()
                 }}
                 rows={4}
               />
@@ -249,7 +305,10 @@ export default function CreateCoursePage() {
                 <Label htmlFor="category">Category</Label>
                 <Select 
                   value={courseCreation?.category || undefined}
-                  onValueChange={(value) => setCourseInfo({ category: value })}
+                  onValueChange={(value) => {
+                    form.setCourseData({ category: value })
+                    form.setFormDirty()
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select category" />
@@ -267,7 +326,10 @@ export default function CreateCoursePage() {
                 <Label htmlFor="level">Level</Label>
                 <Select 
                   value={courseCreation?.level || 'beginner'}
-                  onValueChange={(value: any) => setCourseInfo({ level: value })}
+                  onValueChange={(value: any) => {
+                    form.setCourseData({ level: value })
+                    form.setFormDirty()
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -283,16 +345,30 @@ export default function CreateCoursePage() {
 
             <div className="flex justify-end">
               <Button 
-                onClick={() => {
+                onClick={async () => {
                   if (courseCreation?.title && courseCreation?.description && courseCreation?.price !== undefined) {
-                    saveDraft().then(() => {
-                      setCurrentStep('content')
-                    })
+                    try {
+                      let courseId = currentCourseId
+                      if (!courseId) {
+                        const result = await createCourse.mutateAsync(courseCreation)
+                        courseId = result.id
+                        setCurrentCourseId(courseId)
+                      } else {
+                        await saveDraft.mutateAsync({ 
+                          courseId, 
+                          data: courseCreation 
+                        })
+                      }
+                      wizard.setWizardStep('content')
+                    } catch (error) {
+                      console.error('Save failed:', error)
+                      toast.error('Failed to save course')
+                    }
                   }
                 }}
-                disabled={!courseCreation?.title || !courseCreation?.description || courseCreation?.price === undefined || courseCreation?.price === null}
+                disabled={!courseCreation?.title || !courseCreation?.description || courseCreation?.price === undefined || courseCreation?.price === null || createCourse.isPending || saveDraft.isPending}
               >
-                Next: Add Content
+                {(createCourse.isPending || saveDraft.isPending) ? 'Saving...' : 'Next: Add Content'}
                 <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
@@ -306,16 +382,10 @@ export default function CreateCoursePage() {
           <div className="lg:col-span-1">
             <VideoUploader
               onFilesSelected={(files) => {
-                if (courseCreation?.chapters?.length) {
-                  handleVideoUpload(courseCreation.chapters[0].id, files)
-                } else {
-                  createChapter('Chapter 1')
-                  setTimeout(() => {
-                    if (courseCreation?.chapters?.[0]) {
-                      handleVideoUpload(courseCreation.chapters[0].id, files)
-                    }
-                  }, 100)
-                }
+                // For now, we'll use a default chapter ID
+                // TODO: Implement chapter management in new architecture
+                const defaultChapterId = 'default-chapter'
+                handleVideoUpload(defaultChapterId, files)
               }}
               uploadQueue={uploadQueue}
             />
@@ -326,14 +396,43 @@ export default function CreateCoursePage() {
             <Card>
               <CardContent className="pt-6">
                 <ChapterManager
-                  chapters={courseCreation?.chapters || []}
-                  onCreateChapter={createChapter}
-                  onUpdateChapter={updateChapter}
-                  onDeleteChapter={deleteChapter}
-                  onReorderChapters={reorderChapters}
+                  chapters={[]} // TODO: Implement chapters in new architecture
+                  onCreateChapter={(title) => {
+                    console.log('Create chapter:', title)
+                    // TODO: Implement chapter creation
+                  }}
+                  onUpdateChapter={(id, updates) => {
+                    console.log('Update chapter:', id, updates)
+                    // TODO: Implement chapter updates
+                  }}
+                  onDeleteChapter={(id) => {
+                    console.log('Delete chapter:', id)
+                    // TODO: Implement chapter deletion
+                  }}
+                  onReorderChapters={(chapters) => {
+                    console.log('Reorder chapters:', chapters)
+                    // TODO: Implement chapter reordering
+                  }}
                   onVideoUpload={handleVideoUpload}
-                  onVideoRename={updateVideoName}
-                  onVideoDelete={removeVideo}
+                  onVideoRename={async (id, name) => {
+                    try {
+                      await updateVideo.mutateAsync({
+                        videoId: id,
+                        updates: { title: name }
+                      })
+                    } catch (error) {
+                      console.error('Video rename failed:', error)
+                      toast.error('Failed to rename video')
+                    }
+                  }}
+                  onVideoDelete={async (id) => {
+                    try {
+                      await deleteVideo.mutateAsync(id)
+                    } catch (error) {
+                      console.error('Video delete failed:', error)
+                      toast.error('Failed to delete video')
+                    }
+                  }}
                   onVideoPreview={openPreview}
                   onMoveVideo={handleMoveVideo}
                 />
@@ -358,7 +457,7 @@ export default function CreateCoursePage() {
                   <p className="font-medium">Course Title</p>
                   <p className="text-sm text-muted-foreground">{courseCreation?.title || 'Not set'}</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => setCurrentStep('info')}>
+                <Button variant="outline" size="sm" onClick={() => wizard.setWizardStep('info')}>
                   Edit
                 </Button>
               </div>
@@ -367,10 +466,10 @@ export default function CreateCoursePage() {
                 <div>
                   <p className="font-medium">Total Videos</p>
                   <p className="text-sm text-muted-foreground">
-                    {courseCreation?.videos.length || 0} videos across {courseCreation?.chapters.length || 0} chapters
+                    {0} videos across {0} chapters
                   </p>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => setCurrentStep('content')}>
+                <Button variant="outline" size="sm" onClick={() => wizard.setWizardStep('content')}>
                   Edit
                 </Button>
               </div>
@@ -382,18 +481,53 @@ export default function CreateCoursePage() {
                     ${courseCreation?.price || 0}
                   </p>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => setCurrentStep('info')}>
+                <Button variant="outline" size="sm" onClick={() => wizard.setWizardStep('info')}>
                   Edit
                 </Button>
               </div>
             </div>
 
             <div className="flex justify-end gap-4">
-              <Button variant="outline" onClick={saveDraft}>
-                Save as Draft
+              <Button 
+                variant="outline" 
+                onClick={async () => {
+                  if (!currentCourseId) {
+                    toast.error('Course not found')
+                    return
+                  }
+                  try {
+                    await saveDraft.mutateAsync({ 
+                      courseId: currentCourseId, 
+                      data: courseCreation 
+                    })
+                    toast.success('Course saved as draft')
+                  } catch (error) {
+                    console.error('Save failed:', error)
+                    toast.error('Failed to save course')
+                  }
+                }}
+                disabled={!currentCourseId || saveDraft.isPending}
+              >
+                {saveDraft.isPending ? 'Saving...' : 'Save as Draft'}
               </Button>
-              <Button onClick={publishCourse}>
-                Publish Course
+              <Button 
+                onClick={async () => {
+                  if (!currentCourseId) {
+                    toast.error('Course not found')
+                    return
+                  }
+                  try {
+                    await publishCourse.mutateAsync(currentCourseId)
+                    toast.success('Course published successfully!')
+                    router.push('/instructor/courses')
+                  } catch (error) {
+                    console.error('Publish failed:', error)
+                    toast.error('Failed to publish course')
+                  }
+                }}
+                disabled={!currentCourseId || publishCourse.isPending}
+              >
+                {publishCourse.isPending ? 'Publishing...' : 'Publish Course'}
               </Button>
             </div>
           </CardContent>

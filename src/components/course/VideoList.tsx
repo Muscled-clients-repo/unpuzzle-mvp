@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
+import { useClickToEdit } from "@/hooks/use-click-to-edit"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
@@ -14,7 +15,8 @@ import {
   Loader2,
   X,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Save
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { VideoUpload } from "@/stores/slices/course-creation-slice"
@@ -27,6 +29,9 @@ interface VideoListProps {
   onVideoDragStart?: (videoId: string) => void
   onVideoDragEnd?: () => void
   onVideoReorder?: (videos: VideoUpload[]) => void
+  batchRenameMutation?: any // TanStack Query mutation
+  onPendingChangesUpdate?: (hasChanges: boolean, changeCount: number, saveFunction: () => void, isSaving?: boolean) => void
+  onTabNavigation?: (currentId: string, currentType: 'video' | 'chapter', direction: 'next' | 'previous') => void
   isDraggable?: boolean
   className?: string
 }
@@ -39,17 +44,208 @@ export function VideoList({
   onVideoDragStart,
   onVideoDragEnd,
   onVideoReorder,
+  batchRenameMutation,
+  onPendingChangesUpdate,
+  onTabNavigation,
   isDraggable = true,
   className
 }: VideoListProps) {
+  // 🔍 INVESTIGATION: Log VideoList data source
+  useEffect(() => {
+    console.log('🔍 [INVESTIGATION] VideoList received videos:', {
+      count: videos.length,
+      videoIds: videos.map(v => v.id),
+      firstVideoTitle: videos[0]?.title,
+      firstVideoName: videos[0]?.name,
+      firstVideoFilename: videos[0]?.filename,
+      dataSource: 'chapter.videos from useChapters query'
+    })
+  }, [videos])
+
   const [editingVideo, setEditingVideo] = useState<string | null>(null)
   const [videoTitle, setVideoTitle] = useState("")
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [draggedOverIndex, setDraggedOverIndex] = useState<number | null>(null)
   const [draggedVideoIndex, setDraggedVideoIndex] = useState<number | null>(null)
+  const [cursorPosition, setCursorPosition] = useState<number | null>(null)
+  
+  // Simple pending changes for UI feedback
+  const [pendingChanges, setPendingChanges] = useState<Record<string, string>>({})
+  const [activelyEditing, setActivelyEditing] = useState<{id: string, value: string} | null>(null)
+  
+  // Get display name for a video (show pending changes until save, then let TanStack Query handle updates)
+  const getDisplayName = (video: VideoUpload): string => {
+    // If actively editing, show current input
+    if (editingVideo === video.id && videoTitle) {
+      return videoTitle
+    }
+    // Show pending changes (until save is clicked)
+    if (pendingChanges[video.id]) {
+      return pendingChanges[video.id]
+    }
+    
+    // Extract original filename from structured path if needed
+    let displayFilename = video.filename
+    if (displayFilename && displayFilename.includes('/')) {
+      // Extract just the filename part from structured path like "courses/.../uuid_filename.mp4"
+      displayFilename = displayFilename.split('/').pop() || displayFilename
+      // Remove UUID prefix if present (e.g., "uuid_filename.mp4" -> "filename.mp4")
+      if (displayFilename.includes('_') && displayFilename.match(/^[a-f0-9-]{36}_/)) {
+        displayFilename = displayFilename.replace(/^[a-f0-9-]{36}_/, '')
+      }
+    }
+    
+    // Otherwise show server data (prioritize title which gets updated by TanStack Query)
+    return video.title || video.name || displayFilename || 'Untitled Video'
+  }
+  
+  // Track pending changes for counter
+  const trackPendingChange = (videoId: string, newName: string) => {
+    const video = videos.find(v => v.id === videoId)
+    const currentName = video?.name || video?.title || video?.filename || 'Untitled Video'
+    
+    if (newName.trim() === currentName) {
+      // No change, remove from pending
+      setPendingChanges(prev => {
+        const next = { ...prev }
+        delete next[videoId]
+        return next
+      })
+    } else {
+      // Add to pending changes
+      setPendingChanges(prev => ({
+        ...prev,
+        [videoId]: newName.trim()
+      }))
+    }
+  }
+  
+  // Save all pending changes using TanStack Query mutation
+  const saveAllChanges = useCallback(async () => {
+    if (!batchRenameMutation) return
+    
+    // Include any currently active edit
+    let finalChanges = { ...pendingChanges }
+    
+    // If user is currently editing, include that change
+    if (editingVideo && videoTitle.trim()) {
+      const video = videos.find(v => v.id === editingVideo)
+      const currentName = video?.name || video?.title || video?.filename || 'Untitled Video'
+      if (videoTitle.trim() !== currentName) {
+        finalChanges[editingVideo] = videoTitle.trim()
+      }
+    }
+    
+    if (Object.keys(finalChanges).length === 0) return
+    
+    // Convert to mutation format
+    const updates = Object.entries(finalChanges).map(([id, name]) => {
+      // For filename changes, we only need to send id and title
+      // Don't send order/chapter_id unless we're actually reordering
+      return {
+        id,
+        title: name
+      }
+    })
+    
+    console.log('🚀 Saving changes:', updates)
+    
+    // Use TanStack Query mutation (handles optimistic updates)
+    batchRenameMutation.mutate(updates, {
+      onSuccess: (result) => {
+        console.log('✅ Save success:', result)
+        // Immediately clear pending changes - trust TanStack Query optimistic updates
+        setPendingChanges({})
+        if (editingVideo) {
+          setEditingVideo(null)
+          setEditingIndex(null)
+          setVideoTitle('')
+        }
+      },
+      onError: (error) => {
+        console.error('❌ Save error:', error)
+        // Keep pending changes on error so user doesn't lose work
+      }
+    })
+  }, [batchRenameMutation, pendingChanges, editingVideo, videoTitle, videos])
+  
+  // Notify parent of pending changes when state changes
+  useEffect(() => {
+    let totalChanges = Object.keys(pendingChanges).length
+    let hasAnyChanges = totalChanges > 0
+    
+    // Include currently active edit if it's different from original
+    if (editingVideo && videoTitle.trim()) {
+      const video = videos.find(v => v.id === editingVideo)
+      const currentName = video?.name || video?.title || video?.filename || 'Untitled Video'
+      if (videoTitle.trim() !== currentName && !pendingChanges[editingVideo]) {
+        totalChanges += 1
+        hasAnyChanges = true
+      }
+    }
+    
+    const isSaving = batchRenameMutation?.isPending || false
+    onPendingChangesUpdate?.(hasAnyChanges, totalChanges, saveAllChanges, isSaving)
+  }, [pendingChanges, editingVideo, videoTitle, videos, saveAllChanges, onPendingChangesUpdate, batchRenameMutation?.isPending])
 
-  const handleStartEdit = (video: VideoUpload) => {
+  // Auto-save on component unmount
+  useEffect(() => {
+    return () => {
+      if (Object.keys(pendingChanges).length > 0) {
+        if (onBatchRename) {
+          const changes = Object.entries(pendingChanges).map(([id, name]) => ({ id, name }))
+          onBatchRename(changes)
+        } else {
+          // Fallback to individual renames if batch not available
+          for (const [videoId, newName] of Object.entries(pendingChanges)) {
+            onVideoRename(videoId, newName)
+          }
+        }
+      }
+    }
+  }, [])
+
+  // Calculate cursor position based on click location
+  const calculateCursorPosition = (e: React.MouseEvent, text: string): number => {
+    const element = e.currentTarget as HTMLElement
+    const rect = element.getBoundingClientRect()
+    const clickX = e.clientX - rect.left
+    
+    // Create a temporary span to measure text width
+    const tempSpan = document.createElement('span')
+    tempSpan.style.font = window.getComputedStyle(element).font
+    tempSpan.style.position = 'absolute'
+    tempSpan.style.visibility = 'hidden'
+    tempSpan.style.whiteSpace = 'pre'
+    document.body.appendChild(tempSpan)
+    
+    let position = 0
+    for (let i = 0; i <= text.length; i++) {
+      tempSpan.textContent = text.substring(0, i)
+      if (tempSpan.offsetWidth >= clickX) {
+        position = i
+        break
+      }
+      position = i
+    }
+    
+    document.body.removeChild(tempSpan)
+    return position
+  }
+
+  const handleStartEdit = (video: VideoUpload, index: number, clickPosition?: number | 'start' | 'end') => {
+    const videoName = getDisplayName(video)
     setEditingVideo(video.id)
-    setVideoTitle(video.name)
+    setEditingIndex(index)
+    setVideoTitle(videoName)
+    
+    if (clickPosition === 'start') {
+      setCursorPosition(0)
+    } else if (clickPosition === 'end') {
+      setCursorPosition(videoName.length)
+    } else {
+      setCursorPosition(clickPosition ?? null)
+    }
   }
 
   const handleDragStart = (e: React.DragEvent, index: number, videoId: string) => {
@@ -92,12 +288,22 @@ export function VideoList({
     setDraggedOverIndex(null)
   }
 
-  const handleSaveEdit = (videoId: string) => {
+  const handleSaveEdit = (videoId: string, force = false) => {
+    // Always track the current edit when exiting
     if (videoTitle.trim()) {
-      onVideoRename(videoId, videoTitle.trim())
+      trackPendingChange(videoId, videoTitle.trim())
     }
     setEditingVideo(null)
+    setEditingIndex(null)
+    setVideoTitle('')
   }
+  
+  const handleCancelEdit = () => {
+    setEditingVideo(null)
+    setEditingIndex(null)
+    setVideoTitle('')
+  }
+
 
   const getStatusIcon = (status: VideoUpload['status']) => {
     switch (status) {
@@ -112,14 +318,14 @@ export function VideoList({
     }
   }
 
-  const getStatusBadge = (status: VideoUpload['status']) => {
+  const getStatusIndicator = (status: VideoUpload['status']) => {
     switch (status) {
       case 'uploading':
         return <Badge variant="secondary">Uploading</Badge>
       case 'processing':
         return <Badge variant="secondary">Processing</Badge>
       case 'complete':
-        return <Badge variant="default">Ready</Badge>
+        return <div className="h-2 w-2 bg-green-500 rounded-full" title="Ready" />
       case 'error':
         return <Badge variant="destructive">Error</Badge>
       case 'pending':
@@ -144,23 +350,24 @@ export function VideoList({
       {videos.map((video, index) => (
         <div
           key={video.id}
-          draggable={isDraggable && video.status !== 'uploading'}
-          onDragStart={(e) => isDraggable && handleDragStart(e, index, video.id)}
-          onDragOver={(e) => isDraggable && handleDragOver(e, index)}
-          onDragEnd={handleDragEnd}
-          onDrop={(e) => isDraggable && handleDrop(e, index)}
           className={cn(
             "flex items-center gap-3 p-3 bg-background rounded-lg border",
             "hover:bg-accent/50 transition-colors group",
             video.status === 'uploading' && "opacity-70",
             draggedOverIndex === index && "border-primary bg-accent",
-            isDraggable && video.status !== 'uploading' && "cursor-move",
             video.markedForDeletion && "opacity-50 bg-destructive/10"
           )}
         >
           {/* Drag Handle */}
           {isDraggable && (
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+            <div 
+              className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+              draggable={video.status !== 'uploading'}
+              onDragStart={(e) => handleDragStart(e, index, video.id)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDragEnd={handleDragEnd}
+              onDrop={(e) => handleDrop(e, index)}
+            >
               {video.status === 'uploading' ? (
                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
               ) : (
@@ -178,30 +385,115 @@ export function VideoList({
           {getStatusIcon(video.status)}
 
           {/* Video Name/Title */}
-          <div className="flex-1 min-w-0">
+          <div 
+            className="flex-1 min-w-0"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              if (editingVideo !== video.id) {
+                // Save any current edit before starting new one
+                if (editingVideo && videoTitle.trim()) {
+                  const currentVideo = videos.find(v => v.id === editingVideo)
+                  if (currentVideo) {
+                    trackPendingChange(editingVideo, videoTitle.trim())
+                  }
+                }
+                
+                // Check if this is a navigation click (cursor should be at end)
+                const target = e.target as HTMLElement
+                const currentTarget = e.currentTarget as HTMLElement
+                
+                // Check both target and currentTarget for the data attribute
+                let cursorIntent = target.getAttribute('data-cursor-position') || 
+                                 currentTarget.querySelector('[data-cursor-position]')?.getAttribute('data-cursor-position')
+                
+                let clickPosition: number | 'start' | 'end'
+                if (cursorIntent === 'end') {
+                  clickPosition = 'end'
+                } else {
+                  // Calculate cursor position from click
+                  const displayName = getDisplayName(video)
+                  clickPosition = calculateCursorPosition(e, displayName)
+                }
+                
+                handleStartEdit(video, index, clickPosition)
+              }
+            }}
+          >
             {editingVideo === video.id ? (
               <Input
-                value={videoTitle}
-                onChange={(e) => setVideoTitle(e.target.value)}
-                onBlur={() => handleSaveEdit(video.id)}
+                value={videoTitle || ''}
+                onChange={(e) => {
+                  const newValue = e.target.value
+                  setVideoTitle(newValue)
+                  
+                  // Track pending changes for counter
+                  trackPendingChange(video.id, newValue)
+                }}
+                onBlur={() => {
+                  // Save changes on blur instead of canceling
+                  if (videoTitle.trim()) {
+                    handleSaveEdit(video.id)
+                  } else {
+                    handleCancelEdit()
+                  }
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
-                    handleSaveEdit(video.id)
-                  } else if (e.key === 'Escape') {
+                    e.preventDefault()
+                    if (videoTitle.trim()) {
+                      handleSaveEdit(video.id, true)
+                    } else {
+                      handleCancelEdit()
+                    }
+                  } else if (e.key === 'Tab') {
+                    e.preventDefault()
+                    
+                    // Always save current edit when tabbing
+                    if (videoTitle.trim()) {
+                      trackPendingChange(video.id, videoTitle.trim())
+                    }
+                    
+                    // Exit edit mode
                     setEditingVideo(null)
+                    setEditingIndex(null)
+                    setVideoTitle('')
+                    
+                    // Navigate to next field
+                    if (onTabNavigation) {
+                      onTabNavigation(video.id, 'video', e.shiftKey ? 'previous' : 'next')
+                    }
+                  } else if (e.key === 'Escape') {
+                    handleCancelEdit()
                   }
                 }}
                 className="h-7 text-sm"
-                autoFocus
+                ref={(input) => {
+                  if (input) {
+                    input.focus()
+                    // Set cursor position if we captured it from the click
+                    if (cursorPosition !== null) {
+                      setTimeout(() => {
+                        input.setSelectionRange(cursorPosition, cursorPosition)
+                        // Clear cursor position after setting it so it doesn't interfere with typing
+                        setCursorPosition(null)
+                      }, 0)
+                    }
+                  }
+                }}
                 onClick={(e) => e.stopPropagation()}
               />
             ) : (
               <div className="space-y-1">
-                <p className={cn(
-                  "text-sm font-medium truncate",
-                  video.markedForDeletion && "line-through"
-                )}>
-                  {video.name}
+                <p 
+                  className={cn(
+                    "text-sm font-medium cursor-pointer select-none hover:bg-slate-200 hover:text-slate-900 px-2 py-1 rounded border border-transparent hover:border-slate-400 transition-all",
+                    video.markedForDeletion && "line-through"
+                  )}
+                  title="Click to edit filename"
+                  data-video-edit={video.id}
+                >
+                  {getDisplayName(video)}
                 </p>
                 {video.status === 'uploading' && video.progress !== undefined && (
                   <div className="flex items-center gap-2">
@@ -211,20 +503,21 @@ export function VideoList({
                     </span>
                   </div>
                 )}
-                {video.duration && video.status === 'complete' && (
+                {video.duration && video.status === 'complete' && video.duration !== '0:00' && (
                   <p className="text-xs text-muted-foreground">
                     Duration: {video.duration}
                   </p>
                 )}
+                
               </div>
             )}
           </div>
 
-          {/* Status Badge */}
+          {/* Status Indicator */}
           {video.markedForDeletion ? (
             <Badge variant="destructive">Marked for deletion</Badge>
           ) : (
-            getStatusBadge(video.status)
+            getStatusIndicator(video.status)
           )}
 
           {/* Actions */}
@@ -245,20 +538,6 @@ export function VideoList({
               </Button>
             )}
 
-            {/* Edit Button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={(e) => {
-                e.stopPropagation()
-                handleStartEdit(video)
-              }}
-              disabled={video.status === 'uploading'}
-              title="Rename video"
-            >
-              <Edit2 className="h-3 w-3" />
-            </Button>
 
             {/* Delete Button */}
             <Button

@@ -1,8 +1,20 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter, useParams } from "next/navigation"
-import { useAppStore } from "@/stores/app-store"
+import { useState, useEffect, use } from "react"
+import { useRouter } from "next/navigation"
+import { useCourse } from "@/hooks/use-course-queries"
+import { useCourseMutations } from "@/hooks/use-course-mutations"
+import { useVideoMutations } from "@/hooks/use-video-mutations"
+import { useChapterMutations } from "@/hooks/use-chapter-mutations"
+import { useChapters } from "@/hooks/use-course-queries"
+import { 
+  useWizardState, 
+  useFormState, 
+  usePreferences,
+  useUploadProgress,
+  useModalState
+} from '@/stores/app-store-new'
+import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -32,116 +44,213 @@ import { ChapterManager } from "@/components/course/ChapterManager"
 import { VideoPreviewModal } from "@/components/course/VideoPreviewModal"
 import { useVideoPreview } from "@/hooks/useVideoPreview"
 
-// Import the normalized reorder hook (THE FIX!)
-import { useNormalizedVideoReorder, useMigrateCourseToNormalized } from "@/hooks/useNormalizedVideoReorder"
+// Video preview hook (keeping existing functionality)
+// import { useNormalizedVideoReorder, useMigrateCourseToNormalized } from "@/hooks/useNormalizedVideoReorder"
 
-export default function EditCoursePage() {
+export default function EditCoursePage(props: { params: Promise<{ id: string }> }) {
   const router = useRouter()
-  const params = useParams()
-  const courseId = params.id as string
+  const params = use(props.params)
+  const courseId = params.id
   
-  const {
-    user,
-    courses,
-    courseCreation,
-    setCourseInfo,
-    createChapter,
-    updateChapter,
-    deleteChapter,
-    addVideosToQueue,
-    updateVideoName,
-    removeVideo,
-    moveVideoToChapter,
-    reorderChapters,
-    reorderVideosInChapter: oldReorderVideosInChapter, // Keep old function as backup
-    saveDraft,
-    publishCourse,
-    loadCourseForEdit,
-    uploadQueue,
-    isAutoSaving,
-    authLoading
-  } = useAppStore()
+  // New architecture hooks
+  const { data: course, isLoading: courseLoading, error: courseError } = useCourse(courseId)
+  const { data: chapters, isLoading: chaptersLoading } = useChapters(courseId)
+  
+  // Debug logging for performance investigation
+  useEffect(() => {
+    console.log('[EDIT PAGE] Performance Debug:', {
+      courseId,
+      courseLoading,
+      chaptersLoading,
+      hasError: !!courseError,
+      hasCourse: !!course,
+      timestamp: new Date().toISOString()
+    })
+  }, [courseId, courseLoading, chaptersLoading, courseError, course])
+  const { updateCourse, saveDraft, publishCourse } = useCourseMutations()
+  const { uploadVideo, updateVideo, deleteVideo, moveVideoToChapter, batchUpdateVideoOrders, batchUpdateVideoOrdersSilent } = useVideoMutations(courseId)
+  const { createChapter, updateChapter, deleteChapter, reorderChapters } = useChapterMutations()
+  
+  // UI state from new minimal store
+  const wizard = useWizardState()
+  const form = useFormState()
+  
+  const preferences = usePreferences()
+  const uploadProgress = useUploadProgress()
+  const modal = useModalState()
+
+  // Current course data from TanStack Query
+  const currentCourse = course
+  
+  // Loading and error states
+  const isLoading = courseLoading || chaptersLoading
+  const error = courseError
 
   const [hasChanges, setHasChanges] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [activeTab, setActiveTab] = useState("course-info")
   
+  // Video filename change state
+  const [hasPendingVideoChanges, setHasPendingVideoChanges] = useState(false)
+  const [pendingVideoChangeCount, setPendingVideoChangeCount] = useState(0)
+  const [videoSaveFunction, setVideoSaveFunction] = useState<(() => void) | null>(null)
+  
+  // Local form state for course data (since we're not persisting this)
+  const [courseData, setCourseData] = useState<any>(null)
+  
   // Use the video preview hook
   const { previewVideo, isPreviewOpen, openPreview, closePreview } = useVideoPreview()
   
-  // Use the NORMALIZED video reorder hook (THE FIX!)
-  const { reorderVideosInChapter, isUsingNormalized } = useNormalizedVideoReorder()
-  const { migrateCourse } = useMigrateCourseToNormalized()
-
-  // Load course for editing on mount - but only after user is loaded
+  // Initialize form data when course loads
   useEffect(() => {
-    if (courseId && user?.id && !authLoading) {
-      loadCourseForEdit(courseId)
+    if (currentCourse && !courseData) {
+      setCourseData({
+        title: currentCourse.title,
+        description: currentCourse.description,
+        price: currentCourse.price,
+        category: currentCourse.category,
+        level: currentCourse.level,
+        status: currentCourse.status
+      })
     }
-  }, [courseId, user?.id, authLoading, loadCourseForEdit])
-  
-  // Migrate course data to normalized state when it loads
-  useEffect(() => {
-    if (courseCreation && courseId) {
-      migrateCourse(courseCreation)
-    }
-  }, [courseCreation, courseId, migrateCourse])
-
-  // Get current course from courseCreation or courses list
-  const currentCourse = courseCreation || courses?.find(c => c.id === courseId)
+  }, [currentCourse, courseData])
 
   // Handle video upload for a specific chapter
-  const handleVideoUpload = (chapterId: string, files: FileList) => {
-    if (!courseCreation?.id) {
-      // Ensure course ID is set
-      setCourseInfo({ ...courseCreation, id: courseId })
-    }
-    
-    addVideosToQueue(files)
+  const handleVideoUpload = async (chapterId: string, files: FileList) => {
+    console.log('🎥 Starting video upload:', { chapterId, fileCount: files.length, courseId })
     setHasChanges(true)
+    const fileArray = Array.from(files)
     
-    // Move videos to specific chapter after upload starts
-    setTimeout(() => {
-      Array.from(files).forEach((_, index) => {
-        const videoId = uploadQueue[uploadQueue.length - files.length + index]?.id
-        if (videoId) {
-          moveVideoToChapter(videoId, chapterId)
-        }
-      })
-    }, 100)
+    // Upload files one by one since the mutation expects single files
+    const uploadPromises = fileArray.map(async (file) => {
+      try {
+        console.log('📤 Uploading file:', file.name, 'to chapter:', chapterId)
+        const result = await uploadVideo.mutateAsync({ file, chapterId })
+        console.log('✅ Upload successful:', file.name, result)
+        return result
+      } catch (error) {
+        console.error(`❌ Upload failed for ${file.name}:`, error)
+        toast.error(`Failed to upload ${file.name}`)
+        throw error
+      }
+    })
+    
+    try {
+      const results = await Promise.all(uploadPromises)
+      console.log('🎉 All uploads completed:', results)
+      toast.success(`${fileArray.length} video(s) uploaded successfully`)
+    } catch (error) {
+      // Some uploads failed, but some might have succeeded
+      console.error('❌ Some video uploads failed:', error)
+    }
   }
 
   // Handle moving video between chapters
-  const handleMoveVideo = (videoId: string, fromChapterId: string, toChapterId: string) => {
-    moveVideoToChapter(videoId, toChapterId)
+  const handleMoveVideo = async (videoId: string, fromChapterId: string, toChapterId: string) => {
     setHasChanges(true)
+    try {
+      await moveVideoToChapter.mutateAsync({ videoId, newChapterId: toChapterId, newOrder: 0 })
+    } catch (error) {
+      console.error('Move video failed:', error)
+      toast.error('Failed to move video')
+    }
   }
 
   // Handle save
   const handleSave = async () => {
     setSaveStatus('saving')
     try {
-      await saveDraft()
+      // Save video changes first if there are any
+      if (hasPendingVideoChanges && videoSaveFunction) {
+        console.log('[COURSE EDIT] Saving video filename changes...')
+        await videoSaveFunction()
+        setHasPendingVideoChanges(false)
+        setPendingVideoChangeCount(0)
+        setVideoSaveFunction(null)
+      }
+      
+      // Then save course changes if there are any
+      if (hasChanges && courseData) {
+        console.log('[COURSE EDIT] Saving course data changes...')
+        await saveDraft.mutateAsync({
+          courseId,
+          data: courseData
+        })
+        setHasChanges(false)
+        form.reset() // Use reset instead of clearFormDirty
+      }
+      
       setSaveStatus('saved')
-      setHasChanges(false)
       setTimeout(() => setSaveStatus('idle'), 3000)
+      toast.success('Changes saved successfully')
     } catch (error) {
       console.error('[COURSE EDIT] Save error:', error)
       setSaveStatus('error')
       setTimeout(() => setSaveStatus('idle'), 3000)
+      toast.error('Failed to save changes')
     }
   }
 
   // Handle input changes
   const handleInputChange = (field: string, value: any) => {
-    setCourseInfo({ [field]: value })
+    setCourseData({ ...courseData, [field]: value })
+    form.setFormDirty()
     setHasChanges(true)
   }
 
-  if (authLoading || !currentCourse) {
+  // Show skeleton loading instead of full spinner for better UX
+  if (isLoading && !course) {
+    return (
+      <div className="container mx-auto p-6 max-w-7xl">
+        {/* Header Skeleton */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <div className="w-8 h-8 bg-muted rounded animate-pulse" />
+            <div>
+              <div className="h-8 w-48 bg-muted rounded animate-pulse mb-2" />
+              <div className="h-4 w-72 bg-muted rounded animate-pulse" />
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="h-10 w-32 bg-muted rounded animate-pulse" />
+            <div className="h-10 w-32 bg-muted rounded animate-pulse" />
+          </div>
+        </div>
+
+        {/* Tabs Skeleton */}
+        <div className="flex gap-2 mb-6">
+          {[1,2,3].map(i => <div key={i} className="h-10 w-32 bg-muted rounded animate-pulse" />)}
+        </div>
+
+        {/* Content Skeleton */}
+        <div className="space-y-6">
+          {[1,2,3].map(i => (
+            <div key={i} className="h-32 bg-muted rounded animate-pulse" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <div className="text-center">
+          <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+          <p className="text-red-600">Failed to load course</p>
+          <p className="text-sm text-muted-foreground">{error.message}</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!currentCourse) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <AlertCircle className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+          <p>Course not found</p>
+        </div>
       </div>
     )
   }
@@ -168,7 +277,7 @@ export default function EditCoursePage() {
         
         <div className="flex items-center gap-4">
           {/* Save Status Indicator */}
-          {saveStatus === 'saving' && (
+          {(saveStatus === 'saving' || saveDraft.isPending) && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Saving...
@@ -199,10 +308,12 @@ export default function EditCoursePage() {
           {/* Save Button */}
           <Button
             onClick={handleSave}
-            disabled={!hasChanges || saveStatus === 'saving'}
+            disabled={(!hasChanges && !form.isDirty && !hasPendingVideoChanges) || saveStatus === 'saving' || saveDraft.isPending}
           >
             <Save className="mr-2 h-4 w-4" />
-            Save Changes
+            {saveDraft.isPending || saveStatus === 'saving' ? 'Saving...' : 
+             hasPendingVideoChanges ? `Save ${pendingVideoChangeCount} filename change${pendingVideoChangeCount !== 1 ? 's' : ''}` :
+             'Save Changes'}
           </Button>
         </div>
       </div>
@@ -231,7 +342,7 @@ export default function EditCoursePage() {
                   <Label htmlFor="title">Course Title</Label>
                   <Input
                     id="title"
-                    value={courseCreation?.title || ''}
+                    value={courseData?.title || currentCourse?.title || ''}
                     onChange={(e) => handleInputChange('title', e.target.value)}
                   />
                 </div>
@@ -240,7 +351,7 @@ export default function EditCoursePage() {
                   <Input
                     id="price"
                     type="number"
-                    value={courseCreation?.price || 0}
+                    value={courseData?.price || currentCourse?.price || 0}
                     onChange={(e) => handleInputChange('price', parseFloat(e.target.value))}
                   />
                 </div>
@@ -250,7 +361,7 @@ export default function EditCoursePage() {
                 <Label htmlFor="description">Description</Label>
                 <Textarea
                   id="description"
-                  value={courseCreation?.description || ''}
+                  value={courseData?.description || currentCourse?.description || ''}
                   onChange={(e) => handleInputChange('description', e.target.value)}
                   rows={4}
                 />
@@ -260,7 +371,7 @@ export default function EditCoursePage() {
                 <div className="space-y-2">
                   <Label htmlFor="category">Category</Label>
                   <Select 
-                    value={courseCreation?.category || undefined}
+                    value={courseData?.category || currentCourse?.category || undefined}
                     onValueChange={(value) => handleInputChange('category', value)}
                   >
                     <SelectTrigger>
@@ -278,7 +389,7 @@ export default function EditCoursePage() {
                 <div className="space-y-2">
                   <Label htmlFor="level">Level</Label>
                   <Select 
-                    value={courseCreation?.level || 'beginner'}
+                    value={courseData?.level || currentCourse?.level || 'beginner'}
                     onValueChange={(value) => handleInputChange('level', value)}
                   >
                     <SelectTrigger>
@@ -303,18 +414,15 @@ export default function EditCoursePage() {
             <div className="lg:col-span-1">
               <VideoUploader
                 onFilesSelected={(files) => {
-                  if (courseCreation?.chapters?.length) {
-                    handleVideoUpload(courseCreation.chapters[0].id, files)
+                  if (chapters && chapters.length > 0) {
+                    handleVideoUpload(chapters[0].id, files)
                   } else {
-                    createChapter('Chapter 1')
-                    setTimeout(() => {
-                      if (courseCreation?.chapters?.[0]) {
-                        handleVideoUpload(courseCreation.chapters[0].id, files)
-                      }
-                    }, 100)
+                    // Create first chapter if none exist
+                    // TODO: Implement createChapter mutation
+                    console.log('Need to create first chapter')
                   }
                 }}
-                uploadQueue={uploadQueue}
+                uploadQueue={uploadProgress.queue}
               />
             </div>
 
@@ -323,37 +431,118 @@ export default function EditCoursePage() {
               <Card>
                 <CardContent className="pt-6">
                   <ChapterManager
-                    chapters={courseCreation?.chapters || []}
-                    onCreateChapter={(title) => {
-                      createChapter(title)
-                      setHasChanges(true)
+                    chapters={chapters || []}
+                    onCreateChapter={async (title) => {
+                      try {
+                        await createChapter.mutateAsync({ courseId, title })
+                        setHasChanges(true)
+                      } catch (error) {
+                        console.error('Create chapter failed:', error)
+                      }
                     }}
-                    onUpdateChapter={(id, updates) => {
-                      updateChapter(id, updates)
-                      setHasChanges(true)
+                    onUpdateChapter={async (id, updates) => {
+                      try {
+                        await updateChapter.mutateAsync({ courseId, chapterId: id, updates })
+                        setHasChanges(true)
+                      } catch (error) {
+                        console.error('Update chapter failed:', error)
+                      }
                     }}
-                    onDeleteChapter={(id) => {
-                      deleteChapter(id)
-                      setHasChanges(true)
+                    onDeleteChapter={async (id) => {
+                      try {
+                        await deleteChapter.mutateAsync({ courseId, chapterId: id })
+                        setHasChanges(true)
+                      } catch (error) {
+                        console.error('Delete chapter failed:', error)
+                      }
                     }}
-                    onReorderChapters={(chapters) => {
-                      reorderChapters(chapters)
-                      setHasChanges(true)
+                    onReorderChapters={async (chapters) => {
+                      try {
+                        await reorderChapters.mutateAsync({ courseId, chapters })
+                        setHasChanges(true)
+                      } catch (error) {
+                        console.error('Reorder chapters failed:', error)
+                      }
                     }}
                     onVideoUpload={handleVideoUpload}
-                    onVideoRename={(id, name) => {
-                      updateVideoName(id, name)
-                      setHasChanges(true)
+                    onVideoRename={async (id, name) => {
+                      try {
+                        await updateVideo.mutateAsync({
+                          videoId: id,
+                          updates: { title: name }
+                        })
+                        setHasChanges(true)
+                      } catch (error) {
+                        console.error('Video rename failed:', error)
+                        toast.error('Failed to rename video')
+                      }
                     }}
-                    onVideoDelete={(id) => {
-                      removeVideo(id)
-                      setHasChanges(true)
+                    batchRenameMutation={batchUpdateVideoOrdersSilent}
+                    onVideoDelete={async (id) => {
+                      try {
+                        await deleteVideo.mutateAsync(id)
+                        setHasChanges(true)
+                      } catch (error) {
+                        console.error('Video delete failed:', error)
+                        toast.error('Failed to delete video')
+                      }
                     }}
                     onVideoPreview={openPreview}
                     onMoveVideo={handleMoveVideo}
                     onReorderVideosInChapter={(chapterId, videos) => {
-                      reorderVideosInChapter(chapterId, videos)
+                      // TODO: Implement reorderVideosInChapter mutation
+                      console.log('Reorder videos:', chapterId, videos)
                       setHasChanges(true)
+                    }}
+                    onPendingChangesUpdate={(hasChanges, count, saveFunction, isSaving) => {
+                      // Handle video filename changes
+                      if (hasChanges !== hasPendingVideoChanges) {
+                        setHasPendingVideoChanges(hasChanges)
+                        setPendingVideoChangeCount(count)
+                        if (saveFunction) {
+                          setVideoSaveFunction(() => saveFunction)
+                        }
+                        console.log('Pending changes update:', { hasChanges, count, isSaving })
+                      }
+                    }}
+                    onTabNavigation={(currentId, currentType, direction) => {
+                      // Handle Tab navigation between video titles only (skip broken chapter editing)
+                      if (currentType === 'video') {
+                        // Get all video IDs from all chapters in order
+                        const allVideoIds: string[] = []
+                        chapters.forEach(chapter => {
+                          chapter.videos.forEach(video => {
+                            allVideoIds.push(video.id)
+                          })
+                        })
+                        
+                        const currentIndex = allVideoIds.indexOf(currentId)
+                        if (currentIndex === -1) return
+                        
+                        let nextIndex = currentIndex
+                        if (direction === 'next') {
+                          nextIndex = (currentIndex + 1) % allVideoIds.length
+                        } else {
+                          nextIndex = currentIndex === 0 ? allVideoIds.length - 1 : currentIndex - 1
+                        }
+                        
+                        const nextVideoId = allVideoIds[nextIndex]
+                        if (nextVideoId) {
+                          // Find the element and trigger edit mode
+                          const nextElement = document.querySelector(`[data-video-edit="${nextVideoId}"]`)
+                          if (nextElement) {
+                            (nextElement as HTMLElement).click()
+                            // Set cursor to end for tab navigation
+                            setTimeout(() => {
+                              const input = document.querySelector('input:focus') as HTMLInputElement
+                              if (input) {
+                                const length = input.value.length
+                                input.setSelectionRange(length, length)
+                              }
+                            }, 0)
+                          }
+                        }
+                      }
                     }}
                   />
                 </CardContent>
@@ -376,26 +565,30 @@ export default function EditCoursePage() {
                 <div>
                   <p className="font-medium">Course Status</p>
                   <p className="text-sm text-muted-foreground">
-                    Current status: {courseCreation?.status || 'draft'}
+                    Current status: {currentCourse?.status || 'draft'}
                   </p>
                 </div>
                 <div className="space-x-2">
-                  {courseCreation?.status === 'draft' && (
+                  {currentCourse?.status === 'draft' && (
                     <Button 
                       onClick={async () => {
-                        await publishCourse()
-                        router.push('/instructor/courses')
+                        try {
+                          await publishCourse.mutateAsync(courseId)
+                          router.push('/instructor/courses')
+                        } catch (error) {
+                          console.error('Publish failed:', error)
+                          toast.error('Failed to publish course')
+                        }
                       }}
                     >
                       Publish Course
                     </Button>
                   )}
-                  {courseCreation?.status === 'published' && (
+                  {currentCourse?.status === 'published' && (
                     <Button 
                       variant="outline"
                       onClick={() => {
-                        setCourseInfo({ status: 'draft' })
-                        setHasChanges(true)
+                        handleInputChange('status', 'draft')
                       }}
                     >
                       Unpublish
@@ -408,7 +601,7 @@ export default function EditCoursePage() {
                 <div>
                   <p className="font-medium">Total Videos</p>
                   <p className="text-sm text-muted-foreground">
-                    {courseCreation?.videos?.length || 0} videos across {courseCreation?.chapters?.length || 0} chapters
+                    {currentCourse?.videos?.length || 0} videos across {chapters?.length || 0} chapters
                   </p>
                 </div>
               </div>
@@ -417,7 +610,7 @@ export default function EditCoursePage() {
                 <div>
                   <p className="font-medium">Created</p>
                   <p className="text-sm text-muted-foreground">
-                    {courseCreation?.createdAt ? new Date(courseCreation.createdAt).toLocaleDateString() : 'Unknown'}
+                    {currentCourse?.created_at ? new Date(currentCourse.created_at).toLocaleDateString() : 'Unknown'}
                   </p>
                 </div>
               </div>
@@ -426,7 +619,7 @@ export default function EditCoursePage() {
                 <div>
                   <p className="font-medium">Last Updated</p>
                   <p className="text-sm text-muted-foreground">
-                    {courseCreation?.lastSaved ? new Date(courseCreation.lastSaved).toLocaleDateString() : 'Unknown'}
+                    {currentCourse?.updated_at ? new Date(currentCourse.updated_at).toLocaleDateString() : 'Unknown'}
                   </p>
                 </div>
               </div>
