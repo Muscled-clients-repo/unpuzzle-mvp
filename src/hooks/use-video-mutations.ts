@@ -1,5 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+// TODO: Switch to app-store-new after Phase 4 migration
+// import { useAppStore } from '@/stores/app-store-new'
 import { useAppStore } from '@/stores/app-store'
 import {
   uploadVideoAction,
