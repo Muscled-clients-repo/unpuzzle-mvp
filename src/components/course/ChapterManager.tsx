@@ -31,7 +31,6 @@ interface ChapterManagerProps {
   onVideoPreview?: (video: VideoUpload) => void
   onMoveVideo: (videoId: string, fromChapterId: string, toChapterId: string) => void
   onReorderVideosInChapter?: (chapterId: string, videos: VideoUpload[]) => void
-  uploadQueue?: VideoUpload[]
   className?: string
 }
 
@@ -47,7 +46,6 @@ export function ChapterManager({
   onVideoPreview,
   onMoveVideo,
   onReorderVideosInChapter,
-  uploadQueue = [],
   className
 }: ChapterManagerProps) {
   const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set())
@@ -287,22 +285,6 @@ export function ChapterManager({
         </div>
       )}
 
-      {/* Currently uploading videos (if any) */}
-      {uploadQueue.filter(v => v.status === 'uploading').length > 0 && (
-        <Card>
-          <CardHeader>
-            <h4 className="font-medium">Currently Uploading</h4>
-          </CardHeader>
-          <CardContent>
-            <VideoList
-              videos={uploadQueue.filter(v => v.status === 'uploading')}
-              onVideoRename={() => {}}
-              onVideoDelete={() => {}}
-              isDraggable={false}
-            />
-          </CardContent>
-        </Card>
-      )}
     </div>
   )
 }

@@ -355,7 +355,6 @@ export default function EditCoursePage() {
                       reorderVideosInChapter(chapterId, videos)
                       setHasChanges(true)
                     }}
-                    uploadQueue={uploadQueue}
                   />
                 </CardContent>
               </Card>

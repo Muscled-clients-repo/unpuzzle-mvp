@@ -336,7 +336,6 @@ export default function CreateCoursePage() {
                   onVideoDelete={removeVideo}
                   onVideoPreview={openPreview}
                   onMoveVideo={handleMoveVideo}
-                  uploadQueue={uploadQueue}
                 />
               </CardContent>
             </Card>

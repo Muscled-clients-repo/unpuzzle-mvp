@@ -5,11 +5,278 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { backblazeService } from '@/services/video/backblaze-service'
 import { revalidatePath } from 'next/cache'
 
+// Result types for better type safety
+export interface ActionResult<T = any> {
+  success: boolean
+  data?: T
+  error?: string
+  message?: string
+}
+
 export interface DeleteCourseResult {
   success: boolean
   message?: string
   error?: string
   videosDeleted?: number
+}
+
+// Helper function to get authenticated user
+async function requireAuth() {
+  const supabase = await createClient()
+  const { data: { user }, error } = await supabase.auth.getUser()
+  
+  if (error || !user) {
+    throw new Error('Authentication required')
+  }
+  
+  return user
+}
+
+/**
+ * Create a new course
+ */
+export async function createCourseAction(data: {
+  title?: string
+  description?: string
+  price?: number
+  category?: string
+  level?: string
+}): Promise<ActionResult> {
+  try {
+    const user = await requireAuth()
+    const supabase = await createClient()
+    
+    const { data: course, error } = await supabase
+      .from('courses')
+      .insert({
+        title: data.title || 'Untitled Course',
+        description: data.description || '',
+        price: data.price,
+        category: data.category,
+        level: data.level,
+        instructor_id: user.id,
+        status: 'draft',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single()
+    
+    if (error) throw error
+    
+    revalidatePath('/instructor/courses')
+    revalidatePath(`/instructor/course/${course.id}`)
+    
+    return { success: true, data: course }
+  } catch (error) {
+    console.error('Create course error:', error)
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to create course' 
+    }
+  }
+}
+
+/**
+ * Get a single course with videos
+ */
+export async function getCourseAction(courseId: string) {
+  try {
+    const user = await requireAuth()
+    const supabase = await createClient()
+    
+    const { data: course, error } = await supabase
+      .from('courses')
+      .select(`
+        *,
+        videos (
+          id,
+          title,
+          url,
+          thumbnail_url,
+          duration,
+          order,
+          chapter_id,
+          backblaze_file_id,
+          filename,
+          file_size,
+          status,
+          created_at,
+          updated_at
+        )
+      `)
+      .eq('id', courseId)
+      .eq('instructor_id', user.id)
+      .single()
+    
+    if (error) throw error
+    if (!course) throw new Error('Course not found')
+    
+    // Sort videos by order
+    if (course.videos) {
+      course.videos.sort((a: any, b: any) => (a.order || 0) - (b.order || 0))
+    }
+    
+    return course
+  } catch (error) {
+    console.error('Get course error:', error)
+    throw error
+  }
+}
+
+/**
+ * Get all courses for the current user
+ */
+export async function getCoursesAction() {
+  try {
+    const user = await requireAuth()
+    const supabase = await createClient()
+    
+    const { data: courses, error } = await supabase
+      .from('courses')
+      .select(`
+        *,
+        videos!inner (count)
+      `)
+      .eq('instructor_id', user.id)
+      .order('updated_at', { ascending: false })
+    
+    if (error) throw error
+    
+    return courses || []
+  } catch (error) {
+    console.error('Get courses error:', error)
+    throw error
+  }
+}
+
+/**
+ * Save course as draft (auto-save functionality)
+ */
+export async function saveCourseAsDraftAction(
+  courseId: string, 
+  data: any
+): Promise<ActionResult> {
+  try {
+    const user = await requireAuth()
+    const supabase = await createClient()
+    
+    const { data: course, error } = await supabase
+      .from('courses')
+      .update({
+        ...data,
+        status: 'draft',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', courseId)
+      .eq('instructor_id', user.id)
+      .select()
+      .single()
+    
+    if (error) throw error
+    
+    // Soft revalidation for auto-save
+    revalidatePath(`/instructor/course/${courseId}`, 'page')
+    
+    return { success: true, data: course }
+  } catch (error) {
+    console.error('Save draft error:', error)
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to save draft' 
+    }
+  }
+}
+
+/**
+ * Publish a course
+ */
+export async function publishCourseAction(courseId: string): Promise<ActionResult> {
+  try {
+    const user = await requireAuth()
+    const supabase = await createClient()
+    
+    // Verify course has required content
+    const { data: course, error: fetchError } = await supabase
+      .from('courses')
+      .select(`
+        *,
+        videos (id)
+      `)
+      .eq('id', courseId)
+      .eq('instructor_id', user.id)
+      .single()
+    
+    if (fetchError) throw fetchError
+    if (!course) throw new Error('Course not found')
+    
+    if (!course.title || !course.description) {
+      throw new Error('Course must have title and description')
+    }
+    
+    if (!course.videos || course.videos.length === 0) {
+      throw new Error('Course must have at least one video')
+    }
+    
+    const { data: publishedCourse, error } = await supabase
+      .from('courses')
+      .update({
+        status: 'published',
+        published_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', courseId)
+      .eq('instructor_id', user.id)
+      .select()
+      .single()
+    
+    if (error) throw error
+    
+    revalidatePath(`/instructor/course/${courseId}`)
+    revalidatePath('/instructor/courses')
+    
+    return { success: true, data: publishedCourse }
+  } catch (error) {
+    console.error('Publish course error:', error)
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to publish course' 
+    }
+  }
+}
+
+/**
+ * Unpublish a course
+ */
+export async function unpublishCourseAction(courseId: string): Promise<ActionResult> {
+  try {
+    const user = await requireAuth()
+    const supabase = await createClient()
+    
+    const { data: course, error } = await supabase
+      .from('courses')
+      .update({
+        status: 'draft',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', courseId)
+      .eq('instructor_id', user.id)
+      .select()
+      .single()
+    
+    if (error) throw error
+    
+    revalidatePath(`/instructor/course/${courseId}`)
+    revalidatePath('/instructor/courses')
+    
+    return { success: true, data: course }
+  } catch (error) {
+    console.error('Unpublish course error:', error)
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to unpublish course' 
+    }
+  }
 }
 
 /**

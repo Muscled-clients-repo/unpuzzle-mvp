@@ -197,6 +197,45 @@ const reorderVideos = (videos: any[]) => {
 - [ ] Reload page - order is maintained
 - [ ] User confirms: "VIDEO REORDERING WORKS! Continue to next feature"
 
+### ⚠️ CRITICAL UPDATE: Video Deletion Synchronization Issue
+**NEW DISCOVERY:** Video deletion is broken due to state architecture mismatch. Videos marked for deletion in old state (`courseCreation.videos`) but system only processes from new normalized state (`normalizedState.videos`).
+
+**IMMEDIATE FIX REQUIRED:** Before proceeding with migration, add synchronization to `removeVideo` function:
+
+```typescript
+// In removeVideo() - SYNC BOTH STATES DURING MIGRATION
+removeVideo: (videoId) => {
+  // Mark in OLD state (current)
+  set(state => ({ /* old state update */ }))
+  
+  // ALSO mark in NEW state
+  set(state => ({
+    normalizedState: {
+      ...state.normalizedState,
+      videos: {
+        ...state.normalizedState.videos,
+        [videoId]: {
+          ...state.normalizedState.videos[videoId],
+          markedForDeletion: true
+        }
+      }
+    }
+  }))
+}
+```
+
+**AND update saveDraft to check BOTH states:**
+```typescript
+// In saveDraft() - DUAL-STATE PROCESSING
+const videosFromNormalized = normalizedState ? getVideosMarkedForDeletion(normalizedState) : []
+const videosFromOldState = courseCreation.videos.filter(v => v.markedForDeletion === true)
+const allVideosToDelete = [...videosFromNormalized, ...videosFromOldState]
+
+if (allVideosToDelete.length > 0) {
+  // Process ALL deletions regardless of source
+}
+```
+
 ### Step 4.2: Migration Order
 1. **Video Reordering** (broken, fix first) - CHECKPOINT 4A
 2. **Video Upload** (create in normalized from start) - CHECKPOINT 4B  

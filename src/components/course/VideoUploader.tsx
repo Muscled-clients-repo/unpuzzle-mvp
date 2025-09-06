@@ -123,33 +123,6 @@ export function VideoUploader({
           </div>
         </CardContent>
       </Card>
-
-      {/* Upload Progress Queue */}
-      {uploadQueue.length > 0 && (
-        <Card className="mt-4">
-          <CardHeader>
-            <CardTitle>Uploading</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {uploadQueue.map((video) => (
-              <div key={video.id} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm truncate flex items-center gap-2">
-                    {video.status === 'uploading' && (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    )}
-                    {video.name}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {video.progress}%
-                  </span>
-                </div>
-                <Progress value={video.progress} className="h-2" />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
     </div>
   )
 }
