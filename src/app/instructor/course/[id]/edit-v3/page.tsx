@@ -337,19 +337,12 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
                   {formState.values.title || course?.title || 'Course Editor'}
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  {course?.status === 'published' ? 'Live Course' : 'Draft Mode'}
+                  {course?.status === 'published' ? 'Live Course' : 'Draft'}
                 </p>
               </div>
             </div>
             
             <div className="flex items-center gap-3">
-              <Badge 
-                variant={course.status === 'published' ? 'default' : 'secondary'}
-                className="capitalize"
-              >
-                {course.status}
-              </Badge>
-              
               <Button
                 variant="outline"
                 size="sm"
@@ -375,7 +368,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
       </div>
 
       {/* Two Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
         {/* Course Details - 33% Width */}
         <div className="lg:col-span-1">
           <Card className="sticky top-24">

@@ -10,7 +10,6 @@ import {
   ChevronRight, 
   ChevronDown, 
   GripVertical,
-  Edit2,
   Trash2,
   Upload
 } from "lucide-react"
@@ -91,9 +90,17 @@ export function ChapterManager({
   }
 
   const handleSaveChapterEdit = (chapterId: string) => {
-    if (chapterTitle.trim()) {
-      // Add to pending changes instead of auto-saving
-      ui.setChapterPendingChange(chapterId, chapterTitle.trim())
+    const chapter = chapters.find(ch => ch.id === chapterId)
+    if (chapter && chapterTitle.trim()) {
+      const originalTitle = chapter.title
+      
+      if (chapterTitle.trim() === originalTitle) {
+        // No change, remove any pending changes
+        ui.removeContentPendingChange('chapters', chapterId)
+      } else {
+        // Only set pending change if actually different
+        ui.setChapterPendingChange(chapterId, chapterTitle.trim())
+      }
     }
     setEditingChapter(null)
   }
@@ -200,18 +207,26 @@ export function ChapterManager({
                             const newTitle = e.target.value
                             setChapterTitle(newTitle)
                             
-                            // Check if this matches the original chapter title
+                            // Only set pending changes if value actually differs from original
                             const originalTitle = chapter.title
                             
                             if (newTitle.trim() === originalTitle) {
                               // No change, remove from pending changes
                               ui.removeContentPendingChange('chapters', chapter.id)
-                            } else if (newTitle.trim()) {
-                              // Set pending change immediately during typing (like video filenames)
+                            } else if (newTitle.trim() && newTitle.trim() !== originalTitle) {
+                              // Only set pending change if actually different from original
                               ui.setChapterPendingChange(chapter.id, newTitle.trim())
                             }
                           }}
-                          onBlur={() => handleSaveChapterEdit(chapter.id)}
+                          onBlur={(e) => {
+                            // Only exit edit mode if blur is due to clicking elsewhere in the document
+                            // Not due to application switching (Cmd+Tab)
+                            setTimeout(() => {
+                              if (document.activeElement && document.activeElement !== e.target) {
+                                handleSaveChapterEdit(chapter.id)
+                              }
+                            }, 0)
+                          }}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               handleSaveChapterEdit(chapter.id)
@@ -225,7 +240,7 @@ export function ChapterManager({
                       ) : (
                         <button
                           onClick={() => handleStartEditChapter(chapter)}
-                          className="text-left flex-1 hover:bg-muted/50 px-2 py-1 rounded transition-colors"
+                          className="text-left flex-1 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
                         >
                           <h3 className="font-medium">
                             {index + 1}. {ui.getChapterPendingChanges()[chapter.id] || chapter.title}
@@ -237,9 +252,6 @@ export function ChapterManager({
                       )}
                     </div>
 
-                    <Badge variant="secondary">
-                      {chapter.videos.length} videos
-                    </Badge>
                     
                     {chapter.duration && (
                       <span className="text-sm text-muted-foreground">
@@ -254,17 +266,6 @@ export function ChapterManager({
                       compact
                     />
                     
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleStartEditChapter(chapter)
-                      }}
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
                     
                     <Button
                       variant="ghost"

@@ -134,7 +134,7 @@ export function VideoList({
         delete next[videoId]
         return next
       })
-      ui.removeVideoPendingChange(videoId)
+      ui.removeContentPendingChange('videos', videoId)
     } else {
       // Add to pending changes (both local and Zustand)
       setPendingChanges(prev => ({
@@ -556,7 +556,7 @@ export function VideoList({
               <div className="space-y-1">
                 <p 
                   className={cn(
-                    "text-sm font-medium cursor-pointer select-none hover:bg-slate-200 hover:text-slate-900 px-2 py-1 rounded border border-transparent hover:border-slate-400 transition-all",
+                    "text-sm font-medium cursor-pointer select-none hover:bg-blue-50 px-2 py-1 rounded transition-colors",
                     video.markedForDeletion && "line-through"
                   )}
                   title="Click to edit filename"
