@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Select,
   SelectContent,
@@ -286,63 +285,73 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.push('/instructor/courses')}
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">
-              {formState.values.title || course?.title}
-            </h1>
-            <p className="text-muted-foreground">
-              Edit course content and settings
-            </p>
+      {/* Sticky Header */}
+      <div className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
+        <div className="container mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => router.push('/instructor/courses')}
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div>
+                <h1 className="text-xl font-semibold">
+                  {formState.values.title || course?.title || 'Course Editor'}
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  {course?.status === 'published' ? 'Live Course' : 'Draft Mode'}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <Badge 
+                variant={course.status === 'published' ? 'default' : 'secondary'}
+                className="capitalize"
+              >
+                {course.status}
+              </Badge>
+              
+              <Button
+                variant="outline"
+                size="sm"
+              >
+                {course.status === 'published' ? 'Unpublish' : 'Publish'}
+              </Button>
+              
+              <Button
+                onClick={handleSave}
+                disabled={!hasChanges || isUpdating}
+                size="sm"
+              >
+                {isUpdating ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
+                {isUpdating ? 'Saving...' : hasChanges ? 'Save' : 'Saved'}
+              </Button>
+            </div>
           </div>
-        </div>
-        
-        <div className="flex items-center gap-4">
-          <Badge 
-            variant={course.status === 'published' ? 'default' : 'secondary'}
-            className="capitalize"
-          >
-            {course.status}
-          </Badge>
-          
-          {/* Save Button */}
-          <Button
-            onClick={handleSave}
-            disabled={!hasChanges || isUpdating}
-          >
-            {isUpdating ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="mr-2 h-4 w-4" />
-            )}
-            {isUpdating ? 'Saving...' : hasChanges ? 'Save Changes' : 'Saved'}
-          </Button>
         </div>
       </div>
 
-      <Tabs defaultValue="course-info" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="course-info">Course Info</TabsTrigger>
-          <TabsTrigger value="content">Content</TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
-        </TabsList>
-
-        {/* Course Info Tab */}
-        <TabsContent value="course-info" className="space-y-6">
-          <Card>
+      {/* Two Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Course Details - 33% Width */}
+        <div className="lg:col-span-1">
+          <Card className="sticky top-24">
             <CardHeader>
-              <CardTitle>Basic Information</CardTitle>
+              <CardTitle className="text-lg">Course Details</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Basic information
+              </p>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
+              {/* Course Title */}
               <div>
                 <Label htmlFor="title">Course Title</Label>
                 <Input
@@ -350,97 +359,60 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
                   value={formState.values.title}
                   onChange={(e) => handleInputChange('title', e.target.value)}
                   placeholder="Enter course title"
+                  className="font-medium"
+                />
+              </div>
+              
+              {/* Price */}
+              <div>
+                <Label htmlFor="price">Price ($)</Label>
+                <Input
+                  id="price"
+                  type="number"
+                  value={formState.values.price ?? ''}
+                  onChange={(e) => handleInputChange('price', e.target.value ? Number(e.target.value) : null)}
+                  placeholder="0"
+                  min="0"
+                  step="0.01"
                 />
               </div>
 
+              {/* Description */}
               <div>
                 <Label htmlFor="description">Description</Label>
                 <Textarea
                   id="description"
                   value={formState.values.description}
                   onChange={(e) => handleInputChange('description', e.target.value)}
-                  placeholder="Describe your course"
+                  placeholder="Describe your course..."
                   rows={4}
+                  className="resize-none"
                 />
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="price">Price ($)</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    value={formState.values.price ?? ''}
-                    onChange={(e) => handleInputChange('price', e.target.value ? Number(e.target.value) : null)}
-                    placeholder="0"
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="difficulty">Difficulty</Label>
-                  <Select 
-                    value={formState.values.difficulty} 
-                    onValueChange={(value) => handleInputChange('difficulty', value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select difficulty" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="beginner">Beginner</SelectItem>
-                      <SelectItem value="intermediate">Intermediate</SelectItem>
-                      <SelectItem value="advanced">Advanced</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
             </CardContent>
           </Card>
-        </TabsContent>
+        </div>
 
-        {/* Content Tab - Enhanced Chapter Manager */}
-        <TabsContent value="content" className="space-y-6">
-          <EnhancedChapterManager 
-            courseId={courseId}
-            className="space-y-4"
-          />
-        </TabsContent>
-
-        {/* Settings Tab */}
-        <TabsContent value="settings" className="space-y-6">
+        {/* Course Content - 67% Width */}
+        <div className="lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>Course Settings</CardTitle>
+              <CardTitle className="text-lg">Course Content</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Organize your course into chapters and lessons
+              </p>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label>Status</Label>
-                <div className="flex items-center gap-2 mt-2">
-                  <Badge 
-                    variant={course.status === 'published' ? 'default' : 'secondary'}
-                    className="capitalize"
-                  >
-                    {course.status}
-                  </Badge>
-                  <span className="text-sm text-muted-foreground">
-                    {course.status === 'published' 
-                      ? 'Course is live and visible to students' 
-                      : 'Course is in draft mode'
-                    }
-                  </span>
-                </div>
-              </div>
-              
-              <div className="pt-4">
-                <Button variant="outline" className="w-full">
-                  {course.status === 'published' ? 'Unpublish Course' : 'Publish Course'}
-                </Button>
+            <CardContent className="p-0">
+              <div className="px-6 pb-6">
+                <EnhancedChapterManager 
+                  courseId={courseId}
+                  className="space-y-4"
+                />
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
+        </div>
+      </div>
 
       {/* Video Preview Modal */}
       {ui.modal.type === 'video-preview' && ui.modal.data && (

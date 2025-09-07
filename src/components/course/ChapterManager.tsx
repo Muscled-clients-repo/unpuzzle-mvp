@@ -128,35 +128,27 @@ export function ChapterManager({
 
   return (
     <div className={cn("space-y-4", className)}>
-      {/* Add Chapter Button */}
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">Course Structure</h3>
-        <Button
-          onClick={() => onCreateChapter(`Chapter ${chapters.length + 1}`)}
-          size="sm"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Add Chapter
-        </Button>
-      </div>
 
       {/* Chapters List */}
-      {chapters.length === 0 ? (
-        <Card>
-          <CardContent className="text-center py-8">
-            <p className="text-muted-foreground">No chapters yet</p>
-            <Button
-              className="mt-4"
-              onClick={() => onCreateChapter("Chapter 1")}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Create First Chapter
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {chapters.map((chapter, index) => (
+      <div className="space-y-3">
+        {chapters.length === 0 && (
+          <Card>
+            <CardContent className="text-center py-8">
+              <p className="text-muted-foreground">No chapters yet</p>
+              <Button
+                className="mt-4"
+                onClick={() => onCreateChapter("Chapter 1")}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Create First Chapter
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+        
+        {chapters.length > 0 && (
+          <>
+            {chapters.map((chapter, index) => (
             <Card
               key={chapter.id}
               onDrop={() => handleChapterDrop(chapter.id)}
@@ -304,8 +296,22 @@ export function ChapterManager({
               )}
             </Card>
           ))}
-        </div>
-      )}
+          
+          {/* Add New Chapter Row */}
+          <Card className="border-dashed border-2 hover:border-primary/50 transition-colors">
+            <CardContent className="py-4">
+              <button
+                onClick={() => onCreateChapter(`Chapter ${chapters.length + 1}`)}
+                className="flex items-center justify-center gap-2 w-full text-muted-foreground hover:text-primary transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="text-sm">Add Chapter</span>
+              </button>
+            </CardContent>
+          </Card>
+          </>
+        )}
+      </div>
 
     </div>
   )
