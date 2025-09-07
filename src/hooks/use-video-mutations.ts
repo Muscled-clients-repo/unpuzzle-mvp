@@ -15,9 +15,65 @@ import {
 export function useVideoMutations(courseId: string) {
   const queryClient = useQueryClient()
   
-  // Upload video mutation
+  // Helper function to update progress in cache by filename (for uploading videos)
+  const updateVideoProgressByFilename = (filename: string, progress: number) => {
+    queryClient.setQueryData(['course', courseId], (old: any) => {
+      if (!old) return old
+      return {
+        ...old,
+        videos: old.videos.map((v: any) => 
+          v.filename === filename && v.status === 'uploading' ? { ...v, progress } : v
+        )
+      }
+    })
+    
+    // Also update chapters cache
+    queryClient.setQueryData(['chapters', courseId], (old: any) => {
+      if (!old || !Array.isArray(old)) return old
+      return old.map((chapter: any) => ({
+        ...chapter,
+        videos: chapter.videos?.map((v: any) => 
+          v.filename === filename && v.status === 'uploading' ? { ...v, progress } : v
+        ) || []
+      }))
+    })
+  }
+  
+  // Helper function to update progress in cache by video ID
+  const updateVideoProgress = (videoId: string, progress: number) => {
+    queryClient.setQueryData(['course', courseId], (old: any) => {
+      if (!old) return old
+      return {
+        ...old,
+        videos: old.videos.map((v: any) => 
+          v.id === videoId ? { ...v, progress } : v
+        )
+      }
+    })
+    
+    // Also update chapters cache
+    queryClient.setQueryData(['chapters', courseId], (old: any) => {
+      if (!old || !Array.isArray(old)) return old
+      return old.map((chapter: any) => ({
+        ...chapter,
+        videos: chapter.videos?.map((v: any) => 
+          v.id === videoId ? { ...v, progress } : v
+        ) || []
+      }))
+    })
+  }
+  
+  // Upload video mutation with progress tracking
   const uploadVideo = useMutation({
-    mutationFn: async ({ file, chapterId }: { file: File, chapterId: string }) => {
+    mutationFn: async ({ 
+      file, 
+      chapterId, 
+      onProgress 
+    }: { 
+      file: File, 
+      chapterId: string,
+      onProgress?: (progress: number) => void 
+    }) => {
       console.log('🔄 Video mutation executing:', { fileName: file.name, chapterId, courseId })
       
       // Create FormData for server action
@@ -26,12 +82,47 @@ export function useVideoMutations(courseId: string) {
       formData.append('courseId', courseId)
       formData.append('chapterId', chapterId)
       
-      const result = await uploadVideoAction(formData)
-      console.log('📊 Upload action result:', result)
-      return result
+      // Simulate upload progress based on file size (until we get real progress from server)
+      if (onProgress) {
+        const fileSizeMB = file.size / (1024 * 1024)
+        const estimatedTimeSeconds = Math.max(2, Math.min(30, fileSizeMB * 2)) // 2-30 seconds based on size
+        const progressIntervalMs = 200 // Update every 200ms
+        const totalSteps = (estimatedTimeSeconds * 1000) / progressIntervalMs
+        let currentStep = 0
+        
+        const progressInterval = setInterval(() => {
+          currentStep++
+          // Use exponential curve for more realistic progress
+          const rawProgress = currentStep / totalSteps
+          const exponentialProgress = 1 - Math.exp(-rawProgress * 3) // Exponential curve
+          const percentage = Math.min(95, Math.round(exponentialProgress * 100)) // Cap at 95% until complete
+          
+          onProgress(percentage)
+          
+          if (currentStep >= totalSteps) {
+            clearInterval(progressInterval)
+          }
+        }, progressIntervalMs)
+        
+        try {
+          const result = await uploadVideoAction(formData)
+          clearInterval(progressInterval)
+          onProgress(100) // Complete
+          console.log('📊 Upload action result:', result)
+          return result
+        } catch (error) {
+          clearInterval(progressInterval)
+          throw error
+        }
+      } else {
+        // No progress tracking requested
+        const result = await uploadVideoAction(formData)
+        console.log('📊 Upload action result:', result)
+        return result
+      }
     },
     onMutate: async ({ file, chapterId }) => {
-      // Optimistic update - add temporary video
+      // Optimistic update - add temporary video with progress tracking
       const tempVideo = {
         id: `temp-${Date.now()}`,
         title: file.name.replace(/\.[^/.]+$/, ''),
@@ -40,10 +131,12 @@ export function useVideoMutations(courseId: string) {
         chapter_id: chapterId,
         course_id: courseId,
         status: 'uploading',
+        progress: 0, // Initialize progress at 0%
         order: 999, // Will be fixed on success
         created_at: new Date().toISOString()
       }
       
+      // Update course cache
       queryClient.setQueryData(['course', courseId], (old: any) => {
         if (!old) return old
         return {
@@ -52,12 +145,28 @@ export function useVideoMutations(courseId: string) {
         }
       })
       
+      // Also update chapters cache (this is what VideoList reads from!)
+      queryClient.setQueryData(['chapters', courseId], (old: any) => {
+        if (!old || !Array.isArray(old)) return old
+        
+        return old.map((chapter: any) => {
+          // Add temp video to the correct chapter
+          if (chapter.id === chapterId) {
+            return {
+              ...chapter,
+              videos: [...(chapter.videos || []), tempVideo]
+            }
+          }
+          return chapter
+        })
+      })
+      
       return { tempVideo }
     },
     onSuccess: (result, variables, context) => {
       console.log('✅ Upload mutation success:', result)
       if (result.success) {
-        // Replace temp video with real one
+        // Replace temp video with real one in course cache
         queryClient.setQueryData(['course', courseId], (old: any) => {
           if (!old) return old
           const updatedData = {
@@ -70,13 +179,24 @@ export function useVideoMutations(courseId: string) {
           return updatedData
         })
         
+        // Also replace in chapters cache
+        queryClient.setQueryData(['chapters', courseId], (old: any) => {
+          if (!old || !Array.isArray(old)) return old
+          return old.map((chapter: any) => ({
+            ...chapter,
+            videos: chapter.videos?.map((v: any) => 
+              v.id === context?.tempVideo.id ? result.data : v
+            ) || []
+          }))
+        })
+        
         queryClient.invalidateQueries({ queryKey: ['course', courseId] })
         queryClient.invalidateQueries({ queryKey: ['chapters', courseId] })
         
         toast.success('Video uploaded successfully')
       } else {
         console.error('❌ Upload failed:', result.error)
-        // Remove temp video on failure
+        // Remove temp video on failure from both caches
         queryClient.setQueryData(['course', courseId], (old: any) => {
           if (!old) return old
           return {
@@ -85,18 +205,34 @@ export function useVideoMutations(courseId: string) {
           }
         })
         
+        queryClient.setQueryData(['chapters', courseId], (old: any) => {
+          if (!old || !Array.isArray(old)) return old
+          return old.map((chapter: any) => ({
+            ...chapter,
+            videos: chapter.videos?.filter((v: any) => v.id !== context?.tempVideo.id) || []
+          }))
+        })
+        
         toast.error(result.error || 'Failed to upload video')
       }
     },
     onError: (error, variables, context) => {
       console.error('❌ Upload mutation error:', error)
-      // Remove temp video on error
+      // Remove temp video on error from both caches
       queryClient.setQueryData(['course', courseId], (old: any) => {
         if (!old) return old
         return {
           ...old,
           videos: old.videos.filter((v: any) => v.id !== context?.tempVideo.id)
         }
+      })
+      
+      queryClient.setQueryData(['chapters', courseId], (old: any) => {
+        if (!old || !Array.isArray(old)) return old
+        return old.map((chapter: any) => ({
+          ...chapter,
+          videos: chapter.videos?.filter((v: any) => v.id !== context?.tempVideo.id) || []
+        }))
       })
       
       toast.error('Failed to upload video')
@@ -387,6 +523,8 @@ export function useVideoMutations(courseId: string) {
     moveVideoToChapter,
     updateVideo,
     batchUpdateVideoOrders,
-    batchUpdateVideoOrdersSilent
+    batchUpdateVideoOrdersSilent,
+    updateVideoProgress,
+    updateVideoProgressByFilename
   }
 }

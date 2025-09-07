@@ -46,19 +46,23 @@ export async function createCourseAction(data: {
     const user = await requireAuth()
     const supabase = await createClient()
     
+    const courseData = {
+      title: data.title || 'Untitled Course',
+      description: data.description || '',
+      instructor_id: user.id,
+      status: 'draft',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }
+
+    // Add optional fields if they exist
+    if (data.price !== undefined) courseData.price = data.price
+    if (data.level !== undefined) courseData.difficulty = data.level
+    if (data.difficulty !== undefined) courseData.difficulty = data.difficulty
+
     const { data: course, error } = await supabase
       .from('courses')
-      .insert({
-        title: data.title || 'Untitled Course',
-        description: data.description || '',
-        price: data.price,
-        category: data.category,
-        level: data.level,
-        instructor_id: user.id,
-        status: 'draft',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
+      .insert(courseData)
       .select()
       .single()
     
@@ -163,19 +167,38 @@ export async function saveCourseAsDraftAction(
     const user = await requireAuth()
     const supabase = await createClient()
     
+    // Map the data to match the database schema
+    const updateData: any = {
+      status: 'draft',
+      updated_at: new Date().toISOString()
+    }
+    
+    // Only include fields that exist in the courses table
+    if (data.title !== undefined) updateData.title = data.title
+    if (data.description !== undefined) updateData.description = data.description
+    if (data.price !== undefined) updateData.price = data.price
+    if (data.thumbnail_url !== undefined) updateData.thumbnail_url = data.thumbnail_url
+    if (data.is_free !== undefined) updateData.is_free = data.is_free
+    
+    // Map 'level' to 'difficulty' to match database schema
+    if (data.level !== undefined) updateData.difficulty = data.level
+    if (data.difficulty !== undefined) updateData.difficulty = data.difficulty
+    
+    // Note: 'category' field doesn't exist in the current schema, so we skip it
+    // if (data.category !== undefined) updateData.category = data.category
+    
     const { data: course, error } = await supabase
       .from('courses')
-      .update({
-        ...data,
-        status: 'draft',
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', courseId)
       .eq('instructor_id', user.id)
       .select()
       .single()
     
-    if (error) throw error
+    if (error) {
+      console.error('Database error details:', error)
+      throw error
+    }
     
     // Soft revalidation for auto-save
     revalidatePath(`/instructor/course/${courseId}`, 'page')
@@ -312,13 +335,30 @@ export async function updateCourse(courseId: string, updates: any) {
       throw new Error('Access denied - you do not own this course')
     }
     
+    // Map the updates to match the database schema
+    const updateData: any = {
+      updated_at: new Date().toISOString()
+    }
+    
+    // Only include fields that exist in the courses table
+    if (updates.title !== undefined) updateData.title = updates.title
+    if (updates.description !== undefined) updateData.description = updates.description
+    if (updates.price !== undefined) updateData.price = updates.price
+    if (updates.thumbnail_url !== undefined) updateData.thumbnail_url = updates.thumbnail_url
+    if (updates.is_free !== undefined) updateData.is_free = updates.is_free
+    if (updates.status !== undefined) updateData.status = updates.status
+    
+    // Map 'level' to 'difficulty' to match database schema
+    if (updates.level !== undefined) updateData.difficulty = updates.level
+    if (updates.difficulty !== undefined) updateData.difficulty = updates.difficulty
+    
+    // Note: 'category' field doesn't exist in the current schema, so we skip it
+    // if (updates.category !== undefined) updateData.category = updates.category
+
     // Update the course  
     const { data, error } = await supabase
       .from('courses')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', courseId)
       .eq('instructor_id', user.id) // Extra safety check
       .select()

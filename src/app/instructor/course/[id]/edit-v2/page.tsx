@@ -38,11 +38,12 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-// Import our new reusable components
+// Import our new reusable components  
 import { VideoUploader } from "@/components/course/VideoUploader"
-import { ChapterManager } from "@/components/course/ChapterManager"
+import { ChapterManagerPOC } from "@/components/course/ChapterManagerPOC" // POC version
 import { VideoPreviewModal } from "@/components/course/VideoPreviewModal"
 import { useVideoPreview } from "@/hooks/useVideoPreview"
+import { useChapterMutationsPOC } from "@/hooks/use-chapter-mutations-poc" // POC chapter mutations
 
 // Video preview hook (keeping existing functionality)
 // import { useNormalizedVideoReorder, useMigrateCourseToNormalized } from "@/hooks/useNormalizedVideoReorder"
@@ -71,6 +72,9 @@ export default function EditCoursePage(props: { params: Promise<{ id: string }> 
   const { uploadVideo, updateVideo, deleteVideo, moveVideoToChapter, batchUpdateVideoOrders, batchUpdateVideoOrdersSilent, updateVideoProgressByFilename } = useVideoMutations(courseId)
   const { createChapter, updateChapter, deleteChapter, reorderChapters } = useChapterMutations()
   
+  // POC: Add chapter mutations using proven pattern
+  const { batchUpdateChaptersSilent } = useChapterMutationsPOC(courseId)
+  
   // UI state from new minimal store
   const wizard = useWizardState()
   const form = useFormState()
@@ -94,6 +98,11 @@ export default function EditCoursePage(props: { params: Promise<{ id: string }> 
   const [hasPendingVideoChanges, setHasPendingVideoChanges] = useState(false)
   const [pendingVideoChangeCount, setPendingVideoChangeCount] = useState(0)
   const [videoSaveFunction, setVideoSaveFunction] = useState<(() => void) | null>(null)
+  
+  // Chapter change state (POC)
+  const [hasPendingChapterChanges, setHasPendingChapterChanges] = useState(false)
+  const [pendingChapterChangeCount, setPendingChapterChangeCount] = useState(0)
+  const [chapterSaveFunction, setChapterSaveFunction] = useState<(() => void) | null>(null)
   
   // Local form state for course data (since we're not persisting this)
   const [courseData, setCourseData] = useState<any>(null)
@@ -177,6 +186,15 @@ export default function EditCoursePage(props: { params: Promise<{ id: string }> 
         setHasPendingVideoChanges(false)
         setPendingVideoChangeCount(0)
         setVideoSaveFunction(null)
+      }
+      
+      // Save chapter changes if there are any (POC)
+      if (hasPendingChapterChanges && chapterSaveFunction) {
+        console.log('[COURSE EDIT] Saving chapter name changes...')
+        await chapterSaveFunction()
+        setHasPendingChapterChanges(false)
+        setPendingChapterChangeCount(0)
+        setChapterSaveFunction(null)
       }
       
       // Then save course changes if there are any
@@ -318,11 +336,13 @@ export default function EditCoursePage(props: { params: Promise<{ id: string }> 
           {/* Save Button */}
           <Button
             onClick={handleSave}
-            disabled={(!hasChanges && !form.isDirty && !hasPendingVideoChanges) || saveStatus === 'saving' || saveDraft.isPending}
+            disabled={(!hasChanges && !form.isDirty && !hasPendingVideoChanges && !hasPendingChapterChanges) || saveStatus === 'saving' || saveDraft.isPending}
           >
             <Save className="mr-2 h-4 w-4" />
             {saveDraft.isPending || saveStatus === 'saving' ? 'Saving...' : 
+             hasPendingVideoChanges && hasPendingChapterChanges ? `Save ${pendingVideoChangeCount + pendingChapterChangeCount} changes` :
              hasPendingVideoChanges ? `Save ${pendingVideoChangeCount} filename change${pendingVideoChangeCount !== 1 ? 's' : ''}` :
+             hasPendingChapterChanges ? `Save ${pendingChapterChangeCount} chapter change${pendingChapterChangeCount !== 1 ? 's' : ''}` :
              'Save Changes'}
           </Button>
         </div>
@@ -420,7 +440,7 @@ export default function EditCoursePage(props: { params: Promise<{ id: string }> 
             <div className="lg:col-span-2">
               <Card>
                 <CardContent className="pt-6">
-                  <ChapterManager
+                  <ChapterManagerPOC
                     chapters={chapters || []}
                     onCreateChapter={async (title) => {
                       try {
@@ -468,6 +488,7 @@ export default function EditCoursePage(props: { params: Promise<{ id: string }> 
                       }
                     }}
                     batchRenameMutation={batchUpdateVideoOrdersSilent}
+                    batchChapterUpdateMutation={batchUpdateChaptersSilent}
                     onVideoDelete={async (id) => {
                       try {
                         await deleteVideo.mutateAsync(id)
@@ -492,7 +513,18 @@ export default function EditCoursePage(props: { params: Promise<{ id: string }> 
                         if (saveFunction) {
                           setVideoSaveFunction(() => saveFunction)
                         }
-                        console.log('Pending changes update:', { hasChanges, count, isSaving })
+                        console.log('Video pending changes update:', { hasChanges, count, isSaving })
+                      }
+                    }}
+                    onPendingChapterChangesUpdate={(hasChanges, count, saveFunction, isSaving) => {
+                      // Handle chapter name changes (POC)
+                      if (hasChanges !== hasPendingChapterChanges) {
+                        setHasPendingChapterChanges(hasChanges)
+                        setPendingChapterChangeCount(count)
+                        if (saveFunction) {
+                          setChapterSaveFunction(() => saveFunction)
+                        }
+                        console.log('Chapter pending changes update:', { hasChanges, count, isSaving })
                       }
                     }}
                     onTabNavigation={(currentId, currentType, direction) => {

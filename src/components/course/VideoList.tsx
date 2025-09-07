@@ -68,41 +68,58 @@ export function VideoList({
   const [draggedOverIndex, setDraggedOverIndex] = useState<number | null>(null)
   const [draggedVideoIndex, setDraggedVideoIndex] = useState<number | null>(null)
   const [cursorPosition, setCursorPosition] = useState<number | null>(null)
+  const [hasSelectedText, setHasSelectedText] = useState(false)
   
   // Simple pending changes for UI feedback
   const [pendingChanges, setPendingChanges] = useState<Record<string, string>>({})
   const [activelyEditing, setActivelyEditing] = useState<{id: string, value: string} | null>(null)
   
-  // Get display name for a video (show pending changes until save, then let TanStack Query handle updates)
-  const getDisplayName = (video: VideoUpload): string => {
-    // If actively editing, show current input
-    if (editingVideo === video.id && videoTitle) {
-      return videoTitle
-    }
-    // Show pending changes (until save is clicked)
-    if (pendingChanges[video.id]) {
-      return pendingChanges[video.id]
+  // Helper to get current server/optimistic name (excluding UI state)
+  const getCurrentServerName = (video: VideoUpload): string => {
+    // Check optimistic updates first (video.title from TanStack Query)
+    if (video.title && video.title !== video.name && video.title !== video.filename) {
+      return video.title
     }
     
-    // Extract original filename from structured path if needed
+    // Fallback to original name
+    if (video.name) {
+      return video.name
+    }
+    
+    // Extract filename from structured path
     let displayFilename = video.filename
     if (displayFilename && displayFilename.includes('/')) {
-      // Extract just the filename part from structured path like "courses/.../uuid_filename.mp4"
       displayFilename = displayFilename.split('/').pop() || displayFilename
-      // Remove UUID prefix if present (e.g., "uuid_filename.mp4" -> "filename.mp4")
       if (displayFilename.includes('_') && displayFilename.match(/^[a-f0-9-]{36}_/)) {
         displayFilename = displayFilename.replace(/^[a-f0-9-]{36}_/, '')
       }
     }
     
-    // Otherwise show server data (prioritize title which gets updated by TanStack Query)
-    return video.title || video.name || displayFilename || 'Untitled Video'
+    return displayFilename || 'Untitled Video'
   }
   
-  // Track pending changes for counter
+  // Get display name for a video with proper precedence to avoid race conditions
+  const getDisplayName = (video: VideoUpload): string => {
+    // 1. HIGHEST PRIORITY: Currently editing this video
+    if (editingVideo === video.id && videoTitle) {
+      return videoTitle
+    }
+    
+    // 2. HIGH PRIORITY: Pending changes (unsaved edits)
+    if (pendingChanges[video.id]) {
+      return pendingChanges[video.id]
+    }
+    
+    // 3. FALLBACK: Server/optimistic data
+    return getCurrentServerName(video)
+  }
+  
+  // Track pending changes for counter - use same logic as getDisplayName for consistency
   const trackPendingChange = (videoId: string, newName: string) => {
     const video = videos.find(v => v.id === videoId)
-    const currentName = video?.name || video?.title || video?.filename || 'Untitled Video'
+    if (!video) return
+    
+    const currentName = getCurrentServerName(video)
     
     if (newName.trim() === currentName) {
       // No change, remove from pending
@@ -130,9 +147,11 @@ export function VideoList({
     // If user is currently editing, include that change
     if (editingVideo && videoTitle.trim()) {
       const video = videos.find(v => v.id === editingVideo)
-      const currentName = video?.name || video?.title || video?.filename || 'Untitled Video'
-      if (videoTitle.trim() !== currentName) {
-        finalChanges[editingVideo] = videoTitle.trim()
+      if (video) {
+        const currentName = getCurrentServerName(video)
+        if (videoTitle.trim() !== currentName) {
+          finalChanges[editingVideo] = videoTitle.trim()
+        }
       }
     }
     
@@ -154,12 +173,13 @@ export function VideoList({
     batchRenameMutation.mutate(updates, {
       onSuccess: (result) => {
         console.log('✅ Save success:', result)
-        // Immediately clear pending changes - trust TanStack Query optimistic updates
+        // Clear pending changes - the improved getDisplayName will handle the transition
         setPendingChanges({})
         if (editingVideo) {
           setEditingVideo(null)
           setEditingIndex(null)
           setVideoTitle('')
+          setHasSelectedText(false)
         }
       },
       onError: (error) => {
@@ -238,6 +258,7 @@ export function VideoList({
     setEditingVideo(video.id)
     setEditingIndex(index)
     setVideoTitle(videoName)
+    setHasSelectedText(false) // Reset flag so we can select text once
     
     if (clickPosition === 'start') {
       setCursorPosition(0)
@@ -296,12 +317,14 @@ export function VideoList({
     setEditingVideo(null)
     setEditingIndex(null)
     setVideoTitle('')
+    setHasSelectedText(false)
   }
   
   const handleCancelEdit = () => {
     setEditingVideo(null)
     setEditingIndex(null)
     setVideoTitle('')
+    setHasSelectedText(false)
   }
 
 
@@ -325,7 +348,7 @@ export function VideoList({
       case 'processing':
         return <Badge variant="secondary">Processing</Badge>
       case 'complete':
-        return <div className="h-2 w-2 bg-green-500 rounded-full" title="Ready" />
+        return null // Removed green dot - clean look
       case 'error':
         return <Badge variant="destructive">Error</Badge>
       case 'pending':
@@ -471,11 +494,12 @@ export function VideoList({
                 ref={(input) => {
                   if (input) {
                     input.focus()
-                    // Set cursor position if we captured it from the click
-                    if (cursorPosition !== null) {
+                    // Only select all text once when starting to edit
+                    if (!hasSelectedText) {
                       setTimeout(() => {
-                        input.setSelectionRange(cursorPosition, cursorPosition)
-                        // Clear cursor position after setting it so it doesn't interfere with typing
+                        input.select()
+                        setHasSelectedText(true)
+                        // Clear cursor position after setting selection
                         setCursorPosition(null)
                       }, 0)
                     }
@@ -495,11 +519,11 @@ export function VideoList({
                 >
                   {getDisplayName(video)}
                 </p>
-                {video.status === 'uploading' && video.progress !== undefined && (
+                {video.status === 'uploading' && (
                   <div className="flex items-center gap-2">
-                    <Progress value={video.progress} className="h-1 flex-1" />
-                    <span className="text-xs text-muted-foreground">
-                      {video.progress}%
+                    <Progress value={video.progress || 0} className="h-2 flex-1" />
+                    <span className="text-xs text-muted-foreground font-medium">
+                      {video.progress || 0}%
                     </span>
                   </div>
                 )}
