@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils"
 // New architecture imports
 import { useCourseCreationUI } from '@/stores/course-creation-ui'
 import { useCourseEdit } from '@/hooks/use-course-queries'
+import { useChaptersEdit } from '@/hooks/use-chapter-queries'
 import { useVideoBatchOperations } from '@/hooks/use-video-queries'
 import { useFormState } from '@/hooks/use-form-state'
 import { EnhancedChapterManager } from '@/components/course/EnhancedChapterManager'
@@ -43,6 +44,9 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   // New architecture hooks
   const ui = useCourseCreationUI()
   const { course, isLoading, error, updateCourse, isUpdating } = useCourseEdit(courseId)
+  
+  // Preload chapters data to avoid separate loading states
+  const { chapters } = useChaptersEdit(courseId)
   
   // PROFESSIONAL FORM STATE PATTERN: Form state as source of truth for inputs
   const formState = useFormState({
@@ -142,6 +146,10 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
           console.log('🎬 Executing video batch update...', videoUpdates)
           batchUpdateVideos({ courseId, updates: videoUpdates })
           
+          // Show success toast for video filename changes
+          const videoCount = videoUpdates.length
+          toast.success(`📹 ${videoCount} video filename${videoCount > 1 ? 's' : ''} updated successfully!`)
+          
           // Clear pending changes from Zustand after initiating save
           ui.clearAllVideoPendingChanges()
         }
@@ -191,14 +199,63 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
     formState.setValue(field, value)
   }
 
-  if (isLoading && !course) {
+  if ((isLoading && !course) || !chapters) {
     return (
       <div className="container mx-auto p-6 max-w-7xl">
-        {/* Loading skeleton */}
+        {/* Subtle loading skeleton */}
         <div className="space-y-6">
-          <div className="h-8 bg-gray-200 animate-pulse rounded" />
-          <div className="h-32 bg-gray-200 animate-pulse rounded" />
-          <div className="h-64 bg-gray-200 animate-pulse rounded" />
+          {/* Header skeleton */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="h-8 w-8 bg-muted/30 animate-pulse rounded" />
+              <div className="space-y-2">
+                <div className="h-6 w-48 bg-muted/30 animate-pulse rounded" />
+                <div className="h-4 w-64 bg-muted/20 animate-pulse rounded" />
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="h-6 w-16 bg-muted/20 animate-pulse rounded-full" />
+              <div className="h-9 w-32 bg-muted/30 animate-pulse rounded" />
+            </div>
+          </div>
+          
+          {/* Tabs skeleton */}
+          <div className="space-y-4">
+            <div className="flex space-x-1 bg-muted/10 p-1 rounded-lg w-fit">
+              <div className="h-8 w-24 bg-muted/20 animate-pulse rounded" />
+              <div className="h-8 w-20 bg-muted/20 animate-pulse rounded" />
+              <div className="h-8 w-20 bg-muted/20 animate-pulse rounded" />
+            </div>
+            
+            {/* Content skeleton */}
+            <div className="border border-muted/20 rounded-lg p-6 space-y-4">
+              <div className="space-y-2">
+                <div className="h-5 w-32 bg-muted/30 animate-pulse rounded" />
+                <div className="h-4 w-full max-w-md bg-muted/20 animate-pulse rounded" />
+              </div>
+              
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <div className="h-4 w-20 bg-muted/20 animate-pulse rounded" />
+                  <div className="h-10 w-full bg-muted/20 animate-pulse rounded" />
+                </div>
+                <div className="space-y-2">
+                  <div className="h-4 w-24 bg-muted/20 animate-pulse rounded" />
+                  <div className="h-24 w-full bg-muted/20 animate-pulse rounded" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <div className="h-4 w-16 bg-muted/20 animate-pulse rounded" />
+                    <div className="h-10 w-full bg-muted/20 animate-pulse rounded" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-4 w-20 bg-muted/20 animate-pulse rounded" />
+                    <div className="h-10 w-full bg-muted/20 animate-pulse rounded" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     )

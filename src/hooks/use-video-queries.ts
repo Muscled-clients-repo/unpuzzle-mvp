@@ -135,7 +135,13 @@ export function useVideoUpload(courseId: string) {
           )
         })
         
-        toast.success(`${realVideo.filename} uploaded successfully!`)
+        // Extract a cleaner filename by removing UUID and timestamp
+        const cleanFilename = realVideo.filename
+          .replace(/_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.mp4$/, '.mp4') // Remove timestamp
+          .replace(/^[a-f0-9-]{36}_/, '') // Remove UUID prefix
+          .replace(/^.*\//, '') // Remove any path prefixes
+        
+        toast.success(`📹 ${cleanFilename} uploaded successfully!`)
         
         // Background refetch to ensure consistency
         setTimeout(() => {
