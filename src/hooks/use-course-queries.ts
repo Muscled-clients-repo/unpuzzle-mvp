@@ -1,98 +1,170 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { 
+  createCourseAction, 
+  updateCourseAction, 
   getCourseAction,
-  getCoursesAction
+  getCoursesAction 
 } from '@/app/actions/course-actions'
-import { getChaptersForCourseAction } from '@/app/actions/chapter-actions'
+import type { Course, CreateCourseRequest, ApiResponse } from '@/types'
 
-/**
- * Query hook to fetch a single course with videos
- */
-export function useCourse(courseId: string) {
+// ===== QUERY KEYS =====
+export const courseKeys = {
+  all: ['courses'] as const,
+  lists: () => [...courseKeys.all, 'list'] as const,
+  list: (filters: any) => [...courseKeys.lists(), filters] as const,
+  details: () => [...courseKeys.all, 'detail'] as const,
+  detail: (id: string) => [...courseKeys.details(), id] as const,
+  creation: () => [...courseKeys.all, 'creation'] as const,
+}
+
+// ===== COURSE CREATION HOOK =====
+export function useCourseCreation() {
   const queryClient = useQueryClient()
   
-  return useQuery({
-    queryKey: ['course', courseId],
-    queryFn: async () => {
-      const result = await getCourseAction(courseId)
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to fetch course')
-      }
-      return result.data
+  const createMutation = useMutation({
+    mutationFn: (data: CreateCourseRequest) => createCourseAction(data),
+    
+    onMutate: async (newCourse) => {
+      // Cancel outgoing queries
+      await queryClient.cancelQueries({ queryKey: courseKeys.lists() })
+      
+      // Snapshot previous value
+      const previousCourses = queryClient.getQueryData(courseKeys.lists())
+      
+      // Optimistic update - add course to list immediately
+      queryClient.setQueryData(courseKeys.lists(), (old: Course[] = []) => [
+        {
+          id: `temp-${Date.now()}`, // Temporary ID
+          ...newCourse,
+          status: 'draft' as const,
+          instructor_id: 'current-user', // Will be set by server
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        ...old
+      ])
+      
+      return { previousCourses }
     },
-    enabled: !!courseId,
-    staleTime: 10 * 60 * 1000, // Consider data fresh for 10 minutes
-    gcTime: 15 * 60 * 1000, // Keep in cache for 15 minutes
-    retry: 1, // Only retry once to avoid long delays
-    refetchOnWindowFocus: false, // Don't refetch when window gains focus
-    refetchOnMount: false, // Don't refetch when component mounts if data exists
-    networkMode: 'offlineFirst', // Use cache first, then network
-    placeholderData: () => {
-      // Try to get initial data from courses list cache
-      const coursesData = queryClient.getQueryData(['courses'])
-      if (coursesData && Array.isArray(coursesData)) {
-        const course = coursesData.find((c: any) => c.id === courseId)
-        if (course) {
-          return { ...course, videos: [] } // Basic course data without videos
-        }
+    
+    onSuccess: (result, variables, context) => {
+      if (result.success && result.data) {
+        // Update cache with real server data
+        queryClient.setQueryData(
+          courseKeys.detail(result.data.id), 
+          result.data
+        )
+        
+        // Update the list to replace temp course with real one
+        queryClient.setQueryData(courseKeys.lists(), (old: Course[] = []) => 
+          old.map(course => 
+            course.id.startsWith('temp-') ? result.data! : course
+          )
+        )
+        
+        toast.success('Course created successfully!')
+      } else {
+        toast.error(result.error || 'Failed to create course')
       }
-      return undefined
+    },
+    
+    onError: (error, variables, context) => {
+      // Rollback optimistic update
+      if (context?.previousCourses) {
+        queryClient.setQueryData(courseKeys.lists(), context.previousCourses)
+      }
+      toast.error('Failed to create course')
     }
   })
+  
+  return {
+    createCourse: createMutation.mutate,
+    createCourseAsync: createMutation.mutateAsync,
+    isCreating: createMutation.isPending,
+    error: createMutation.error
+  }
 }
 
-/**
- * Query hook to fetch all courses for the current user
- */
-export function useCourses() {
-  return useQuery({
-    queryKey: ['courses'],
-    queryFn: async () => {
-      const result = await getCoursesAction()
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to fetch courses')
-      }
-      return result.data
-    },
-    staleTime: 2 * 60 * 1000, // Consider data fresh for 2 minutes
-  })
-}
-
-/**
- * Query hook to fetch virtual chapters for a course
- */
-export function useChapters(courseId: string) {
-  return useQuery({
-    queryKey: ['chapters', courseId],
-    queryFn: async () => {
-      const chapters = await getChaptersForCourseAction(courseId)
-      return chapters
-    },
-    enabled: !!courseId,
-    staleTime: 5 * 60 * 1000,
-  })
-}
-
-/**
- * Prefetch a course (useful for hover preloading)
- */
-export function useCoursePrefetch() {
+// ===== COURSE EDIT HOOK =====
+export function useCourseEdit(courseId: string) {
   const queryClient = useQueryClient()
   
-  const prefetchCourse = useCallback((courseId: string) => {
-    return queryClient.prefetchQuery({
-      queryKey: ['course', courseId],
-      queryFn: async () => {
-        const result = await getCourseAction(courseId)
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to fetch course')
-        }
-        return result.data
-      },
-      staleTime: 5 * 60 * 1000,
-    })
-  }, [queryClient])
+  // Query for course data
+  const courseQuery = useQuery({
+    queryKey: courseKeys.detail(courseId),
+    queryFn: () => getCourseAction(courseId),
+    enabled: !!courseId
+  })
   
-  return { prefetchCourse }
+  // Update mutation with optimistic updates
+  const updateMutation = useMutation({
+    mutationFn: (updates: Partial<Course>) => updateCourseAction(courseId, updates),
+    
+    onMutate: async (updates) => {
+      // Cancel outgoing queries
+      await queryClient.cancelQueries({ queryKey: courseKeys.detail(courseId) })
+      
+      // Snapshot previous value
+      const previousCourse = queryClient.getQueryData(courseKeys.detail(courseId))
+      
+      // Optimistic update
+      queryClient.setQueryData(courseKeys.detail(courseId), (old: Course) => ({
+        ...old,
+        ...updates,
+        updated_at: new Date().toISOString()
+      }))
+      
+      // Also update in lists cache if it exists
+      queryClient.setQueryData(courseKeys.lists(), (old: Course[] = []) =>
+        old.map(course => 
+          course.id === courseId 
+            ? { ...course, ...updates, updated_at: new Date().toISOString() }
+            : course
+        )
+      )
+      
+      return { previousCourse }
+    },
+    
+    onSuccess: (result) => {
+      if (result.success) {
+        // Background refetch for consistency
+        setTimeout(() => {
+          queryClient.refetchQueries({ queryKey: courseKeys.detail(courseId) })
+        }, 2000)
+        
+        toast.success('Course updated successfully!')
+      } else {
+        toast.error(result.error || 'Failed to update course')
+      }
+    },
+    
+    onError: (error, variables, context) => {
+      // Rollback optimistic update
+      if (context?.previousCourse) {
+        queryClient.setQueryData(courseKeys.detail(courseId), context.previousCourse)
+      }
+      toast.error('Failed to update course')
+    }
+  })
+  
+  return {
+    course: courseQuery.data,
+    isLoading: courseQuery.isLoading,
+    error: courseQuery.error,
+    updateCourse: updateMutation.mutate,
+    updateCourseAsync: updateMutation.mutateAsync,
+    isUpdating: updateMutation.isPending
+  }
+}
+
+// ===== COURSES LIST HOOK =====
+export function useCoursesList(filters: any = {}) {
+  return useQuery({
+    queryKey: courseKeys.list(filters),
+    queryFn: () => getCoursesAction(filters),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
+  })
 }

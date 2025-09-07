@@ -308,7 +308,7 @@ export async function unpublishCourseAction(courseId: string): Promise<ActionRes
  * Server Action to update a course
  * Ensures proper authentication and ownership verification
  */
-export async function updateCourse(courseId: string, updates: any) {
+export async function updateCourseAction(courseId: string, updates: any): Promise<ActionResult> {
   const supabase = await createClient()
   
   try {
@@ -368,10 +368,14 @@ export async function updateCourse(courseId: string, updates: any) {
       throw error
     }
     
-    return data
+    return { success: true, data }
     
   } catch (error) {
-    throw error
+    console.error('Update course error:', error)
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to update course' 
+    }
   }
 }
 

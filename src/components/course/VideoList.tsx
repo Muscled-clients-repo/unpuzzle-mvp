@@ -310,7 +310,7 @@ export function VideoList({
   }
 
   const handleSaveEdit = (videoId: string, force = false) => {
-    // Always track the current edit when exiting
+    // Always track the current edit when exiting (but don't save immediately)
     if (videoTitle.trim()) {
       trackPendingChange(videoId, videoTitle.trim())
     }

@@ -28,20 +28,28 @@ async function requireAuth() {
 /**
  * Upload a video to Backblaze and create database record
  */
-export async function uploadVideoAction(
-  formData: FormData
-): Promise<ActionResult> {
+export async function uploadVideoAction({
+  file,
+  courseId,
+  chapterId,
+  onProgress
+}: {
+  file: File
+  courseId: string
+  chapterId: string
+  onProgress?: (progress: number) => void
+}): Promise<ActionResult> {
   try {
     const user = await requireAuth()
     const supabase = await createClient()
     
-    // Extract parameters from FormData
-    const file = formData.get('file') as File
-    const courseId = formData.get('courseId') as string
-    const chapterId = formData.get('chapterId') as string || 'chapter-1'
-    
     if (!file || !courseId) {
       throw new Error('Missing required fields: file and courseId')
+    }
+    
+    // Default chapter if not provided
+    if (!chapterId) {
+      chapterId = 'chapter-1'
     }
     
     console.log('[SERVER ACTION] Processing upload:', {
