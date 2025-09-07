@@ -193,7 +193,9 @@ export function useVideoBatchOperations(courseId: string) {
   const queryClient = useQueryClient()
   
   // ARCHITECTURE-COMPLIANT: Read UI state from Zustand for dirty tracking
-  const { videoPendingChanges, getVideoPendingChangesCount } = useCourseCreationUI()
+  const ui = useCourseCreationUI()
+  const videoPendingChanges = ui.getVideoPendingChanges()
+  const getVideoPendingChangesCount = ui.getVideoPendingChangesCount
   
   const batchUpdateMutation = useMutation({
     mutationFn: ({ courseId, updates }: { 
@@ -269,10 +271,10 @@ export function useVideoBatchOperations(courseId: string) {
   return {
     batchUpdateVideos: batchUpdateMutation.mutate,
     isBatchUpdating: batchUpdateMutation.isPending,
-    // ARCHITECTURE-COMPLIANT: Expose UI state for UI orchestration
-    hasPendingVideoChanges: Object.keys(videoPendingChanges).length > 0,
-    videoPendingCount: getVideoPendingChangesCount(),
-    videoPendingChanges // Expose the actual pending changes for save operations
+    // ARCHITECTURE-COMPLIANT: Use unified content system for all pending changes
+    hasPendingVideoChanges: ui.getVideoPendingChangesCount() > 0,
+    videoPendingCount: ui.getVideoPendingChangesCount(),
+    videoPendingChanges: videoPendingChanges || {} // Expose the actual pending changes for save operations
   }
 }
 

@@ -67,6 +67,18 @@ export async function getChaptersForCourseAction(courseId: string) {
     
     if (videosError) throw videosError
     
+    // Get chapter titles from course_chapters table
+    const { data: chapterTitles } = await supabase
+      .from('course_chapters')
+      .select('id, title, order')
+      .eq('course_id', courseId)
+      .order('order', { ascending: true })
+    
+    const chapterTitleMap: Record<string, string> = {}
+    chapterTitles?.forEach(chapter => {
+      chapterTitleMap[chapter.id] = chapter.title
+    })
+    
     // Group videos by chapter_id to create virtual chapters
     const chaptersMap: Record<string, VirtualChapter> = {}
     
@@ -74,12 +86,13 @@ export async function getChaptersForCourseAction(courseId: string) {
       const chapterId = video.chapter_id || 'chapter-default'
       
       if (!chaptersMap[chapterId]) {
-        // Extract chapter number from ID for title
+        // Use stored title or fallback to auto-generated title
         const chapterNumber = chapterId.split('-')[1] || '1'
+        const title = chapterTitleMap[chapterId] || `Chapter ${chapterNumber}`
         
         chaptersMap[chapterId] = {
           id: chapterId,
-          title: `Chapter ${chapterNumber}`,
+          title,
           courseId,
           videos: [],
           videoCount: 0
@@ -160,8 +173,7 @@ export async function createChapterAction(courseId: string, title?: string): Pro
 }
 
 /**
- * POC: Update chapter title (for virtual chapters, this updates video metadata)
- * Since chapters are virtual, we'll store chapter title in video metadata for now
+ * Update chapter title using course_chapters table
  */
 export async function updateChapterAction(chapterId: string, updates: { title?: string }): Promise<ActionResult> {
   try {
@@ -172,25 +184,96 @@ export async function updateChapterAction(chapterId: string, updates: { title?: 
       return { success: true, message: 'No updates provided' }
     }
     
-    // For POC: Store chapter title as metadata in all videos of this chapter
-    // This is a simplified approach - in production, you might want dedicated chapter storage
-    const { error } = await supabase
-      .from('videos')
-      .update({ 
-        // We can store chapter title in a metadata field or create a chapters table
-        // For POC, let's just update videos to have the new chapter_id if needed
-        updated_at: new Date().toISOString()
-      })
-      .eq('chapter_id', chapterId)
+    // Check if chapter exists in course_chapters table
+    const { data: existingChapter, error: fetchError } = await supabase
+      .from('course_chapters')
+      .select('id, course_id')
+      .eq('id', chapterId)
+      .single()
     
-    if (error) {
-      console.error('Update chapter error:', error)
-      throw error
+    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = not found
+      throw fetchError
     }
     
-    console.log(`[POC] Updated virtual chapter ${chapterId} title to: ${updates.title}`)
+    if (existingChapter) {
+      // Verify user owns the course
+      const { data: course, error: courseError } = await supabase
+        .from('courses')
+        .select('instructor_id')
+        .eq('id', existingChapter.course_id)
+        .single()
+      
+      if (courseError || !course) {
+        throw new Error('Course not found')
+      }
+      
+      if (course.instructor_id !== user.id) {
+        throw new Error('Unauthorized: You do not own this course')
+      }
+      
+      // Update existing chapter
+      const { error: updateError } = await supabase
+        .from('course_chapters')
+        .update({ 
+          title: updates.title,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', chapterId)
+      
+      if (updateError) throw updateError
+    } else {
+      // Chapter doesn't exist yet - this happens with virtual chapters
+      // We need to find the course_id from videos table and create the chapter
+      const { data: video, error: videoError } = await supabase
+        .from('videos')
+        .select('course_id')
+        .eq('chapter_id', chapterId)
+        .limit(1)
+        .single()
+      
+      if (videoError || !video) {
+        throw new Error('Chapter not found')
+      }
+      
+      // Verify user owns the course
+      const { data: course, error: courseError } = await supabase
+        .from('courses')
+        .select('instructor_id')
+        .eq('id', video.course_id)
+        .single()
+      
+      if (courseError || !course) {
+        throw new Error('Course not found')
+      }
+      
+      if (course.instructor_id !== user.id) {
+        throw new Error('Unauthorized: You do not own this course')
+      }
+      
+      // Get next order number for this course
+      const { data: lastChapter } = await supabase
+        .from('course_chapters')
+        .select('order')
+        .eq('course_id', video.course_id)
+        .order('order', { ascending: false })
+        .limit(1)
+        .single()
+      
+      const nextOrder = (lastChapter?.order || 0) + 1
+      
+      // Create new chapter
+      const { error: createError } = await supabase
+        .from('course_chapters')
+        .insert({
+          id: chapterId,
+          course_id: video.course_id,
+          title: updates.title,
+          order: nextOrder
+        })
+      
+      if (createError) throw createError
+    }
     
-    // For now, just return success - the UI will handle optimistic updates
     return { 
       success: true, 
       message: `Chapter updated to "${updates.title}"`,

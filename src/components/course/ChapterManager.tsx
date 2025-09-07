@@ -15,6 +15,7 @@ import {
   Upload
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useCourseCreationUI } from '@/stores/course-creation-ui'
 import { VideoList } from "./VideoList"
 import { VideoUploader } from "./VideoUploader"
 import type { VideoUpload, Chapter } from "@/types/course"
@@ -54,6 +55,9 @@ export function ChapterManager({
   onTabNavigation,
   className
 }: ChapterManagerProps) {
+  // Zustand store for pending changes
+  const ui = useCourseCreationUI()
+  
   // Always expand all chapters - initialize with all chapter IDs
   const [expandedChapters, setExpandedChapters] = useState<Set<string>>(
     new Set(chapters.map(chapter => chapter.id))
@@ -83,12 +87,13 @@ export function ChapterManager({
 
   const handleStartEditChapter = (chapter: Chapter) => {
     setEditingChapter(chapter.id)
-    setChapterTitle(chapter.title)
+    setChapterTitle(ui.getChapterPendingChanges()[chapter.id] || chapter.title)
   }
 
   const handleSaveChapterEdit = (chapterId: string) => {
     if (chapterTitle.trim()) {
-      onUpdateChapter(chapterId, { title: chapterTitle.trim() })
+      // Add to pending changes instead of auto-saving
+      ui.setChapterPendingChange(chapterId, chapterTitle.trim())
     }
     setEditingChapter(null)
   }
@@ -174,20 +179,38 @@ export function ChapterManager({
                       }}
                     />
                     
-                    <button
-                      onClick={() => toggleChapter(chapter.id)}
-                      className="flex items-center gap-2 flex-1"
-                    >
-                      {expandedChapters.has(chapter.id) ? (
-                        <ChevronDown className="h-4 w-4" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4" />
-                      )}
+                    <div className="flex items-center gap-2 flex-1">
+                      {/* Chevron for expand/collapse */}
+                      <button
+                        onClick={() => toggleChapter(chapter.id)}
+                        className="p-1 hover:bg-muted rounded"
+                      >
+                        {expandedChapters.has(chapter.id) ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
+                      </button>
                       
+                      {/* Chapter title - clickable to edit */}
                       {editingChapter === chapter.id ? (
                         <Input
                           value={chapterTitle}
-                          onChange={(e) => setChapterTitle(e.target.value)}
+                          onChange={(e) => {
+                            const newTitle = e.target.value
+                            setChapterTitle(newTitle)
+                            
+                            // Check if this matches the original chapter title
+                            const originalTitle = chapter.title
+                            
+                            if (newTitle.trim() === originalTitle) {
+                              // No change, remove from pending changes
+                              ui.removeContentPendingChange('chapters', chapter.id)
+                            } else if (newTitle.trim()) {
+                              // Set pending change immediately during typing (like video filenames)
+                              ui.setChapterPendingChange(chapter.id, newTitle.trim())
+                            }
+                          }}
                           onBlur={() => handleSaveChapterEdit(chapter.id)}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
@@ -198,14 +221,21 @@ export function ChapterManager({
                           }}
                           className="h-8 flex-1"
                           autoFocus
-                          onClick={(e) => e.stopPropagation()}
                         />
                       ) : (
-                        <h3 className="font-medium">
-                          {index + 1}. {chapter.title}
-                        </h3>
+                        <button
+                          onClick={() => handleStartEditChapter(chapter)}
+                          className="text-left flex-1 hover:bg-muted/50 px-2 py-1 rounded transition-colors"
+                        >
+                          <h3 className="font-medium">
+                            {index + 1}. {ui.getChapterPendingChanges()[chapter.id] || chapter.title}
+                            {ui.getChapterPendingChanges()[chapter.id] && (
+                              <span className="ml-2 text-xs text-orange-500">●</span>
+                            )}
+                          </h3>
+                        </button>
                       )}
-                    </button>
+                    </div>
 
                     <Badge variant="secondary">
                       {chapter.videos.length} videos

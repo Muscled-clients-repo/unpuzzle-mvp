@@ -148,7 +148,7 @@ export function useCourseEdit(courseId: string) {
           queryClient.refetchQueries({ queryKey: courseKeys.detail(courseId) })
         }, 2000)
         
-        toast.success('Course updated successfully!')
+        // Don't show individual toast - consolidated toast is handled by the edit page
       } else {
         toast.error(result.error || 'Failed to update course')
       }

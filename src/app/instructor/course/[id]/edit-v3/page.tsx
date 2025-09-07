@@ -45,7 +45,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   const { course, isLoading, error, updateCourse, isUpdating } = useCourseEdit(courseId)
   
   // Preload chapters data to avoid separate loading states
-  const { chapters } = useChaptersEdit(courseId)
+  const { chapters, error: chaptersError } = useChaptersEdit(courseId)
   
   // PROFESSIONAL FORM STATE PATTERN: Form state as source of truth for inputs
   const formState = useFormState({
@@ -80,16 +80,11 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   }, [courseId, course, isLoading, error])
   
   // ARCHITECTURE-COMPLIANT: UI Orchestration - read from TanStack mutations directly
-  const { batchUpdateVideos, isBatchUpdating, hasPendingVideoChanges, videoPendingCount, videoPendingChanges } = useVideoBatchOperations(courseId)
+  const { batchUpdateVideos, isBatchUpdating, videoPendingChanges } = useVideoBatchOperations(courseId)
+  const { updateChapter } = useChaptersEdit(courseId)
   
-  // Get video pending changes by reading TanStack mutation state (UI orchestration)
-  const getVideoPendingChanges = React.useCallback(() => {
-    return { 
-      hasChanges: hasPendingVideoChanges, 
-      isSaving: isBatchUpdating,
-      changeCount: videoPendingCount 
-    }
-  }, [hasPendingVideoChanges, isBatchUpdating, videoPendingCount])
+  // Get unified content pending changes count (stable primitive)
+  const contentPendingChangesCount = ui.getContentPendingChangesCount()
   
   // ARCHITECTURE-COMPLIANT: UI Orchestration - read from appropriate stores without mixing data
   const hasChanges = React.useMemo(() => {
@@ -98,18 +93,14 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
     // Course info changes (Professional form state pattern - use isDirty for immediate feedback)
     const courseInfoChanged = formState.isDirty
     
-    // Video changes (TanStack mutation state) - UI orchestration, not data mixing
-    const videoPendingState = getVideoPendingChanges()
-    const videoChanges = videoPendingState.hasChanges
+    // Content changes (UI orchestration, not data mixing) - Videos + Chapters unified
+    const contentChanges = contentPendingChangesCount > 0
     
-    // Chapter changes (future TanStack mutation state)
-    const chapterChanges = false // Not implemented yet
-    
-    return courseInfoChanged || videoChanges || chapterChanges
+    return courseInfoChanged || contentChanges
   }, [
     course,
     formState.isDirty, // Use isDirty for immediate response to optimistic reset
-    getVideoPendingChanges // This is stable due to useCallback
+    contentPendingChangesCount // Stable primitive value - includes both video and chapter changes
   ])
   
   // ARCHITECTURE-COMPLIANT: No data copying or synchronization
@@ -118,25 +109,29 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   const handleSave = async () => {
     if (!hasChanges || isUpdating) return
 
-    console.log('🚀 ARCHITECTURE-COMPLIANT SAVE: UI orchestration of multiple domains...', {
+    console.log('🚀 UNIFIED SAVE: UI orchestration of multiple domains...', {
       courseInfoChanges: formState.hasChanges(course),
-      videoChanges: getVideoPendingChanges().hasChanges
+      contentChanges: contentPendingChangesCount > 0,
+      contentBreakdown: {
+        videos: Object.keys(ui.getVideoPendingChanges()).length,
+        chapters: Object.keys(ui.getChapterPendingChanges()).length,
+        total: contentPendingChangesCount
+      }
     })
 
     try {
       // UI Orchestration: Coordinate TanStack mutations without data mixing
       
       // 1. Save video changes via TanStack mutation
-      const videoPendingState = getVideoPendingChanges()
-      if (videoPendingState.hasChanges) {
+      const videoPendingChangesFromUI = ui.getVideoPendingChanges()
+      if (Object.keys(videoPendingChangesFromUI).length > 0) {
         console.log('🎬 Orchestrating video save via TanStack...', {
-          pendingCount: videoPendingState.changeCount,
-          isSaving: videoPendingState.isSaving,
-          pendingChanges: videoPendingChanges
+          pendingCount: Object.keys(videoPendingChangesFromUI).length,
+          pendingChanges: videoPendingChangesFromUI
         })
         
         // Convert Zustand pending changes to TanStack mutation format
-        const videoUpdates = Object.entries(videoPendingChanges).map(([videoId, newTitle]) => ({
+        const videoUpdates = Object.entries(videoPendingChangesFromUI).map(([videoId, newTitle]) => ({
           id: videoId,
           title: newTitle
         }))
@@ -145,16 +140,29 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
           console.log('🎬 Executing video batch update...', videoUpdates)
           batchUpdateVideos({ courseId, updates: videoUpdates })
           
-          // Show success toast for video filename changes
-          const videoCount = videoUpdates.length
-          toast.success(`📹 ${videoCount} video filename${videoCount > 1 ? 's' : ''} updated successfully!`)
-          
-          // Clear pending changes from Zustand after initiating save
+          // Clear video pending changes from unified system
           ui.clearAllVideoPendingChanges()
         }
       }
 
-      // 2. Save course info changes via TanStack mutation - ONLY CHANGED FIELDS
+      // 2. Save chapter name changes via TanStack mutation  
+      const chapterPendingChanges = ui.getChapterPendingChanges()
+      if (Object.keys(chapterPendingChanges).length > 0) {
+        console.log('📚 Orchestrating chapter name save via TanStack...', {
+          pendingCount: Object.keys(chapterPendingChanges).length,
+          pendingChanges: chapterPendingChanges
+        })
+        
+        // Save each chapter name change  
+        for (const [chapterId, newTitle] of Object.entries(chapterPendingChanges)) {
+          updateChapter({ chapterId, updates: { title: newTitle } })
+        }
+        
+        // Clear chapter pending changes from unified system
+        ui.clearAllChapterPendingChanges()
+      }
+
+      // 3. Save course info changes via TanStack mutation - ONLY CHANGED FIELDS
       const courseUpdates = formState.getChangedFieldsFromServer(course)
 
       if (Object.keys(courseUpdates).length > 0) {
@@ -186,6 +194,24 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
         })
       } else {
         console.log('✅ ARCHITECTURE-COMPLIANT SAVE: No course info changes to save!')
+      }
+
+      // Show single consolidated success toast
+      const savedItems = []
+      if (videoPendingChangesFromUI && Object.keys(videoPendingChangesFromUI).length > 0) {
+        const count = Object.keys(videoPendingChangesFromUI).length
+        savedItems.push(`${count} video filename${count > 1 ? 's' : ''}`)
+      }
+      if (chapterPendingChanges && Object.keys(chapterPendingChanges).length > 0) {
+        const count = Object.keys(chapterPendingChanges).length  
+        savedItems.push(`${count} chapter name${count > 1 ? 's' : ''}`)
+      }
+      if (courseUpdates && Object.keys(courseUpdates).length > 0) {
+        savedItems.push('course details')
+      }
+      
+      if (savedItems.length > 0) {
+        toast.success(`✅ Successfully saved ${savedItems.join(', ')}!`)
       }
 
     } catch (error) {
@@ -260,13 +286,22 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
     )
   }
 
-  if (error) {
+  if (error || chaptersError) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
-          <p className="text-red-600">Failed to load course</p>
-          <p className="text-sm text-muted-foreground">{error.message}</p>
+          <p className="text-red-600">Failed to load course data</p>
+          <p className="text-sm text-muted-foreground">
+            {error?.message || chaptersError?.message || 'Unknown error'}
+          </p>
+          <Button 
+            variant="outline" 
+            className="mt-4"
+            onClick={() => window.location.reload()}
+          >
+            Try Again
+          </Button>
         </div>
       </div>
     )

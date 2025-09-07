@@ -48,12 +48,23 @@ interface CourseCreationUIState {
   unmarkForDeletion: (id: string) => void
   clearPendingDeletes: () => void
   
-  // ===== VIDEO EDITING STATE (UI State - what's being edited) =====
-  videoPendingChanges: Record<string, string> // videoId -> newTitle
+  // ===== UNIFIED CONTENT EDITING STATE (UI State - what's being edited) =====
+  contentPendingChanges: {
+    videos: Record<string, string>    // videoId -> newTitle
+    chapters: Record<string, string>  // chapterId -> newTitle
+  }
+  setContentPendingChange: (type: 'videos' | 'chapters', id: string, newTitle: string) => void
+  removeContentPendingChange: (type: 'videos' | 'chapters', id: string) => void
+  clearAllContentPendingChanges: () => void
+  getContentPendingChangesCount: () => number
+  
+  // Convenience methods for backward compatibility and specific access
   setVideoPendingChange: (videoId: string, newTitle: string) => void
-  removeVideoPendingChange: (videoId: string) => void
-  clearAllVideoPendingChanges: () => void
+  setChapterPendingChange: (chapterId: string, newTitle: string) => void
+  getVideoPendingChanges: () => Record<string, string>
+  getChapterPendingChanges: () => Record<string, string>
   getVideoPendingChangesCount: () => number
+  getChapterPendingChangesCount: () => number
   
   // ===== UI PREFERENCES =====
   preferences: {
@@ -98,7 +109,10 @@ export const useCourseCreationUI = create<CourseCreationUIState>()(
           previewData: null
         },
         pendingDeletes: new Set(),
-        videoPendingChanges: {},
+        contentPendingChanges: {
+          videos: {},
+          chapters: {}
+        },
         preferences: {
           autoSave: true,
           showUploadProgress: true,
@@ -239,31 +253,93 @@ export const useCourseCreationUI = create<CourseCreationUIState>()(
           set({ pendingDeletes: new Set() })
         },
 
-        // Video pending changes methods (UI state for what's being edited)
-        setVideoPendingChange: (videoId, newTitle) => {
+        // ===== UNIFIED CONTENT PENDING CHANGES METHODS =====
+        setContentPendingChange: (type, id, newTitle) => {
           set((state) => ({
-            videoPendingChanges: {
-              ...state.videoPendingChanges,
-              [videoId]: newTitle
+            contentPendingChanges: {
+              ...state.contentPendingChanges,
+              [type]: {
+                ...state.contentPendingChanges[type],
+                [id]: newTitle
+              }
             }
           }))
         },
 
-        removeVideoPendingChange: (videoId) => {
+        removeContentPendingChange: (type, id) => {
           set((state) => {
-            const newPendingChanges = { ...state.videoPendingChanges }
-            delete newPendingChanges[videoId]
-            return { videoPendingChanges: newPendingChanges }
+            const newTypeChanges = { ...state.contentPendingChanges[type] }
+            delete newTypeChanges[id]
+            return {
+              contentPendingChanges: {
+                ...state.contentPendingChanges,
+                [type]: newTypeChanges
+              }
+            }
           })
         },
 
+        clearAllContentPendingChanges: () => {
+          set({
+            contentPendingChanges: {
+              videos: {},
+              chapters: {}
+            }
+          })
+        },
+
+        getContentPendingChangesCount: () => {
+          const { contentPendingChanges } = get()
+          return Object.keys(contentPendingChanges.videos).length + 
+                 Object.keys(contentPendingChanges.chapters).length
+        },
+
+        // ===== BACKWARD COMPATIBILITY METHODS =====
+        setVideoPendingChange: (videoId, newTitle) => {
+          get().setContentPendingChange('videos', videoId, newTitle)
+        },
+
+        setChapterPendingChange: (chapterId, newTitle) => {
+          get().setContentPendingChange('chapters', chapterId, newTitle)
+        },
+
         clearAllVideoPendingChanges: () => {
-          set({ videoPendingChanges: {} })
+          set((state) => ({
+            contentPendingChanges: {
+              ...state.contentPendingChanges,
+              videos: {}
+            }
+          }))
+        },
+
+        clearAllChapterPendingChanges: () => {
+          set((state) => ({
+            contentPendingChanges: {
+              ...state.contentPendingChanges,
+              chapters: {}
+            }
+          }))
+        },
+
+        // ===== COMPATIBILITY GETTERS =====
+        getVideoPendingChanges: () => {
+          const { contentPendingChanges } = get()
+          return contentPendingChanges.videos
+        },
+
+        getChapterPendingChanges: () => {
+          const { contentPendingChanges } = get()
+          return contentPendingChanges.chapters
         },
 
         getVideoPendingChangesCount: () => {
-          const { videoPendingChanges } = get()
-          return Object.keys(videoPendingChanges).length
+          const { contentPendingChanges } = get()
+          return Object.keys(contentPendingChanges.videos).length
+        },
+
+        getChapterPendingChangesCount: () => {
+          const { contentPendingChanges } = get()
+          return Object.keys(contentPendingChanges.chapters).length
         },
 
         // Preferences methods

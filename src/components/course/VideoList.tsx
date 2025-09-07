@@ -198,6 +198,15 @@ export function VideoList({
     })
   }, [batchRenameMutation, pendingChanges, editingVideo, videoTitle, videos])
   
+  // Clear local pending changes when Zustand store is cleared (after save)
+  const videoPendingChangesFromStore = ui.getVideoPendingChanges()
+  useEffect(() => {
+    if (Object.keys(videoPendingChangesFromStore).length === 0) {
+      // Zustand store was cleared, clear local state too
+      setPendingChanges({})
+    }
+  }, [videoPendingChangesFromStore])
+
   // Notify parent of pending changes when state changes
   useEffect(() => {
     let totalChanges = Object.keys(pendingChanges).length
@@ -554,6 +563,9 @@ export function VideoList({
                   data-video-edit={video.id}
                 >
                   {getDisplayName(video)}
+                  {pendingChanges[video.id] && (
+                    <span className="ml-2 text-xs text-orange-500">●</span>
+                  )}
                 </p>
                 {/* ARCHITECTURE-COMPLIANT: Upload progress from TanStack */}
                 {renderUploadProgress(video)}

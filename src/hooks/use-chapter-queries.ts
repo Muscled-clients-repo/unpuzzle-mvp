@@ -111,8 +111,10 @@ export function useChaptersEdit(courseId: string) {
     },
     
     onSuccess: (result) => {
+      // Don't show toast here - let the parent component handle it
+      // This prevents duplicate toasts when "Save Changes" triggers multiple saves
       if (result.success) {
-        toast.success('Chapter updated successfully!')
+        console.log('✅ Chapter updated successfully (no toast)')
       }
     },
     
