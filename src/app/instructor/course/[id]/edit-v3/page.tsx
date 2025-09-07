@@ -30,6 +30,8 @@ import { cn } from "@/lib/utils"
 // New architecture imports
 import { useCourseCreationUI } from '@/stores/course-creation-ui'
 import { useCourseEdit } from '@/hooks/use-course-queries'
+import { useVideoBatchOperations } from '@/hooks/use-video-queries'
+import { useFormState } from '@/hooks/use-form-state'
 import { EnhancedChapterManager } from '@/components/course/EnhancedChapterManager'
 import { VideoPreviewModal } from "@/components/course/VideoPreviewModal"
 
@@ -42,65 +44,151 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   const ui = useCourseCreationUI()
   const { course, isLoading, error, updateCourse, isUpdating } = useCourseEdit(courseId)
   
-  // Track video save function from EnhancedChapterManager
-  const videoSaveFunctionRef = React.useRef<(() => void) | null>(null)
+  // PROFESSIONAL FORM STATE PATTERN: Form state as source of truth for inputs
+  const formState = useFormState({
+    title: course?.title || '',
+    description: course?.description || '',
+    price: course?.price || null,
+    difficulty: course?.difficulty || 'beginner'
+  })
   
-  // Track if we have pending changes for save button (memoized to prevent infinite loops)
-  const hasChanges = React.useMemo(() => {
-    return ui.hasUnsavedChanges() || Object.keys(ui.formData).length > 0
-  }, [ui.formData.title, ui.formData.description, ui.formData.price, ui.formData.difficulty, ui.uploads])
-  
-  // Initialize form data when course loads (only run once per course)
-  const [initialized, setInitialized] = React.useState(false)
-  
+  // Update form state when server data changes (after fetch or optimistic update)
   React.useEffect(() => {
-    if (course && !initialized) {
-      ui.updateFormData('title', course.title || '')
-      ui.updateFormData('description', course.description || '')
-      ui.updateFormData('price', course.price || null)
-      ui.updateFormData('difficulty', course.difficulty || 'beginner')
-      setInitialized(true)
+    if (course) {
+      formState.updateInitialValues({
+        title: course.title || '',
+        description: course.description || '',
+        price: course.price || null,
+        difficulty: course.difficulty || 'beginner'
+      })
     }
-  }, [course, initialized, ui])
+  }, [course])
   
+  // Debug TanStack Query state
+  React.useEffect(() => {
+    console.log('🔍 [TANSTACK DEBUG] Course query state:', {
+      courseId,
+      course: !!course,
+      courseData: course,
+      isLoading,
+      error: error?.message,
+      hasUpdateFunction: !!updateCourse
+    })
+  }, [courseId, course, isLoading, error])
+  
+  // ARCHITECTURE-COMPLIANT: UI Orchestration - read from TanStack mutations directly
+  const { batchUpdateVideos, isBatchUpdating, hasPendingVideoChanges, videoPendingCount, videoPendingChanges } = useVideoBatchOperations(courseId)
+  
+  // Get video pending changes by reading TanStack mutation state (UI orchestration)
+  const getVideoPendingChanges = React.useCallback(() => {
+    return { 
+      hasChanges: hasPendingVideoChanges, 
+      isSaving: isBatchUpdating,
+      changeCount: videoPendingCount 
+    }
+  }, [hasPendingVideoChanges, isBatchUpdating, videoPendingCount])
+  
+  // ARCHITECTURE-COMPLIANT: UI Orchestration - read from appropriate stores without mixing data
+  const hasChanges = React.useMemo(() => {
+    if (!course) return false // No server data yet
+    
+    // Course info changes (Professional form state pattern - use isDirty for immediate feedback)
+    const courseInfoChanged = formState.isDirty
+    
+    // Video changes (TanStack mutation state) - UI orchestration, not data mixing
+    const videoPendingState = getVideoPendingChanges()
+    const videoChanges = videoPendingState.hasChanges
+    
+    // Chapter changes (future TanStack mutation state)
+    const chapterChanges = false // Not implemented yet
+    
+    return courseInfoChanged || videoChanges || chapterChanges
+  }, [
+    course,
+    formState.isDirty, // Use isDirty for immediate response to optimistic reset
+    getVideoPendingChanges // This is stable due to useCallback
+  ])
+  
+  // ARCHITECTURE-COMPLIANT: No data copying or synchronization
+  
+  // ARCHITECTURE-COMPLIANT: UI Orchestration - coordinate multiple TanStack mutations
   const handleSave = async () => {
-    if (!course) return
-    
-    // First, save any pending video changes
-    if (videoSaveFunctionRef.current) {
-      console.log('🎬 Saving video changes first...')
-      videoSaveFunctionRef.current()
-    }
-    
-    // Get form data from UI store
-    const formData = ui.formData
-    
-    // Update course with form data
-    const updates: Partial<typeof course> = {}
-    
-    if (formData.title !== course.title) {
-      updates.title = formData.title
-    }
-    if (formData.description !== (course.description || '')) {
-      updates.description = formData.description
-    }
-    if (formData.price !== course.price) {
-      updates.price = formData.price
-    }
-    if (formData.difficulty !== course.difficulty) {
-      updates.difficulty = formData.difficulty
-    }
-    
-    if (Object.keys(updates).length > 0) {
-      updateCourse(updates)
+    if (!hasChanges || isUpdating) return
+
+    console.log('🚀 ARCHITECTURE-COMPLIANT SAVE: UI orchestration of multiple domains...', {
+      courseInfoChanges: formState.hasChanges(course),
+      videoChanges: getVideoPendingChanges().hasChanges
+    })
+
+    try {
+      // UI Orchestration: Coordinate TanStack mutations without data mixing
       
-      // Clear form data after successful update
-      ui.clearForm()
+      // 1. Save video changes via TanStack mutation
+      const videoPendingState = getVideoPendingChanges()
+      if (videoPendingState.hasChanges) {
+        console.log('🎬 Orchestrating video save via TanStack...', {
+          pendingCount: videoPendingState.changeCount,
+          isSaving: videoPendingState.isSaving,
+          pendingChanges: videoPendingChanges
+        })
+        
+        // Convert Zustand pending changes to TanStack mutation format
+        const videoUpdates = Object.entries(videoPendingChanges).map(([videoId, newTitle]) => ({
+          id: videoId,
+          title: newTitle
+        }))
+        
+        if (videoUpdates.length > 0) {
+          console.log('🎬 Executing video batch update...', videoUpdates)
+          batchUpdateVideos({ courseId, updates: videoUpdates })
+          
+          // Clear pending changes from Zustand after initiating save
+          ui.clearAllVideoPendingChanges()
+        }
+      }
+
+      // 2. Save course info changes via TanStack mutation - ONLY CHANGED FIELDS
+      const courseUpdates = formState.getChangedFieldsFromServer(course)
+
+      if (Object.keys(courseUpdates).length > 0) {
+        console.log('📝 Orchestrating course info save via TanStack (only changed fields)...', {
+          courseUpdates,
+          currentServerData: { title: course?.title, description: course?.description, price: course?.price, difficulty: course?.difficulty },
+          formData: formState.values
+        })
+        
+        // PROFESSIONAL UX: Optimistic form reset for immediate UI feedback
+        const optimisticData = { ...course, ...courseUpdates }
+        formState.updateInitialValues(optimisticData as typeof course)
+        
+        updateCourse(courseUpdates, {
+          onSuccess: (result) => {
+            console.log('✅ Course save successful, optimistic reset was correct...', result)
+            // Form state already reset optimistically
+          },
+          onError: (error) => {
+            console.error('❌ Course save failed, reverting form state...', error)
+            // Revert to original server data on error
+            formState.updateInitialValues({
+              title: course.title || '',
+              description: course.description || '',
+              price: course.price || null,
+              difficulty: course.difficulty || 'beginner'
+            })
+          }
+        })
+      } else {
+        console.log('✅ ARCHITECTURE-COMPLIANT SAVE: No course info changes to save!')
+      }
+
+    } catch (error) {
+      console.error('❌ ARCHITECTURE-COMPLIANT SAVE: Error in UI orchestration:', error)
     }
   }
   
-  const handleInputChange = (field: string, value: any) => {
-    ui.updateFormData(field as keyof typeof ui.formData, value)
+  // PROFESSIONAL PATTERN: Form state handles all input changes
+  const handleInputChange = (field: keyof typeof formState.values, value: any) => {
+    formState.setValue(field, value)
   }
 
   if (isLoading && !course) {
@@ -153,7 +241,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
           </Button>
           <div>
             <h1 className="text-2xl font-bold">
-              {ui.formData.title || course.title}
+              {formState.values.title || course?.title}
             </h1>
             <p className="text-muted-foreground">
               Edit course content and settings
@@ -202,7 +290,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
                 <Label htmlFor="title">Course Title</Label>
                 <Input
                   id="title"
-                  value={ui.formData.title || course.title}
+                  value={formState.values.title}
                   onChange={(e) => handleInputChange('title', e.target.value)}
                   placeholder="Enter course title"
                 />
@@ -212,7 +300,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
                 <Label htmlFor="description">Description</Label>
                 <Textarea
                   id="description"
-                  value={ui.formData.description || course.description || ''}
+                  value={formState.values.description}
                   onChange={(e) => handleInputChange('description', e.target.value)}
                   placeholder="Describe your course"
                   rows={4}
@@ -225,7 +313,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
                   <Input
                     id="price"
                     type="number"
-                    value={ui.formData.price ?? course.price ?? ''}
+                    value={formState.values.price ?? ''}
                     onChange={(e) => handleInputChange('price', e.target.value ? Number(e.target.value) : null)}
                     placeholder="0"
                     min="0"
@@ -236,7 +324,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
                 <div>
                   <Label htmlFor="difficulty">Difficulty</Label>
                   <Select 
-                    value={ui.formData.difficulty || course.difficulty} 
+                    value={formState.values.difficulty} 
                     onValueChange={(value) => handleInputChange('difficulty', value)}
                   >
                     <SelectTrigger>
@@ -259,9 +347,6 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
           <EnhancedChapterManager 
             courseId={courseId}
             className="space-y-4"
-            onVideoSaveFunctionReady={(saveFunction) => {
-              videoSaveFunctionRef.current = saveFunction
-            }}
           />
         </TabsContent>
 

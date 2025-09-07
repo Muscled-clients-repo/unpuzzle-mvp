@@ -8,6 +8,8 @@ import {
   reorderVideosAction
 } from '@/app/actions/video-actions'
 import type { Video, UploadItem } from '@/types'
+import { chapterKeys } from './use-chapter-queries'
+import { useCourseCreationUI } from '@/stores/course-creation-ui'
 
 // ===== QUERY KEYS =====
 export const videoKeys = {
@@ -27,24 +29,43 @@ export function useVideoUpload(courseId: string) {
     mutationFn: async ({ 
       file, 
       chapterId, 
-      onProgress 
+      tempVideoId
     }: { 
       file: File
       chapterId: string
-      onProgress?: (progress: number) => void
+      tempVideoId: string
     }) => {
+      // ARCHITECTURE-COMPLIANT: Progress updates in TanStack cache
+      const updateProgress = (progress: number) => {
+        queryClient.setQueryData(videoKeys.list(courseId), (old: Video[] = []) =>
+          old.map(video => 
+            video.id === tempVideoId 
+              ? { 
+                  ...video, 
+                  uploadProgress: progress,
+                  // Calculate estimated time remaining
+                  uploadTimeRemaining: video.uploadStartTime ? 
+                    Math.round(((Date.now() - video.uploadStartTime) * (100 - progress)) / progress / 1000) 
+                    : null
+                }
+              : video
+          )
+        )
+      }
+
+      // ARCHITECTURE-COMPLIANT: Server Action handles upload
+      // WebSocket progress tracking will be implemented next
       return uploadVideoAction({
         file,
         courseId,
-        chapterId,
-        onProgress
+        chapterId
       })
     },
     
-    onMutate: async ({ file, chapterId }) => {
+    onMutate: async ({ file, chapterId, tempVideoId }) => {
       // Create temporary video object for immediate UI feedback
       const tempVideo: Video = {
-        id: `temp-video-${Date.now()}`,
+        id: tempVideoId,
         filename: file.name,
         originalFilename: file.name,
         course_id: courseId,
@@ -57,7 +78,10 @@ export function useVideoUpload(courseId: string) {
         backblaze_file_id: null,
         backblaze_url: null,
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        // ARCHITECTURE-COMPLIANT: Upload progress in TanStack
+        uploadProgress: 0,
+        uploadStartTime: Date.now()
       }
       
       // Add to videos cache optimistically
@@ -67,10 +91,10 @@ export function useVideoUpload(courseId: string) {
       ])
       
       // Update chapters cache to reflect new video count
-      queryClient.setQueryData(['chapters', courseId], (old: any) => {
+      queryClient.setQueryData(chapterKeys.list(courseId), (old: any) => {
         if (!Array.isArray(old)) return old
         
-        return old.map(chapter => 
+        return old.map((chapter: any) => 
           chapter.id === chapterId
             ? {
                 ...chapter,
@@ -96,10 +120,10 @@ export function useVideoUpload(courseId: string) {
         )
         
         // Update chapters cache
-        queryClient.setQueryData(['chapters', courseId], (old: any) => {
+        queryClient.setQueryData(chapterKeys.list(courseId), (old: any) => {
           if (!Array.isArray(old)) return old
           
-          return old.map(chapter => 
+          return old.map((chapter: any) => 
             chapter.id === variables.chapterId
               ? {
                   ...chapter,
@@ -112,6 +136,12 @@ export function useVideoUpload(courseId: string) {
         })
         
         toast.success(`${realVideo.filename} uploaded successfully!`)
+        
+        // Background refetch to ensure consistency
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: videoKeys.list(courseId) })
+          queryClient.invalidateQueries({ queryKey: ['chapters', courseId] })
+        }, 1000)
       } else {
         toast.error(result.error || 'Upload failed')
       }
@@ -156,6 +186,9 @@ export function useVideoUpload(courseId: string) {
 export function useVideoBatchOperations(courseId: string) {
   const queryClient = useQueryClient()
   
+  // ARCHITECTURE-COMPLIANT: Read UI state from Zustand for dirty tracking
+  const { videoPendingChanges, getVideoPendingChangesCount } = useCourseCreationUI()
+  
   const batchUpdateMutation = useMutation({
     mutationFn: ({ courseId, updates }: { 
       courseId: string, 
@@ -167,10 +200,10 @@ export function useVideoBatchOperations(courseId: string) {
     
     onMutate: async ({ courseId, updates }) => {
       await queryClient.cancelQueries({ queryKey: videoKeys.list(courseId) })
-      await queryClient.cancelQueries({ queryKey: ['chapters', courseId] })
+      await queryClient.cancelQueries({ queryKey: chapterKeys.list(courseId) })
       
       const previousVideos = queryClient.getQueryData(videoKeys.list(courseId))
-      const previousChapters = queryClient.getQueryData(['chapters', courseId])
+      const previousChapters = queryClient.getQueryData(chapterKeys.list(courseId))
       
       // Optimistic update for videos
       queryClient.setQueryData(videoKeys.list(courseId), (old: Video[] = []) =>
@@ -181,10 +214,10 @@ export function useVideoBatchOperations(courseId: string) {
       )
       
       // Optimistic update for chapters
-      queryClient.setQueryData(['chapters', courseId], (old: any) => {
+      queryClient.setQueryData(chapterKeys.list(courseId), (old: any) => {
         if (!Array.isArray(old)) return old
         
-        return old.map(chapter => ({
+        return old.map((chapter: any) => ({
           ...chapter,
           videos: chapter.videos.map((video: Video) => {
             const update = updates.find(u => u.id === video.id)
@@ -206,7 +239,7 @@ export function useVideoBatchOperations(courseId: string) {
         // Background refetch for consistency
         setTimeout(() => {
           queryClient.refetchQueries({ queryKey: videoKeys.list(courseId) })
-          queryClient.refetchQueries({ queryKey: ['chapters', courseId] })
+          queryClient.refetchQueries({ queryKey: chapterKeys.list(courseId) })
         }, 2000)
       } else {
         toast.error(result.error || 'Update failed')
@@ -229,7 +262,11 @@ export function useVideoBatchOperations(courseId: string) {
   
   return {
     batchUpdateVideos: batchUpdateMutation.mutate,
-    isBatchUpdating: batchUpdateMutation.isPending
+    isBatchUpdating: batchUpdateMutation.isPending,
+    // ARCHITECTURE-COMPLIANT: Expose UI state for UI orchestration
+    hasPendingVideoChanges: Object.keys(videoPendingChanges).length > 0,
+    videoPendingCount: getVideoPendingChangesCount(),
+    videoPendingChanges // Expose the actual pending changes for save operations
   }
 }
 
@@ -242,10 +279,10 @@ export function useVideoDelete(courseId: string) {
     
     onMutate: async (videoId) => {
       await queryClient.cancelQueries({ queryKey: videoKeys.list(courseId) })
-      await queryClient.cancelQueries({ queryKey: ['chapters', courseId] })
+      await queryClient.cancelQueries({ queryKey: chapterKeys.list(courseId) })
       
       const previousVideos = queryClient.getQueryData(videoKeys.list(courseId))
-      const previousChapters = queryClient.getQueryData(['chapters', courseId])
+      const previousChapters = queryClient.getQueryData(chapterKeys.list(courseId))
       
       // Optimistic update - remove video
       queryClient.setQueryData(videoKeys.list(courseId), (old: Video[] = []) =>
@@ -253,10 +290,10 @@ export function useVideoDelete(courseId: string) {
       )
       
       // Update chapters cache
-      queryClient.setQueryData(['chapters', courseId], (old: any) => {
+      queryClient.setQueryData(chapterKeys.list(courseId), (old: any) => {
         if (!Array.isArray(old)) return old
         
-        return old.map(chapter => ({
+        return old.map((chapter: any) => ({
           ...chapter,
           videos: chapter.videos.filter((video: Video) => video.id !== videoId),
           videoCount: Math.max(0, (chapter.videoCount || 1) - 1)
@@ -278,7 +315,7 @@ export function useVideoDelete(courseId: string) {
         queryClient.setQueryData(videoKeys.list(courseId), context.previousVideos)
       }
       if (context?.previousChapters) {
-        queryClient.setQueryData(['chapters', courseId], context.previousChapters)
+        queryClient.setQueryData(chapterKeys.list(courseId), context.previousChapters)
       }
       
       toast.error('Failed to delete video')

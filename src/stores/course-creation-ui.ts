@@ -10,7 +10,9 @@ interface CourseCreationUIState {
   setStep: (step: number) => void
   markStepCompleted: (step: number) => void
   
-  // ===== FORM DATA (Temporary, before save) =====
+  // ===== REMOVED: courseData (violates architecture - TanStack owns server data) =====
+  
+  // ===== FORM DATA (Temporary edits, UI state) =====
   formData: CourseCreationData
   updateFormData: <K extends keyof CourseCreationData>(field: K, value: CourseCreationData[K]) => void
   validateForm: () => boolean
@@ -38,21 +40,20 @@ interface CourseCreationUIState {
   updateDragTarget: (target: DropTarget | null) => void
   endDrag: () => void
   
-  // ===== UPLOAD MANAGEMENT =====
-  uploads: Record<string, UploadItem>
-  addUpload: (item: UploadItem) => void
-  updateUploadProgress: (id: string, progress: number) => void
-  updateUploadStatus: (id: string, status: UploadItem['status'], error?: string) => void
-  removeUpload: (id: string) => void
-  clearCompletedUploads: () => void
-  getUploadsByChapter: (chapterId: string) => UploadItem[]
-  getTotalUploadProgress: () => number
+  // ===== UPLOAD MANAGEMENT REMOVED (Architecture violation - TanStack owns server state) =====
   
   // ===== PENDING OPERATIONS =====
   pendingDeletes: Set<string> // IDs of items marked for deletion
   markForDeletion: (id: string) => void
   unmarkForDeletion: (id: string) => void
   clearPendingDeletes: () => void
+  
+  // ===== VIDEO EDITING STATE (UI State - what's being edited) =====
+  videoPendingChanges: Record<string, string> // videoId -> newTitle
+  setVideoPendingChange: (videoId: string, newTitle: string) => void
+  removeVideoPendingChange: (videoId: string) => void
+  clearAllVideoPendingChanges: () => void
+  getVideoPendingChangesCount: () => number
   
   // ===== UI PREFERENCES =====
   preferences: {
@@ -96,8 +97,8 @@ export const useCourseCreationUI = create<CourseCreationUIState>()(
           dropTarget: null,
           previewData: null
         },
-        uploads: {},
         pendingDeletes: new Set(),
+        videoPendingChanges: {},
         preferences: {
           autoSave: true,
           showUploadProgress: true,
@@ -127,7 +128,9 @@ export const useCourseCreationUI = create<CourseCreationUIState>()(
           }))
         },
 
-        // Form data methods
+        // ARCHITECTURE-COMPLIANT: Removed server state methods (TanStack owns server data)
+
+        // Form data methods (UI state - temporary edits)
         updateFormData: (field, value) => {
           set((state) => ({
             formData: {
@@ -136,6 +139,8 @@ export const useCourseCreationUI = create<CourseCreationUIState>()(
             }
           }))
         },
+
+        // ARCHITECTURE-COMPLIANT: Removed getDisplayValue (components read directly from TanStack + formData)
 
         validateForm: () => {
           const { formData } = get()
@@ -213,76 +218,7 @@ export const useCourseCreationUI = create<CourseCreationUIState>()(
           })
         },
 
-        // Upload methods
-        addUpload: (item) => {
-          set((state) => ({
-            uploads: {
-              ...state.uploads,
-              [item.id]: item
-            }
-          }))
-        },
-
-        updateUploadProgress: (id, progress) => {
-          set((state) => ({
-            uploads: {
-              ...state.uploads,
-              [id]: state.uploads[id] ? {
-                ...state.uploads[id],
-                progress
-              } : state.uploads[id]
-            }
-          }))
-        },
-
-        updateUploadStatus: (id, status, error) => {
-          set((state) => ({
-            uploads: {
-              ...state.uploads,
-              [id]: state.uploads[id] ? {
-                ...state.uploads[id],
-                status,
-                error
-              } : state.uploads[id]
-            }
-          }))
-        },
-
-        removeUpload: (id) => {
-          set((state) => {
-            const { [id]: removed, ...remaining } = state.uploads
-            return { uploads: remaining }
-          })
-        },
-
-        clearCompletedUploads: () => {
-          set((state) => {
-            const activeUploads = Object.fromEntries(
-              Object.entries(state.uploads).filter(
-                ([_, upload]) => upload.status !== 'complete'
-              )
-            )
-            return { uploads: activeUploads }
-          })
-        },
-
-        getUploadsByChapter: (chapterId) => {
-          const { uploads } = get()
-          return Object.values(uploads).filter(
-            upload => upload.chapterId === chapterId
-          )
-        },
-
-        getTotalUploadProgress: () => {
-          const { uploads } = get()
-          const uploadList = Object.values(uploads)
-          if (uploadList.length === 0) return 100
-          
-          const totalProgress = uploadList.reduce(
-            (sum, upload) => sum + upload.progress, 0
-          )
-          return Math.round(totalProgress / uploadList.length)
-        },
+        // ARCHITECTURE-COMPLIANT: Removed upload methods (TanStack owns server state)
 
         // Pending deletes methods
         markForDeletion: (id) => {
@@ -301,6 +237,33 @@ export const useCourseCreationUI = create<CourseCreationUIState>()(
 
         clearPendingDeletes: () => {
           set({ pendingDeletes: new Set() })
+        },
+
+        // Video pending changes methods (UI state for what's being edited)
+        setVideoPendingChange: (videoId, newTitle) => {
+          set((state) => ({
+            videoPendingChanges: {
+              ...state.videoPendingChanges,
+              [videoId]: newTitle
+            }
+          }))
+        },
+
+        removeVideoPendingChange: (videoId) => {
+          set((state) => {
+            const newPendingChanges = { ...state.videoPendingChanges }
+            delete newPendingChanges[videoId]
+            return { videoPendingChanges: newPendingChanges }
+          })
+        },
+
+        clearAllVideoPendingChanges: () => {
+          set({ videoPendingChanges: {} })
+        },
+
+        getVideoPendingChangesCount: () => {
+          const { videoPendingChanges } = get()
+          return Object.keys(videoPendingChanges).length
         },
 
         // Preferences methods
@@ -340,10 +303,9 @@ export const useCourseCreationUI = create<CourseCreationUIState>()(
         },
 
         hasUnsavedChanges: () => {
-          const { formData, uploads } = get()
+          const { formData } = get()
           return (formData.title && formData.title.trim().length > 0) ||
-                 (formData.description && formData.description.trim().length > 0) ||
-                 Object.keys(uploads).length > 0
+                 (formData.description && formData.description.trim().length > 0)
         }
       }),
       {

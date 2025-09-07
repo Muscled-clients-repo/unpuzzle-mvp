@@ -3,7 +3,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { 
   createCourseAction,
-  updateCourse,
+  updateCourseAction,
   deleteCourse,
   saveCourseAsDraftAction,
   publishCourseAction,
@@ -28,7 +28,7 @@ export function useCourseMutations() {
         queryClient.setQueryData(['course', result.data.id], result.data)
         toast.success('Course created successfully')
         // Navigate to edit page
-        router.push(`/instructor/course/${result.data.id}/edit`)
+        router.push(`/instructor/course/${result.data.id}/edit-v3`)
       } else {
         toast.error(result.error || 'Failed to create course')
       }
@@ -41,7 +41,7 @@ export function useCourseMutations() {
   // Update course mutation
   const updateCourseMutation = useMutation({
     mutationFn: ({ id, data }: { id: string, data: any }) => 
-      updateCourse(id, data),
+      updateCourseAction(id, data),
     onMutate: async ({ id, data }) => {
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: ['course', id] })

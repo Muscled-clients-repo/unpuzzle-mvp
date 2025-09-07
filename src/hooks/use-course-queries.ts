@@ -50,7 +50,7 @@ export function useCourseCreation() {
     
     onSuccess: (result, variables, context) => {
       if (result.success && result.data) {
-        // Update cache with real server data
+        // CRITICAL: Set course detail cache FIRST to prevent "Course not found" on navigation
         queryClient.setQueryData(
           courseKeys.detail(result.data.id), 
           result.data
@@ -62,6 +62,12 @@ export function useCourseCreation() {
             course.id.startsWith('temp-') ? result.data! : course
           )
         )
+        
+        // Pre-fetch to ensure data is available
+        queryClient.prefetchQuery({
+          queryKey: courseKeys.detail(result.data.id),
+          queryFn: () => getCourseAction(result.data!.id)
+        })
         
         toast.success('Course created successfully!')
       } else {
@@ -93,7 +99,15 @@ export function useCourseEdit(courseId: string) {
   // Query for course data
   const courseQuery = useQuery({
     queryKey: courseKeys.detail(courseId),
-    queryFn: () => getCourseAction(courseId),
+    queryFn: async () => {
+      console.log('🔍 [COURSE QUERY] Fetching course:', courseId)
+      const result = await getCourseAction(courseId)
+      console.log('🔍 [COURSE QUERY] Result:', result)
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to fetch course')
+      }
+      return result.data
+    },
     enabled: !!courseId
   })
   
@@ -150,7 +164,7 @@ export function useCourseEdit(courseId: string) {
   })
   
   return {
-    course: courseQuery.data,
+    course: courseQuery.data, // Course data is directly available since queryFn returns result.data
     isLoading: courseQuery.isLoading,
     error: courseQuery.error,
     updateCourse: updateMutation.mutate,
@@ -167,4 +181,21 @@ export function useCoursesList(filters: any = {}) {
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
   })
+}
+
+// ===== COURSE PREFETCH HOOK =====
+export function useCoursePrefetch() {
+  const queryClient = useQueryClient()
+  
+  const prefetchCourse = (courseId: string) => {
+    queryClient.prefetchQuery({
+      queryKey: courseKeys.detail(courseId),
+      queryFn: () => getCourseAction(courseId),
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    })
+  }
+  
+  return {
+    prefetchCourse
+  }
 }

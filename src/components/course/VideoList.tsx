@@ -19,16 +19,17 @@ import {
   Save
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { VideoUpload } from "@/stores/slices/course-creation-slice"
+import type { Video } from "@/types/course"
+import { useCourseCreationUI } from '@/stores/course-creation-ui'
 
 interface VideoListProps {
-  videos: VideoUpload[]
+  videos: Video[]
   onVideoRename: (videoId: string, newName: string) => void
   onVideoDelete: (videoId: string) => void
-  onVideoPreview?: (video: VideoUpload) => void
+  onVideoPreview?: (video: Video) => void
   onVideoDragStart?: (videoId: string) => void
   onVideoDragEnd?: () => void
-  onVideoReorder?: (videos: VideoUpload[]) => void
+  onVideoReorder?: (videos: Video[]) => void
   batchRenameMutation?: any // TanStack Query mutation
   onPendingChangesUpdate?: (hasChanges: boolean, changeCount: number, saveFunction: () => void, isSaving?: boolean) => void
   onTabNavigation?: (currentId: string, currentType: 'video' | 'chapter', direction: 'next' | 'previous') => void
@@ -50,6 +51,10 @@ export function VideoList({
   isDraggable = true,
   className
 }: VideoListProps) {
+  // ARCHITECTURE-COMPLIANT: Upload progress comes from TanStack optimistic updates
+  // No need to enhance videos - progress data already in video objects from TanStack
+  const ui = useCourseCreationUI()
+  
   // 🔍 INVESTIGATION: Log VideoList data source
   useEffect(() => {
     console.log('🔍 [INVESTIGATION] VideoList received videos:', {
@@ -58,7 +63,8 @@ export function VideoList({
       firstVideoTitle: videos[0]?.title,
       firstVideoName: videos[0]?.name,
       firstVideoFilename: videos[0]?.filename,
-      dataSource: 'chapter.videos from useChapters query'
+      dataSource: 'chapter.videos from useChapters query',
+      progressData: videos.filter(v => v.uploadProgress).map(v => ({ id: v.id, progress: v.uploadProgress }))
     })
   }, [videos])
 
@@ -75,7 +81,7 @@ export function VideoList({
   const [activelyEditing, setActivelyEditing] = useState<{id: string, value: string} | null>(null)
   
   // Helper to get current server/optimistic name (excluding UI state)
-  const getCurrentServerName = (video: VideoUpload): string => {
+  const getCurrentServerName = (video: Video): string => {
     // Check optimistic updates first (video.title from TanStack Query)
     if (video.title && video.title !== video.name && video.title !== video.filename) {
       return video.title
@@ -99,7 +105,7 @@ export function VideoList({
   }
   
   // Get display name for a video with proper precedence to avoid race conditions
-  const getDisplayName = (video: VideoUpload): string => {
+  const getDisplayName = (video: Video): string => {
     // 1. HIGHEST PRIORITY: Currently editing this video
     if (editingVideo === video.id && videoTitle) {
       return videoTitle
@@ -114,7 +120,7 @@ export function VideoList({
     return getCurrentServerName(video)
   }
   
-  // Track pending changes for counter - use same logic as getDisplayName for consistency
+  // ARCHITECTURE-COMPLIANT: Track pending changes in both local state and Zustand
   const trackPendingChange = (videoId: string, newName: string) => {
     const video = videos.find(v => v.id === videoId)
     if (!video) return
@@ -122,18 +128,20 @@ export function VideoList({
     const currentName = getCurrentServerName(video)
     
     if (newName.trim() === currentName) {
-      // No change, remove from pending
+      // No change, remove from pending (both local and Zustand)
       setPendingChanges(prev => {
         const next = { ...prev }
         delete next[videoId]
         return next
       })
+      ui.removeVideoPendingChange(videoId)
     } else {
-      // Add to pending changes
+      // Add to pending changes (both local and Zustand)
       setPendingChanges(prev => ({
         ...prev,
         [videoId]: newName.trim()
       }))
+      ui.setVideoPendingChange(videoId, newName.trim())
     }
   }
   
@@ -173,8 +181,9 @@ export function VideoList({
     batchRenameMutation.mutate(updates, {
       onSuccess: (result) => {
         console.log('✅ Save success:', result)
-        // Clear pending changes - the improved getDisplayName will handle the transition
+        // ARCHITECTURE-COMPLIANT: Clear pending changes from both local and Zustand
         setPendingChanges({})
+        ui.clearAllVideoPendingChanges()
         if (editingVideo) {
           setEditingVideo(null)
           setEditingIndex(null)
@@ -253,7 +262,7 @@ export function VideoList({
     return position
   }
 
-  const handleStartEdit = (video: VideoUpload, index: number, clickPosition?: number | 'start' | 'end') => {
+  const handleStartEdit = (video: Video, index: number, clickPosition?: number | 'start' | 'end') => {
     const videoName = getDisplayName(video)
     setEditingVideo(video.id)
     setEditingIndex(index)
@@ -328,11 +337,13 @@ export function VideoList({
   }
 
 
-  const getStatusIcon = (status: VideoUpload['status']) => {
-    switch (status) {
+  const getStatusIcon = (video: Video) => {
+    switch (video.status) {
       case 'uploading':
         return <Loader2 className="h-4 w-4 animate-spin text-primary" />
-      case 'complete':
+      case 'processing':
+        return <Loader2 className="h-4 w-4 animate-spin text-orange-500" />
+      case 'ready':
         return <CheckCircle className="h-4 w-4 text-green-600" />
       case 'error':
         return <AlertCircle className="h-4 w-4 text-red-600" />
@@ -341,21 +352,46 @@ export function VideoList({
     }
   }
 
-  const getStatusIndicator = (status: VideoUpload['status']) => {
-    switch (status) {
+  const getStatusIndicator = (video: Video) => {
+    switch (video.status) {
       case 'uploading':
         return <Badge variant="secondary">Uploading</Badge>
       case 'processing':
         return <Badge variant="secondary">Processing</Badge>
-      case 'complete':
-        return null // Removed green dot - clean look
+      case 'ready':
+        return null
       case 'error':
         return <Badge variant="destructive">Error</Badge>
-      case 'pending':
-        return <Badge variant="outline">Pending</Badge>
       default:
         return null
     }
+  }
+
+  // ARCHITECTURE-COMPLIANT: Render upload progress (TanStack data)
+  const renderUploadProgress = (video: Video) => {
+    if (video.status !== 'uploading' || typeof video.uploadProgress !== 'number') {
+      return null
+    }
+
+    const formatTimeRemaining = (seconds: number | null) => {
+      if (!seconds || seconds <= 0) return 'Calculating...'
+      const mins = Math.floor(seconds / 60)
+      const secs = seconds % 60
+      return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`
+    }
+
+    return (
+      <div className="mt-2 space-y-1">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>{Math.round(video.uploadProgress)}%</span>
+          <span>{formatTimeRemaining(video.uploadTimeRemaining)}</span>
+        </div>
+        <Progress 
+          value={video.uploadProgress} 
+          className="h-2" 
+        />
+      </div>
+    )
   }
 
   if (videos.length === 0) {
@@ -405,7 +441,7 @@ export function VideoList({
           </span>
 
           {/* Status Icon */}
-          {getStatusIcon(video.status)}
+          {getStatusIcon(video)}
 
           {/* Video Name/Title */}
           <div 
@@ -519,15 +555,9 @@ export function VideoList({
                 >
                   {getDisplayName(video)}
                 </p>
-                {video.status === 'uploading' && (
-                  <div className="flex items-center gap-2">
-                    <Progress value={video.progress || 0} className="h-2 flex-1" />
-                    <span className="text-xs text-muted-foreground font-medium">
-                      {video.progress || 0}%
-                    </span>
-                  </div>
-                )}
-                {video.duration && video.status === 'complete' && video.duration !== '0:00' && (
+                {/* ARCHITECTURE-COMPLIANT: Upload progress from TanStack */}
+                {renderUploadProgress(video)}
+                {video.duration && video.status === 'ready' && video.duration !== null && (
                   <p className="text-xs text-muted-foreground">
                     Duration: {video.duration}
                   </p>
@@ -541,13 +571,13 @@ export function VideoList({
           {video.markedForDeletion ? (
             <Badge variant="destructive">Marked for deletion</Badge>
           ) : (
-            getStatusIndicator(video.status)
+            getStatusIndicator(video)
           )}
 
           {/* Actions */}
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             {/* Preview Button */}
-            {onVideoPreview && video.url && video.status === 'complete' && (
+            {onVideoPreview && video.backblaze_url && video.status === 'ready' && (
               <Button
                 variant="ghost"
                 size="icon"

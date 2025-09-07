@@ -48,6 +48,11 @@ export interface Video {
   backblaze_file_id: string | null
   backblaze_url: string | null
   
+  // ARCHITECTURE-COMPLIANT: Upload progress fields (TanStack managed)
+  uploadProgress?: number // 0-100
+  uploadStartTime?: number // timestamp
+  uploadTimeRemaining?: number | null // seconds remaining
+  
   // Metadata
   created_at: string
   updated_at: string

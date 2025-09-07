@@ -159,8 +159,6 @@ export function ChapterManager({
           {chapters.map((chapter, index) => (
             <Card
               key={chapter.id}
-              draggable
-              onDragStart={() => handleChapterDragStart(chapter.id)}
               onDrop={() => handleChapterDrop(chapter.id)}
               onDragOver={(e) => {
                 e.preventDefault()
@@ -175,7 +173,14 @@ export function ChapterManager({
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 flex-1">
-                    <GripVertical className="h-4 w-4 text-muted-foreground cursor-move" />
+                    <GripVertical 
+                      className="h-4 w-4 text-muted-foreground cursor-move" 
+                      draggable
+                      onDragStart={(e) => {
+                        e.stopPropagation()
+                        handleChapterDragStart(chapter.id)
+                      }}
+                    />
                     
                     <button
                       onClick={() => toggleChapter(chapter.id)}

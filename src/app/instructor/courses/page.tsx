@@ -301,7 +301,7 @@ export default function TeachCoursesPage() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem 
-                      onClick={() => router.push(`/instructor/course/${course.id}/edit`)}
+                      onClick={() => router.push(`/instructor/course/${course.id}/edit-v3`)}
                       onMouseEnter={() => prefetchCourse(course.id)}
                     >
                       <Edit className="mr-2 h-4 w-4" />
@@ -360,7 +360,7 @@ export default function TeachCoursesPage() {
                   <Button 
                     className="flex-1" 
                     variant="outline"
-                    onClick={() => router.push(`/instructor/course/${course.id}/edit`)}
+                    onClick={() => router.push(`/instructor/course/${course.id}/edit-v3`)}
                     onMouseEnter={() => prefetchCourse(course.id)}
                   >
                     <Edit className="mr-2 h-4 w-4" />

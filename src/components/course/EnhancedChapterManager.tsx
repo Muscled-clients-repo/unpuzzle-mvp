@@ -10,13 +10,16 @@ import type { Chapter } from '@/types/course'
 interface EnhancedChapterManagerProps {
   courseId: string
   className?: string
-  onVideoSaveFunctionReady?: (saveFunction: () => void) => void
+  // ARCHITECTURE-COMPLIANT: No callback chains - parent reads TanStack state directly
 }
 
 /**
  * Enhanced Chapter Manager that integrates existing UI with new Zustand + TanStack architecture
  */
-export function EnhancedChapterManager({ courseId, className, onVideoSaveFunctionReady }: EnhancedChapterManagerProps) {
+export function EnhancedChapterManager({ 
+  courseId, 
+  className 
+}: EnhancedChapterManagerProps) {
   // New architecture hooks
   const ui = useCourseCreationUI()
   const { 
@@ -31,7 +34,7 @@ export function EnhancedChapterManager({ courseId, className, onVideoSaveFunctio
     isReordering
   } = useChaptersEdit(courseId)
   
-  const { uploadVideo, isUploading } = useVideoUpload(courseId)
+  const { uploadVideo, uploadVideoAsync, isUploading } = useVideoUpload(courseId)
   const { batchUpdateVideos, isBatchUpdating } = useVideoBatchOperations(courseId)
   const { deleteVideo, isDeleting: isDeletingVideo } = useVideoDelete(courseId)
   
@@ -74,33 +77,24 @@ export function EnhancedChapterManager({ courseId, className, onVideoSaveFunctio
   const handleVideoUpload = async (chapterId: string, files: FileList) => {
     const fileArray = Array.from(files)
     
-    // Add uploads to UI store for progress tracking
-    fileArray.forEach((file, index) => {
-      const uploadId = `upload-${Date.now()}-${index}`
-      ui.addUpload({
-        id: uploadId,
-        file,
-        filename: file.name,
-        chapterId,
-        progress: 0,
-        status: 'pending'
-      })
+    console.log('🎬 [ARCHITECTURE-COMPLIANT] Starting video upload via TanStack:', {
+      chapterId,
+      fileCount: fileArray.length,
+      fileNames: fileArray.map(f => f.name)
+    })
+    
+    // ARCHITECTURE-COMPLIANT: Upload progress managed by TanStack Query
+    fileArray.forEach((file) => {
+      const tempVideoId = `temp-video-${Date.now()}-${Math.random()}`
       
-      // Start upload with progress tracking
-      uploadVideo({
+      uploadVideoAsync({
         file,
         chapterId,
-        onProgress: (progress) => {
-          ui.updateUploadProgress(uploadId, progress)
-        }
+        tempVideoId
       }).then((result) => {
-        if (result.success) {
-          ui.updateUploadStatus(uploadId, 'complete')
-        } else {
-          ui.updateUploadStatus(uploadId, 'error', result.error)
-        }
+        console.log('✅ [UPLOAD] Upload completed:', result)
       }).catch((error) => {
-        ui.updateUploadStatus(uploadId, 'error', error.message)
+        console.error('❌ [UPLOAD] Upload failed:', error)
       })
     })
   }
@@ -134,42 +128,18 @@ export function EnhancedChapterManager({ courseId, className, onVideoSaveFunctio
     ui.openModal('video-preview', video)
   }
   
-  // Track video save functions from all VideoList components
-  const videoSaveFunctionsRef = React.useRef<Record<string, () => void>>({})
-  
-  // Pending changes tracking for save button activation
+  // ARCHITECTURE-COMPLIANT: Remove callback chains - parent reads TanStack state directly
   const handlePendingChangesUpdate = (
     hasChanges: boolean, 
     changeCount: number, 
     saveFunction: () => void, 
     isSaving?: boolean
   ) => {
-    // Store the save function for this chapter's videos
-    // We'll identify by the first video ID in the videos being managed
-    if (saveFunction) {
-      videoSaveFunctionsRef.current['videos'] = saveFunction
-    }
-    
-    // This could connect to parent component's save button logic
-    console.log('📝 Video pending changes:', { hasChanges, changeCount, isSaving })
+    console.log('📝 [ARCHITECTURE-COMPLIANT] Video pending changes (local only):', { hasChanges, changeCount, isSaving })
+    // No callback forwarding - parent component uses UI orchestration to read TanStack state
   }
   
-  // Function to save all pending video changes across all chapters
-  const saveAllVideoChanges = () => {
-    console.log('💾 Saving all video changes...')
-    Object.values(videoSaveFunctionsRef.current).forEach(saveFunction => {
-      if (saveFunction) {
-        saveFunction()
-      }
-    })
-  }
-  
-  // Expose the save function to parent component
-  React.useEffect(() => {
-    if (onVideoSaveFunctionReady) {
-      onVideoSaveFunctionReady(saveAllVideoChanges)
-    }
-  }, [onVideoSaveFunctionReady])
+  // CONSOLIDATED: Old save function approach removed - now using consolidated callbacks
   
   const handleTabNavigation = (
     currentId: string, 
