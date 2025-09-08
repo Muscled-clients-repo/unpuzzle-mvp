@@ -20,6 +20,11 @@ interface UploadResult {
   uploadTimestamp: number
 }
 
+interface SignedUrlResult {
+  url: string
+  expiresAt: number
+}
+
 export class BackblazeService {
   private b2: B2
   private isAuthorized = false
@@ -160,10 +165,8 @@ export class BackblazeService {
       const result: UploadResult = {
         fileId: response.data.fileId,
         fileName: response.data.fileName,
-        // Use Bunny CDN if configured, fallback to direct B2 URLs
-        fileUrl: process.env.BUNNY_CDN_URL 
-          ? `${process.env.BUNNY_CDN_URL}/file/${process.env.BACKBLAZE_BUCKET_NAME}/${response.data.fileName}`
-          : `https://f005.backblazeb2.com/file/${process.env.BACKBLAZE_BUCKET_NAME}/${response.data.fileName}`,
+        // Store file ID for private access - no direct URL
+        fileUrl: `private:${response.data.fileId}:${response.data.fileName}`,
         contentLength: response.data.contentLength,
         contentSha1: response.data.contentSha1,
         uploadTimestamp: response.data.uploadTimestamp
@@ -259,6 +262,66 @@ export class BackblazeService {
       console.error('[BACKBLAZE] List files failed:', error)
       throw error
     }
+  }
+  
+  /**
+   * Generate a signed URL for private file access
+   * @param fileId - Backblaze file ID
+   * @param fileName - File name
+   * @param expirationHours - Hours until URL expires (default: 2)
+   */
+  async generateSignedUrl(fileId: string, fileName: string, expirationHours: number = 2): Promise<SignedUrlResult> {
+    await this.authorize()
+    
+    try {
+      console.log(`[BACKBLAZE] Generating signed URL for ${fileName} (expires in ${expirationHours}h)`)
+      
+      // Calculate expiration timestamp
+      const expiresAt = Date.now() + (expirationHours * 60 * 60 * 1000)
+      const validDurationSeconds = expirationHours * 60 * 60
+      
+      // Get download authorization
+      const authResponse = await this.b2.getDownloadAuthorization({
+        bucketId: this.bucketId!,
+        fileNamePrefix: fileName,
+        validDurationInSeconds: validDurationSeconds
+      })
+      
+      const { authorizationToken } = authResponse.data
+      
+      // Construct signed download URL
+      const downloadUrl = `https://f005.backblazeb2.com/file/${process.env.BACKBLAZE_BUCKET_NAME}/${fileName}?Authorization=${authorizationToken}`
+      
+      console.log(`[BACKBLAZE] Signed URL generated for ${fileName}, expires: ${new Date(expiresAt).toISOString()}`)
+      
+      return {
+        url: downloadUrl,
+        expiresAt
+      }
+      
+    } catch (error) {
+      console.error(`[BACKBLAZE] Failed to generate signed URL for ${fileName}:`, error)
+      throw error
+    }
+  }
+  
+  /**
+   * Parse private file URL and generate signed URL
+   * @param privateUrl - Format: "private:fileId:fileName"
+   * @param expirationHours - Hours until URL expires (default: 2)
+   */
+  async getSignedUrlFromPrivate(privateUrl: string, expirationHours: number = 2): Promise<SignedUrlResult> {
+    if (!privateUrl.startsWith('private:')) {
+      throw new Error('Invalid private URL format. Expected: private:fileId:fileName')
+    }
+    
+    const parts = privateUrl.split(':')
+    if (parts.length !== 3) {
+      throw new Error('Invalid private URL format. Expected: private:fileId:fileName')
+    }
+    
+    const [, fileId, fileName] = parts
+    return this.generateSignedUrl(fileId, fileName, expirationHours)
   }
 }
 

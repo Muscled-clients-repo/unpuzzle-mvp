@@ -4,6 +4,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button"
 import { useState, useRef, useEffect } from "react"
 import type { VideoUpload } from "@/stores/slices/course-creation-slice"
+import { useSignedUrl } from "@/hooks/use-signed-url"
+import { Loader2, AlertCircle, RefreshCw } from "lucide-react"
 
 interface VideoPreviewModalProps {
   video: VideoUpload | null
@@ -16,6 +18,10 @@ export function VideoPreviewModal({ video, isOpen, onClose }: VideoPreviewModalP
   const [isFullscreen, setIsFullscreen] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  
+  // Get signed URL for private video access
+  const videoUrl = video?.backblaze_url || video?.video_url || video?.url
+  const signedUrl = useSignedUrl(videoUrl || null, 30) // Refresh 30min before expiry
 
   const handleFullscreen = async () => {
     if (!containerRef.current) return
@@ -51,7 +57,6 @@ export function VideoPreviewModal({ video, isOpen, onClose }: VideoPreviewModalP
     return null
   }
 
-  const videoUrl = video.backblaze_url || video.video_url || video.url
   if (!videoUrl) {
     return null
   }
@@ -71,23 +76,56 @@ export function VideoPreviewModal({ video, isOpen, onClose }: VideoPreviewModalP
         </DialogHeader>
         
         <div className="relative bg-black">
-          <video
-            ref={videoRef}
-            src={videoUrl}
-            controls
-            autoPlay
-            className="w-full h-auto max-h-[70vh]"
-            controlsList="nodownload"
-          >
-            Your browser does not support the video tag.
-          </video>
+          {signedUrl.isLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="h-8 w-8 animate-spin text-white" />
+              <span className="ml-2 text-white">Loading video...</span>
+            </div>
+          ) : signedUrl.error ? (
+            <div className="flex flex-col items-center justify-center h-64 text-white">
+              <AlertCircle className="h-8 w-8 mb-2" />
+              <span className="mb-2">Failed to load video</span>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={signedUrl.refresh}
+                className="bg-transparent border-white text-white hover:bg-white hover:text-black"
+              >
+                <RefreshCw className="h-4 w-4 mr-1" />
+                Retry
+              </Button>
+            </div>
+          ) : signedUrl.url ? (
+            <video
+              ref={videoRef}
+              src={signedUrl.url}
+              controls
+              autoPlay
+              className="w-full h-auto max-h-[70vh]"
+              controlsList="nodownload"
+            >
+              Your browser does not support the video tag.
+            </video>
+          ) : (
+            <div className="flex items-center justify-center h-64">
+              <span className="text-white">No video URL available</span>
+            </div>
+          )}
         </div>
 
-        {video.duration && (
-          <div className="p-4 pt-2 text-sm text-muted-foreground">
-            Duration: {video.duration}
-          </div>
-        )}
+        <div className="p-4 pt-2">
+          {video.duration && (
+            <div className="text-sm text-muted-foreground mb-2">
+              Duration: {video.duration}
+            </div>
+          )}
+          {signedUrl.isNearExpiry && signedUrl.timeUntilExpiry && (
+            <div className="text-xs text-amber-600 flex items-center">
+              <AlertCircle className="h-3 w-3 mr-1" />
+              Video link expires in {Math.ceil(signedUrl.timeUntilExpiry / (1000 * 60))} minutes
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   )

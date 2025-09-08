@@ -573,7 +573,7 @@ export function VideoList({
           {/* Actions */}
           <div className="flex items-center gap-1">
             {/* Preview Button */}
-            {onVideoPreview && (video.backblaze_url || video.status === 'complete') && (
+            {onVideoPreview && (video.backblaze_url || video.video_url || video.url) && video.status !== 'uploading' && (
               <Button
                 variant="ghost"
                 size="icon"
