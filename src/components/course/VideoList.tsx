@@ -52,22 +52,16 @@ export function VideoList({
   className
 }: VideoListProps) {
   // ARCHITECTURE-COMPLIANT: Upload progress comes from TanStack optimistic updates
-  // No need to enhance videos - progress data already in video objects from TanStack
+  // Augment server data with UI state for deletion indicators
   const ui = useCourseCreationUI()
   
-  // 🔍 INVESTIGATION: Log VideoList data source
-  useEffect(() => {
-    console.log('🔍 [INVESTIGATION] VideoList received videos:', {
-      count: videos.length,
-      videoIds: videos.map(v => v.id),
-      firstVideoTitle: videos[0]?.title,
-      firstVideoName: videos[0]?.name,
-      firstVideoFilename: videos[0]?.filename,
-      dataSource: 'chapter.videos from useChapters query',
-      progressData: videos.filter(v => v.uploadProgress).map(v => ({ id: v.id, progress: v.uploadProgress }))
-    })
-  }, [videos])
-
+  // ARCHITECTURE-COMPLIANT: Combine server data (TanStack) with UI state (Zustand)
+  const videosWithDeletionState = videos.map(video => ({
+    ...video,
+    markedForDeletion: ui.pendingDeletes.has(video.id)
+  }))
+  
+  // State declarations first (before any useEffect that references them)
   const [editingVideo, setEditingVideo] = useState<string | null>(null)
   const [videoTitle, setVideoTitle] = useState("")
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
@@ -79,6 +73,7 @@ export function VideoList({
   // Simple pending changes for UI feedback
   const [pendingChanges, setPendingChanges] = useState<Record<string, string>>({})
   const [activelyEditing, setActivelyEditing] = useState<{id: string, value: string} | null>(null)
+  
   
   // Helper to get current server/optimistic name (excluding UI state)
   const getCurrentServerName = (video: Video): string => {
@@ -104,25 +99,23 @@ export function VideoList({
     return displayFilename || 'Untitled Video'
   }
   
-  // Get display name for a video with proper precedence to avoid race conditions
+  // ARCHITECTURE-COMPLIANT: Get display name without mixing form and server state during editing
   const getDisplayName = (video: Video): string => {
-    // 1. HIGHEST PRIORITY: Currently editing this video
-    if (editingVideo === video.id && videoTitle) {
-      return videoTitle
-    }
+    // PROFESSIONAL FORM PATTERN: Don't use editing state for display outside of input field
+    // This prevents race conditions when server data updates during editing
     
-    // 2. HIGH PRIORITY: Pending changes (unsaved edits)
+    // 1. HIGH PRIORITY: Pending changes (confirmed edits)
     if (pendingChanges[video.id]) {
       return pendingChanges[video.id]
     }
     
-    // 3. FALLBACK: Server/optimistic data
+    // 2. FALLBACK: Server/optimistic data
     return getCurrentServerName(video)
   }
   
   // ARCHITECTURE-COMPLIANT: Track pending changes in both local state and Zustand
   const trackPendingChange = (videoId: string, newName: string) => {
-    const video = videos.find(v => v.id === videoId)
+    const video = videosWithDeletionState.find(v => v.id === videoId)
     if (!video) return
     
     const currentName = getCurrentServerName(video)
@@ -154,7 +147,7 @@ export function VideoList({
     
     // If user is currently editing, include that change
     if (editingVideo && videoTitle.trim()) {
-      const video = videos.find(v => v.id === editingVideo)
+      const video = videosWithDeletionState.find(v => v.id === editingVideo)
       if (video) {
         const currentName = getCurrentServerName(video)
         if (videoTitle.trim() !== currentName) {
@@ -198,33 +191,26 @@ export function VideoList({
     })
   }, [batchRenameMutation, pendingChanges, editingVideo, videoTitle, videos])
   
-  // Clear local pending changes when Zustand store is cleared (after save)
+  // ARCHITECTURE-COMPLIANT: Sync with Zustand store only when not editing
   const videoPendingChangesFromStore = ui.getVideoPendingChanges()
   useEffect(() => {
-    if (Object.keys(videoPendingChangesFromStore).length === 0) {
+    // PROFESSIONAL FORM PATTERN: Don't sync state during active editing to prevent edit mode exit
+    if (!editingVideo && Object.keys(videoPendingChangesFromStore).length === 0) {
       // Zustand store was cleared, clear local state too
       setPendingChanges({})
     }
-  }, [videoPendingChangesFromStore])
+  }, [videoPendingChangesFromStore, editingVideo])
 
-  // Notify parent of pending changes when state changes
+  // ARCHITECTURE-COMPLIANT: Notify parent of pending changes (exclude real-time editing state)
   useEffect(() => {
-    let totalChanges = Object.keys(pendingChanges).length
-    let hasAnyChanges = totalChanges > 0
-    
-    // Include currently active edit if it's different from original
-    if (editingVideo && videoTitle.trim()) {
-      const video = videos.find(v => v.id === editingVideo)
-      const currentName = video?.name || video?.title || video?.filename || 'Untitled Video'
-      if (videoTitle.trim() !== currentName && !pendingChanges[editingVideo]) {
-        totalChanges += 1
-        hasAnyChanges = true
-      }
-    }
-    
+    const totalChanges = Object.keys(pendingChanges).length
+    const hasAnyChanges = totalChanges > 0
     const isSaving = batchRenameMutation?.isPending || false
+    
+    // PROFESSIONAL FORM PATTERN: Don't include actively editing state in dependency array
+    // This prevents re-renders during typing that exit edit mode
     onPendingChangesUpdate?.(hasAnyChanges, totalChanges, saveAllChanges, isSaving)
-  }, [pendingChanges, editingVideo, videoTitle, videos, saveAllChanges, onPendingChangesUpdate, batchRenameMutation?.isPending])
+  }, [pendingChanges, saveAllChanges, onPendingChangesUpdate, batchRenameMutation?.isPending])
 
   // Auto-save on component unmount
   useEffect(() => {
@@ -272,7 +258,7 @@ export function VideoList({
   }
 
   const handleStartEdit = (video: Video, index: number, clickPosition?: number | 'start' | 'end') => {
-    const videoName = getDisplayName(video)
+    const videoName = getCurrentServerName(video) // ARCHITECTURE-COMPLIANT: Use server data as form initial value
     setEditingVideo(video.id)
     setEditingIndex(index)
     setVideoTitle(videoName)
@@ -415,7 +401,7 @@ export function VideoList({
 
   return (
     <div className={cn("space-y-2", className)}>
-      {videos.map((video, index) => (
+      {videosWithDeletionState.map((video, index) => (
         <div
           key={video.id}
           className={cn(
@@ -461,7 +447,7 @@ export function VideoList({
               if (editingVideo !== video.id) {
                 // Save any current edit before starting new one
                 if (editingVideo && videoTitle.trim()) {
-                  const currentVideo = videos.find(v => v.id === editingVideo)
+                  const currentVideo = videosWithDeletionState.find(v => v.id === editingVideo)
                   if (currentVideo) {
                     trackPendingChange(editingVideo, videoTitle.trim())
                   }
@@ -494,9 +480,7 @@ export function VideoList({
                 onChange={(e) => {
                   const newValue = e.target.value
                   setVideoTitle(newValue)
-                  
-                  // Track pending changes for counter
-                  trackPendingChange(video.id, newValue)
+                  // ARCHITECTURE-COMPLIANT: No real-time tracking during typing (causes edit mode exit)
                 }}
                 onBlur={() => {
                   // Save changes on blur instead of canceling
@@ -587,9 +571,9 @@ export function VideoList({
           )}
 
           {/* Actions */}
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1">
             {/* Preview Button */}
-            {onVideoPreview && video.backblaze_url && video.status === 'ready' && (
+            {onVideoPreview && (video.backblaze_url || video.status === 'complete') && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -603,7 +587,6 @@ export function VideoList({
                 <Eye className="h-3 w-3" />
               </Button>
             )}
-
 
             {/* Delete Button */}
             <Button

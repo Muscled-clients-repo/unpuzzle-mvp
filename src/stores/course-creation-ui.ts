@@ -48,6 +48,8 @@ interface CourseCreationUIState {
   unmarkForDeletion: (id: string) => void
   clearPendingDeletes: () => void
   
+  // ===== PENDING CHAPTER CREATION REMOVED (Architecture fix - TanStack owns server state) =====
+  
   // ===== UNIFIED CONTENT EDITING STATE (UI State - what's being edited) =====
   contentPendingChanges: {
     videos: Record<string, string>    // videoId -> newTitle
@@ -252,6 +254,8 @@ export const useCourseCreationUI = create<CourseCreationUIState>()(
         clearPendingDeletes: () => {
           set({ pendingDeletes: new Set() })
         },
+
+        // ===== PENDING CHAPTER CREATION METHODS REMOVED (Architecture fix - TanStack owns server state) =====
 
         // ===== UNIFIED CONTENT PENDING CHANGES METHODS =====
         setContentPendingChange: (type, id, newTitle) => {

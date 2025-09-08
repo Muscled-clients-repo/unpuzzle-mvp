@@ -28,6 +28,7 @@ export function EnhancedChapterManager({
     updateChapter, 
     deleteChapter, 
     reorderChapters,
+    isLoading,
     isCreating,
     isUpdating,
     isDeleting,
@@ -63,11 +64,23 @@ export function EnhancedChapterManager({
   }
   
   const handleDeleteChapter = (chapterId: string) => {
-    // Add to pending deletes in UI store for soft delete
-    ui.markForDeletion(chapterId)
-    
-    // For now, immediately delete - could be changed to batch delete later
-    deleteChapter(chapterId)
+    // ARCHITECTURE-COMPLIANT: Only mark for deletion in UI store (Zustand)
+    // Actual deletion happens on Save via TanStack mutations
+    if (ui.pendingDeletes.has(chapterId)) {
+      // Undo chapter deletion mark
+      ui.unmarkForDeletion(chapterId)
+    } else {
+      // Mark chapter (and all its videos) for deletion
+      ui.markForDeletion(chapterId)
+      
+      // Also mark all videos in this chapter for deletion
+      const chapter = chapters?.find(ch => ch.id === chapterId)
+      if (chapter?.videos) {
+        chapter.videos.forEach(video => {
+          ui.markForDeletion(video.id)
+        })
+      }
+    }
   }
   
   const handleReorderChapters = (newOrder: Chapter[]) => {
@@ -108,11 +121,15 @@ export function EnhancedChapterManager({
   }
   
   const handleVideoDelete = (videoId: string) => {
-    // Add to pending deletes in UI store
-    ui.markForDeletion(videoId)
-    
-    // For now, immediately delete - could be changed to batch delete later
-    deleteVideo(videoId)
+    // ARCHITECTURE-COMPLIANT: Only mark for deletion in UI store (Zustand)
+    // Actual deletion happens on Save via TanStack mutations
+    if (ui.pendingDeletes.has(videoId)) {
+      // Undo deletion mark
+      ui.unmarkForDeletion(videoId)
+    } else {
+      // Mark for deletion
+      ui.markForDeletion(videoId)
+    }
   }
   
   const handleMoveVideo = (videoId: string, fromChapterId: string, toChapterId: string) => {
@@ -135,7 +152,6 @@ export function EnhancedChapterManager({
     saveFunction: () => void, 
     isSaving?: boolean
   ) => {
-    console.log('📝 [ARCHITECTURE-COMPLIANT] Video pending changes (local only):', { hasChanges, changeCount, isSaving })
     // No callback forwarding - parent component uses UI orchestration to read TanStack state
   }
   
@@ -151,7 +167,7 @@ export function EnhancedChapterManager({
   }
   
   // Show loading state if data is not yet available
-  if (!chapters) {
+  if (isLoading || !chapters) {
     return (
       <div className="space-y-4">
         <div className="h-8 bg-gray-200 animate-pulse rounded" />

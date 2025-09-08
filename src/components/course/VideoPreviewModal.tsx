@@ -2,7 +2,6 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { X, Maximize2, Minimize2 } from "lucide-react"
 import { useState, useRef, useEffect } from "react"
 import type { VideoUpload } from "@/stores/slices/course-creation-slice"
 
@@ -13,6 +12,7 @@ interface VideoPreviewModalProps {
 }
 
 export function VideoPreviewModal({ video, isOpen, onClose }: VideoPreviewModalProps) {
+  
   const [isFullscreen, setIsFullscreen] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -47,7 +47,12 @@ export function VideoPreviewModal({ video, isOpen, onClose }: VideoPreviewModalP
     }
   }, [])
 
-  if (!video || !video.url) {
+  if (!video) {
+    return null
+  }
+
+  const videoUrl = video.backblaze_url || video.video_url || video.url
+  if (!videoUrl) {
     return null
   }
 
@@ -62,35 +67,13 @@ export function VideoPreviewModal({ video, isOpen, onClose }: VideoPreviewModalP
             <DialogTitle className="text-lg font-semibold truncate pr-4">
               {video.name}
             </DialogTitle>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleFullscreen}
-                title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-              >
-                {isFullscreen ? (
-                  <Minimize2 className="h-4 w-4" />
-                ) : (
-                  <Maximize2 className="h-4 w-4" />
-                )}
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onClose}
-                title="Close"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
           </div>
         </DialogHeader>
         
         <div className="relative bg-black">
           <video
             ref={videoRef}
-            src={video.url}
+            src={videoUrl}
             controls
             autoPlay
             className="w-full h-auto max-h-[70vh]"

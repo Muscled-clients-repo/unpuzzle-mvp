@@ -27,10 +27,11 @@ import {
 import { cn } from "@/lib/utils"
 
 // New architecture imports
+import { useQueryClient } from '@tanstack/react-query'
 import { useCourseCreationUI } from '@/stores/course-creation-ui'
 import { useCourseEdit } from '@/hooks/use-course-queries'
 import { useChaptersEdit } from '@/hooks/use-chapter-queries'
-import { useVideoBatchOperations } from '@/hooks/use-video-queries'
+import { useVideoBatchOperations, useVideoDelete } from '@/hooks/use-video-queries'
 import { useFormState } from '@/hooks/use-form-state'
 import { EnhancedChapterManager } from '@/components/course/EnhancedChapterManager'
 import { VideoPreviewModal } from "@/components/course/VideoPreviewModal"
@@ -41,6 +42,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   const router = useRouter()
   
   // New architecture hooks
+  const queryClient = useQueryClient()
   const ui = useCourseCreationUI()
   const { course, isLoading, error, updateCourse, isUpdating } = useCourseEdit(courseId)
   
@@ -81,10 +83,18 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   
   // ARCHITECTURE-COMPLIANT: UI Orchestration - read from TanStack mutations directly
   const { batchUpdateVideos, isBatchUpdating, videoPendingChanges } = useVideoBatchOperations(courseId)
-  const { updateChapter } = useChaptersEdit(courseId)
+  const { updateChapter, deleteChapter, isUpdating: isUpdatingChapters, isDeleting: isDeletingChapters } = useChaptersEdit(courseId)
+  const { deleteVideo, isDeleting: isDeletingVideos } = useVideoDelete(courseId)
   
   // Get unified content pending changes count (stable primitive)
   const contentPendingChangesCount = ui.getContentPendingChangesCount()
+  const pendingDeletesCount = ui.pendingDeletes.size
+  
+  // Manual save state for immediate button feedback
+  const [isSavingManually, setIsSavingManually] = React.useState(false)
+  
+  // Comprehensive loading state for all save operations
+  const isSaving = isSavingManually || isUpdating || isBatchUpdating || isUpdatingChapters || isDeletingChapters || isDeletingVideos
   
   // ARCHITECTURE-COMPLIANT: UI Orchestration - read from appropriate stores without mixing data
   const hasChanges = React.useMemo(() => {
@@ -96,18 +106,29 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
     // Content changes (UI orchestration, not data mixing) - Videos + Chapters unified
     const contentChanges = contentPendingChangesCount > 0
     
-    return courseInfoChanged || contentChanges
+    // Pending deletions (UI state from Zustand)
+    const pendingDeletions = pendingDeletesCount > 0
+    
+    // Pending chapter creations (TanStack cache with pending flag)
+    const pendingChapterCreations = chapters?.some((ch: any) => ch._isPendingCreation) || false
+    
+    return courseInfoChanged || contentChanges || pendingDeletions || pendingChapterCreations
   }, [
     course,
     formState.isDirty, // Use isDirty for immediate response to optimistic reset
-    contentPendingChangesCount // Stable primitive value - includes both video and chapter changes
+    contentPendingChangesCount, // Stable primitive value - includes both video and chapter changes
+    pendingDeletesCount, // Pending deletions count from Zustand
+    chapters // Pending chapter creations in TanStack
   ])
   
   // ARCHITECTURE-COMPLIANT: No data copying or synchronization
   
   // ARCHITECTURE-COMPLIANT: UI Orchestration - coordinate multiple TanStack mutations
   const handleSave = async () => {
-    if (!hasChanges || isUpdating) return
+    if (!hasChanges || isSaving) return
+
+    // Immediately disable save button for better UX
+    setIsSavingManually(true)
 
     console.log('🚀 UNIFIED SAVE: UI orchestration of multiple domains...', {
       courseInfoChanges: formState.hasChanges(course),
@@ -139,7 +160,6 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
         if (videoUpdates.length > 0) {
           console.log('🎬 Executing video batch update...', videoUpdates)
           batchUpdateVideos({ courseId, updates: videoUpdates })
-          
           // Clear video pending changes from unified system
           ui.clearAllVideoPendingChanges()
         }
@@ -162,60 +182,107 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
         ui.clearAllChapterPendingChanges()
       }
 
-      // 3. Save course info changes via TanStack mutation - ONLY CHANGED FIELDS
+      // 2.5. Save pending chapter creations to database (Architecture-Compliant Consolidated UX)
+      const pendingChaptersToCreate = chapters?.filter((ch: any) => ch._isPendingCreation) || []
+      if (pendingChaptersToCreate.length > 0) {
+        console.log('📑 Saving pending chapters to database...', {
+          pendingCount: pendingChaptersToCreate.length,
+          pendingChapters: pendingChaptersToCreate.map(ch => ({ id: ch.id, title: ch.title }))
+        })
+        
+        for (const pendingChapter of pendingChaptersToCreate) {
+          try {
+            const { saveChapterToDatabaseAction } = await import('@/app/actions/chapter-actions')
+            
+            const result = await saveChapterToDatabaseAction(
+              courseId,
+              pendingChapter.id, 
+              pendingChapter.title
+            )
+            
+            if (result.success) {
+              // Update chapter in cache to remove pending flag and add server data
+              queryClient.setQueryData(['chapters', courseId], (old: any[] = []) =>
+                old.map(ch => 
+                  ch.id === pendingChapter.id 
+                    ? { ...ch, _isPendingCreation: undefined, ...result.data }
+                    : ch
+                )
+              )
+              console.log('✅ Chapter saved to database:', pendingChapter.title)
+            } else {
+              console.error('❌ Chapter save failed:', result.error)
+            }
+          } catch (error) {
+            console.error('Failed to save pending chapter:', pendingChapter, error)
+          }
+        }
+      }
+
+      // 3. Process pending deletions via TanStack mutations
+      const pendingDeletesArray = Array.from(ui.pendingDeletes)
+      if (pendingDeletesArray.length > 0) {
+        console.log('🗑️ Orchestrating deletions via TanStack...', {
+          pendingCount: pendingDeletesArray.length,
+          pendingDeletes: pendingDeletesArray
+        })
+        
+        // Separate videos and chapters for different deletion handlers
+        const videoDeletes = []
+        const chapterDeletes = []
+        
+        pendingDeletesArray.forEach(id => {
+          if (id.startsWith('chapter-')) {
+            chapterDeletes.push(id)
+          } else {
+            videoDeletes.push(id)
+          }
+        })
+        
+        // Process deletions - let TanStack handle optimistic updates
+        videoDeletes.forEach(videoId => {
+          if (!chapterDeletes.some(chapterId => chapters?.find(ch => ch.id === chapterId)?.videos.some(v => v.id === videoId))) {
+            console.log('🗑️ Deleting video:', videoId)
+            deleteVideo(videoId)
+          }
+        })
+        
+        chapterDeletes.forEach(chapterId => {
+          console.log('🗑️ Deleting chapter:', chapterId)
+          deleteChapter(chapterId)
+        })
+        
+        // Clear pending deletes - TanStack will handle UI updates
+        ui.clearPendingDeletes()
+      }
+
+      // 4. Save course info changes via TanStack mutation - ONLY CHANGED FIELDS
       const courseUpdates = formState.getChangedFieldsFromServer(course)
 
       if (Object.keys(courseUpdates).length > 0) {
         console.log('📝 Orchestrating course info save via TanStack (only changed fields)...', {
-          courseUpdates,
-          currentServerData: { title: course?.title, description: course?.description, price: course?.price, difficulty: course?.difficulty },
-          formData: formState.values
+          courseUpdates
         })
         
         // PROFESSIONAL UX: Optimistic form reset for immediate UI feedback
         const optimisticData = { ...course, ...courseUpdates }
         formState.updateInitialValues(optimisticData as typeof course)
         
-        updateCourse(courseUpdates, {
-          onSuccess: (result) => {
-            console.log('✅ Course save successful, optimistic reset was correct...', result)
-            // Form state already reset optimistically
-          },
-          onError: (error) => {
-            console.error('❌ Course save failed, reverting form state...', error)
-            // Revert to original server data on error
-            formState.updateInitialValues({
-              title: course.title || '',
-              description: course.description || '',
-              price: course.price || null,
-              difficulty: course.difficulty || 'beginner'
-            })
-          }
-        })
+        // Trigger course update - no complex Promise waiting
+        updateCourse(courseUpdates)
       } else {
-        console.log('✅ ARCHITECTURE-COMPLIANT SAVE: No course info changes to save!')
+        console.log('✅ No course info changes to save!')
       }
 
-      // Show single consolidated success toast
-      const savedItems = []
-      if (videoPendingChangesFromUI && Object.keys(videoPendingChangesFromUI).length > 0) {
-        const count = Object.keys(videoPendingChangesFromUI).length
-        savedItems.push(`${count} video filename${count > 1 ? 's' : ''}`)
-      }
-      if (chapterPendingChanges && Object.keys(chapterPendingChanges).length > 0) {
-        const count = Object.keys(chapterPendingChanges).length  
-        savedItems.push(`${count} chapter name${count > 1 ? 's' : ''}`)
-      }
-      if (courseUpdates && Object.keys(courseUpdates).length > 0) {
-        savedItems.push('course details')
-      }
-      
-      if (savedItems.length > 0) {
-        toast.success(`✅ Successfully saved ${savedItems.join(', ')}!`)
-      }
+      // Show single consolidated success toast (Architecture-Compliant Consolidated UX)
+      toast.success('Course updated')
 
     } catch (error) {
-      console.error('❌ ARCHITECTURE-COMPLIANT SAVE: Error in UI orchestration:', error)
+      console.error('❌ Error in UI orchestration:', error)
+      toast.error('Failed to update course')
+    } finally {
+      // Re-enable save button after all operations complete
+      setIsSavingManually(false)
     }
   }
   
@@ -352,15 +419,15 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
               
               <Button
                 onClick={handleSave}
-                disabled={!hasChanges || isUpdating}
+                disabled={!hasChanges || isSaving}
                 size="sm"
               >
-                {isUpdating ? (
+                {isSaving ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   <Save className="mr-2 h-4 w-4" />
                 )}
-                {isUpdating ? 'Saving...' : hasChanges ? 'Save' : 'Saved'}
+                {isSaving ? 'Saving...' : hasChanges ? 'Save' : 'Saved'}
               </Button>
             </div>
           </div>
@@ -450,6 +517,13 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
           onClose={ui.closeModal}
         />
       )}
+      
+      {/* Debug modal state */}
+      {console.log('🎭 Modal render check:', { 
+        modalType: ui.modal.type, 
+        hasModalData: !!ui.modal.data,
+        shouldRender: ui.modal.type === 'video-preview' && ui.modal.data 
+      })}
     </div>
   )
 }

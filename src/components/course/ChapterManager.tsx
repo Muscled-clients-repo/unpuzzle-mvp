@@ -54,6 +54,12 @@ export function ChapterManager({
   onTabNavigation,
   className
 }: ChapterManagerProps) {
+  // Safety check for undefined chapters
+  if (!chapters) {
+    console.warn('⚠️ ChapterManager: chapters prop is undefined')
+    return <div>Loading chapters...</div>
+  }
+
   // Zustand store for pending changes
   const ui = useCourseCreationUI()
   
@@ -160,7 +166,11 @@ export function ChapterManager({
         
         {chapters.length > 0 && (
           <>
-            {chapters.map((chapter, index) => (
+            {chapters.map((chapter, index) => {
+              const isMarkedForDeletion = ui.pendingDeletes.has(chapter.id)
+              const isPendingCreation = (chapter as any)._isPendingCreation
+              
+              return (
             <Card
               key={chapter.id}
               onDrop={() => handleChapterDrop(chapter.id)}
@@ -171,7 +181,9 @@ export function ChapterManager({
               onDragLeave={() => setDragOverChapter(null)}
               className={cn(
                 "transition-colors",
-                dragOverChapter === chapter.id && "border-primary bg-primary/5"
+                dragOverChapter === chapter.id && "border-primary bg-primary/5",
+                isMarkedForDeletion && "opacity-50 bg-red-50 border-red-200"
+                // Removed pending creation styling - new chapters look like normal chapters
               )}
             >
               <CardHeader className="pb-3">
@@ -247,6 +259,11 @@ export function ChapterManager({
                             {ui.getChapterPendingChanges()[chapter.id] && (
                               <span className="ml-2 text-xs text-orange-500">●</span>
                             )}
+                            {isMarkedForDeletion && (
+                              <span className="ml-2 px-2 py-1 bg-red-100 text-red-800 text-xs rounded-md font-medium">
+                                Will be deleted
+                              </span>
+                            )}
                           </h3>
                         </button>
                       )}
@@ -271,15 +288,7 @@ export function ChapterManager({
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8"
-                      onClick={() => {
-                        if (chapter.videos.length > 0) {
-                          if (confirm(`Delete "${chapter.title}"? ${chapter.videos.length} video(s) will be moved to the first available chapter.`)) {
-                            onDeleteChapter(chapter.id)
-                          }
-                        } else {
-                          onDeleteChapter(chapter.id)
-                        }
-                      }}
+                      onClick={() => onDeleteChapter(chapter.id)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -291,7 +300,7 @@ export function ChapterManager({
                 <CardContent
                   className={cn(
                     "pt-0",
-                    chapter.videos.length === 0 && "min-h-[100px]"
+                    (!chapter.videos || chapter.videos.length === 0) && "min-h-[100px]"
                   )}
                   onDrop={(e) => {
                     e.preventDefault()
@@ -300,14 +309,14 @@ export function ChapterManager({
                   }}
                   onDragOver={(e) => e.preventDefault()}
                 >
-                  {chapter.videos.length === 0 ? (
+                  {(!chapter.videos || chapter.videos.length === 0) ? (
                     <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
                       <Upload className="h-8 w-8 mx-auto mb-2 opacity-50" />
                       <p className="text-sm">Drag videos here or use the upload button</p>
                     </div>
                   ) : (
                     <VideoList
-                      videos={chapter.videos}
+                      videos={chapter.videos || []}
                       onVideoRename={onVideoRename}
                       batchRenameMutation={batchRenameMutation}
                       onVideoDelete={onVideoDelete}
@@ -326,7 +335,8 @@ export function ChapterManager({
                 </CardContent>
               )}
             </Card>
-          ))}
+              )
+            })}
           
           {/* Add New Chapter Row */}
           <Card className="border-dashed border-2 hover:border-primary/50 transition-colors">

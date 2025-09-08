@@ -82,6 +82,18 @@ export async function getChaptersForCourseAction(courseId: string) {
     // Group videos by chapter_id to create virtual chapters
     const chaptersMap: Record<string, VirtualChapter> = {}
     
+    // First, create chapters for all stored chapter titles (including empty ones)
+    chapterTitles?.forEach(storedChapter => {
+      chaptersMap[storedChapter.id] = {
+        id: storedChapter.id,
+        title: storedChapter.title,
+        courseId,
+        videos: [],
+        videoCount: 0
+      }
+    })
+    
+    // Then add videos to their respective chapters
     for (const video of videos || []) {
       const chapterId = video.chapter_id || 'chapter-default'
       
@@ -145,29 +157,96 @@ export async function createChapterAction(courseId: string, title?: string): Pro
     // Generate a new chapter ID
     const timestamp = Date.now()
     const chapterId = `chapter-${timestamp}`
+    const chapterTitle = title || `Chapter ${timestamp}`
     
-    // Create virtual chapter object (not stored in database)
+    // Create virtual chapter object (staged for save)
     const virtualChapter: VirtualChapter = {
       id: chapterId,
-      title: title || `Chapter ${timestamp}`,
+      title: chapterTitle,
       courseId,
       videos: [],
       videoCount: 0
     }
     
-    // No database operation needed - chapters are virtual
-    // The chapter will appear once videos are added to it
+    // No database operation - chapter will be saved when user clicks Save
+    // This maintains consistency with the staged architecture
     
     return { 
       success: true, 
       data: virtualChapter,
-      message: 'Virtual chapter created. Add videos to make it visible.'
+      message: 'Chapter created and staged for save.'
     }
   } catch (error) {
     console.error('Create chapter error:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to create chapter'
+    }
+  }
+}
+
+/**
+ * Save a virtual chapter to database (for pending chapters from save flow)
+ */
+export async function saveChapterToDatabaseAction(
+  courseId: string, 
+  chapterId: string, 
+  title: string
+): Promise<ActionResult> {
+  try {
+    const user = await requireAuth()
+    const supabase = await createClient()
+    
+    // Verify course ownership
+    const { data: course, error: courseError } = await supabase
+      .from('courses')
+      .select('instructor_id')
+      .eq('id', courseId)
+      .single()
+    
+    if (courseError || !course) {
+      throw new Error('Course not found')
+    }
+    
+    if (course.instructor_id !== user.id) {
+      throw new Error('Unauthorized: You do not own this course')
+    }
+    
+    // Get next order number for this course
+    const { data: lastChapter } = await supabase
+      .from('course_chapters')
+      .select('order')
+      .eq('course_id', courseId)
+      .order('order', { ascending: false })
+      .limit(1)
+      .single()
+    
+    const nextOrder = (lastChapter?.order || 0) + 1
+    
+    // Insert new chapter directly into course_chapters table
+    const { error: insertError } = await supabase
+      .from('course_chapters')
+      .insert({
+        id: chapterId,
+        course_id: courseId,
+        title: title,
+        order: nextOrder
+      })
+    
+    if (insertError) {
+      throw insertError
+    }
+    
+    return { 
+      success: true, 
+      message: `Chapter "${title}" saved to database`,
+      data: { id: chapterId, title, courseId, order: nextOrder }
+    }
+  } catch (error) {
+    console.error('Save chapter to database error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to save chapter to database'
     }
   }
 }
@@ -338,13 +417,22 @@ export async function deleteChapterAction(
     await Promise.all(deletionPromises)
     
     // Delete all videos from database
-    const { error: deleteError } = await supabase
+    const { error: deleteVideosError } = await supabase
       .from('videos')
       .delete()
       .eq('course_id', courseId)
       .eq('chapter_id', chapterId)
     
-    if (deleteError) throw deleteError
+    if (deleteVideosError) throw deleteVideosError
+    
+    // Delete chapter from course_chapters table (if it exists)
+    const { error: deleteChapterError } = await supabase
+      .from('course_chapters')
+      .delete()
+      .eq('id', chapterId)
+      .eq('course_id', courseId)
+    
+    if (deleteChapterError) throw deleteChapterError
     
     revalidatePath(`/instructor/course/${courseId}`)
     

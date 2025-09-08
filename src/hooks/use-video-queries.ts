@@ -35,26 +35,8 @@ export function useVideoUpload(courseId: string) {
       chapterId: string
       tempVideoId: string
     }) => {
-      // ARCHITECTURE-COMPLIANT: Progress updates in TanStack cache
-      const updateProgress = (progress: number) => {
-        queryClient.setQueryData(videoKeys.list(courseId), (old: Video[] = []) =>
-          old.map(video => 
-            video.id === tempVideoId 
-              ? { 
-                  ...video, 
-                  uploadProgress: progress,
-                  // Calculate estimated time remaining
-                  uploadTimeRemaining: video.uploadStartTime ? 
-                    Math.round(((Date.now() - video.uploadStartTime) * (100 - progress)) / progress / 1000) 
-                    : null
-                }
-              : video
-          )
-        )
-      }
-
-      // ARCHITECTURE-COMPLIANT: Server Action handles upload
-      // WebSocket progress tracking will be implemented next
+      // ARCHITECTURE-COMPLIANT: mutationFn only calls server action
+      // Progress tracking will be handled by WebSocket updates to TanStack cache
       return uploadVideoAction({
         file,
         courseId,
@@ -112,14 +94,17 @@ export function useVideoUpload(courseId: string) {
       if (result.success && result.data) {
         const realVideo = result.data
         
-        // Replace temporary video with real one
+        // ARCHITECTURE-COMPLIANT: Update temporary video with real data but preserve temp ID to avoid React key change
+        // This prevents edit mode exit when upload completes during filename editing
         queryClient.setQueryData(videoKeys.list(courseId), (old: Video[] = []) =>
           old.map(video => 
-            video.id === context?.tempVideoId ? realVideo : video
+            video.id === context?.tempVideoId 
+              ? { ...realVideo, id: context.tempVideoId } // Keep temp ID to preserve React key
+              : video
           )
         )
         
-        // Update chapters cache
+        // Update chapters cache (preserve temp ID to avoid React key change)
         queryClient.setQueryData(chapterKeys.list(courseId), (old: any) => {
           if (!Array.isArray(old)) return old
           
@@ -128,7 +113,9 @@ export function useVideoUpload(courseId: string) {
               ? {
                   ...chapter,
                   videos: chapter.videos.map((video: Video) =>
-                    video.id === context?.tempVideoId ? realVideo : video
+                    video.id === context?.tempVideoId 
+                      ? { ...realVideo, id: context.tempVideoId } // Keep temp ID to preserve React key
+                      : video
                   )
                 }
               : chapter
@@ -143,11 +130,8 @@ export function useVideoUpload(courseId: string) {
         
         toast.success(`📹 ${cleanFilename} uploaded successfully!`)
         
-        // Background refetch to ensure consistency
-        setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: videoKeys.list(courseId) })
-          queryClient.invalidateQueries({ queryKey: ['chapters', courseId] })
-        }, 1000)
+        // No background refetch needed - direct cache update above is sufficient
+        // Removing this prevents editing state from being reset during filename editing
       } else {
         toast.error(result.error || 'Upload failed')
       }
@@ -240,9 +224,8 @@ export function useVideoBatchOperations(courseId: string) {
     onSuccess: (result, variables) => {
       console.log('🎯 Batch update result:', result)
       if (result.success) {
-        // Don't show toast here - let the parent component handle it
-        // This prevents duplicate toasts when "Save Changes" triggers both video and course saves
-        console.log(`✅ ${variables.updates.length} video(s) updated successfully (no toast)`)
+        // No individual toast - handled by consolidated save toast
+        console.log(`✅ ${variables.updates.length} video(s) updated successfully`)
         
         // Background refetch for consistency
         setTimeout(() => {
@@ -313,7 +296,8 @@ export function useVideoDelete(courseId: string) {
     
     onSuccess: (result) => {
       if (result.success) {
-        toast.success('Video deleted successfully!')
+        // No individual toast - handled by consolidated save toast
+        console.log('✅ Video deleted successfully')
       }
     },
     
