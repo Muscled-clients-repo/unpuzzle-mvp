@@ -289,8 +289,9 @@ export class BackblazeService {
       
       const { authorizationToken } = authResponse.data
       
-      // Construct signed download URL
-      const downloadUrl = `https://f005.backblazeb2.com/file/${process.env.BACKBLAZE_BUCKET_NAME}/${fileName}?Authorization=${authorizationToken}`
+      // Construct signed download URL through Cloudflare CDN (fallback to direct B2)
+      const cdnUrl = process.env.CLOUDFLARE_CDN_URL || 'https://f005.backblazeb2.com'
+      const downloadUrl = `${cdnUrl}/file/${process.env.BACKBLAZE_BUCKET_NAME}/${fileName}?Authorization=${authorizationToken}`
       
       console.log(`[BACKBLAZE] Signed URL generated for ${fileName}, expires: ${new Date(expiresAt).toISOString()}`)
       
