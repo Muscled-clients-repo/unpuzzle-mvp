@@ -199,6 +199,7 @@ export function useChaptersEdit(courseId: string) {
     createChapter: createChapter,
     updateChapter: updateMutation.mutate,
     deleteChapter: deleteMutation.mutate,
+    deleteChapterMutation: deleteMutation, // Expose mutation object for callback support
     reorderChapters,
     isCreating: false, // Chapter creation is immediate to cache, no loading needed
     isUpdating: updateMutation.isPending,

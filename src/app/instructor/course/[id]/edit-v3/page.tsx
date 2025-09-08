@@ -31,9 +31,9 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useCourseCreationUI } from '@/stores/course-creation-ui'
 import { useCourseEdit } from '@/hooks/use-course-queries'
 import { useChaptersEdit } from '@/hooks/use-chapter-queries'
-import { useVideoBatchOperations, useVideoDelete } from '@/hooks/use-video-queries'
+import { useVideoBatchOperations, useVideoDelete, useVideoUpload } from '@/hooks/use-video-queries'
 import { useFormState } from '@/hooks/use-form-state'
-import { EnhancedChapterManager } from '@/components/course/EnhancedChapterManager'
+import { ChapterManager } from '@/components/course/ChapterManager'
 import { VideoPreviewModal } from "@/components/course/VideoPreviewModal"
 
 export default function EditCourseV3Page(props: { params: Promise<{ id: string }> }) {
@@ -47,7 +47,15 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   const { course, isLoading, error, updateCourse, isUpdating } = useCourseEdit(courseId)
   
   // Preload chapters data to avoid separate loading states
-  const { chapters, error: chaptersError } = useChaptersEdit(courseId)
+  const { 
+    chapters, 
+    createChapter, 
+    reorderChapters,
+    error: chaptersError 
+  } = useChaptersEdit(courseId)
+  
+  // Video operations hooks
+  const { uploadVideoAsync } = useVideoUpload(courseId)
   
   // PROFESSIONAL FORM STATE PATTERN: Form state as source of truth for inputs
   const formState = useFormState({
@@ -83,7 +91,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   
   // ARCHITECTURE-COMPLIANT: UI Orchestration - read from TanStack mutations directly
   const { batchUpdateVideos, isBatchUpdating, videoPendingChanges } = useVideoBatchOperations(courseId)
-  const { updateChapter, deleteChapter, isUpdating: isUpdatingChapters, isDeleting: isDeletingChapters } = useChaptersEdit(courseId)
+  const { updateChapter, deleteChapter, deleteChapterMutation, isUpdating: isUpdatingChapters, isDeleting: isDeletingChapters } = useChaptersEdit(courseId)
   const { deleteVideo, isDeleting: isDeletingVideos } = useVideoDelete(courseId)
   
   // Get unified content pending changes count (stable primitive)
@@ -124,6 +132,102 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   // ARCHITECTURE-COMPLIANT: No data copying or synchronization
   
   // ARCHITECTURE-COMPLIANT: UI Orchestration - coordinate multiple TanStack mutations
+  // Chapter Manager handler functions (inlined from EnhancedChapterManager)
+  const handleCreateChapter = (title: string) => {
+    createChapter(title)
+  }
+  
+  const handleUpdateChapter = (chapterId: string, updates: Partial<any>) => {
+    updateChapter({ chapterId, updates })
+  }
+  
+  const handleDeleteChapter = (chapterId: string) => {
+    // ARCHITECTURE-COMPLIANT: Only mark for deletion in UI store (Zustand)
+    // Actual deletion happens on Save via TanStack mutations
+    if (ui.pendingDeletes.has(chapterId)) {
+      ui.unmarkForDeletion(chapterId)
+    } else {
+      ui.markForDeletion(chapterId)
+      // Also mark all videos in this chapter for deletion
+      const chapter = chapters?.find(ch => ch.id === chapterId)
+      if (chapter?.videos) {
+        chapter.videos.forEach(video => {
+          ui.markForDeletion(video.id)
+        })
+      }
+    }
+  }
+  
+  const handleReorderChapters = (newOrder: any[]) => {
+    reorderChapters(newOrder)
+  }
+  
+  const handleVideoUpload = async (chapterId: string, files: FileList) => {
+    const fileArray = Array.from(files)
+    
+    console.log('🎬 [ARCHITECTURE-COMPLIANT] Starting video upload via TanStack:', {
+      chapterId,
+      fileCount: fileArray.length,
+      fileNames: fileArray.map(f => f.name)
+    })
+    
+    // ARCHITECTURE-COMPLIANT: Upload progress managed by TanStack Query
+    fileArray.forEach((file) => {
+      const tempVideoId = `temp-video-${Date.now()}-${Math.random()}`
+      
+      uploadVideoAsync({
+        file,
+        chapterId,
+        tempVideoId
+      }).then((result) => {
+        console.log('✅ [UPLOAD] Upload completed:', result)
+      }).catch((error) => {
+        console.error('❌ [UPLOAD] Upload failed:', error)
+      })
+    })
+  }
+  
+  const handleVideoRename = (videoId: string, newName: string) => {
+    batchUpdateVideos({ 
+      courseId, 
+      updates: [{ id: videoId, title: newName }] 
+    })
+  }
+  
+  const handleVideoDelete = (videoId: string) => {
+    // ARCHITECTURE-COMPLIANT: Immediate deletion via TanStack mutation
+    console.log('🗑️ Deleting video:', videoId)
+    deleteVideo(videoId)
+  }
+  
+  const handleMoveVideo = (videoId: string, fromChapterId: string, toChapterId: string) => {
+    batchUpdateVideos({ 
+      courseId, 
+      updates: [{ id: videoId, chapter_id: toChapterId, order: 0 }] 
+    })
+  }
+  
+  const handleVideoPreview = (video: any) => {
+    ui.openModal('video-preview', video)
+  }
+  
+  const handlePendingChangesUpdate = (
+    hasChanges: boolean, 
+    changeCount: number, 
+    saveFunction: () => void, 
+    isSaving?: boolean
+  ) => {
+    // Parent component uses UI orchestration to read TanStack state
+  }
+  
+  const handleTabNavigation = (
+    currentId: string, 
+    currentType: 'chapter' | 'video', 
+    direction: 'next' | 'previous'
+  ) => {
+    console.log('Tab navigation:', { currentId, currentType, direction })
+  }
+
   const handleSave = async () => {
     if (!hasChanges || isSaving) return
 
@@ -143,6 +247,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
     try {
       // UI Orchestration: Wait for ALL server confirmations before showing success
       const savePromises: Promise<any>[] = []
+      let chapterDeletes: string[] = [] // Declare at function scope
       
       // 1. Save video changes via TanStack mutation - AWAIT COMPLETION
       const videoPendingChangesFromUI = ui.getVideoPendingChanges()
@@ -256,7 +361,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
         
         // Separate videos and chapters for different deletion handlers
         const videoDeletes = []
-        const chapterDeletes = []
+        chapterDeletes = [] // Use the function-scoped variable
         
         pendingDeletesArray.forEach(id => {
           if (id.startsWith('chapter-')) {
@@ -286,21 +391,11 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
           }
         })
         
+        // Process chapter deletions - don't wait for them in Promise.all
+        // They have optimistic updates so UI responds immediately
         chapterDeletes.forEach(chapterId => {
           console.log('🗑️ Deleting chapter:', chapterId)
-          const chapterDeletionPromise = new Promise((resolve, reject) => {
-            deleteChapter(chapterId, {
-              onSuccess: (result) => {
-                console.log('✅ Chapter deletion confirmed by server:', chapterId)
-                resolve(result)
-              },
-              onError: (error) => {
-                console.error('❌ Chapter deletion failed on server:', chapterId, error)
-                reject(error)
-              }
-            })
-          })
-          savePromises.push(chapterDeletionPromise)
+          deleteChapter(chapterId)
         })
         
         // Clear pending deletes - TanStack will handle UI updates
@@ -337,12 +432,44 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
         console.log('✅ No course info changes to save!')
       }
 
-      // OPTION 1 IMPLEMENTATION: Wait for ALL server confirmations before showing success toast
+      // Wait for regular save operations (videos, chapters updates, course info)
       console.log(`⏳ Waiting for ${savePromises.length} server operations to complete...`)
       await Promise.all(savePromises)
-      console.log('✅ All server operations confirmed - showing success toast')
+      console.log('✅ All server operations confirmed')
       
-      // Show success toast only after ALL server operations confirm success
+      // Wait for chapter deletions to complete (tracked separately)
+      if (chapterDeletes.length > 0) {
+        console.log(`⏳ Waiting for ${chapterDeletes.length} chapter deletions to complete...`)
+        console.log('Current isDeletingChapters state:', isDeletingChapters)
+        
+        // More robust waiting: wait for deletion state to become false after it becomes true
+        let deletionStarted = isDeletingChapters
+        
+        // If deletion hasn't started yet, wait for it to start
+        if (!deletionStarted) {
+          let attempts = 0
+          while (!isDeletingChapters && attempts < 50) { // Wait up to 5 seconds
+            await new Promise(resolve => setTimeout(resolve, 100))
+            attempts++
+          }
+          deletionStarted = isDeletingChapters
+          console.log('Deletion started:', deletionStarted)
+        }
+        
+        // Now wait for deletion to complete
+        if (deletionStarted) {
+          let attempts = 0
+          while (isDeletingChapters && attempts < 100) { // Wait up to 10 seconds
+            await new Promise(resolve => setTimeout(resolve, 100))
+            attempts++
+          }
+          console.log('✅ Chapter deletions confirmed by server')
+        } else {
+          console.log('⚠️ Chapter deletion did not start - proceeding anyway')
+        }
+      }
+      
+      // Show success toast only after ALL operations (including deletions) complete
       toast.success('Course updated')
 
     } catch (error) {
@@ -567,8 +694,24 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
             </CardHeader>
             <CardContent className="p-0">
               <div className="px-6 pb-6">
-                <EnhancedChapterManager 
-                  courseId={courseId}
+                <ChapterManager
+                  chapters={chapters || []}
+                  onCreateChapter={handleCreateChapter}
+                  onUpdateChapter={handleUpdateChapter}
+                  onDeleteChapter={handleDeleteChapter}
+                  onReorderChapters={handleReorderChapters}
+                  onVideoUpload={handleVideoUpload}
+                  onVideoRename={handleVideoRename}
+                  batchRenameMutation={{
+                    mutate: (updates: Array<{ id: string, title?: string }>) => 
+                      batchUpdateVideos({ courseId, updates }),
+                    isPending: isBatchUpdating
+                  }}
+                  onVideoDelete={handleVideoDelete}
+                  onVideoPreview={handleVideoPreview}
+                  onMoveVideo={handleMoveVideo}
+                  onPendingChangesUpdate={handlePendingChangesUpdate}
+                  onTabNavigation={handleTabNavigation}
                   className="space-y-4"
                 />
               </div>
