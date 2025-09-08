@@ -51,6 +51,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
     chapters, 
     createChapter, 
     reorderChapters,
+    isLoading: chaptersLoading,
     error: chaptersError 
   } = useChaptersEdit(courseId)
   
@@ -66,6 +67,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   })
   
   // Update form state when server data changes (after fetch or optimistic update)
+  // Use primitive values to avoid infinite loops
   React.useEffect(() => {
     if (course) {
       formState.updateInitialValues({
@@ -75,23 +77,13 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
         difficulty: course.difficulty || 'beginner'
       })
     }
-  }, [course])
+  }, [course?.title, course?.description, course?.price, course?.difficulty, course?.id])
   
-  // Debug TanStack Query state
-  React.useEffect(() => {
-    console.log('🔍 [TANSTACK DEBUG] Course query state:', {
-      courseId,
-      course: !!course,
-      courseData: course,
-      isLoading,
-      error: error?.message,
-      hasUpdateFunction: !!updateCourse
-    })
-  }, [courseId, course, isLoading, error])
+  // Removed noisy TanStack debug logs
   
   // ARCHITECTURE-COMPLIANT: UI Orchestration - read from TanStack mutations directly
-  const { batchUpdateVideos, isBatchUpdating, videoPendingChanges } = useVideoBatchOperations(courseId)
-  const { updateChapter, deleteChapter, deleteChapterMutation, isUpdating: isUpdatingChapters, isDeleting: isDeletingChapters } = useChaptersEdit(courseId)
+  const { batchUpdateVideos, batchUpdateVideosMutation, isBatchUpdating, videoPendingChanges } = useVideoBatchOperations(courseId)
+  const { updateChapter, updateChapterMutation, deleteChapter, deleteChapterMutation, isUpdating: isUpdatingChapters, isDeleting: isDeletingChapters } = useChaptersEdit(courseId)
   const { deleteVideo, isDeleting: isDeletingVideos } = useVideoDelete(courseId)
   
   // Get unified content pending changes count (stable primitive)
@@ -165,39 +157,46 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   const handleVideoUpload = async (chapterId: string, files: FileList) => {
     const fileArray = Array.from(files)
     
-    console.log('🎬 [ARCHITECTURE-COMPLIANT] Starting video upload via TanStack:', {
+    console.log('🚀 [UPLOAD PROGRESS] Starting video upload:', {
       chapterId,
       fileCount: fileArray.length,
-      fileNames: fileArray.map(f => f.name)
+      fileNames: fileArray.map(f => f.name),
+      fileSizes: fileArray.map(f => `${(f.size / 1024 / 1024).toFixed(2)}MB`)
     })
     
     // ARCHITECTURE-COMPLIANT: Upload progress managed by TanStack Query
     fileArray.forEach((file) => {
       const tempVideoId = `temp-video-${Date.now()}-${Math.random()}`
+      console.log(`📤 [UPLOAD PROGRESS] Starting upload for ${file.name} with tempId: ${tempVideoId}`)
       
       uploadVideoAsync({
         file,
         chapterId,
         tempVideoId
       }).then((result) => {
-        console.log('✅ [UPLOAD] Upload completed:', result)
+        console.log(`✅ [UPLOAD PROGRESS] Upload completed for ${file.name}:`, result)
       }).catch((error) => {
-        console.error('❌ [UPLOAD] Upload failed:', error)
+        console.error(`❌ [UPLOAD PROGRESS] Upload failed for ${file.name}:`, error)
       })
     })
   }
   
   const handleVideoRename = (videoId: string, newName: string) => {
-    batchUpdateVideos({ 
-      courseId, 
-      updates: [{ id: videoId, title: newName }] 
-    })
+    // ARCHITECTURE-COMPLIANT: Stage video rename in UI store, save on unified Save
+    console.log('📝 Staging video rename:', videoId, newName)
+    ui.updateVideoPendingChanges(videoId, newName)
   }
   
   const handleVideoDelete = (videoId: string) => {
-    // ARCHITECTURE-COMPLIANT: Immediate deletion via TanStack mutation
-    console.log('🗑️ Deleting video:', videoId)
-    deleteVideo(videoId)
+    // ARCHITECTURE-COMPLIANT: Mark for deletion in UI store, delete on unified Save
+    console.log('🗑️ Marking video for deletion:', videoId)
+    if (ui.pendingDeletes.has(videoId)) {
+      // If already marked, unmark it (toggle behavior)
+      ui.unmarkForDeletion(videoId)
+    } else {
+      // Mark for deletion
+      ui.markForDeletion(videoId)
+    }
   }
   
   const handleMoveVideo = (videoId: string, fromChapterId: string, toChapterId: string) => {
@@ -264,20 +263,9 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
         }))
         
         if (videoUpdates.length > 0) {
-          console.log('🎬 Executing video batch update...', videoUpdates)
-          const videoSavePromise = new Promise((resolve, reject) => {
-            batchUpdateVideos({ courseId, updates: videoUpdates }, {
-              onSuccess: (result) => {
-                console.log('✅ Video updates confirmed by server')
-                resolve(result)
-              },
-              onError: (error) => {
-                console.error('❌ Video updates failed on server:', error)
-                reject(error)
-              }
-            })
-          })
-          savePromises.push(videoSavePromise)
+          console.log('🎬 Executing WebSocket video batch update...', videoUpdates)
+          // Use WebSocket-enabled batch update (no need to wait - WebSocket handles confirmation)
+          batchUpdateVideos(videoUpdates)
           
           // Clear video pending changes from unified system
           ui.clearAllVideoPendingChanges()
@@ -292,21 +280,10 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
           pendingChanges: chapterPendingChanges
         })
         
-        // Save each chapter name change and collect promises
+        // Save each chapter name change using WebSocket-enabled mutations
         for (const [chapterId, newTitle] of Object.entries(chapterPendingChanges)) {
-          const chapterSavePromise = new Promise((resolve, reject) => {
-            updateChapter({ chapterId, updates: { title: newTitle } }, {
-              onSuccess: (result) => {
-                console.log('✅ Chapter update confirmed by server:', chapterId)
-                resolve(result)
-              },
-              onError: (error) => {
-                console.error('❌ Chapter update failed on server:', chapterId, error)
-                reject(error)
-              }
-            })
-          })
-          savePromises.push(chapterSavePromise)
+          console.log('📝 Updating chapter title with WebSocket:', chapterId, newTitle)
+          updateChapter(chapterId, { title: newTitle })
         }
         
         // Clear chapter pending changes from unified system
@@ -391,10 +368,9 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
           }
         })
         
-        // Process chapter deletions - don't wait for them in Promise.all
-        // They have optimistic updates so UI responds immediately
+        // Process chapter deletions using WebSocket-enabled mutations
         chapterDeletes.forEach(chapterId => {
-          console.log('🗑️ Deleting chapter:', chapterId)
+          console.log('🗑️ Deleting chapter with WebSocket:', chapterId)
           deleteChapter(chapterId)
         })
         
@@ -432,45 +408,33 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
         console.log('✅ No course info changes to save!')
       }
 
-      // Wait for regular save operations (videos, chapters updates, course info)
-      console.log(`⏳ Waiting for ${savePromises.length} server operations to complete...`)
-      await Promise.all(savePromises)
-      console.log('✅ All server operations confirmed')
+      // WEBSOCKET COORDINATION: Track all operations for coordinated completion
+      const operationCount = [
+        Object.keys(videoPendingChangesFromUI).length > 0 ? 1 : 0,
+        Object.keys(chapterPendingChanges).length > 0 ? 1 : 0,
+        chapterDeletes.length > 0 ? 1 : 0,
+        Object.keys(courseUpdates).length > 0 ? 1 : 0
+      ].filter(Boolean).length
       
-      // Wait for chapter deletions to complete (tracked separately)
-      if (chapterDeletes.length > 0) {
-        console.log(`⏳ Waiting for ${chapterDeletes.length} chapter deletions to complete...`)
-        console.log('Current isDeletingChapters state:', isDeletingChapters)
-        
-        // More robust waiting: wait for deletion state to become false after it becomes true
-        let deletionStarted = isDeletingChapters
-        
-        // If deletion hasn't started yet, wait for it to start
-        if (!deletionStarted) {
-          let attempts = 0
-          while (!isDeletingChapters && attempts < 50) { // Wait up to 5 seconds
-            await new Promise(resolve => setTimeout(resolve, 100))
-            attempts++
-          }
-          deletionStarted = isDeletingChapters
-          console.log('Deletion started:', deletionStarted)
-        }
-        
-        // Now wait for deletion to complete
-        if (deletionStarted) {
-          let attempts = 0
-          while (isDeletingChapters && attempts < 100) { // Wait up to 10 seconds
-            await new Promise(resolve => setTimeout(resolve, 100))
-            attempts++
-          }
-          console.log('✅ Chapter deletions confirmed by server')
-        } else {
-          console.log('⚠️ Chapter deletion did not start - proceeding anyway')
-        }
+      // Wait for legacy operations (course updates, pending chapter saves)
+      if (savePromises.length > 0) {
+        console.log(`⏳ Waiting for ${savePromises.length} legacy operations to complete...`)
+        await Promise.all(savePromises)
+        console.log('✅ Legacy operations confirmed')
       }
       
-      // Show success toast only after ALL operations (including deletions) complete
-      toast.success('Course updated')
+      // Show immediate success for WebSocket operations (they have real-time confirmation)
+      // WebSocket operations will show their own individual toasts when server confirms
+      if (operationCount > 0 && savePromises.length === 0) {
+        // All operations are WebSocket-enabled, show immediate toast
+        toast.success('Changes saved - confirmations will appear shortly')
+      } else if (operationCount === 0) {
+        // No changes detected
+        toast.success('Course updated')
+      } else {
+        // Mixed operations - some legacy waited for, show general success
+        toast.success('Course updated')
+      }
 
     } catch (error) {
       console.error('❌ Error in UI orchestration:', error)
@@ -486,61 +450,127 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
     formState.setValue(field, value)
   }
 
-  if ((isLoading && !course) || !chapters) {
+  if (isLoading || chaptersLoading || !course || !chapters) {
     return (
       <div className="container mx-auto p-6 max-w-7xl">
-        {/* Subtle loading skeleton */}
+        {/* Enhanced skeleton that matches the actual layout */}
         <div className="space-y-6">
-          {/* Header skeleton */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="h-8 w-8 bg-muted/30 animate-pulse rounded" />
-              <div className="space-y-2">
-                <div className="h-6 w-48 bg-muted/30 animate-pulse rounded" />
-                <div className="h-4 w-64 bg-muted/20 animate-pulse rounded" />
+          {/* Sticky Header Skeleton */}
+          <div className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
+            <div className="container mx-auto px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="h-8 w-8 skeleton-shimmer rounded" />
+                  <div className="space-y-2">
+                    <div className="h-6 w-48 skeleton-shimmer rounded" />
+                    <div className="h-4 w-20 skeleton-shimmer rounded" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-20 skeleton-shimmer rounded" />
+                  <div className="h-8 w-16 skeleton-shimmer rounded" />
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="h-6 w-16 bg-muted/20 animate-pulse rounded-full" />
-              <div className="h-9 w-32 bg-muted/30 animate-pulse rounded" />
             </div>
           </div>
-          
-          {/* Tabs skeleton */}
-          <div className="space-y-4">
-            <div className="flex space-x-1 bg-muted/10 p-1 rounded-lg w-fit">
-              <div className="h-8 w-24 bg-muted/20 animate-pulse rounded" />
-              <div className="h-8 w-20 bg-muted/20 animate-pulse rounded" />
-              <div className="h-8 w-20 bg-muted/20 animate-pulse rounded" />
+
+          {/* Two Column Layout Skeleton */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
+            {/* Course Details Skeleton - 33% Width */}
+            <div className="lg:col-span-1">
+              <Card className="sticky top-24">
+                <CardHeader>
+                  <div className="h-6 w-32 skeleton-shimmer rounded" />
+                  <div className="h-4 w-40 skeleton-shimmer rounded" />
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Course Title Skeleton */}
+                  <div className="space-y-2">
+                    <div className="h-4 w-20 skeleton-shimmer rounded" />
+                    <div className="h-10 w-full skeleton-shimmer rounded" />
+                  </div>
+                  
+                  {/* Price Skeleton */}
+                  <div className="space-y-2">
+                    <div className="h-4 w-16 skeleton-shimmer rounded" />
+                    <div className="h-10 w-full skeleton-shimmer rounded" />
+                  </div>
+
+                  {/* Description Skeleton */}
+                  <div className="space-y-2">
+                    <div className="h-4 w-24 skeleton-shimmer rounded" />
+                    <div className="h-24 w-full skeleton-shimmer rounded" />
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-            
-            {/* Content skeleton */}
-            <div className="border border-muted/20 rounded-lg p-6 space-y-4">
-              <div className="space-y-2">
-                <div className="h-5 w-32 bg-muted/30 animate-pulse rounded" />
-                <div className="h-4 w-full max-w-md bg-muted/20 animate-pulse rounded" />
-              </div>
-              
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <div className="h-4 w-20 bg-muted/20 animate-pulse rounded" />
-                  <div className="h-10 w-full bg-muted/20 animate-pulse rounded" />
-                </div>
-                <div className="space-y-2">
-                  <div className="h-4 w-24 bg-muted/20 animate-pulse rounded" />
-                  <div className="h-24 w-full bg-muted/20 animate-pulse rounded" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <div className="h-4 w-16 bg-muted/20 animate-pulse rounded" />
-                    <div className="h-10 w-full bg-muted/20 animate-pulse rounded" />
+
+            {/* Course Content Skeleton - 67% Width */}
+            <div className="lg:col-span-2">
+              <Card>
+                <CardHeader>
+                  <div className="h-6 w-36 skeleton-shimmer rounded" />
+                  <div className="h-4 w-64 skeleton-shimmer rounded" />
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="px-6 pb-6 space-y-4">
+                    {/* Chapter Manager Skeleton */}
+                    <div className="space-y-4">
+                      {/* Add Chapter Button Skeleton */}
+                      <div className="flex items-center gap-2">
+                        <div className="h-9 w-32 skeleton-shimmer rounded" />
+                      </div>
+                      
+                      {/* Chapter Skeletons */}
+                      {[1, 2, 3].map((i) => (
+                        <Card key={i}>
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="h-5 w-5 skeleton-shimmer rounded" />
+                                <div className="h-5 w-40 skeleton-shimmer rounded" />
+                                <div className="h-5 w-8 skeleton-shimmer rounded-full" />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="h-8 w-8 skeleton-shimmer rounded" />
+                                <div className="h-8 w-8 skeleton-shimmer rounded" />
+                              </div>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <div className="space-y-3">
+                              {/* Video Skeletons */}
+                              {[1, 2].map((j) => (
+                                <div key={j} className="flex items-center gap-3 p-3 border rounded-lg">
+                                  <div className="h-4 w-4 bg-muted/30 animate-pulse rounded" />
+                                  <div className="h-8 w-8 bg-muted/20 animate-pulse rounded" />
+                                  <div className="flex-1">
+                                    <div className="h-4 w-48 bg-muted/20 animate-pulse rounded mb-1" />
+                                    <div className="h-3 w-24 bg-muted/10 animate-pulse rounded" />
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <div className="h-6 w-6 bg-muted/20 animate-pulse rounded" />
+                                    <div className="h-6 w-6 bg-muted/20 animate-pulse rounded" />
+                                  </div>
+                                </div>
+                              ))}
+                              
+                              {/* Upload Button Skeleton */}
+                              <div className="border-2 border-dashed border-muted/30 rounded-lg p-6">
+                                <div className="text-center space-y-2">
+                                  <div className="h-8 w-8 bg-muted/20 animate-pulse rounded mx-auto" />
+                                  <div className="h-4 w-32 bg-muted/20 animate-pulse rounded mx-auto" />
+                                  <div className="h-3 w-40 bg-muted/10 animate-pulse rounded mx-auto" />
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <div className="h-4 w-20 bg-muted/20 animate-pulse rounded" />
-                    <div className="h-10 w-full bg-muted/20 animate-pulse rounded" />
-                  </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             </div>
           </div>
         </div>
@@ -729,12 +759,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
         />
       )}
       
-      {/* Debug modal state */}
-      {console.log('🎭 Modal render check:', { 
-        modalType: ui.modal.type, 
-        hasModalData: !!ui.modal.data,
-        shouldRender: ui.modal.type === 'video-preview' && ui.modal.data 
-      })}
+      {/* Removed noisy modal debug logs */}
     </div>
   )
 }

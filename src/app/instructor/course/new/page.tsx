@@ -52,7 +52,7 @@ export default function CreateCoursePage() {
       onSuccess: (result) => {
         if (result.success && result.data) {
           // Navigate AFTER cache is set by the mutation onSuccess
-          router.push(`/instructor/course/${result.data.id}/edit-v3`)
+          router.push(`/instructor/course/${result.data.id}/edit`)
         } else {
           toast.error(result.error || 'Failed to create course')
         }

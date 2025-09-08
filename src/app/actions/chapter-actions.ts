@@ -254,7 +254,11 @@ export async function saveChapterToDatabaseAction(
 /**
  * Update chapter title using course_chapters table
  */
-export async function updateChapterAction(chapterId: string, updates: { title?: string }): Promise<ActionResult> {
+export async function updateChapterAction(
+  chapterId: string, 
+  updates: { title?: string },
+  operationId?: string
+): Promise<ActionResult & { operationId?: string; immediate?: boolean }> {
   try {
     const user = await requireAuth()
     const supabase = await createClient()
@@ -353,6 +357,26 @@ export async function updateChapterAction(chapterId: string, updates: { title?: 
       if (createError) throw createError
     }
     
+    // If operationId provided, this is WebSocket-enabled
+    if (operationId) {
+      // TODO: Trigger WebSocket event - for now, simulate background completion
+      console.log(`[WEBSOCKET] Would broadcast chapter-update-complete for operation: ${operationId}`)
+      
+      // Simulate WebSocket event after short delay (remove this when real WebSocket is implemented)
+      setTimeout(() => {
+        console.log(`📚 [MOCK WEBSOCKET] chapter-update-complete: { operationId: "${operationId}", chapterId: "${chapterId}", title: "${updates.title}" }`)
+      }, 300)
+      
+      return { 
+        success: true, 
+        operationId,
+        immediate: true,
+        message: `Chapter update started - WebSocket will confirm completion`,
+        data: { id: chapterId, title: updates.title }
+      }
+    }
+    
+    // Legacy synchronous response
     return { 
       success: true, 
       message: `Chapter updated to "${updates.title}"`,

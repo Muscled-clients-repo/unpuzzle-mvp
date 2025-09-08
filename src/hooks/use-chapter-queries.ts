@@ -8,7 +8,10 @@ import {
 } from '@/app/actions/chapter-actions'
 import type { Chapter, Course } from '@/types/course'
 import { useCourseCreationUI } from '@/stores/course-creation-ui'
-import { useMemo } from 'react'
+import { useCourseWebSocketSimple } from './use-course-websocket-simple'
+import { generateOperationId } from '@/lib/websocket-operations'
+import { courseEventObserver, COURSE_EVENTS } from '@/lib/course-event-observer'
+import { useMemo, useEffect } from 'react'
 
 // ===== QUERY KEYS =====
 export const chapterKeys = {
@@ -23,6 +26,7 @@ export const chapterKeys = {
 export function useChaptersEdit(courseId: string) {
   const queryClient = useQueryClient()
   const ui = useCourseCreationUI()
+  const websocket = useCourseWebSocketSimple(courseId)
   
   // Query for chapters data
   const chaptersQuery = useQuery({
@@ -43,12 +47,7 @@ export function useChaptersEdit(courseId: string) {
   // ARCHITECTURE-COMPLIANT: TanStack owns ALL server-related state (no data mixing)
   const chapters = chaptersQuery.data || []
   
-  console.log('📚 Chapters in hook:', { 
-    data: chaptersQuery.data, 
-    isLoading: chaptersQuery.isLoading, 
-    error: chaptersQuery.error,
-    chaptersLength: chapters?.length 
-  })
+  // Remove noisy chapter logging
   
   // ARCHITECTURE-COMPLIANT: Staged chapter creation for Consolidated UX
   // Add pending chapters to TanStack cache immediately, save to database via Save button
@@ -75,10 +74,60 @@ export function useChaptersEdit(courseId: string) {
     console.log('✅ Chapter added to cache, pending save')
   }
   
+  // Observer subscriptions for real-time updates (re-enabled with stable dependencies)
+  useEffect(() => {
+    const unsubscribers = [
+      // Chapter update completion
+      courseEventObserver.subscribe(COURSE_EVENTS.CHAPTER_UPDATE_COMPLETE, (event) => {
+        if (event.courseId !== courseId) return
+        
+        console.log('📚 Chapter update completed via Observer:', event)
+        queryClient.invalidateQueries({ queryKey: chapterKeys.list(courseId) })
+        
+        // Handle operation completion tracking if needed
+        if (event.operationId) {
+          toast.success('Chapter updated')
+        }
+      }),
+
+      // Chapter creation completion  
+      courseEventObserver.subscribe(COURSE_EVENTS.CHAPTER_CREATE_COMPLETE, (event) => {
+        if (event.courseId !== courseId) return
+        
+        console.log('📚 Chapter created via Observer:', event)
+        queryClient.invalidateQueries({ queryKey: chapterKeys.list(courseId) })
+        
+        if (event.operationId) {
+          toast.success('Chapter created')
+        }
+      }),
+
+      // Chapter deletion completion
+      courseEventObserver.subscribe(COURSE_EVENTS.CHAPTER_DELETE_COMPLETE, (event) => {
+        if (event.courseId !== courseId) return
+        
+        console.log('🗑️ Chapter deleted via Observer:', event)
+        queryClient.invalidateQueries({ queryKey: chapterKeys.list(courseId) })
+        
+        if (event.operationId) {
+          toast.success('Chapter deleted')
+        }
+      })
+    ]
+
+    return () => {
+      unsubscribers.forEach(unsubscribe => unsubscribe())
+    }
+  }, [courseId, queryClient]) // Stable dependencies only - no more circular issues
+
   // Update chapter mutation
   const updateMutation = useMutation({
-    mutationFn: ({ chapterId, updates }: { chapterId: string, updates: Partial<Chapter> }) =>
-      updateChapterAction(chapterId, updates),
+    mutationFn: ({ chapterId, updates, operationId }: { 
+      chapterId: string, 
+      updates: Partial<Chapter>, 
+      operationId?: string 
+    }) =>
+      updateChapterAction(chapterId, updates, operationId),
     
     onMutate: async ({ chapterId, updates }) => {
       await queryClient.cancelQueries({ queryKey: chapterKeys.list(courseId) })
@@ -110,12 +159,23 @@ export function useChaptersEdit(courseId: string) {
       return { previousChapters }
     },
     
-    onSuccess: (result) => {
-      // Don't show toast here - let the parent component handle it
-      // This prevents duplicate toasts when "Save Changes" triggers multiple saves
-      if (result.success) {
-        console.log('✅ Chapter updated successfully (no toast)')
+    onSuccess: (result, variables) => {
+      console.log('🎯 Chapter update result:', result)
+      
+      // WebSocket-enabled response
+      if (result.operationId && result.immediate) {
+        console.log(`🚀 WebSocket chapter operation started: ${result.operationId}`)
+        // WebSocket will handle completion and cache updates
+        return
       }
+      
+      // Legacy synchronous response - no toast (handled by parent)
+      console.log('✅ Chapter updated successfully (legacy, no toast)')
+      
+      // Background refetch for consistency (skip error checking since onSuccess means it worked)
+      setTimeout(() => {
+        queryClient.refetchQueries({ queryKey: chapterKeys.list(courseId) })
+      }, 2000)
     },
     
     onError: (error, variables, context) => {
@@ -128,9 +188,10 @@ export function useChaptersEdit(courseId: string) {
   
   // Delete chapter mutation (soft delete)
   const deleteMutation = useMutation({
-    mutationFn: (chapterId: string) => deleteChapterAction(courseId, chapterId),
+    mutationFn: ({ chapterId, operationId }: { chapterId: string, operationId?: string }) => 
+      deleteChapterAction(courseId, chapterId, operationId),
     
-    onMutate: async (chapterId) => {
+    onMutate: async ({ chapterId }) => {
       await queryClient.cancelQueries({ queryKey: chapterKeys.list(courseId) })
       
       const previousChapters = queryClient.getQueryData(chapterKeys.list(courseId))
@@ -143,10 +204,23 @@ export function useChaptersEdit(courseId: string) {
       return { previousChapters, deletedChapterId: chapterId }
     },
     
-    onSuccess: (result) => {
-      if (result.success) {
-        // No individual toast - handled by consolidated save toast
+    onSuccess: (result, variables) => {
+      console.log('🗑️ Chapter delete result:', result)
+      
+      // WebSocket-enabled response
+      if (result.operationId && result.immediate) {
+        console.log(`🚀 WebSocket chapter delete operation started: ${result.operationId}`)
+        // WebSocket will handle completion and cache updates
+        return
       }
+      
+      // Legacy synchronous response - no individual toast (handled by consolidated save toast)
+      console.log('✅ Chapter deleted successfully (legacy)')
+      
+      // Background refetch for consistency
+      setTimeout(() => {
+        queryClient.refetchQueries({ queryKey: chapterKeys.list(courseId) })
+      }, 2000)
     },
     
     onError: (error, variables, context) => {
@@ -192,18 +266,49 @@ export function useChaptersEdit(courseId: string) {
     reorderMutation.mutate(newOrder)
   }
   
+  // WebSocket-enabled chapter update function (with Observer pattern)
+  const updateChapterWithWebSocket = (chapterId: string, updates: Partial<Chapter>) => {
+    const operationId = websocket.generateOperationId()
+    console.log(`📚 Starting WebSocket chapter update: ${operationId}`)
+    
+    // Observer system will handle completion notifications via WebSocket events
+    updateMutation.mutate({ chapterId, updates, operationId })
+  }
+  
+  // WebSocket-enabled chapter delete function (with Observer pattern)
+  const deleteChapterWithWebSocket = (chapterId: string) => {
+    const operationId = websocket.generateOperationId()
+    console.log(`🗑️ Starting WebSocket chapter delete: ${operationId}`)
+    
+    // Observer system will handle completion notifications via WebSocket events
+    deleteMutation.mutate({ chapterId, operationId })
+  }
+  
+  // Legacy chapter update function (no WebSocket)
+  const updateChapterLegacy = (chapterId: string, updates: Partial<Chapter>) => {
+    updateMutation.mutate({ chapterId, updates })
+  }
+  
+  // Legacy chapter delete function (no WebSocket)
+  const deleteChapterLegacy = (chapterId: string) => {
+    deleteMutation.mutate({ chapterId })
+  }
+  
   return {
     chapters: chapters, // ARCHITECTURE-COMPLIANT: Direct from TanStack, no merging
     isLoading: chaptersQuery.isLoading,
     error: chaptersQuery.error,
     createChapter: createChapter,
-    updateChapter: updateMutation.mutate,
-    deleteChapter: deleteMutation.mutate,
+    updateChapter: updateChapterWithWebSocket, // WebSocket-enabled update
+    updateChapterMutation: updateMutation, // Expose mutation object for callback support
+    deleteChapter: deleteChapterWithWebSocket, // WebSocket-enabled delete
     deleteChapterMutation: deleteMutation, // Expose mutation object for callback support
     reorderChapters,
     isCreating: false, // Chapter creation is immediate to cache, no loading needed
     isUpdating: updateMutation.isPending,
     isDeleting: deleteMutation.isPending,
-    isReordering: reorderMutation.isPending // ARCHITECTURE-COMPLIANT: Real mutation loading state
+    isReordering: reorderMutation.isPending, // ARCHITECTURE-COMPLIANT: Real mutation loading state
+    // WebSocket connection state
+    isWebSocketConnected: websocket.isConnected
   }
 }

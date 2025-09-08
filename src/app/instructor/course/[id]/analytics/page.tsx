@@ -63,7 +63,7 @@ export default function CourseAnalyticsPageClean() {
           </p>
         </div>
         <Button asChild>
-          <Link href={`/instructor/course/${courseId}/edit-v3`}>
+          <Link href={`/instructor/course/${courseId}/edit`}>
             Edit Course
           </Link>
         </Button>

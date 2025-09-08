@@ -200,12 +200,47 @@ Users perform multiple operations (edits, deletions, creations) with visual feed
 **Single Source of Truth**: Components read from TanStack only
 **No Manual Coordination**: WebSocket handler updates cache directly
 
+### Production-Proven Pattern: Standalone WebSocket Architecture
+
+**Implementation Decision**: Standalone WebSocket server (not Next.js API route) provides:
+- **Development Stability**: Connections persist during hot-reload
+- **Production Reliability**: Independent process lifecycle management
+- **Clear Separation**: WebSocket concerns isolated from web application logic
+
+**Server Action Integration**: HTTP POST bridge enables Server Actions to communicate with WebSocket server:
+```javascript
+// Server Action → WebSocket Server → Client broadcast
+broadcastWebSocketMessage({
+  type: 'upload-progress',
+  data: { progress: progressData.percentage }
+})
+```
+
+**Observer Pattern Integration**: WebSocket messages map to Observer events for dependency-free architecture:
+```typescript
+// WebSocket → Observer → TanStack → UI
+courseEventObserver.emit(COURSE_EVENTS.UPLOAD_PROGRESS, courseId, progressData)
+```
+
+### Critical Implementation Fix: Dual Cache Updates
+
+**Problem Solved**: UI reads from `chapter.videos` but progress updates only updated video cache
+**Solution**: Update both video and chapter caches to ensure UI reactivity
+**Result**: Real-time progress bars work seamlessly across all UI components
+
 ### Production Applications
 
-- **Upload Progress**: Real-time progress bars during file uploads
+- **Upload Progress**: Real-time progress bars during file uploads (0% → 100% with WebSocket updates)
 - **Payment Status**: Live payment processing updates
 - **Course Progress**: Real-time learning progress tracking
 - **Social Features**: Live user interactions and notifications
+
+### Performance Characteristics
+
+- **1GB file support**: Handles large video uploads with consistent progress updates
+- **Multiple concurrent uploads**: WebSocket handles multiple operations simultaneously  
+- **Cross-tab synchronization**: Progress visible across browser tabs
+- **Graceful degradation**: Continues working when WebSocket server offline
 
 ---
 

@@ -1,7 +1,6 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { createServiceClient } from '@/lib/supabase/server'
 import { backblazeService } from '@/services/video/backblaze-service'
 import { revalidatePath } from 'next/cache'
 
@@ -25,20 +24,51 @@ async function requireAuth() {
   return user
 }
 
+// Helper function to broadcast WebSocket messages from Server Actions
+async function broadcastWebSocketMessage(message: {
+  type: string
+  courseId: string
+  operationId?: string
+  data: any
+  timestamp: number
+}) {
+  try {
+    console.log(`📤 [WEBSOCKET] Broadcasting to server:`, message.type)
+    const response = await fetch('http://localhost:8080/broadcast', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(message)
+    })
+    
+    if (response.ok) {
+      console.log(`✅ [WEBSOCKET] Broadcast successful: ${message.type}`)
+    } else {
+      console.warn(`⚠️ [WEBSOCKET] Broadcast failed: ${response.status}`)
+    }
+  } catch (error) {
+    console.warn(`⚠️ [WEBSOCKET] Broadcast error (server may be offline):`, error.message)
+  }
+}
+
 /**
  * Upload a video to Backblaze and create database record
+ * Now with WebSocket progress updates!
  */
 export async function uploadVideoAction({
   file,
   courseId,
   chapterId,
+  operationId,
   onProgress
 }: {
   file: File
   courseId: string
   chapterId: string
+  operationId?: string
   onProgress?: (progress: number) => void
-}): Promise<ActionResult> {
+}): Promise<ActionResult & { operationId?: string }> {
   try {
     const user = await requireAuth()
     const supabase = await createClient()
@@ -87,9 +117,45 @@ export async function uploadVideoAction({
     
     console.log('[SERVER ACTION] Structured path:', structuredPath)
     
-    // Upload to Backblaze with structured path
-    console.log('[SERVER ACTION] Starting Backblaze upload...')
-    const uploadResult = await backblazeService.uploadVideo(file, structuredPath)
+    // Upload to Backblaze with structured path and progress tracking
+    console.log(`[SERVER ACTION] Starting Backblaze upload with operationId: ${operationId || 'none'}`)
+    
+    // Initialize progress tracking if operationId provided
+    if (operationId) {
+      console.log(`📈 [UPLOAD PROGRESS] Starting progress tracking for ${operationId}`)
+    }
+    
+    const uploadResult = await backblazeService.uploadVideo(
+      file, 
+      structuredPath,
+      // Server-side progress callback - broadcast via WebSocket
+      operationId ? (progressData) => {
+        console.log(`📈 [UPLOAD PROGRESS] Server progress: ${progressData.percentage}% for operation ${operationId}`)
+        
+        // Broadcast progress via WebSocket to all connected clients
+        broadcastWebSocketMessage({
+          type: 'upload-progress',
+          courseId,
+          operationId,
+          data: {
+            operationId,
+            courseId,
+            progress: progressData.percentage,
+            bytes: progressData.bytes,
+            total: progressData.total
+          },
+          timestamp: Date.now()
+        })
+        
+        // Call legacy progress callback if provided
+        if (onProgress) {
+          onProgress(progressData.percentage)
+        }
+      } : (progressData) => {
+        console.log(`📈 [UPLOAD PROGRESS] Progress callback (no operationId): ${progressData.percentage}%`)
+      }
+    )
+    
     console.log('[SERVER ACTION] Backblaze upload result:', uploadResult)
     
     // uploadResult returns { fileId, fileName, fileUrl, ... }
@@ -151,7 +217,26 @@ export async function uploadVideoAction({
     
     revalidatePath(`/instructor/course/${courseId}`)
     
-    return { success: true, data: video }
+    // Upload completion event
+    if (operationId) {
+      console.log(`📈 [UPLOAD PROGRESS] Upload completed for operation ${operationId}`)
+      
+      // Broadcast completion via WebSocket
+      broadcastWebSocketMessage({
+        type: 'upload-complete',
+        courseId,
+        operationId,
+        data: {
+          operationId,
+          courseId,
+          videoId: video.id,
+          chapterId: chapterId
+        },
+        timestamp: Date.now()
+      })
+    }
+    
+    return { success: true, data: video, operationId }
   } catch (error) {
     console.error('Upload video error:', error)
     return {
@@ -477,11 +562,12 @@ export async function batchUpdateVideoOrdersAction(
   courseId: string,
   updates: Array<{
     id: string
-    order: number
-    chapter_id: string
+    order?: number
+    chapter_id?: string
     title?: string
-  }>
-): Promise<ActionResult> {
+  }>,
+  operationId?: string
+): Promise<ActionResult & { operationId?: string; immediate?: boolean }> {
   try {
     const user = await requireAuth()
     const supabase = await createClient()
@@ -562,6 +648,22 @@ export async function batchUpdateVideoOrdersAction(
     
     revalidatePath(`/instructor/course/${courseId}`)
     
+    // If operationId provided, this is WebSocket-enabled
+    if (operationId) {
+      console.log(`[WEBSOCKET] Video batch update completed for operation: ${operationId}`)
+      
+      // Emit WebSocket completion event (real server or simulator)
+      webSocketEventSimulator.simulateVideoUpdateComplete(operationId, courseId, { updates })
+      
+      return { 
+        success: true, 
+        operationId,
+        immediate: true,
+        message: 'Video update started - WebSocket will confirm completion'
+      }
+    }
+    
+    // Legacy synchronous response
     return { success: true, message: 'Videos updated successfully' }
   } catch (error) {
     console.error('Batch update error:', error)

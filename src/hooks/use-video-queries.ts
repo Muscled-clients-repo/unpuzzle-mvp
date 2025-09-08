@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { 
   uploadVideoAction,
@@ -10,6 +11,9 @@ import {
 import type { Video, UploadItem } from '@/types'
 import { chapterKeys } from './use-chapter-queries'
 import { useCourseCreationUI } from '@/stores/course-creation-ui'
+import { useCourseWebSocketSimple } from './use-course-websocket-simple'
+import { generateOperationId } from '@/lib/websocket-operations'
+import { courseEventObserver, COURSE_EVENTS } from '@/lib/course-event-observer'
 
 // ===== QUERY KEYS =====
 export const videoKeys = {
@@ -24,27 +28,36 @@ export const videoKeys = {
 // ===== VIDEO UPLOAD HOOK =====
 export function useVideoUpload(courseId: string) {
   const queryClient = useQueryClient()
+  const websocket = useCourseWebSocketSimple(courseId)
+  const [currentOperationId, setCurrentOperationId] = useState<string | null>(null)
+  
+  // WebSocket connection will now handle real-time progress updates
   
   const uploadMutation = useMutation({
     mutationFn: async ({ 
       file, 
       chapterId, 
-      tempVideoId
+      tempVideoId,
+      operationId
     }: { 
       file: File
       chapterId: string
       tempVideoId: string
+      operationId: string
     }) => {
       // ARCHITECTURE-COMPLIANT: mutationFn only calls server action
       // Progress tracking will be handled by WebSocket updates to TanStack cache
       return uploadVideoAction({
         file,
         courseId,
-        chapterId
+        chapterId,
+        operationId
       })
     },
     
-    onMutate: async ({ file, chapterId, tempVideoId }) => {
+    onMutate: async ({ file, chapterId, tempVideoId, operationId }) => {
+      console.log(`📈 [UPLOAD PROGRESS] onMutate called for ${file.name} with operationId: ${operationId}`)
+      
       // Create temporary video object for immediate UI feedback
       const tempVideo: Video = {
         id: tempVideoId,
@@ -57,7 +70,7 @@ export function useVideoUpload(courseId: string) {
         size: file.size,
         format: file.type,
         status: 'uploading',
-        backblaze_file_id: null,
+        backblaze_file_id: operationId, // Store operationId here for progress matching
         backblaze_url: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -87,12 +100,14 @@ export function useVideoUpload(courseId: string) {
         )
       })
       
-      return { tempVideoId: tempVideo.id }
+      return { tempVideoId: tempVideo.id, operationId }
     },
     
     onSuccess: (result, variables, context) => {
       if (result.success && result.data) {
         const realVideo = result.data
+        
+        console.log(`📈 [UPLOAD PROGRESS] Upload success for ${context?.operationId}`)
         
         // ARCHITECTURE-COMPLIANT: Update temporary video with real data but preserve temp ID to avoid React key change
         // This prevents edit mode exit when upload completes during filename editing
@@ -140,6 +155,7 @@ export function useVideoUpload(courseId: string) {
     onError: (error, variables, context) => {
       // Remove temporary video on error
       if (context?.tempVideoId) {
+        console.log(`❌ [UPLOAD PROGRESS] Removing failed upload video ${context.tempVideoId}`)
         queryClient.setQueryData(videoKeys.list(courseId), (old: Video[] = []) =>
           old.filter(video => video.id !== context.tempVideoId)
         )
@@ -166,8 +182,20 @@ export function useVideoUpload(courseId: string) {
   })
   
   return {
-    uploadVideo: uploadMutation.mutate,
-    uploadVideoAsync: uploadMutation.mutateAsync,
+    uploadVideo: (params: { file: File; chapterId: string; tempVideoId: string }) => {
+      // Generate operation ID and add to params
+      const operationId = generateOperationId()
+      console.log(`🚀 [UPLOAD PROGRESS] Starting upload with Observer pattern: ${operationId} for ${params.file.name}`)
+      setCurrentOperationId(operationId)
+      uploadMutation.mutate({ ...params, operationId })
+    },
+    uploadVideoAsync: (params: { file: File; chapterId: string; tempVideoId: string }) => {
+      // Generate operation ID and add to params
+      const operationId = generateOperationId()
+      console.log(`🚀 [UPLOAD PROGRESS] Starting upload async with Observer pattern: ${operationId} for ${params.file.name}`)
+      setCurrentOperationId(operationId)
+      return uploadMutation.mutateAsync({ ...params, operationId })
+    },
     isUploading: uploadMutation.isPending
   }
 }
@@ -175,19 +203,113 @@ export function useVideoUpload(courseId: string) {
 // ===== BATCH VIDEO OPERATIONS HOOK =====
 export function useVideoBatchOperations(courseId: string) {
   const queryClient = useQueryClient()
+  const websocket = useCourseWebSocketSimple(courseId)
   
   // ARCHITECTURE-COMPLIANT: Read UI state from Zustand for dirty tracking
   const ui = useCourseCreationUI()
   const videoPendingChanges = ui.getVideoPendingChanges()
   const getVideoPendingChangesCount = ui.getVideoPendingChangesCount
   
+  // Observer subscriptions for real-time video updates (re-enabled with stable dependencies)
+  useEffect(() => {
+    const unsubscribers = [
+      courseEventObserver.subscribe(COURSE_EVENTS.VIDEO_UPDATE_COMPLETE, (event) => {
+        if (event.courseId !== courseId) return
+        
+        console.log('🎬 Video update completed via Observer:', event)
+        queryClient.invalidateQueries({ queryKey: videoKeys.list(courseId) })
+        queryClient.invalidateQueries({ queryKey: chapterKeys.list(courseId) })
+        
+        if (event.operationId) {
+          toast.success('Video updated')
+        }
+      }),
+
+      courseEventObserver.subscribe(COURSE_EVENTS.VIDEO_DELETE_COMPLETE, (event) => {
+        if (event.courseId !== courseId) return
+        
+        console.log('🗑️ Video deleted via Observer:', event)
+        queryClient.invalidateQueries({ queryKey: videoKeys.list(courseId) })
+        queryClient.invalidateQueries({ queryKey: chapterKeys.list(courseId) })
+        
+        if (event.operationId) {
+          toast.success('Video deleted')
+        }
+      }),
+
+      courseEventObserver.subscribe(COURSE_EVENTS.UPLOAD_PROGRESS, (event) => {
+        if (event.courseId !== courseId) return
+        
+        console.log(`📈 [UPLOAD PROGRESS] WebSocket progress event: ${event.data.progress}% for operation ${event.operationId}`)
+        
+        // Update upload progress in TanStack cache for real-time UI updates
+        queryClient.setQueryData(videoKeys.list(courseId), (old: Video[] = []) => {
+          const updated = old.map(video => {
+            // Match by operationId stored in temp video during upload
+            if (video.id.includes(event.operationId) || video.backblaze_file_id === event.operationId) {
+              console.log(`📈 [UPLOAD PROGRESS] Updating progress for video ${video.id}: ${event.data.progress}%`)
+              return {
+                ...video,
+                uploadProgress: event.data.progress,
+                status: 'uploading' as const
+              }
+            }
+            return video
+          })
+          console.log(`📈 [UPLOAD PROGRESS] Cache updated, videos with progress:`, 
+            updated.filter(v => v.uploadProgress !== undefined).map(v => ({ id: v.id, progress: v.uploadProgress }))
+          )
+          return updated
+        })
+
+        // CRITICAL FIX: Also update chapters cache (where UI reads from)
+        queryClient.setQueryData(chapterKeys.list(courseId), (old: any) => {
+          if (!Array.isArray(old)) return old
+          
+          return old.map((chapter: any) => ({
+            ...chapter,
+            videos: chapter.videos.map((video: Video) => {
+              // Match by operationId stored in temp video during upload
+              if (video.id.includes(event.operationId) || video.backblaze_file_id === event.operationId) {
+                console.log(`📈 [UPLOAD PROGRESS] Updating progress in chapters cache for video ${video.id}: ${event.data.progress}%`)
+                return {
+                  ...video,
+                  uploadProgress: event.data.progress,
+                  status: 'uploading' as const
+                }
+              }
+              return video
+            })
+          }))
+        })
+      }),
+
+      courseEventObserver.subscribe(COURSE_EVENTS.UPLOAD_COMPLETE, (event) => {
+        if (event.courseId !== courseId) return
+        
+        console.log('📤 Upload completed via Observer:', event)
+        queryClient.invalidateQueries({ queryKey: videoKeys.list(courseId) })
+        queryClient.invalidateQueries({ queryKey: chapterKeys.list(courseId) })
+        
+        if (event.operationId) {
+          toast.success('Upload completed!')
+        }
+      })
+    ]
+
+    return () => {
+      unsubscribers.forEach(unsubscribe => unsubscribe())
+    }
+  }, [courseId, queryClient])
+  
   const batchUpdateMutation = useMutation({
-    mutationFn: ({ courseId, updates }: { 
+    mutationFn: ({ courseId, updates, operationId }: { 
       courseId: string, 
-      updates: Array<{ id: string, title?: string, chapter_id?: string, order?: number }> 
+      updates: Array<{ id: string, title?: string, chapter_id?: string, order?: number }>,
+      operationId?: string
     }) => {
-      console.log('🔥 Batch update called with:', { courseId, updates })
-      return batchUpdateVideoOrdersAction(courseId, updates)
+      console.log('🔥 Batch update called with:', { courseId, updates, operationId })
+      return batchUpdateVideoOrdersAction(courseId, updates, operationId)
     },
     
     onMutate: async ({ courseId, updates }) => {
@@ -223,19 +345,22 @@ export function useVideoBatchOperations(courseId: string) {
     
     onSuccess: (result, variables) => {
       console.log('🎯 Batch update result:', result)
-      if (result.success) {
-        // No individual toast - handled by consolidated save toast
-        console.log(`✅ ${variables.updates.length} video(s) updated successfully`)
-        
-        // Background refetch for consistency
-        setTimeout(() => {
-          queryClient.refetchQueries({ queryKey: videoKeys.list(courseId) })
-          queryClient.refetchQueries({ queryKey: chapterKeys.list(courseId) })
-        }, 2000)
-      } else {
-        toast.error(result.error || 'Update failed')
-        console.error('❌ Batch update failed:', result.error)
+      
+      // WebSocket-enabled response
+      if (result.operationId && result.immediate) {
+        console.log(`🚀 WebSocket operation started: ${result.operationId}`)
+        // WebSocket will handle completion and cache updates
+        return
       }
+      
+      // Legacy synchronous response
+      console.log(`✅ ${variables.updates.length} video(s) updated successfully (legacy)`)
+      
+      // Background refetch for consistency (skip error checking since onSuccess means it worked)
+      setTimeout(() => {
+        queryClient.refetchQueries({ queryKey: videoKeys.list(courseId) })
+        queryClient.refetchQueries({ queryKey: chapterKeys.list(courseId) })
+      }, 2000)
     },
     
     onError: (error, variables, context) => {
@@ -251,13 +376,27 @@ export function useVideoBatchOperations(courseId: string) {
     }
   })
   
+  // WebSocket-enabled batch update function
+  const batchUpdateVideosWithWebSocket = (updates: Array<{ id: string, title?: string, order?: number, chapter_id?: string }>) => {
+    const operationId = generateOperationId()
+    console.log(`🎬 Starting WebSocket video batch update: ${operationId}`)
+    
+    // Observer system will handle completion notifications via WebSocket events
+    
+    // Start mutation with operation tracking
+    batchUpdateMutation.mutate({ courseId, updates, operationId })
+  }
+
   return {
-    batchUpdateVideos: batchUpdateMutation.mutate,
+    batchUpdateVideos: batchUpdateVideosWithWebSocket,
+    batchUpdateVideosMutation: batchUpdateMutation, // Expose mutation object for callback support
     isBatchUpdating: batchUpdateMutation.isPending,
     // ARCHITECTURE-COMPLIANT: Use unified content system for all pending changes
     hasPendingVideoChanges: ui.getVideoPendingChangesCount() > 0,
     videoPendingCount: ui.getVideoPendingChangesCount(),
-    videoPendingChanges: videoPendingChanges || {} // Expose the actual pending changes for save operations
+    videoPendingChanges: videoPendingChanges || {}, // Expose the actual pending changes for save operations
+    // WebSocket connection state
+    isWebSocketConnected: websocket.isConnected
   }
 }
 

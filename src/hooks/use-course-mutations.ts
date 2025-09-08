@@ -28,7 +28,7 @@ export function useCourseMutations() {
         queryClient.setQueryData(['course', result.data.id], result.data)
         toast.success('Course created successfully')
         // Navigate to edit page
-        router.push(`/instructor/course/${result.data.id}/edit-v3`)
+        router.push(`/instructor/course/${result.data.id}/edit`)
       } else {
         toast.error(result.error || 'Failed to create course')
       }
