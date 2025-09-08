@@ -36,7 +36,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>
         {children}
-        <Toaster position="top-right" richColors />
+        <Toaster position="bottom-left" richColors />
       </ErrorBoundary>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>

@@ -141,9 +141,10 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
     })
 
     try {
-      // UI Orchestration: Coordinate TanStack mutations without data mixing
+      // UI Orchestration: Wait for ALL server confirmations before showing success
+      const savePromises: Promise<any>[] = []
       
-      // 1. Save video changes via TanStack mutation
+      // 1. Save video changes via TanStack mutation - AWAIT COMPLETION
       const videoPendingChangesFromUI = ui.getVideoPendingChanges()
       if (Object.keys(videoPendingChangesFromUI).length > 0) {
         console.log('🎬 Orchestrating video save via TanStack...', {
@@ -159,13 +160,26 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
         
         if (videoUpdates.length > 0) {
           console.log('🎬 Executing video batch update...', videoUpdates)
-          batchUpdateVideos({ courseId, updates: videoUpdates })
+          const videoSavePromise = new Promise((resolve, reject) => {
+            batchUpdateVideos({ courseId, updates: videoUpdates }, {
+              onSuccess: (result) => {
+                console.log('✅ Video updates confirmed by server')
+                resolve(result)
+              },
+              onError: (error) => {
+                console.error('❌ Video updates failed on server:', error)
+                reject(error)
+              }
+            })
+          })
+          savePromises.push(videoSavePromise)
+          
           // Clear video pending changes from unified system
           ui.clearAllVideoPendingChanges()
         }
       }
 
-      // 2. Save chapter name changes via TanStack mutation  
+      // 2. Save chapter name changes via TanStack mutation - AWAIT COMPLETION
       const chapterPendingChanges = ui.getChapterPendingChanges()
       if (Object.keys(chapterPendingChanges).length > 0) {
         console.log('📚 Orchestrating chapter name save via TanStack...', {
@@ -173,9 +187,21 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
           pendingChanges: chapterPendingChanges
         })
         
-        // Save each chapter name change  
+        // Save each chapter name change and collect promises
         for (const [chapterId, newTitle] of Object.entries(chapterPendingChanges)) {
-          updateChapter({ chapterId, updates: { title: newTitle } })
+          const chapterSavePromise = new Promise((resolve, reject) => {
+            updateChapter({ chapterId, updates: { title: newTitle } }, {
+              onSuccess: (result) => {
+                console.log('✅ Chapter update confirmed by server:', chapterId)
+                resolve(result)
+              },
+              onError: (error) => {
+                console.error('❌ Chapter update failed on server:', chapterId, error)
+                reject(error)
+              }
+            })
+          })
+          savePromises.push(chapterSavePromise)
         }
         
         // Clear chapter pending changes from unified system
@@ -201,8 +227,9 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
             )
             
             if (result.success) {
-              // Update chapter in cache to remove pending flag and add server data
-              queryClient.setQueryData(['chapters', courseId], (old: any[] = []) =>
+              // Update chapter in cache to remove pending flag and add server data - USE CORRECT CACHE KEY
+              const { chapterKeys } = await import('@/hooks/use-chapter-queries')
+              queryClient.setQueryData(chapterKeys.list(courseId), (old: any[] = []) =>
                 old.map(ch => 
                   ch.id === pendingChapter.id 
                     ? { ...ch, _isPendingCreation: undefined, ...result.data }
@@ -239,24 +266,48 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
           }
         })
         
-        // Process deletions - let TanStack handle optimistic updates
+        // Process deletions - AWAIT COMPLETION
         videoDeletes.forEach(videoId => {
           if (!chapterDeletes.some(chapterId => chapters?.find(ch => ch.id === chapterId)?.videos.some(v => v.id === videoId))) {
             console.log('🗑️ Deleting video:', videoId)
-            deleteVideo(videoId)
+            const deletionPromise = new Promise((resolve, reject) => {
+              deleteVideo(videoId, {
+                onSuccess: (result) => {
+                  console.log('✅ Video deletion confirmed by server:', videoId)
+                  resolve(result)
+                },
+                onError: (error) => {
+                  console.error('❌ Video deletion failed on server:', videoId, error)
+                  reject(error)
+                }
+              })
+            })
+            savePromises.push(deletionPromise)
           }
         })
         
         chapterDeletes.forEach(chapterId => {
           console.log('🗑️ Deleting chapter:', chapterId)
-          deleteChapter(chapterId)
+          const chapterDeletionPromise = new Promise((resolve, reject) => {
+            deleteChapter(chapterId, {
+              onSuccess: (result) => {
+                console.log('✅ Chapter deletion confirmed by server:', chapterId)
+                resolve(result)
+              },
+              onError: (error) => {
+                console.error('❌ Chapter deletion failed on server:', chapterId, error)
+                reject(error)
+              }
+            })
+          })
+          savePromises.push(chapterDeletionPromise)
         })
         
         // Clear pending deletes - TanStack will handle UI updates
         ui.clearPendingDeletes()
       }
 
-      // 4. Save course info changes via TanStack mutation - ONLY CHANGED FIELDS
+      // 4. Save course info changes via TanStack mutation - AWAIT COMPLETION
       const courseUpdates = formState.getChangedFieldsFromServer(course)
 
       if (Object.keys(courseUpdates).length > 0) {
@@ -268,13 +319,30 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
         const optimisticData = { ...course, ...courseUpdates }
         formState.updateInitialValues(optimisticData as typeof course)
         
-        // Trigger course update - no complex Promise waiting
-        updateCourse(courseUpdates)
+        // Wait for course update completion
+        const courseUpdatePromise = new Promise((resolve, reject) => {
+          updateCourse(courseUpdates, {
+            onSuccess: (result) => {
+              console.log('✅ Course update confirmed by server')
+              resolve(result)
+            },
+            onError: (error) => {
+              console.error('❌ Course update failed on server:', error)
+              reject(error)
+            }
+          })
+        })
+        savePromises.push(courseUpdatePromise)
       } else {
         console.log('✅ No course info changes to save!')
       }
 
-      // Show single consolidated success toast (Architecture-Compliant Consolidated UX)
+      // OPTION 1 IMPLEMENTATION: Wait for ALL server confirmations before showing success toast
+      console.log(`⏳ Waiting for ${savePromises.length} server operations to complete...`)
+      await Promise.all(savePromises)
+      console.log('✅ All server operations confirmed - showing success toast')
+      
+      // Show success toast only after ALL server operations confirm success
       toast.success('Course updated')
 
     } catch (error) {

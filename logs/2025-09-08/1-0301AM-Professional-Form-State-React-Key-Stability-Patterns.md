@@ -245,6 +245,62 @@ Users perform multiple operations (edits, deletions, creations) with visual feed
 
 ---
 
+## React Key Stability During Async Operations Pattern
+
+### The Problem: Component Unmounting During Critical User Actions
+
+When async operations complete (file uploads, server mutations), temporary IDs are replaced with server-generated IDs. This causes React components to unmount/remount, losing all local state including:
+- Active edit modes
+- Form input focus
+- User selections
+- In-progress typing
+
+### Production-Proven Solution: Preserve Temporary IDs
+
+**Core Pattern**: During optimistic updates, merge server data while preserving temporary IDs that maintain React key stability.
+
+**Implementation Approach**: Instead of replacing entire objects with server responses (which changes IDs), merge server data into existing objects while keeping the original temporary ID. This preserves React component identity while updating all necessary data fields including URLs, metadata, and status.
+
+### Business Impact
+- **Zero Edit Interruptions**: Users can continue editing during background operations
+- **Data Loss Prevention**: Form state preserved during async operations  
+- **Professional UX**: Matches enterprise application standards
+- **Developer Confidence**: Predictable component lifecycle behavior
+
+### When to Apply
+- File upload flows with simultaneous editing
+- Real-time collaborative features
+- Multi-step forms with background saves
+- Any scenario where users interact with UI during async operations
+
+---
+
+## Server-Confirmed UI Feedback Pattern
+
+### The Problem: False Confidence from Optimistic Updates
+
+Standard optimistic updates show success messages immediately when mutations are dispatched, before server confirmation. This creates false confidence - users see "Saved!" while the server might still be processing or could fail.
+
+### Production-Tested Solution: Wait for Server Confirmation
+
+**Core Pattern**: Use Promise.all() to ensure all server operations complete before showing success feedback.
+
+**Implementation Approach**: Collect all mutation promises into an array, then await their completion using Promise.all() before displaying any success messages. This ensures toast messages only appear after definitive server confirmation, not optimistic client-side assumptions. The pattern maintains responsive UI through optimistic updates while ensuring accurate feedback messaging.
+
+### Business Impact
+- **Accurate Feedback**: Toast messages reflect actual server state
+- **User Trust**: Eliminates false confidence scenarios
+- **Error Clarity**: Clear distinction between client and server failures
+- **Professional Polish**: Matches user expectations from enterprise apps
+
+### When to Apply
+- Batch operations with multiple server calls
+- Critical data mutations (payments, enrollments, content creation)
+- Any save operation where data integrity is crucial
+- Workflows where false positive feedback could mislead users
+
+---
+
 ## Applicable Use Cases
 
 ### Course Enrollment (Student-Side)

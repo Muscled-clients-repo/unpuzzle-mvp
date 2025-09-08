@@ -540,7 +540,7 @@ export function VideoList({
               <div className="space-y-1">
                 <p 
                   className={cn(
-                    "text-sm font-medium cursor-pointer select-none hover:bg-blue-50 px-2 py-1 rounded transition-colors",
+                    "text-sm font-medium cursor-pointer select-none hover:bg-primary/10 hover:text-primary px-2 py-1 rounded transition-colors",
                     video.markedForDeletion && "line-through"
                   )}
                   title="Click to edit filename"

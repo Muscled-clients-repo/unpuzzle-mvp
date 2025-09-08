@@ -252,7 +252,7 @@ export function ChapterManager({
                       ) : (
                         <button
                           onClick={() => handleStartEditChapter(chapter)}
-                          className="text-left flex-1 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
+                          className="text-left flex-1 hover:bg-primary/10 hover:text-primary px-2 py-1 rounded transition-colors"
                         >
                           <h3 className="font-medium">
                             {index + 1}. {ui.getChapterPendingChanges()[chapter.id] || chapter.title}
