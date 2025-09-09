@@ -1,11 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { useEffect } from 'react'
 import { 
   createCourseAction, 
   updateCourseAction, 
   getCourseAction,
   getCoursesAction 
 } from '@/app/actions/course-actions'
+import { courseEventObserver, MEDIA_EVENTS } from '@/lib/course-event-observer'
 import type { Course, CreateCourseRequest, ApiResponse } from '@/types'
 
 // ===== QUERY KEYS =====
@@ -162,6 +164,8 @@ export function useCourseEdit(courseId: string) {
       toast.error('Failed to update course')
     }
   })
+  
+  // Note: Media-linked observer moved to use-chapter-queries.ts since ChapterManager uses chapters data
   
   return {
     course: courseQuery.data, // Course data is directly available since queryFn returns result.data

@@ -10,7 +10,7 @@ import type { Chapter, Course } from '@/types/course'
 import { useCourseCreationUI } from '@/stores/course-creation-ui'
 import { useCourseWebSocketSimple } from './use-course-websocket-simple'
 import { generateOperationId } from '@/lib/websocket-operations'
-import { courseEventObserver, COURSE_EVENTS } from '@/lib/course-event-observer'
+import { courseEventObserver, COURSE_EVENTS, MEDIA_EVENTS } from '@/lib/course-event-observer'
 import { useMemo, useEffect } from 'react'
 
 // ===== QUERY KEYS =====
@@ -293,6 +293,18 @@ export function useChaptersEdit(courseId: string) {
   const deleteChapterLegacy = (chapterId: string) => {
     deleteMutation.mutate({ chapterId })
   }
+  
+  // Listen for media-linked events to refresh chapters data (moved from use-course-queries.ts)
+  useEffect(() => {
+    const unsubscribe = courseEventObserver.subscribe(MEDIA_EVENTS.MEDIA_LINKED, (event) => {
+      if (event.courseId === courseId) {
+        console.log('🔗 [CHAPTERS] Media linked event received, refreshing chapters data')
+        queryClient.invalidateQueries({ queryKey: chapterKeys.list(courseId) })
+      }
+    })
+    
+    return unsubscribe
+  }, [courseId, queryClient])
   
   return {
     chapters: chapters, // ARCHITECTURE-COMPLIANT: Direct from TanStack, no merging

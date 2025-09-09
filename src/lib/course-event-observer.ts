@@ -211,7 +211,8 @@ export const MEDIA_EVENTS = {
   MEDIA_BULK_DELETE_PROGRESS: 'media-bulk-delete-progress',
   MEDIA_BULK_DELETE_COMPLETE: 'media-bulk-delete-complete',
   MEDIA_BULK_MOVE_PROGRESS: 'media-bulk-move-progress',
-  MEDIA_BULK_MOVE_COMPLETE: 'media-bulk-move-complete'
+  MEDIA_BULK_MOVE_COMPLETE: 'media-bulk-move-complete',
+  MEDIA_LINKED: 'media-linked'
 } as const
 
 export type CourseEventType = typeof COURSE_EVENTS[keyof typeof COURSE_EVENTS]

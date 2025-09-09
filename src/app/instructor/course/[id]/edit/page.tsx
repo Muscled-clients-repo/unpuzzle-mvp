@@ -726,6 +726,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
               <div className="px-6 pb-6">
                 <ChapterManager
                   chapters={chapters || []}
+                  courseId={courseId}
                   onCreateChapter={handleCreateChapter}
                   onUpdateChapter={handleUpdateChapter}
                   onDeleteChapter={handleDeleteChapter}

@@ -108,23 +108,29 @@ export function useWebSocketConnection(userId: string) {
             'media-upload-progress': MEDIA_EVENTS.MEDIA_UPLOAD_PROGRESS,
             'media-upload-complete': MEDIA_EVENTS.MEDIA_UPLOAD_COMPLETE,
             'bulk-delete-progress': MEDIA_EVENTS.MEDIA_BULK_DELETE_PROGRESS,
-            'bulk-delete-complete': MEDIA_EVENTS.MEDIA_BULK_DELETE_COMPLETE
+            'bulk-delete-complete': MEDIA_EVENTS.MEDIA_BULK_DELETE_COMPLETE,
+            'media-linked': MEDIA_EVENTS.MEDIA_LINKED
           }
           
           const observerEventType = eventTypeMapping[message.type]
           if (observerEventType) {
-            // Course events need courseId, media events need userId
-            const isMediaEvent = message.type.startsWith('media-') || message.type.startsWith('bulk-')
-            const hasRequiredId = isMediaEvent ? message.data?.userId : message.data?.courseId
-            const eventId = isMediaEvent ? message.data?.userId : message.data?.courseId
+            // Course events and media-linked need courseId, other media events need userId
+            const isCourseEvent = message.type.startsWith('upload-') || message.type.startsWith('video-') || message.type.startsWith('chapter-') || message.type === 'media-linked'
+            const isMediaEvent = message.type.startsWith('media-') && message.type !== 'media-linked'
+            const isBulkEvent = message.type.startsWith('bulk-')
+            
+            const hasRequiredId = isCourseEvent ? message.courseId : (isMediaEvent || isBulkEvent) ? message.data?.userId : message.data?.courseId
+            const eventId = isCourseEvent ? message.courseId : (isMediaEvent || isBulkEvent) ? message.data?.userId : message.data?.courseId
             
             console.log(`🔍 [WEBSOCKET DEBUG] Checking message:`, {
               type: message.type,
+              isCourseEvent,
               isMediaEvent,
+              isBulkEvent,
               hasRequiredId,
               eventId,
               userId: message.data?.userId,
-              courseId: message.data?.courseId,
+              courseId: message.courseId,
               data: message.data
             })
             
@@ -145,9 +151,11 @@ export function useWebSocketConnection(userId: string) {
             } else {
               console.log(`❌ [WEBSOCKET] Message missing required ID:`, { 
                 messageType: message.type, 
+                isCourseEvent,
                 isMediaEvent,
+                isBulkEvent,
                 hasRequiredId,
-                expectedField: isMediaEvent ? 'userId' : 'courseId',
+                expectedField: isCourseEvent ? 'courseId' : (isMediaEvent || isBulkEvent) ? 'userId' : 'courseId',
                 data: message.data
               })
             }

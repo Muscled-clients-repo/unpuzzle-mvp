@@ -6,7 +6,8 @@ import {
   updateVideoAction,
   deleteVideoAction,
   batchUpdateVideoOrdersAction,
-  reorderVideosAction
+  reorderVideosAction,
+  linkMediaToChapterAction
 } from '@/app/actions/video-actions'
 import type { Video, UploadItem } from '@/types'
 import { chapterKeys } from './use-chapter-queries'
@@ -457,4 +458,42 @@ export function useVideoDelete(courseId: string) {
     deleteVideo: deleteMutation.mutate,
     isDeleting: deleteMutation.isPending
   }
+}
+
+/**
+ * Link media file to chapter using TanStack Query
+ * Phase 4B: Reuses existing mutation patterns
+ */
+export function useLinkMediaToChapter() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async ({ 
+      mediaId, 
+      chapterId, 
+      courseId 
+    }: { 
+      mediaId: string
+      chapterId: string
+      courseId: string 
+    }) => {
+      const result = await linkMediaToChapterAction(mediaId, chapterId, courseId)
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to link media')
+      }
+      return result
+    },
+    onSuccess: (data, variables) => {
+      // Don't invalidate here - let the WebSocket observer handle it to avoid race conditions
+      // queryClient.invalidateQueries({ queryKey: ['courses', 'detail', variables.courseId] })
+      queryClient.invalidateQueries({ queryKey: ['media-files'] })
+      
+      console.log('✅ Media linked successfully:', data.data?.id)
+      // Removed success toast - real-time UI update is sufficient feedback
+    },
+    onError: (error) => {
+      console.error('❌ Media link failed:', error)
+      toast.error(error.message || 'Failed to link media to chapter')
+    }
+  })
 }

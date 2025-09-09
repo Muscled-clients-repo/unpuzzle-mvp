@@ -11,16 +11,23 @@ import {
   ChevronDown, 
   GripVertical,
   Trash2,
-  Upload
+  Upload,
+  Library
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCourseCreationUI } from '@/stores/course-creation-ui'
 import { VideoList } from "./VideoList"
 import { VideoUploader } from "./VideoUploader"
+import { MediaSelector } from "../media/media-selector"
+import { toast } from 'sonner'
+import { useQueryClient } from '@tanstack/react-query'
+import { useLinkMediaToChapter } from '@/hooks/use-video-queries'
 import type { VideoUpload, Chapter } from "@/types/course"
+import type { MediaFile } from "@/hooks/use-media-queries"
 
 interface ChapterManagerProps {
   chapters: Chapter[]
+  courseId: string // NEW: Add courseId prop for media linking
   onCreateChapter: (title: string) => void
   onUpdateChapter: (chapterId: string, updates: Partial<Chapter>) => void
   onDeleteChapter: (chapterId: string) => void
@@ -39,6 +46,7 @@ interface ChapterManagerProps {
 
 export function ChapterManager({
   chapters,
+  courseId, // NEW: Add courseId parameter
   onCreateChapter,
   onUpdateChapter,
   onDeleteChapter,
@@ -77,6 +85,7 @@ export function ChapterManager({
   const [draggedChapter, setDraggedChapter] = useState<string | null>(null)
   const [draggedVideo, setDraggedVideo] = useState<string | null>(null)
   const [dragOverChapter, setDragOverChapter] = useState<string | null>(null)
+  const [showMediaSelector, setShowMediaSelector] = useState<string | null>(null)
 
   const toggleChapter = (chapterId: string) => {
     setExpandedChapters(prev => {
@@ -142,6 +151,34 @@ export function ChapterManager({
       }
     }
     setDraggedVideo(null)
+  }
+
+  // Phase 4B: Real media selection handler using TanStack Query
+  const linkMediaMutation = useLinkMediaToChapter()
+  
+  const handleMediaSelected = async (files: MediaFile[], chapterId: string) => {
+    console.log(`🔗 [Phase 4B] Linking ${files.length} media files to chapter ${chapterId} in course ${courseId}`)
+    
+    // Phase 4B: Link each selected media file using courseId from props
+    for (const file of files) {
+      try {
+        console.log(`🔗 [DEBUG] Starting link for ${file.name} (${file.id}) to chapter ${chapterId} in course ${courseId}`)
+        
+        const result = await linkMediaMutation.mutateAsync({
+          mediaId: file.id,
+          chapterId: chapterId,
+          courseId: courseId // Use courseId from props instead of chapter data
+        })
+        
+        console.log(`✅ [DEBUG] Link successful for ${file.name}:`, result)
+        
+      } catch (error) {
+        console.error(`❌ [DEBUG] Failed to link ${file.name}:`, error)
+        // Individual error handling is done by the mutation's onError
+      }
+    }
+    
+    setShowMediaSelector(null)
   }
 
   return (
@@ -283,6 +320,25 @@ export function ChapterManager({
                       compact
                     />
                     
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2 text-xs"
+                      onClick={() => setShowMediaSelector(chapter.id)}
+                      disabled={linkMediaMutation.isPending}
+                    >
+                      {linkMediaMutation.isPending ? (
+                        <>
+                          <div className="animate-spin h-3 w-3 mr-1 border border-current border-t-transparent rounded-full" />
+                          Linking...
+                        </>
+                      ) : (
+                        <>
+                          <Library className="h-3 w-3 mr-1" />
+                          Browse Library
+                        </>
+                      )}
+                    </Button>
                     
                     <Button
                       variant="ghost"
@@ -354,6 +410,18 @@ export function ChapterManager({
         )}
       </div>
 
+      {/* Phase 4A: MediaSelector Integration */}
+      {showMediaSelector && (
+        <MediaSelector
+          isOpen={!!showMediaSelector}
+          onClose={() => setShowMediaSelector(null)}
+          onSelect={(selectedFiles) => handleMediaSelected(selectedFiles, showMediaSelector)}
+          fileTypeFilter="video"
+          allowMultiple={true}
+          title="Select Videos from Library"
+          isLinking={linkMediaMutation.isPending}
+        />
+      )}
     </div>
   )
 }

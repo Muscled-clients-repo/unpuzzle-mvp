@@ -35,6 +35,7 @@ interface MediaSelectorProps {
   allowMultiple?: boolean
   fileTypeFilter?: string
   title?: string
+  isLinking?: boolean
 }
 
 export function MediaSelector({
@@ -43,7 +44,8 @@ export function MediaSelector({
   onSelect,
   allowMultiple = false,
   fileTypeFilter,
-  title = "Select Media from Library"
+  title = "Select Media from Library",
+  isLinking = false
 }: MediaSelectorProps) {
   // ARCHITECTURE-COMPLIANT: Form state in useState
   const [searchQuery, setSearchQuery] = useState('')
@@ -104,6 +106,9 @@ export function MediaSelector({
     return (
       <Dialog open={isOpen} onOpenChange={handleClose}>
         <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+          </DialogHeader>
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
           </div>
@@ -275,9 +280,16 @@ export function MediaSelector({
           </Button>
           <Button 
             onClick={handleSelect}
-            disabled={localSelectedFiles.length === 0}
+            disabled={localSelectedFiles.length === 0 || isLinking}
           >
-            Select {localSelectedFiles.length > 0 && `(${localSelectedFiles.length})`}
+            {isLinking ? (
+              <>
+                <div className="animate-spin h-4 w-4 mr-2 border border-current border-t-transparent rounded-full" />
+                Linking...
+              </>
+            ) : (
+              `Select ${localSelectedFiles.length > 0 ? `(${localSelectedFiles.length})` : ''}`
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

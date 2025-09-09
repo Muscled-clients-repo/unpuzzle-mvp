@@ -678,3 +678,176 @@ export async function batchUpdateVideoOrdersAction(
     }
   }
 }
+
+/**
+ * Link existing media file to course chapter
+ * Phase 4B: Reuses all existing patterns from video-actions.ts
+ */
+export async function linkMediaToChapterAction(
+  mediaId: string,
+  chapterId: string,
+  courseId: string
+): Promise<ActionResult> {
+  try {
+    const user = await requireAuth() // REUSE: Line 16-25 pattern
+    const supabase = await createClient()
+    
+    console.log('[MEDIA LINKING] Starting link process:', { mediaId, chapterId, courseId })
+    
+    // REUSE: Course ownership verification (same as line 100-112)
+    const { data: course, error: courseError } = await supabase
+      .from('courses')
+      .select('instructor_id')
+      .eq('id', courseId)
+      .single()
+    
+    if (courseError || !course) {
+      throw new Error('Course not found')
+    }
+    
+    if (course.instructor_id !== user.id) {
+      throw new Error('Unauthorized: You do not own this course')
+    }
+    
+    // REUSE: Media ownership verification (same pattern as media-actions.ts)
+    const { data: mediaFile, error: mediaError } = await supabase
+      .from('media_files')
+      .select('*')
+      .eq('id', mediaId)
+      .eq('uploaded_by', user.id)
+      .single()
+    
+    if (mediaError || !mediaFile) {
+      throw new Error('Media file not found or unauthorized')
+    }
+    
+    // Check for duplicate linking (prevent same media in same chapter)
+    const { data: duplicateCheck, error: duplicateError } = await supabase
+      .from('videos')
+      .select('id')
+      .eq('course_id', courseId)
+      .eq('chapter_id', chapterId)
+      .eq('media_file_id', mediaId)
+      .single()
+    
+    if (duplicateCheck) {
+      throw new Error('This media file is already linked to this chapter')
+    }
+    
+    // REUSE: Next order calculation (same as lines 166-195)
+    const { data: existingVideos, error: orderError } = await supabase
+      .from('videos')
+      .select('order')
+      .eq('course_id', courseId)
+      .eq('chapter_id', chapterId)
+      .order('order', { ascending: false, nullsFirst: false })
+    
+    if (orderError) {
+      console.log('[MEDIA LINKING] Order query error:', orderError)
+      throw orderError
+    }
+    
+    // REUSE: Order calculation logic (same as lines 181-195)
+    let nextOrder = 0
+    if (existingVideos && existingVideos.length > 0) {
+      const validOrders = existingVideos
+        .map(v => v.order)
+        .filter(order => order !== null && typeof order === 'number')
+        .sort((a, b) => b - a)
+      
+      nextOrder = validOrders.length > 0 ? validOrders[0] + 1 : existingVideos.length
+    }
+    
+    console.log('[MEDIA LINKING] Calculated next order:', nextOrder)
+    
+    // REUSE: Video record creation (same structure as lines 202-219)
+    const { data: linkedVideo, error: linkError } = await supabase
+      .from('videos')
+      .insert({
+        title: mediaFile.name, // Use media file name as video title
+        filename: mediaFile.name, // Store original filename
+        video_url: mediaFile.cdn_url, // Use CDN URL for playback
+        backblaze_file_id: mediaFile.backblaze_file_id,
+        backblaze_url: mediaFile.backblaze_url,
+        course_id: courseId,
+        chapter_id: chapterId,
+        order: nextOrder,
+        file_size: mediaFile.file_size,
+        status: 'complete', // Media files are already processed
+        media_file_id: mediaId, // NEW: Link to original media file
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single()
+    
+    if (linkError) {
+      console.error('[MEDIA LINKING] Video creation error:', linkError)
+      throw linkError
+    }
+    
+    console.log('[MEDIA LINKING] Video created successfully:', linkedVideo.id)
+    
+    // NEW: Track usage for delete protection
+    const { error: usageError } = await supabase
+      .from('media_usage')
+      .insert({
+        media_file_id: mediaId,
+        resource_type: 'chapter',
+        resource_id: chapterId,
+        course_id: courseId
+      })
+    
+    if (usageError) {
+      console.error('[MEDIA LINKING] Usage tracking error:', usageError)
+      // Don't fail the operation for usage tracking errors
+    }
+    
+    // NEW: Update usage count in media_files
+    const { error: updateError } = await supabase
+      .from('media_files')
+      .update({
+        usage_count: (mediaFile.usage_count || 0) + 1,
+        last_used_at: new Date().toISOString()
+      })
+      .eq('id', mediaId)
+    
+    if (updateError) {
+      console.error('[MEDIA LINKING] Usage count update error:', updateError)
+      // Don't fail the operation for usage count errors
+    }
+    
+    // REUSE: Path revalidation (same as line 223)
+    revalidatePath(`/instructor/course/${courseId}`)
+    
+    // Broadcast media link event via WebSocket for real-time UI updates
+    // Add small delay to ensure database transaction is committed
+    setTimeout(() => {
+      broadcastWebSocketMessage({
+        type: 'media-linked',
+        courseId,
+        data: {
+          videoId: linkedVideo.id,
+          chapterId: chapterId,
+          mediaFileId: mediaId,
+          title: linkedVideo.title
+        },
+        timestamp: Date.now()
+      })
+    }, 100)
+    
+    console.log('[MEDIA LINKING] Link operation completed successfully')
+    
+    return { 
+      success: true, 
+      data: linkedVideo,
+      message: `Successfully linked ${mediaFile.name} to chapter`
+    }
+  } catch (error) {
+    console.error('Link media to chapter error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to link media to chapter'
+    }
+  }
+}
