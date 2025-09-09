@@ -530,59 +530,173 @@ export function SimpleVideoPreview({ video, isOpen, onClose, title, autoPlay = t
 
 ---
 
-### **Phase 3: Advanced Operations** (PLANNED - NOT YET IMPLEMENTED)
+### **Phase 3: Advanced Operations** (PLANNED - Reusing Existing Upload Progress Infrastructure)
 
-#### 3.1 Bulk Operations with Progress Tracking
-**Status**: 🚧 **PLANNED FOR FUTURE IMPLEMENTATION**
+#### 3.1 Reusable Upload Progress System
+**Status**: 🚧 **READY TO IMPLEMENT - Reusing Course Upload System**
 
-**Following Our Established Patterns:**
-- **TanStack Query**: Handle bulk mutations with `useMutation`  
-- **Server Actions**: `bulkDeleteMediaAction` following our established pattern
-- **WebSocket Progress**: Reuse existing WebSocket infrastructure like upload progress
-- **Observer Integration**: Can use existing `courseEventObserver` for bulk operations if needed
-- **Client-side Updates**: Query invalidation + Observer events for complex operations
+**Key Insight**: We already have a **FULLY WORKING** upload progress system in the course edit flow. The functionality is complete - we just need **UI changes** to make it generic and reusable for Media Manager.
 
-**Planned Implementation Pattern:**
+**✅ FULLY WORKING Infrastructure (Just Need UI Changes):**
+- ✅ **UploadProgressPanel.tsx** - `src/components/course/UploadProgressPanel.tsx` (**Working** - just make generic UI)
+- ✅ **WebSocket Progress** - `src/hooks/use-websocket-connection.ts` (**Working** - already handles `media-upload-progress`)
+- ✅ **Progress Broadcasting** - `src/lib/websocket-operations.ts` (**Working** - `broadcastWebSocketMessage` exists)
+- ✅ **Observer Pattern** - `src/lib/course-event-observer.ts` (**Working** - WebSocket → Observer → TanStack flow)
+- ✅ **Zustand Store Pattern** - `src/stores/course-creation-ui.ts` (**Working** - upload state management)
+- ✅ **SimpleModal Component** - `src/components/media/SimpleModal.tsx` (**Working** - reuse for confirmations)
+
+**🔧 ONLY UI CHANGES NEEDED:**
+- Extract UploadProgressPanel to be generic (remove course-specific props)
+- Add Media Manager UI components that consume the existing progress system
+- Extend Observer events for media-specific operations (bulk delete, etc.)
+- Create media store using same Zustand pattern as course-creation-ui
+
+**Implementation Plan:**
 ```typescript
-// Following our established server action pattern
-export async function bulkDeleteMediaAction(fileIds: string[]) {
+// 1. Extract & Make Generic (from src/components/course/UploadProgressPanel.tsx)
+interface UploadProgressPanelProps {
+  uploads: UploadItem[]  // Generic instead of course-specific
+  onClearCompleted?: () => void
+  onRemoveUpload?: (id: string) => void
+  title?: string  // "Upload Progress" | "Bulk Delete Progress" | etc
+}
+
+// 2. Extend media store with upload tracking (same pattern as course-creation-ui)
+interface MediaStoreState {
+  uploads: Record<string, MediaUploadItem>
+  addUpload: (item: MediaUploadItem) => void
+  updateUploadProgress: (id: string, progress: number, status: string) => void
+  removeUpload: (id: string) => void
+  clearCompletedUploads: () => void
+}
+
+// 3. Observer integration (follows WebSocket → Observer → TanStack pattern)
+// Media upload progress follows same pattern as course video upload:
+// WebSocket → courseEventObserver → TanStack Query (existing pattern)
+
+// Add media events to COURSE_EVENTS (extend existing)
+export const MEDIA_EVENTS = {
+  MEDIA_UPLOAD_PROGRESS: 'media-upload-progress',
+  MEDIA_BULK_DELETE_PROGRESS: 'bulk-delete-progress',
+  MEDIA_UPLOAD_COMPLETE: 'media-upload-complete'
+} as const
+
+// WebSocket hook maps messages to Observer (same pattern as course uploads)
+function useWebSocketConnection() {
+  // WebSocket receives 'media-upload-progress' message
+  // Maps to: courseEventObserver.emit(MEDIA_EVENTS.MEDIA_UPLOAD_PROGRESS, userId, data)
+  // TanStack Query subscribes to Observer events and updates cache
+}
+```
+
+#### 3.2 Bulk Operations with Progress Tracking (Same WebSocket Pattern)
+**Following Our Established Upload Progress Pattern:**
+
+```typescript
+// Server action with WebSocket broadcasting (follows existing pattern)
+export async function bulkDeleteMediaAction(fileIds: string[], operationId: string) {
   const supabase = await createSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   
-  // Simple batch update using our existing pattern
-  const { error } = await supabase
-    .from('media_files')
-    .update({ status: 'deleted' })
-    .in('id', fileIds)
-    .eq('uploaded_by', user.id)
+  for (let i = 0; i < fileIds.length; i++) {
+    // Delete individual file (soft delete pattern)
+    await supabase
+      .from('media_files')
+      .update({ status: 'deleted' })
+      .eq('id', fileIds[i])
+      .eq('uploaded_by', user.id)
     
-  return { success: !error, error: error?.message }
+    // Broadcast progress (SAME pattern as course video upload)
+    broadcastWebSocketMessage({
+      type: 'bulk-delete-progress',
+      operationId,
+      data: {
+        processed: i + 1,
+        total: fileIds.length,
+        progress: Math.round((i + 1) / fileIds.length * 100),
+        currentFile: fileIds[i]
+      }
+    })
+  }
+  
+  return { success: true }
 }
 
-// UI layer following our established patterns
+// TanStack Query hooks follow existing Observer pattern
+function useMediaFiles() {
+  const queryClient = useQueryClient()
+  
+  // Subscribe to Observer events (same pattern as course video queries)
+  useEffect(() => {
+    const unsubscribe = courseEventObserver.subscribe(
+      MEDIA_EVENTS.MEDIA_BULK_DELETE_PROGRESS,
+      (event) => {
+        // Update TanStack cache from Observer events (existing pattern)
+        queryClient.setQueryData(['media-files'], (oldData) => {
+          // Optimistic updates based on progress
+          return updateCacheFromProgress(oldData, event.data)
+        })
+      }
+    )
+    return unsubscribe
+  }, [queryClient])
+  
+  return useQuery({
+    queryKey: ['media-files'],
+    queryFn: getMediaFilesAction,
+    staleTime: 5 * 60 * 1000
+  })
+}
+
+// UI Component - Architecture Compliant
 function BulkOperations() {
-  const { selectedFiles } = useMediaStore() // Zustand UI state
+  const { selectedFiles } = useMediaStore() // Zustand for UI state only
+  const { data: mediaFiles, isLoading } = useMediaFiles() // TanStack for server data
+  
   const bulkDeleteMutation = useMutation({
     mutationFn: bulkDeleteMediaAction,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['media-files'] })
       toast.success('Files deleted successfully')
+      // No manual cache invalidation - Observer handles it
     }
   })
   
-  // WebSocket progress tracking
-  const { progress } = useBulkOperationProgress('bulk-delete');
-  
   return (
     <div>
-      {progress && <ProgressBar percentage={progress.percentage} />}
-      <Button onClick={() => bulkDeleteMutation.mutate(selectedFiles)}>
-        Delete Selected ({selectedFiles.length})
-      </Button>
+      {/* Reuse existing UploadProgressPanel (make generic) */}
+      <UploadProgressPanel 
+        title="Bulk Delete Progress"
+        // Read progress from TanStack Query (single source of truth)
+      />
+      
+      {/* Reuse SimpleModal for confirmation */}
+      <SimpleModal 
+        isOpen={showConfirmation}
+        onClose={() => setShowConfirmation(false)}
+        title="Delete Files"
+      >
+        <BulkDeleteConfirmation 
+          fileCount={selectedFiles.length}
+          onConfirm={() => {
+            const operationId = crypto.randomUUID()
+            bulkDeleteMutation.mutate({ fileIds: selectedFiles, operationId })
+          }}
+        />
+      </SimpleModal>
     </div>
-  );
+  )
 }
 ```
+
+**✅ WORKING Infrastructure Reuse (UI Changes Only):**
+- ✅ **WebSocket infrastructure WORKING** - Media Manager just needs UI to consume existing messages
+- ✅ **Progress display components WORKING** - Extract UploadProgressPanel UI and make generic  
+- ✅ **Upload state management WORKING** - Copy same Zustand pattern from course-creation-ui
+- ✅ **Server-side progress broadcasting WORKING** - Extend existing `broadcastWebSocketMessage` for bulk operations
+- ✅ **Observer pattern WORKING** - Extend existing `courseEventObserver` with media events
+- ✅ **Modal patterns WORKING** - Reuse existing `SimpleModal` for confirmations
+
+**🎯 Phase 3 Focus**: **UI Integration Only** - All the hard infrastructure work is done!
 
 #### 3.2 Usage Tracking & Analytics
 ```typescript
