@@ -132,3 +132,34 @@ export function validateOperationId(operationId: string): boolean {
 export function isOperationExpired(metadata: OperationMetadata, maxAgeMs = 30000): boolean {
   return Date.now() - metadata.createdAt > maxAgeMs
 }
+
+// WebSocket broadcasting function for Server Actions
+export async function broadcastWebSocketMessage(message: {
+  type: string
+  operationId?: string
+  data: any
+}) {
+  try {
+    const fullMessage = {
+      ...message,
+      timestamp: Date.now()
+    }
+    
+    console.log(`📤 [WEBSOCKET] Broadcasting to server:`, fullMessage.type)
+    const response = await fetch('http://localhost:8080/broadcast', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(fullMessage)
+    })
+    
+    if (response.ok) {
+      console.log(`✅ [WEBSOCKET] Broadcast successful: ${fullMessage.type}`)
+    } else {
+      console.warn(`⚠️ [WEBSOCKET] Broadcast failed: ${response.status}`)
+    }
+  } catch (error) {
+    console.warn(`⚠️ [WEBSOCKET] Broadcast error:`, error)
+  }
+}

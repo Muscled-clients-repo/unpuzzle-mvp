@@ -20,8 +20,11 @@ export function VideoPreviewModal({ video, isOpen, onClose }: VideoPreviewModalP
   const containerRef = useRef<HTMLDivElement>(null)
   
   // Get signed URL for private video access
-  const videoUrl = video?.backblaze_url || video?.video_url || video?.url
+  // Prioritize video_url (private format) over direct URLs for proper signing
+  const videoUrl = video?.video_url || video?.url || video?.backblaze_url
   const signedUrl = useSignedUrl(videoUrl || null, 30) // Refresh 30min before expiry
+  
+  console.log('[VIDEO PREVIEW] Video URL format:', videoUrl)
 
   const handleFullscreen = async () => {
     if (!containerRef.current) return

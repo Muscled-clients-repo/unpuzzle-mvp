@@ -194,14 +194,19 @@ export async function uploadVideoAction({
       nextOrder
     })
     
+    // Create private URL format for signed URL system
+    const privateUrl = `private:${uploadResult.fileId}:${uploadResult.fileName}`
+    console.log('[SERVER ACTION] Generated private URL format:', privateUrl)
+
     // Create video record
     const { data: video, error: videoError } = await supabase
       .from('videos')
       .insert({
         title: file.name.replace(/\.[^/.]+$/, ''), // Remove file extension
         filename: uploadResult.fileName, // Store Backblaze structured path for deletion
-        video_url: uploadResult.fileUrl, // Use video_url instead of url
+        video_url: privateUrl, // Store private URL format for signed URL generation
         backblaze_file_id: uploadResult.fileId,
+        backblaze_url: uploadResult.fileUrl, // Store direct URL as backup
         course_id: courseId,
         chapter_id: chapterId,
         order: nextOrder,

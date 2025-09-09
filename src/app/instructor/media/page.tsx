@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { UnifiedDropzone } from "@/components/media/unified-dropzone"
 import { useMediaFiles, useDeleteMediaFile, useUploadMediaFile } from "@/hooks/use-media-queries"
 import { useMediaStore } from "@/stores/media-store"
+import { VideoPreviewModal } from "@/components/course/VideoPreviewModal"
 import {
   Upload,
   Search,
@@ -40,6 +41,7 @@ import { cn } from "@/lib/utils"
 export default function MediaPage() {
   // ARCHITECTURE-COMPLIANT: Form state in useState
   const [searchQuery, setSearchQuery] = useState('')
+  const [previewingFile, setPreviewingFile] = useState<any>(null)
   
   // ARCHITECTURE-COMPLIANT: UI state in Zustand
   const {
@@ -67,6 +69,27 @@ export default function MediaPage() {
 
   const handleDelete = async (fileId: string) => {
     deleteMutation.mutate(fileId)
+  }
+
+  const handlePreview = (item: any) => {
+    console.log('[MEDIA PREVIEW] Item data:', item)
+    
+    // Generate private URL format for signed URL system if we have the data
+    let privateUrl = null
+    if (item.backblaze_file_id && item.file_name) {
+      privateUrl = `private:${item.backblaze_file_id}:${item.file_name}`
+      console.log('[MEDIA PREVIEW] Generated private URL:', privateUrl)
+    }
+    
+    const videoForPreview = {
+      id: item.id,
+      name: item.name,
+      video_url: privateUrl || item.fileUrl, // Use private format if available, fallback to direct URL
+      url: item.fileUrl,
+      backblaze_url: item.backblaze_url || item.fileUrl,
+    }
+    console.log('[MEDIA PREVIEW] Video for preview:', videoForPreview)
+    setPreviewingFile(videoForPreview)
   }
 
   const getTypeIcon = (type: string) => {
@@ -222,7 +245,7 @@ export default function MediaPage() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handlePreview(item)}>
                       <Play className="h-4 w-4 mr-2" />
                       Preview
                     </DropdownMenuItem>
@@ -263,7 +286,7 @@ export default function MediaPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handlePreview(item)}>
                     <Play className="h-4 w-4 mr-2" />
                     Preview
                   </DropdownMenuItem>
@@ -290,6 +313,13 @@ export default function MediaPage() {
           </p>
         </div>
       )}
+
+      {/* Preview Modal */}
+      <VideoPreviewModal
+        video={previewingFile}
+        isOpen={!!previewingFile}
+        onClose={() => setPreviewingFile(null)}
+      />
     </div>
   )
 }
