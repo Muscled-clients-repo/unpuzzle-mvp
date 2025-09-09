@@ -1,7 +1,7 @@
 "use client"
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getMediaFilesAction, deleteMediaFileAction, uploadMediaFileAction } from '@/app/actions/media-actions'
+import { getMediaFilesAction, deleteMediaFileAction, uploadMediaFileAction, getMediaFileHistoryAction } from '@/app/actions/media-actions'
 import { toast } from 'sonner'
 
 export interface MediaFile {
@@ -11,8 +11,11 @@ export interface MediaFile {
   size: string
   usage: string
   uploadedAt: string
-  fileUrl: string
   thumbnail: string | null
+  // Internal fields for preview functionality
+  backblaze_file_id?: string
+  backblaze_url?: string
+  file_name?: string
 }
 
 export function useMediaFiles() {
@@ -76,5 +79,20 @@ export function useDeleteMediaFile() {
       console.error('Delete mutation error:', error)
       toast.error('❌ Failed to delete file')
     }
+  })
+}
+
+export function useMediaFileHistory(fileId: string | null) {
+  return useQuery({
+    queryKey: ['media-file-history', fileId],
+    queryFn: async () => {
+      if (!fileId) return { success: false, history: [] }
+      const result = await getMediaFileHistoryAction(fileId)
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+      return result
+    },
+    enabled: !!fileId
   })
 }

@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { UnifiedDropzone } from "@/components/media/unified-dropzone"
 import { useMediaFiles, useDeleteMediaFile, useUploadMediaFile } from "@/hooks/use-media-queries"
 import { useMediaStore } from "@/stores/media-store"
-import { VideoPreviewModal } from "@/components/course/VideoPreviewModal"
+import { SimpleVideoPreview } from "@/components/ui/SimpleVideoPreview"
+import { FileDetailsModal } from "@/components/media/FileDetailsModal"
 import {
   Upload,
   Search,
@@ -21,7 +22,8 @@ import {
   File,
   Play,
   Trash2,
-  MoreHorizontal
+  MoreHorizontal,
+  Info
 } from "lucide-react"
 import {
   Select,
@@ -42,6 +44,7 @@ export default function MediaPage() {
   // ARCHITECTURE-COMPLIANT: Form state in useState
   const [searchQuery, setSearchQuery] = useState('')
   const [previewingFile, setPreviewingFile] = useState<any>(null)
+  const [detailsFile, setDetailsFile] = useState<any>(null)
   
   // ARCHITECTURE-COMPLIANT: UI state in Zustand
   const {
@@ -71,6 +74,14 @@ export default function MediaPage() {
     deleteMutation.mutate(fileId)
   }
 
+  const clearModals = () => {
+    setPreviewingFile(null)
+    setDetailsFile(null)
+    // Force DOM cleanup
+    document.body.style.overflow = 'unset'
+    document.body.style.pointerEvents = 'auto'
+  }
+
   const handlePreview = (item: any) => {
     console.log('[MEDIA PREVIEW] Item data:', item)
     
@@ -84,9 +95,9 @@ export default function MediaPage() {
     const videoForPreview = {
       id: item.id,
       name: item.name,
-      video_url: privateUrl || item.fileUrl, // Use private format if available, fallback to direct URL
-      url: item.fileUrl,
-      backblaze_url: item.backblaze_url || item.fileUrl,
+      video_url: privateUrl || item.backblaze_url,
+      url: item.backblaze_url,
+      backblaze_url: item.backblaze_url,
     }
     console.log('[MEDIA PREVIEW] Video for preview:', videoForPreview)
     setPreviewingFile(videoForPreview)
@@ -136,9 +147,19 @@ export default function MediaPage() {
             Manage and organize your course content
           </p>
         </div>
-        <Badge variant="secondary">
-          {filteredMedia.length} files
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary">
+            {filteredMedia.length} files
+          </Badge>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={clearModals}
+            className="text-xs"
+          >
+            Clear Modals
+          </Button>
+        </div>
       </div>
 
       {/* Upload Zone */}
@@ -237,7 +258,7 @@ export default function MediaPage() {
               </div>
 
               {/* Actions */}
-              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -248,6 +269,10 @@ export default function MediaPage() {
                     <DropdownMenuItem onClick={() => handlePreview(item)}>
                       <Play className="h-4 w-4 mr-2" />
                       Preview
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setDetailsFile(item)}>
+                      <Info className="h-4 w-4 mr-2" />
+                      Details
                     </DropdownMenuItem>
                     <DropdownMenuItem 
                       className="text-destructive"
@@ -290,6 +315,10 @@ export default function MediaPage() {
                     <Play className="h-4 w-4 mr-2" />
                     Preview
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setDetailsFile(item)}>
+                    <Info className="h-4 w-4 mr-2" />
+                    Details
+                  </DropdownMenuItem>
                   <DropdownMenuItem 
                     className="text-destructive"
                     onClick={() => handleDelete(item.id)}
@@ -315,11 +344,24 @@ export default function MediaPage() {
       )}
 
       {/* Preview Modal */}
-      <VideoPreviewModal
-        video={previewingFile}
-        isOpen={!!previewingFile}
-        onClose={() => setPreviewingFile(null)}
-      />
+      {previewingFile && (
+        <SimpleVideoPreview
+          key={previewingFile.id}
+          video={previewingFile}
+          isOpen={true}
+          onClose={clearModals}
+        />
+      )}
+
+      {/* File Details Modal */}
+      {detailsFile && (
+        <FileDetailsModal
+          key={detailsFile.id}
+          file={detailsFile}
+          isOpen={true}
+          onClose={clearModals}
+        />
+      )}
     </div>
   )
 }

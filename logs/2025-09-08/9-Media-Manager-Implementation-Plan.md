@@ -138,9 +138,10 @@ export async function getMediaFilesAction() {
     name: file.name,
     type: file.file_type,
     size: formatFileSize(file.file_size),
-    fileUrl: file.cdn_url || file.backblaze_url || '',
+    // IMPLEMENTATION NOTE: Removed fileUrl to avoid exposing technical URLs to UI
     backblaze_file_id: file.backblaze_file_id, // For preview functionality
-    // ... other fields
+    backblaze_url: file.backblaze_url, // For preview functionality
+    file_name: file.name // For preview functionality
   }))
 
   return { success: true, media: transformedFiles }
@@ -373,13 +374,159 @@ export default function MediaPage() {
 
 ---
 
-## **🔍 CHECKPOINT 3: File History & Metadata**
+## **🔍 CHECKPOINT 3: File History & Metadata** ✅ **COMPLETED**
 **Deliverable**: Complete file information and history tracking  
 **User Testing**: View file details, see upload history, file properties  
-**Estimated Time**: 1-2 hours  
-**User Validation Required**: ✅ File metadata display, history timeline functional
+**Status**: ✅ **IMPLEMENTED & WORKING**
 
-**MANDATORY**: User must approve Checkpoint 3 before Phase 3 can begin
+### **What We Actually Built:**
+- ✅ **File Details Modal**: Enhanced metadata display with properties section
+- ✅ **History Tracking**: Database table `media_file_history` with timeline UI
+- ✅ **SimpleModal System**: Custom modal replacing problematic shadcn Dialog
+- ✅ **Reusable Video Preview**: `SimpleVideoPreview` component for course integration
+- ✅ **Clean UI Design**: Removed technical URLs from user-facing interface
+- ✅ **File History Database**: Migration `012_media_file_history_table.sql`
+- ✅ **Server Action Integration**: History tracking in upload/delete operations
+- ✅ **Filename Extraction**: Helper function for clean filename display
+
+**MANDATORY**: ✅ **USER APPROVED** - Checkpoint 3 complete
+
+### **Implementation Differences from Plan:**
+
+#### **Database Schema Changes:**
+**File:** `supabase/migrations/012_media_file_history_table.sql` (ACTUAL)
+```sql
+-- IMPLEMENTED: File history tracking table
+create table public.media_file_history (
+  id uuid default gen_random_uuid() primary key,
+  media_file_id uuid not null references public.media_files(id) on delete cascade,
+  action text not null check (action in ('uploaded', 'deleted', 'renamed', 'updated', 'downloaded')),
+  description text not null,
+  metadata jsonb null,
+  performed_by uuid not null references auth.users(id) on delete cascade,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- RLS policy for history access
+create policy "Users can view own file history" on public.media_file_history
+  for select using (
+    exists (
+      select 1 from public.media_files 
+      where media_files.id = media_file_history.media_file_id 
+      and media_files.uploaded_by = auth.uid()
+    )
+  );
+```
+
+#### **Custom Modal System (NOT PLANNED):**
+**File:** `src/components/media/SimpleModal.tsx` (CREATED - UNPLANNED)
+```tsx
+// IMPLEMENTED: Custom modal to fix shadcn Dialog backdrop issues
+export function SimpleModal({ isOpen, onClose, title, children, maxWidth = "max-w-2xl" }: SimpleModalProps) {
+  useEffect(() => {
+    if (!isOpen) return
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [isOpen, onClose])
+  
+  if (!isOpen) return null
+  
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className={cn("relative bg-background border shadow-lg rounded-lg w-full mx-4", maxWidth)}>
+        {/* Modal content */}
+      </div>
+    </div>,
+    document.body
+  )
+}
+```
+
+#### **File Details Modal Implementation:**
+**File:** `src/components/media/FileDetailsModal.tsx` (CREATED)
+```tsx
+// IMPLEMENTED: Comprehensive file metadata modal
+export function FileDetailsModal({ file, isOpen, onClose }: FileDetailsModalProps) {
+  const { data: historyData, isLoading: historyLoading } = useMediaFileHistory(file?.id || null)
+  
+  return (
+    <SimpleModal isOpen={isOpen} onClose={onClose} title="File Details">
+      <div className="p-6 space-y-6">
+        {/* File Overview */}
+        <div>
+          <h3 className="text-lg font-semibold mb-3">{file.name}</h3>
+          <div className="flex flex-wrap gap-2 mb-4">
+            <Badge variant="outline">{file.type}</Badge>
+            <Badge variant={file.usage === 'Unused' ? 'secondary' : 'outline'}>{file.usage}</Badge>
+          </div>
+        </div>
+        
+        {/* File Properties */}
+        <div>
+          <h4 className="font-medium mb-3">Properties</h4>
+          <InfoRow icon={HardDrive} label="Size" value={file.size} />
+          <InfoRow icon={Calendar} label="Created" value={file.uploadedAt} />
+          <InfoRow icon={User} label="Uploaded by" value="You" />
+          {file.mime_type && <InfoRow icon={Tag} label="MIME Type" value={file.mime_type} />}
+          {file.duration_seconds && <InfoRow icon={Clock} label="Duration" value={formatDuration(file.duration_seconds)} />}
+          <InfoRow icon={Eye} label="Usage Count" value={file.usage_count?.toString() || '0'} />
+        </div>
+        
+        {/* File History Timeline */}
+        <div>
+          <h4 className="font-medium mb-3">History</h4>
+          {/* History implementation with timeline UI */}
+        </div>
+      </div>
+    </SimpleModal>
+  )
+}
+```
+
+#### **Reusable Video Preview (MOVED TO UI):**
+**File:** `src/components/ui/SimpleVideoPreview.tsx` (MOVED - UNPLANNED)
+```tsx
+// IMPLEMENTED: Made reusable across media manager and course pages
+const extractFilename = (path: string | undefined): string | undefined => {
+  if (!path) return undefined
+  return path.split('/').pop() // Get the last part after the last slash
+}
+
+export function SimpleVideoPreview({ video, isOpen, onClose, title, autoPlay = true }: SimpleVideoPreviewProps) {
+  const videoUrl = video?.video_url || video?.url || video?.backblaze_url
+  const signedUrl = useSignedUrl(videoUrl || null, 30)
+  
+  return (
+    <SimpleModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={title || video?.name || extractFilename(video?.filename) || "Video Preview"}
+      maxWidth="max-w-4xl"
+    >
+      {signedUrl.url && (
+        <video
+          src={signedUrl.url}
+          controls
+          autoPlay={autoPlay}
+          muted={autoPlay}
+          className="w-full h-auto max-h-[70vh]"
+        />
+      )}
+    </SimpleModal>
+  )
+}
+```
+
+#### **Key Implementation Differences:**
+1. **Modal System**: Plan assumed shadcn Dialog would work → Actual: Created custom SimpleModal due to backdrop issues
+2. **URL Display**: Plan included technical URL display → Actual: Removed all URLs from UI for cleaner UX
+3. **Video Preview Location**: Plan kept in media folder → Actual: Moved to `/components/ui/` for reusability
+4. **History Schema**: Plan was basic → Actual: Added JSONB metadata field for rich history data
+5. **File Properties**: Plan showed Backblaze file ID → Actual: Show CDN URL and clean metadata only
+6. **Database Migration Number**: Plan used 020 → Actual: Used 012 to follow proper sequence
 
 ---
 

@@ -190,6 +190,23 @@ export async function uploadMediaFileAction(
 
     console.log('💾 Media file saved to database:', savedFile.id)
 
+    // Add history entry for file upload
+    const { error: historyError } = await supabase.rpc('add_media_file_history', {
+      p_media_file_id: savedFile.id,
+      p_action: 'uploaded',
+      p_description: `File "${file.name}" uploaded (${formatFileSize(file.size)})`,
+      p_metadata: {
+        file_size: file.size,
+        mime_type: file.type,
+        original_name: file.name,
+        backblaze_file_id: uploadResult.fileId
+      }
+    })
+
+    if (historyError) {
+      console.warn('⚠️ Failed to add history entry:', historyError)
+    }
+
     // Broadcast completion
     broadcastWebSocketMessage({
       type: 'media-upload-progress',
@@ -274,12 +291,11 @@ export async function getMediaFilesAction() {
       size: formatFileSize(file.file_size),
       usage: file.usage_count ? `${file.usage_count} uses` : 'Unused',
       uploadedAt: new Date(file.created_at).toLocaleDateString(),
-      fileUrl: file.cdn_url || file.backblaze_url || '',
       thumbnail: file.thumbnail_url,
-      // Include raw data needed for preview functionality
+      // Include minimal data needed for preview functionality only
       backblaze_file_id: file.backblaze_file_id,
       backblaze_url: file.backblaze_url,
-      file_name: file.name // Store filename for private URL generation
+      file_name: file.name
     }))
 
     return { success: true, media: transformedFiles }
@@ -289,6 +305,63 @@ export async function getMediaFilesAction() {
       success: false, 
       error: error instanceof Error ? error.message : 'Failed to fetch media',
       media: []
+    }
+  }
+}
+
+export async function getMediaFileHistoryAction(fileId: string) {
+  try {
+    const supabase = await createSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      return {
+        success: false,
+        error: 'User not authenticated',
+        history: []
+      }
+    }
+
+    const { data: history, error } = await supabase
+      .from('media_file_history')
+      .select(`
+        id,
+        action,
+        description,
+        metadata,
+        created_at,
+        media_files!inner(uploaded_by)
+      `)
+      .eq('media_file_id', fileId)
+      .eq('media_files.uploaded_by', user.id) // Ensure user can only see history for their own files
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('❌ Failed to fetch file history:', error)
+      return {
+        success: false,
+        error: error.message,
+        history: []
+      }
+    }
+
+    // Transform history data
+    const transformedHistory = history.map(entry => ({
+      id: entry.id,
+      action: entry.action,
+      description: entry.description,
+      metadata: entry.metadata,
+      timestamp: entry.created_at,
+      user: 'You' // Since we only show user's own files
+    }))
+
+    return { success: true, history: transformedHistory }
+  } catch (error) {
+    console.error('❌ Failed to fetch file history:', error)
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to fetch history',
+      history: []
     }
   }
 }
@@ -314,6 +387,22 @@ export async function deleteMediaFileAction(fileId: string) {
 
     console.log('🗑️ Deleting file:', fileId)
     
+    // Get file info before deleting for history
+    const { data: fileInfo, error: fetchError } = await supabase
+      .from('media_files')
+      .select('name, file_size, file_type')
+      .eq('id', fileId)
+      .eq('uploaded_by', user.id)
+      .single()
+
+    if (fetchError) {
+      console.error('❌ Failed to fetch file info:', fetchError)
+      return {
+        success: false,
+        error: 'File not found or access denied'
+      }
+    }
+    
     // Soft delete by updating status to 'deleted'
     const { error } = await supabase
       .from('media_files')
@@ -330,6 +419,22 @@ export async function deleteMediaFileAction(fileId: string) {
     }
     
     console.log('✅ File marked as deleted in database')
+
+    // Add history entry for file deletion
+    const { error: historyError } = await supabase.rpc('add_media_file_history', {
+      p_media_file_id: fileId,
+      p_action: 'deleted',
+      p_description: `File "${fileInfo.name}" deleted (${formatFileSize(fileInfo.file_size)})`,
+      p_metadata: {
+        file_size: fileInfo.file_size,
+        file_type: fileInfo.file_type,
+        deleted_name: fileInfo.name
+      }
+    })
+
+    if (historyError) {
+      console.warn('⚠️ Failed to add history entry:', historyError)
+    }
     
     // Revalidate the media page
     revalidatePath('/instructor/media')

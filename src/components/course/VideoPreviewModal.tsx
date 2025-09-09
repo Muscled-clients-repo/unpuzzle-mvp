@@ -65,7 +65,7 @@ export function VideoPreviewModal({ video, isOpen, onClose }: VideoPreviewModalP
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent 
         ref={containerRef}
         className="max-w-4xl w-full p-0 overflow-hidden"

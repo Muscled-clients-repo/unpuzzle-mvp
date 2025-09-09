@@ -34,7 +34,7 @@ import { useChaptersEdit } from '@/hooks/use-chapter-queries'
 import { useVideoBatchOperations, useVideoDelete, useVideoUpload } from '@/hooks/use-video-queries'
 import { useFormState } from '@/hooks/use-form-state'
 import { ChapterManager } from '@/components/course/ChapterManager'
-import { VideoPreviewModal } from "@/components/course/VideoPreviewModal"
+import { SimpleVideoPreview } from "@/components/ui/SimpleVideoPreview"
 
 export default function EditCourseV3Page(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params)
@@ -752,7 +752,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
 
       {/* Video Preview Modal */}
       {ui.modal.type === 'video-preview' && ui.modal.data && (
-        <VideoPreviewModal
+        <SimpleVideoPreview
           video={ui.modal.data}
           isOpen={true}
           onClose={ui.closeModal}
