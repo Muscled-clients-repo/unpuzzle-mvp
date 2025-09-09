@@ -58,6 +58,41 @@
   }
 }
 
+/* Basic Uppy styles */
+.uppy-dashboard-container {
+  .uppy-Root {
+    --uppy-c-white: #fff;
+    --uppy-c-gray-100: #f3f4f6;
+    --uppy-c-gray-300: #d1d5db;
+    --uppy-c-gray-500: #6b7280;
+    --uppy-c-blue: #3b82f6;
+    
+    font-family: inherit;
+  }
+  
+  .uppy-Dashboard {
+    border: 2px dashed #e5e7eb;
+    border-radius: 8px;
+    background: #fafafa;
+  }
+  
+  .uppy-Dashboard-inner {
+    padding: 2rem;
+  }
+  
+  .uppy-Dashboard-dropFilesHereHint {
+    font-size: 1.125rem;
+    color: #6b7280;
+    margin-bottom: 1rem;
+  }
+  
+  .uppy-Dashboard-browse {
+    color: #3b82f6;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+}
+
 /* Skeleton Animation Styles */
 .skeleton-shimmer {
   background: linear-gradient(90deg, 

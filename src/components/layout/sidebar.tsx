@@ -40,6 +40,7 @@ const instructorNavItems = [
   { href: "/instructor", label: "Dashboard", icon: Home },
   { href: "/instructor/courses", label: "My Courses", icon: BookOpen },
   { href: "/instructor/lessons", label: "My Lessons", icon: PlayCircle },
+  { href: "/instructor/media", label: "Media", icon: Upload },
   { href: "/instructor/confusions", label: "Confusions", icon: MessageSquare },
   { href: "/instructor/students", label: "Students", icon: Users },
   { href: "/instructor/engagement", label: "Engagement", icon: TrendingUp },

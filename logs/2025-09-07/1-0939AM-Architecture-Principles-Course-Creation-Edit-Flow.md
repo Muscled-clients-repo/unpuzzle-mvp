@@ -342,3 +342,78 @@ Professional apps (YouTube, Udemy, Netflix) follow this pattern:
 - Maximum reuse of existing UI components
 - Zero reuse of old state management patterns
 - Create clear mapping of old vs new architecture files
+
+---
+
+## Advanced Data Patterns for Media Manager
+
+### Resource Linking Pattern (Media-Specific)
+
+The resource linking pattern manages relationships between media files and course content while maintaining data integrity and enabling comprehensive usage tracking. This pattern is distinct from course-chapter relationships as it involves cross-domain asset management.
+
+#### Core Implementation Pattern
+The resource linking pattern requires a many-to-many relationship table connecting media files to various resource types (courses, chapters, lessons). Each link includes metadata for tracking and analytics purposes. Server actions handle all linking operations with proper cache invalidation across affected resources.
+
+#### Architecture Compliance
+- **TanStack Query**: Owns usage data queries and cache invalidation
+- **Server Actions**: Handle all linking/unlinking mutations
+- **Zustand**: Manages UI state for link creation modals
+- **No Data Mixing**: Components read usage data from TanStack, never duplicate across layers
+
+#### Business Logic Rules
+1. **Referential Integrity**: Links automatically cascade delete when target resource is deleted
+2. **Usage Analytics**: Every link/unlink operation updates usage metrics for performance insights
+3. **Audit Trail**: Complete history of when/where media was linked for troubleshooting
+4. **Delete Protection**: Media files cannot be hard deleted while active links exist
+
+#### Example Implementation
+Components display usage information by reading from TanStack Query for server data and Zustand for UI expansion states. UI orchestration coordinates unlink operations without mixing data between layers. Usage displays show count and specific resource locations with direct unlink actions.
+
+### Soft Delete with Cross-Resource Dependencies (Media-Specific)
+
+This pattern extends the existing course soft delete approach to handle media files with cross-domain dependencies. Unlike course soft delete which affects self-contained entities, media soft delete impacts multiple courses and requires dependency-aware recovery mechanisms.
+
+**Important**: This pattern complements (does not replace) the existing course edit flow soft delete pattern. Course soft delete remains unchanged - this specifically addresses media asset management.
+
+#### Core Implementation Pattern
+Media soft delete checks for active dependencies before marking files as deleted. Files with dependencies require explicit removal from courses or force deletion approval. The deletion process snapshots all current dependencies for potential recovery scenarios. Recovery operations can optionally restore both the file and its previous course relationships based on business rules. All operations maintain comprehensive audit trails for accountability.
+
+#### Distinction from Course Soft Delete
+- **Course Soft Delete**: Self-contained, affects single course entity and its chapters
+- **Media Soft Delete**: Cross-domain, affects multiple courses that reference the media
+- **Recovery Scope**: Course recovery restores single workflow; media recovery can restore multiple course references
+- **Dependency Handling**: Course soft delete handles parent-child relationships; media soft delete handles many-to-many references
+
+#### Architecture Compliance
+- **TanStack Query**: Manages soft-deleted media state and recovery operations
+- **Server Actions**: Handle all soft delete and recovery mutations with dependency checks
+- **Form State**: Manages deletion confirmation forms and recovery option selections
+- **Zustand**: Controls deletion confirmation modals and recovery workflow UI
+
+### Cross-Domain Analytics Pattern (Media-Specific)
+
+This pattern aggregates data across multiple resource types (media files, course usage, student engagement) to provide comprehensive analytics without violating architectural layer boundaries. Unlike single-domain analytics, this requires coordinating data from multiple TanStack Query sources.
+
+#### Core Implementation Pattern
+Cross-domain analytics aggregation occurs server-side using parallel queries across multiple data domains (media files, usage statistics, storage metrics, performance data). Each analytics domain maintains separate TanStack Query keys and caches on the client. Data combination only occurs during visualization rendering through computed values, never stored in client state. Time range filtering and UI interactions use form state and Zustand respectively, maintaining clear layer boundaries.
+
+#### Architecture Compliance Rules
+1. **No Data Fusion in Client State**: Never merge analytics data from different domains into single state objects
+2. **Query Separation**: Each data domain maintains separate TanStack Query keys and caches  
+3. **Computed Visualization Only**: Data combination happens only in render/memo for chart display
+4. **Server-Side Aggregation**: Complex cross-domain calculations happen in server actions, not client
+5. **Independent Cache Invalidation**: Each analytics domain can be invalidated independently
+
+#### Performance Optimization
+- **Parallel Queries**: Multiple analytics domains fetched concurrently
+- **Selective Invalidation**: Time range changes only invalidate affected queries
+- **Memoized Computations**: Chart data computed only when source data changes
+- **Stale Time Management**: Analytics data cached for 5 minutes to reduce server load
+
+#### Example Usage Scenarios
+1. **Storage Optimization Dashboard**: Combines file size data with usage patterns to identify cleanup opportunities
+2. **Content Performance Analytics**: Merges media metadata with student engagement metrics
+3. **ROI Analysis**: Correlates media production costs with course sales and student satisfaction
+4. **Capacity Planning**: Analyzes growth trends across storage, usage, and performance domains
+
+These three patterns specifically address the unique challenges of media asset management while maintaining strict architectural compliance with the existing 3-layer SSOT distribution pattern established for course creation workflows.
