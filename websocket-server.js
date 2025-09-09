@@ -86,17 +86,23 @@ function broadcast(message) {
   const messageString = JSON.stringify(message)
   let sentCount = 0
 
+  console.log(`🔍 DEBUG: Broadcasting to ${clients.size} registered clients`)
   clients.forEach((client, userId) => {
+    console.log(`🔍 DEBUG: Client ${userId} state: ${client.readyState} (OPEN=${WebSocket.OPEN})`)
     if (client.readyState === WebSocket.OPEN) {
       client.send(messageString)
       sentCount++
+      console.log(`✅ Sent to client ${userId}`)
     } else {
+      console.log(`❌ Removing stale client ${userId}`)
       clients.delete(userId)
     }
   })
 
   if (sentCount > 0) {
     console.log(`📡 Broadcast sent to ${sentCount} clients:`, message.type)
+  } else {
+    console.log(`⚠️ No clients available for broadcast:`, message.type)
   }
 }
 

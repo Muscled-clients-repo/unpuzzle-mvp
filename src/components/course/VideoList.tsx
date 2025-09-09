@@ -5,6 +5,7 @@ import { useClickToEdit } from "@/hooks/use-click-to-edit"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
+import { UploadProgress } from "@/components/ui/UploadProgress"
 import { Badge } from "@/components/ui/badge"
 import { 
   GripVertical, 
@@ -362,32 +363,6 @@ export function VideoList({
     }
   }
 
-  // ARCHITECTURE-COMPLIANT: Render upload progress (TanStack data)
-  const renderUploadProgress = (video: Video) => {
-    if (video.status !== 'uploading' || typeof video.uploadProgress !== 'number') {
-      return null
-    }
-
-    const formatTimeRemaining = (seconds: number | null) => {
-      if (!seconds || seconds <= 0) return 'Calculating...'
-      const mins = Math.floor(seconds / 60)
-      const secs = seconds % 60
-      return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`
-    }
-
-    return (
-      <div className="mt-2 space-y-1">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{Math.round(video.uploadProgress)}%</span>
-          <span>{formatTimeRemaining(video.uploadTimeRemaining)}</span>
-        </div>
-        <Progress 
-          value={video.uploadProgress} 
-          className="h-2" 
-        />
-      </div>
-    )
-  }
 
   if (videos.length === 0) {
     return (
@@ -552,7 +527,7 @@ export function VideoList({
                   )}
                 </p>
                 {/* ARCHITECTURE-COMPLIANT: Upload progress from TanStack */}
-                {renderUploadProgress(video)}
+                <UploadProgress item={video} />
                 {video.duration && video.status === 'ready' && video.duration !== null && (
                   <p className="text-xs text-muted-foreground">
                     Duration: {video.duration}

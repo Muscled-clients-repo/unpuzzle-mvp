@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { courseEventObserver, COURSE_EVENTS } from '@/lib/course-event-observer'
+import { courseEventObserver, COURSE_EVENTS, MEDIA_EVENTS } from '@/lib/course-event-observer'
 
 interface WebSocketMessage {
   type: string
@@ -27,12 +27,24 @@ export function useWebSocketConnection(userId: string) {
   const messageListeners = useRef<Map<string, Set<(data: any) => void>>>(new Map())
   const queryClient = useQueryClient()
   
-  // Clean up on unmount
+  // Consolidated cleanup effect - only ONE cleanup to prevent conflicts
+  // Add flag to prevent React Strict Mode immediate disconnection
+  const shouldStayConnected = useRef(true)
+  
   useEffect(() => {
+    shouldStayConnected.current = true
     return () => {
-      if (ws.current) {
-        ws.current.close(1000, 'Component unmounting')
-      }
+      shouldStayConnected.current = false
+      // Delay cleanup to let React Strict Mode finish remounting
+      setTimeout(() => {
+        if (!shouldStayConnected.current) {
+          console.log('🧹 Cleaning up WebSocket connection on unmount')
+          if (ws.current) {
+            ws.current.close(1000, 'Component unmounting')
+            ws.current = null
+          }
+        }
+      }, 100) // Longer delay for React Strict Mode
     }
   }, [])
 
@@ -76,28 +88,73 @@ export function useWebSocketConnection(userId: string) {
           const message: WebSocketMessage = JSON.parse(event.data)
           console.log('📨 [WEBSOCKET] Message received:', message.type, message)
           
+          // Special debugging for media messages
+          if (message.type.startsWith('media-')) {
+            console.log('🎬 [MEDIA WEBSOCKET] Media message details:', {
+              type: message.type,
+              hasUserId: !!message.data?.userId,
+              userId: message.data?.userId,
+              data: message.data
+            })
+          }
+          
           // Map WebSocket message types to Observer events
           const eventTypeMapping: Record<string, string> = {
             'upload-progress': COURSE_EVENTS.UPLOAD_PROGRESS,
             'upload-complete': COURSE_EVENTS.UPLOAD_COMPLETE,
             'video-update-complete': COURSE_EVENTS.VIDEO_UPDATE_COMPLETE,
-            'chapter-update-complete': COURSE_EVENTS.CHAPTER_UPDATE_COMPLETE
+            'chapter-update-complete': COURSE_EVENTS.CHAPTER_UPDATE_COMPLETE,
+            // Media events
+            'media-upload-progress': MEDIA_EVENTS.MEDIA_UPLOAD_PROGRESS,
+            'media-upload-complete': MEDIA_EVENTS.MEDIA_UPLOAD_COMPLETE,
+            'bulk-delete-progress': MEDIA_EVENTS.MEDIA_BULK_DELETE_PROGRESS,
+            'bulk-delete-complete': MEDIA_EVENTS.MEDIA_BULK_DELETE_COMPLETE
           }
           
           const observerEventType = eventTypeMapping[message.type]
-          if (observerEventType && message.data?.courseId) {
-            console.log(`📨 [WEBSOCKET] Emitting to Observer: ${observerEventType}`, message.data)
-            courseEventObserver.emit(
-              observerEventType,
-              message.data.courseId,
-              message.data,
-              message.data.operationId
-            )
+          if (observerEventType) {
+            // Course events need courseId, media events need userId
+            const isMediaEvent = message.type.startsWith('media-') || message.type.startsWith('bulk-')
+            const hasRequiredId = isMediaEvent ? message.data?.userId : message.data?.courseId
+            const eventId = isMediaEvent ? message.data?.userId : message.data?.courseId
+            
+            console.log(`🔍 [WEBSOCKET DEBUG] Checking message:`, {
+              type: message.type,
+              isMediaEvent,
+              hasRequiredId,
+              eventId,
+              userId: message.data?.userId,
+              courseId: message.data?.courseId,
+              data: message.data
+            })
+            
+            if (hasRequiredId) {
+              const finalOperationId = message.operationId || message.data.operationId
+              console.log(`📨 [WEBSOCKET] Emitting to Observer: ${observerEventType}`, message.data)
+              console.log(`🔍 [WEBSOCKET] Operation ID details:`, {
+                messageOperationId: message.operationId,
+                dataOperationId: message.data.operationId,
+                finalOperationId
+              })
+              courseEventObserver.emit(
+                observerEventType,
+                eventId,
+                message.data,
+                finalOperationId
+              )
+            } else {
+              console.log(`❌ [WEBSOCKET] Message missing required ID:`, { 
+                messageType: message.type, 
+                isMediaEvent,
+                hasRequiredId,
+                expectedField: isMediaEvent ? 'userId' : 'courseId',
+                data: message.data
+              })
+            }
           } else {
             console.log(`📨 [WEBSOCKET] Message not mapped to Observer:`, { 
               messageType: message.type, 
-              hasMapping: !!eventTypeMapping[message.type],
-              hasCourseId: !!message.data?.courseId
+              hasMapping: !!eventTypeMapping[message.type]
             })
           }
           
@@ -139,6 +196,8 @@ export function useWebSocketConnection(userId: string) {
         isReconnecting: false 
       }))
     }
+    
+    // No cleanup needed here - handled by the consolidated cleanup effect above
   }, [userId]) // Only depend on userId - simple and stable
 
   // Subscribe to message types

@@ -158,6 +158,41 @@ export interface UploadCompleteEvent {
   videoData: any
 }
 
+// Media event interfaces
+export interface MediaUploadProgressEvent {
+  mediaId: string
+  filename: string
+  progress: number
+  status: 'uploading' | 'processing' | 'complete' | 'error'
+  error?: string
+  operationId?: string
+}
+
+export interface MediaUploadCompleteEvent {
+  mediaId: string
+  filename: string
+  mediaData: any
+  operationId?: string
+}
+
+export interface MediaBulkOperationProgressEvent {
+  operationId: string
+  operationType: 'delete' | 'move' | 'tag'
+  processed: number
+  total: number
+  progress: number
+  currentItem?: string
+  errors?: string[]
+}
+
+export interface MediaBulkOperationCompleteEvent {
+  operationId: string
+  operationType: 'delete' | 'move' | 'tag'
+  processedCount: number
+  failedCount: number
+  results: any[]
+}
+
 // Event type constants
 export const COURSE_EVENTS = {
   CHAPTER_UPDATE_COMPLETE: 'chapter-update-complete',
@@ -169,7 +204,19 @@ export const COURSE_EVENTS = {
   UPLOAD_COMPLETE: 'upload-complete'
 } as const
 
+// Media events (extending the same observer system)
+export const MEDIA_EVENTS = {
+  MEDIA_UPLOAD_PROGRESS: 'media-upload-progress',
+  MEDIA_UPLOAD_COMPLETE: 'media-upload-complete',
+  MEDIA_BULK_DELETE_PROGRESS: 'media-bulk-delete-progress',
+  MEDIA_BULK_DELETE_COMPLETE: 'media-bulk-delete-complete',
+  MEDIA_BULK_MOVE_PROGRESS: 'media-bulk-move-progress',
+  MEDIA_BULK_MOVE_COMPLETE: 'media-bulk-move-complete'
+} as const
+
 export type CourseEventType = typeof COURSE_EVENTS[keyof typeof COURSE_EVENTS]
+export type MediaEventType = typeof MEDIA_EVENTS[keyof typeof MEDIA_EVENTS]
+export type AllEventType = CourseEventType | MediaEventType
 
 // Development utilities
 if (process.env.NODE_ENV === 'development') {

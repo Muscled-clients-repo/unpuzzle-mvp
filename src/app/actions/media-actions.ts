@@ -89,6 +89,8 @@ export async function uploadMediaFileAction(
   formData: FormData,
   operationId?: string
 ): Promise<MediaUploadResult> {
+  let userId: string | undefined
+  
   try {
     const supabase = await createSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -99,6 +101,8 @@ export async function uploadMediaFileAction(
         error: 'User not authenticated'
       }
     }
+    
+    userId = user.id
 
     const file = formData.get('file') as File
     if (!file) {
@@ -117,6 +121,7 @@ export async function uploadMediaFileAction(
       type: 'media-upload-progress',
       operationId: finalOperationId,
       data: {
+        userId: user.id,
         fileName: file.name,
         progress: 0,
         status: 'starting'
@@ -135,6 +140,7 @@ export async function uploadMediaFileAction(
           type: 'media-upload-progress', 
           operationId: finalOperationId,
           data: {
+            userId: user.id,
             fileName: file.name,
             progress: progress.percentage,
             loaded: progress.loaded,
@@ -212,6 +218,7 @@ export async function uploadMediaFileAction(
       type: 'media-upload-progress',
       operationId: finalOperationId,
       data: {
+        userId: user.id,
         fileName: file.name,
         progress: 100,
         status: 'completed',
@@ -233,12 +240,13 @@ export async function uploadMediaFileAction(
   } catch (error) {
     console.error('❌ Upload failed:', error)
     
-    // Broadcast error if we have operationId
-    if (operationId) {
+    // Broadcast error if we have operationId and userId
+    if (operationId && userId) {
       broadcastWebSocketMessage({
         type: 'media-upload-progress',
         operationId,
         data: {
+          userId: userId,
           fileName: formData.get('file')?.name || 'unknown',
           progress: 0,
           status: 'error',

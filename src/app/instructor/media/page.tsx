@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { FloatingUploadPanel } from "@/components/ui/FloatingUploadPanel"
 import { UnifiedDropzone } from "@/components/media/unified-dropzone"
 import { useMediaFiles, useDeleteMediaFile, useUploadMediaFile } from "@/hooks/use-media-queries"
 import { useMediaStore } from "@/stores/media-store"
@@ -66,7 +67,8 @@ export default function MediaPage() {
   // ARCHITECTURE-COMPLIANT: Upload handlers for TanStack Query integration
   const handleFilesSelected = (files: File[]) => {
     files.forEach(file => {
-      uploadMutation.mutate(file)
+      const operationId = `media_upload_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
+      uploadMutation.mutate({ file, operationId })
     })
   }
 
@@ -110,6 +112,7 @@ export default function MediaPage() {
       default: return <File className="h-4 w-4" />
     }
   }
+
 
   const filteredMedia = mediaFiles.filter(item => {
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -161,6 +164,8 @@ export default function MediaPage() {
           </Button>
         </div>
       </div>
+
+      {/* Progress Panel - Shows upload and bulk operation progress */}
 
       {/* Upload Zone */}
       <div className="mb-8">
@@ -362,6 +367,16 @@ export default function MediaPage() {
           onClose={clearModals}
         />
       )}
+
+      {/* Floating Upload Panel - Google Drive style */}
+      <FloatingUploadPanel
+        items={mediaFiles.filter(file => 
+          file.status === 'uploading' || 
+          file.status === 'processing' || 
+          (file.status === 'ready' && typeof file.uploadProgress === 'number')
+        )}
+        position="bottom-right" // Can be changed to "top" or "bottom-center"
+      />
     </div>
   )
 }
