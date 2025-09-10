@@ -252,7 +252,84 @@ export async function uploadVideoAction({
 }
 
 /**
- * Delete a video from database and Backblaze
+ * Unlink a media library video from chapter (keeps file in media library)
+ */
+export async function unlinkVideoAction(videoId: string): Promise<ActionResult> {
+  try {
+    const user = await requireAuth()
+    const supabase = await createClient()
+    
+    // Get video details and verify ownership
+    const { data: video, error: fetchError } = await supabase
+      .from('videos')
+      .select(`
+        *,
+        courses!inner (
+          instructor_id
+        )
+      `)
+      .eq('id', videoId)
+      .single()
+    
+    if (fetchError || !video) {
+      throw new Error('Video not found')
+    }
+    
+    // Verify ownership
+    if (video.courses.instructor_id !== user.id) {
+      throw new Error('Unauthorized: You do not own this course')
+    }
+    
+    // Check if this is a media library video (has media_file_id)
+    if (!video.media_file_id) {
+      throw new Error('This video cannot be unlinked - use delete instead for directly uploaded videos')
+    }
+    
+    console.log('[SERVER ACTION] Unlinking media library video:', {
+      videoId,
+      mediaFileId: video.media_file_id,
+      keepingInLibrary: true
+    })
+    
+    // Only delete video record from database (keep media file in library)
+    const { error: deleteError } = await supabase
+      .from('videos')
+      .delete()
+      .eq('id', videoId)
+    
+    if (deleteError) {
+      console.error('[SERVER ACTION] Video unlink error:', deleteError)
+      throw deleteError
+    }
+    
+    // Remove usage tracking
+    const { error: usageError } = await supabase
+      .from('media_usage')
+      .delete()
+      .eq('media_file_id', video.media_file_id)
+      .eq('resource_type', 'chapter')
+      .eq('resource_id', video.chapter_id)
+    
+    if (usageError) {
+      console.warn('[SERVER ACTION] Usage tracking removal failed:', usageError)
+      // Don't throw - this is not critical
+    }
+    
+    console.log('[SERVER ACTION] Video unlinked successfully (media file preserved in library)')
+    revalidatePath(`/instructor/course/${video.course_id}`)
+    
+    return { success: true, message: 'Video unlinked from chapter (preserved in media library)' }
+  } catch (error) {
+    console.error('Unlink video error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to unlink video'
+    }
+  }
+}
+
+/**
+ * Delete a video from database and Backblaze (for directly uploaded videos only)
  */
 export async function deleteVideoAction(videoId: string): Promise<ActionResult> {
   try {
@@ -279,11 +356,17 @@ export async function deleteVideoAction(videoId: string): Promise<ActionResult> 
       throw new Error('Unauthorized: You do not own this video')
     }
     
+    // Check if this is a directly uploaded video (no media_file_id)
+    if (video.media_file_id) {
+      throw new Error('This video cannot be deleted - use unlink instead for media library videos')
+    }
+    
     console.log('[SERVER ACTION] Starting video deletion:', {
       videoId,
       backblazeFileId: video.backblaze_file_id,
       filename: video.filename,
-      hasBackblazeData: !!(video.backblaze_file_id && video.filename)
+      hasBackblazeData: !!(video.backblaze_file_id && video.filename),
+      isDirectUpload: true
     })
     
     // Delete from Backblaze - filename now contains the structured path

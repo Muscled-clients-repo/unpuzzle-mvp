@@ -31,7 +31,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useCourseCreationUI } from '@/stores/course-creation-ui'
 import { useCourseEdit, courseKeys } from '@/hooks/use-course-queries'
 import { useChaptersEdit, chapterKeys } from '@/hooks/use-chapter-queries'
-import { useVideoBatchOperations, useVideoDelete, useVideoUpload } from '@/hooks/use-video-queries'
+import { useVideoBatchOperations, useVideoDelete } from '@/hooks/use-video-queries'
 import { useFormState } from '@/hooks/use-form-state'
 import { ChapterManager } from '@/components/course/ChapterManager'
 import { SimpleVideoPreview } from "@/components/ui/SimpleVideoPreview"
@@ -90,8 +90,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
     error: chaptersError 
   } = useChaptersEdit(courseId)
   
-  // Video operations hooks
-  const { uploadVideoAsync } = useVideoUpload(courseId)
+  // REMOVED: Direct video upload hooks - all uploads now go through media library
   
   // PROFESSIONAL FORM STATE PATTERN: Form state as source of truth for inputs
   const formState = useFormState({
@@ -189,32 +188,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
     reorderChapters(newOrder)
   }
   
-  const handleVideoUpload = async (chapterId: string, files: FileList) => {
-    const fileArray = Array.from(files)
-    
-    console.log('🚀 [UPLOAD PROGRESS] Starting video upload:', {
-      chapterId,
-      fileCount: fileArray.length,
-      fileNames: fileArray.map(f => f.name),
-      fileSizes: fileArray.map(f => `${(f.size / 1024 / 1024).toFixed(2)}MB`)
-    })
-    
-    // ARCHITECTURE-COMPLIANT: Upload progress managed by TanStack Query
-    fileArray.forEach((file) => {
-      const tempVideoId = `temp-video-${Date.now()}-${Math.random()}`
-      console.log(`📤 [UPLOAD PROGRESS] Starting upload for ${file.name} with tempId: ${tempVideoId}`)
-      
-      uploadVideoAsync({
-        file,
-        chapterId,
-        tempVideoId
-      }).then((result) => {
-        console.log(`✅ [UPLOAD PROGRESS] Upload completed for ${file.name}:`, result)
-      }).catch((error) => {
-        console.error(`❌ [UPLOAD PROGRESS] Upload failed for ${file.name}:`, error)
-      })
-    })
-  }
+  // REMOVED: Direct upload functionality - all uploads must go through media library first
   
   const handleVideoRename = (videoId: string, newName: string) => {
     // ARCHITECTURE-COMPLIANT: Stage video rename in UI store, save on unified Save
@@ -223,15 +197,9 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   }
   
   const handleVideoDelete = (videoId: string) => {
-    // ARCHITECTURE-COMPLIANT: Mark for deletion in UI store, delete on unified Save
-    console.log('🗑️ Marking video for deletion:', videoId)
-    if (ui.pendingDeletes.has(videoId)) {
-      // If already marked, unmark it (toggle behavior)
-      ui.unmarkForDeletion(videoId)
-    } else {
-      // Mark for deletion
-      ui.markForDeletion(videoId)
-    }
+    // ARCHITECTURE-COMPLIANT: Immediate unlink/delete for media library videos
+    console.log('🗑️ Removing video immediately:', videoId)
+    deleteVideo(videoId)
   }
   
   const handleMoveVideo = (videoId: string, fromChapterId: string, toChapterId: string) => {
@@ -755,7 +723,6 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
                   onUpdateChapter={handleUpdateChapter}
                   onDeleteChapter={handleDeleteChapter}
                   onReorderChapters={handleReorderChapters}
-                  onVideoUpload={handleVideoUpload}
                   onVideoRename={handleVideoRename}
                   batchRenameMutation={{
                     mutate: (updates: Array<{ id: string, title?: string }>) => 

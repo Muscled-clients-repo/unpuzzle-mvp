@@ -11,13 +11,11 @@ import {
   ChevronDown, 
   GripVertical,
   Trash2,
-  Upload,
   Library
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCourseCreationUI } from '@/stores/course-creation-ui'
 import { VideoList } from "./VideoList"
-import { VideoUploader } from "./VideoUploader"
 import { MediaSelector } from "../media/media-selector"
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
@@ -32,7 +30,6 @@ interface ChapterManagerProps {
   onUpdateChapter: (chapterId: string, updates: Partial<Chapter>) => void
   onDeleteChapter: (chapterId: string) => void
   onReorderChapters: (chapters: Chapter[]) => void
-  onVideoUpload: (chapterId: string, files: FileList) => void
   onVideoRename: (videoId: string, newName: string) => void
   batchRenameMutation?: any // TanStack Query mutation
   onVideoDelete: (videoId: string) => void
@@ -51,7 +48,6 @@ export function ChapterManager({
   onUpdateChapter,
   onDeleteChapter,
   onReorderChapters,
-  onVideoUpload,
   onVideoRename,
   batchRenameMutation,
   onVideoDelete,
@@ -335,10 +331,7 @@ export function ChapterManager({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <VideoUploader
-                      onFilesSelected={(files) => onVideoUpload(chapter.id, files)}
-                      compact
-                    />
+                    {/* Direct upload removed - only media library import allowed */}
                     
                     <Button
                       variant="outline"

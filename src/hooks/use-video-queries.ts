@@ -5,6 +5,7 @@ import {
   uploadVideoAction,
   updateVideoAction,
   deleteVideoAction,
+  unlinkVideoAction,
   batchUpdateVideoOrdersAction,
   reorderVideosAction,
   linkMediaToChapterAction
@@ -401,12 +402,40 @@ export function useVideoBatchOperations(courseId: string) {
   }
 }
 
-// ===== VIDEO DELETE HOOK =====
+// ===== VIDEO REMOVE HOOK (Smart unlink/delete) =====
 export function useVideoDelete(courseId: string) {
   const queryClient = useQueryClient()
   
-  const deleteMutation = useMutation({
-    mutationFn: (videoId: string) => deleteVideoAction(videoId),
+  // Smart mutation that chooses unlink vs delete based on video type
+  const removeMutation = useMutation({
+    mutationFn: async (videoId: string) => {
+      // First get the video from chapters cache to check if it's from media library
+      const chapters = queryClient.getQueryData<any[]>(chapterKeys.list(courseId)) || []
+      let video = null
+      
+      // Find video in any chapter
+      for (const chapter of chapters) {
+        if (chapter.videos) {
+          video = chapter.videos.find((v: any) => v.id === videoId)
+          if (video) break
+        }
+      }
+      
+      if (!video) {
+        console.warn(`🔍 [VIDEO REMOVE] Video ${videoId} not found in chapters cache, proceeding with unlink (safer option)`)
+        // Default to unlink since media library videos are more common now
+        return await unlinkVideoAction(videoId)
+      }
+      
+      // Use unlink for media library videos (have media_file_id), delete for direct uploads
+      if (video.media_file_id) {
+        console.log(`🔗 [VIDEO REMOVE] Unlinking media library video: ${videoId} (media_file_id: ${video.media_file_id})`)
+        return await unlinkVideoAction(videoId)
+      } else {
+        console.log(`🗑️ [VIDEO REMOVE] Deleting direct upload video: ${videoId}`)
+        return await deleteVideoAction(videoId)
+      }
+    },
     
     onMutate: async (videoId) => {
       await queryClient.cancelQueries({ queryKey: videoKeys.list(courseId) })
@@ -434,10 +463,15 @@ export function useVideoDelete(courseId: string) {
       return { previousVideos, previousChapters, deletedVideoId: videoId }
     },
     
-    onSuccess: (result) => {
+    onSuccess: (result, videoId) => {
       if (result.success) {
+        // Get video info to show appropriate success message
+        const videos = queryClient.getQueryData<Video[]>(videoKeys.list(courseId)) || []
+        const wasMediaLibraryVideo = videos.some(v => v.id === videoId && (v as any).media_file_id)
+        
+        const action = wasMediaLibraryVideo ? 'unlinked from chapter' : 'deleted permanently'
+        console.log(`✅ Video ${action} successfully`)
         // No individual toast - handled by consolidated save toast
-        console.log('✅ Video deleted successfully')
       }
     },
     
@@ -450,13 +484,17 @@ export function useVideoDelete(courseId: string) {
         queryClient.setQueryData(chapterKeys.list(courseId), context.previousChapters)
       }
       
-      toast.error('Failed to delete video')
+      // Show specific error message based on video type
+      const errorMessage = error instanceof Error ? error.message : 'Failed to remove video'
+      toast.error(errorMessage)
     }
   })
   
   return {
-    deleteVideo: deleteMutation.mutate,
-    isDeleting: deleteMutation.isPending
+    deleteVideo: removeMutation.mutate,
+    isDeleting: removeMutation.isPending,
+    // Expose the mutation for more control if needed
+    removeMutation
   }
 }
 
