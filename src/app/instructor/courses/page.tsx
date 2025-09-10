@@ -5,6 +5,8 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAppStore } from "@/stores/app-store"
 import { useCoursePrefetch } from "@/hooks/use-course-queries"
+import { useQueryClient } from "@tanstack/react-query"
+import { getCoursesAction } from "@/app/actions/course-actions"
 import { ErrorBoundary, LoadingSpinner, ErrorFallback } from "@/components/common"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -43,6 +45,7 @@ import {
 
 export default function TeachCoursesPage() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const { 
     // Auth state - now with unique property names
     user, 
@@ -60,13 +63,26 @@ export default function TeachCoursesPage() {
   const [sortBy, setSortBy] = useState("lastUpdated")
   const [hasInitialized, setHasInitialized] = useState(false)
   
+  // OPTIMIZATION: Start prefetching courses while auth is loading (parallel instead of sequential)
   useEffect(() => {
-    // Only load courses after auth is complete and we haven't initialized yet
-    if (!authLoading && !hasInitialized) {
-      loadCourses(user?.id)
-      setHasInitialized(true)
+    if (!hasInitialized) {
+      if (authLoading) {
+        // Start prefetching courses optimistically while waiting for auth
+        // This breaks the sequential dependency chain
+        console.log('🚀 [COURSES PREFETCH] Starting parallel prefetch during auth loading')
+        queryClient.prefetchQuery({
+          queryKey: ['courses', 'list'],
+          queryFn: () => getCoursesAction({}),
+          staleTime: 5 * 60 * 1000, // 5 minutes cache
+        })
+      } else if (user?.id) {
+        // Auth complete - load courses with user context
+        console.log('✅ [COURSES LOAD] Auth complete, loading with user context:', user.id)
+        loadCourses(user?.id)
+        setHasInitialized(true)
+      }
     }
-  }, [authLoading, hasInitialized, loadCourses, user?.id])
+  }, [authLoading, hasInitialized, loadCourses, user?.id, queryClient])
 
   // Show error state if there's an error
   const hasError = authError || coursesError

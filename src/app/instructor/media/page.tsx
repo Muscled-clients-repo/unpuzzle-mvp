@@ -123,8 +123,43 @@ export default function MediaPage() {
   if (isLoading) {
     return (
       <div className="container mx-auto p-6 max-w-7xl">
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        {/* Header Skeleton */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <div className="h-8 bg-gradient-to-r from-muted to-muted/50 rounded w-48 animate-pulse mb-2" />
+            <div className="h-4 bg-gradient-to-r from-muted to-muted/50 rounded w-64 animate-pulse" />
+          </div>
+          <div className="h-6 bg-gradient-to-r from-muted to-muted/50 rounded w-16 animate-pulse" />
+        </div>
+
+        {/* Upload Zone Skeleton */}
+        <div className="mb-8">
+          <div className="h-32 bg-gradient-to-r from-muted to-muted/50 rounded-lg animate-pulse" />
+        </div>
+
+        {/* Filters Skeleton */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="h-10 bg-gradient-to-r from-muted to-muted/50 rounded flex-1 animate-pulse" />
+          <div className="h-10 bg-gradient-to-r from-muted to-muted/50 rounded w-36 animate-pulse" />
+          <div className="h-10 bg-gradient-to-r from-muted to-muted/50 rounded w-20 animate-pulse" />
+          <div className="h-10 bg-gradient-to-r from-muted to-muted/50 rounded w-20 animate-pulse" />
+        </div>
+
+        {/* Media Grid Skeleton */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {[1,2,3,4,5,6,7,8].map((i) => (
+            <div key={i} className="bg-card border rounded-lg overflow-hidden">
+              <div className="aspect-video bg-gradient-to-r from-muted to-muted/50 animate-pulse" />
+              <div className="p-3">
+                <div className="h-5 bg-gradient-to-r from-muted to-muted/50 rounded w-3/4 animate-pulse mb-2" />
+                <div className="flex justify-between mb-2">
+                  <div className="h-4 bg-gradient-to-r from-muted to-muted/50 rounded w-12 animate-pulse" />
+                  <div className="h-4 bg-gradient-to-r from-muted to-muted/50 rounded w-16 animate-pulse" />
+                </div>
+                <div className="h-5 bg-gradient-to-r from-muted to-muted/50 rounded w-16 animate-pulse" />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     )
