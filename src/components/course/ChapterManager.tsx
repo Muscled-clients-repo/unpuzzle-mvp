@@ -86,6 +86,7 @@ export function ChapterManager({
   const [draggedVideo, setDraggedVideo] = useState<string | null>(null)
   const [dragOverChapter, setDragOverChapter] = useState<string | null>(null)
   const [showMediaSelector, setShowMediaSelector] = useState<string | null>(null)
+  const [linkingChapters, setLinkingChapters] = useState<Set<string>>(new Set())
 
   const toggleChapter = (chapterId: string) => {
     setExpandedChapters(prev => {
@@ -157,28 +158,39 @@ export function ChapterManager({
   const linkMediaMutation = useLinkMediaToChapter()
   
   const handleMediaSelected = async (files: MediaFile[], chapterId: string) => {
-    console.log(`🔗 [Phase 4B] Linking ${files.length} media files to chapter ${chapterId} in course ${courseId}`)
+    console.log(`🔗 [Phase 1] Linking ${files.length} media files to chapter ${chapterId} in course ${courseId}`)
     
-    // Phase 4B: Link each selected media file using courseId from props
-    for (const file of files) {
-      try {
-        console.log(`🔗 [DEBUG] Starting link for ${file.name} (${file.id}) to chapter ${chapterId} in course ${courseId}`)
-        
-        const result = await linkMediaMutation.mutateAsync({
-          mediaId: file.id,
-          chapterId: chapterId,
-          courseId: courseId // Use courseId from props instead of chapter data
-        })
-        
-        console.log(`✅ [DEBUG] Link successful for ${file.name}:`, result)
-        
-      } catch (error) {
-        console.error(`❌ [DEBUG] Failed to link ${file.name}:`, error)
-        // Individual error handling is done by the mutation's onError
+    // Mark this chapter as linking
+    setLinkingChapters(prev => new Set([...prev, chapterId]))
+    
+    try {
+      // Phase 1: Link each selected media file (still sequential, but with optimistic updates)
+      for (const file of files) {
+        try {
+          console.log(`🔗 [Phase 1] Starting link for ${file.name} (${file.id}) to chapter ${chapterId}`)
+          
+          const result = await linkMediaMutation.mutateAsync({
+            mediaId: file.id,
+            chapterId: chapterId,
+            courseId: courseId
+          })
+          
+          console.log(`✅ [Phase 1] Link successful for ${file.name}:`, result)
+          
+        } catch (error) {
+          console.error(`❌ [Phase 1] Failed to link ${file.name}:`, error)
+          // Individual error handling is done by the mutation's onError
+        }
       }
+    } finally {
+      // Remove chapter from linking state
+      setLinkingChapters(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(chapterId)
+        return newSet
+      })
+      setShowMediaSelector(null)
     }
-    
-    setShowMediaSelector(null)
   }
 
   return (
@@ -325,9 +337,9 @@ export function ChapterManager({
                       size="sm"
                       className="h-8 px-2 text-xs"
                       onClick={() => setShowMediaSelector(chapter.id)}
-                      disabled={linkMediaMutation.isPending}
+                      disabled={linkingChapters.has(chapter.id)}
                     >
-                      {linkMediaMutation.isPending ? (
+                      {linkingChapters.has(chapter.id) ? (
                         <>
                           <div className="animate-spin h-3 w-3 mr-1 border border-current border-t-transparent rounded-full" />
                           Linking...
@@ -419,7 +431,7 @@ export function ChapterManager({
           fileTypeFilter="video"
           allowMultiple={true}
           title="Select Videos from Library"
-          isLinking={linkMediaMutation.isPending}
+          isLinking={showMediaSelector ? linkingChapters.has(showMediaSelector) : false}
         />
       )}
     </div>

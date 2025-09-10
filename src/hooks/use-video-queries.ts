@@ -462,7 +462,7 @@ export function useVideoDelete(courseId: string) {
 
 /**
  * Link media file to chapter using TanStack Query
- * Phase 4B: Reuses existing mutation patterns
+ * Phase 1: OPTIMISTIC UPDATES ONLY - Videos appear instantly before server confirmation
  */
 export function useLinkMediaToChapter() {
   const queryClient = useQueryClient()
@@ -483,16 +483,102 @@ export function useLinkMediaToChapter() {
       }
       return result
     },
-    onSuccess: (data, variables) => {
-      // Don't invalidate here - let the WebSocket observer handle it to avoid race conditions
-      // queryClient.invalidateQueries({ queryKey: ['courses', 'detail', variables.courseId] })
+    
+    onMutate: async ({ mediaId, chapterId, courseId }) => {
+      console.log(`🚀 [PHASE 1] Optimistically adding media ${mediaId} to chapter ${chapterId}`)
+      
+      // Cancel outgoing refetches to prevent race conditions
+      await queryClient.cancelQueries({ queryKey: chapterKeys.list(courseId) })
+      
+      // Get current chapter data
+      const previousChapters = queryClient.getQueryData(chapterKeys.list(courseId))
+      
+      // Find the media file data from cache (if available)
+      const mediaFiles = queryClient.getQueryData(['media-files']) as any[]
+      const mediaFile = mediaFiles?.find(file => file.id === mediaId)
+      
+      if (mediaFile) {
+        // Create temporary video object from media file
+        const tempVideo: Video = {
+          id: `temp-${mediaId}-${Date.now()}`, // Temporary ID for UI tracking
+          filename: mediaFile.name,
+          originalFilename: mediaFile.original_name || mediaFile.name,
+          course_id: courseId,
+          chapter_id: chapterId,
+          order: 999, // Will be recalculated by server
+          duration: mediaFile.duration || null,
+          size: mediaFile.file_size || 0,
+          format: mediaFile.file_type || 'video/mp4',
+          status: 'ready', // Media files are already processed
+          backblaze_file_id: mediaFile.backblaze_file_id || null,
+          backblaze_url: mediaFile.cdn_url || mediaFile.url,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          // Mark as optimistic for potential rollback
+          _isOptimistic: true,
+          _originalMediaId: mediaId
+        }
+        
+        // Optimistically add video to chapter
+        queryClient.setQueryData(chapterKeys.list(courseId), (old: any) => {
+          if (!Array.isArray(old)) return old
+          
+          return old.map((chapter: any) => 
+            chapter.id === chapterId
+              ? {
+                  ...chapter,
+                  videos: [...(chapter.videos || []), tempVideo],
+                  videoCount: (chapter.videoCount || 0) + 1
+                }
+              : chapter
+          )
+        })
+        
+        console.log(`✨ [PHASE 1] Optimistically added ${mediaFile.name} to chapter - UI should update instantly!`)
+      }
+      
+      return { previousChapters, mediaId, chapterId }
+    },
+    
+    onSuccess: (data, variables, context) => {
+      console.log(`✅ [PHASE 1] Server confirmed linking ${variables.mediaId} to chapter ${variables.chapterId}`)
+      
+      // Replace optimistic entry with real server data if available
+      if (data.data) {
+        const realVideo = data.data
+        queryClient.setQueryData(chapterKeys.list(variables.courseId), (old: any) => {
+          if (!Array.isArray(old)) return old
+          
+          return old.map((chapter: any) => 
+            chapter.id === variables.chapterId
+              ? {
+                  ...chapter,
+                  videos: chapter.videos.map((video: Video) => 
+                    (video as any)._originalMediaId === variables.mediaId
+                      ? { ...realVideo, _isOptimistic: false } // Replace with real data
+                      : video
+                  )
+                }
+              : chapter
+          )
+        })
+      }
+      
+      // Update media files cache
       queryClient.invalidateQueries({ queryKey: ['media-files'] })
       
       console.log('✅ Media linked successfully:', data.data?.id)
-      // Removed success toast - real-time UI update is sufficient feedback
     },
-    onError: (error) => {
-      console.error('❌ Media link failed:', error)
+    
+    onError: (error, variables, context) => {
+      console.error(`❌ [PHASE 1] Server failed to link ${variables.mediaId}:`, error)
+      
+      // Rollback optimistic update by restoring previous state
+      if (context?.previousChapters) {
+        queryClient.setQueryData(chapterKeys.list(variables.courseId), context.previousChapters)
+        console.log(`🔄 [PHASE 1] Rolled back optimistic update for ${variables.mediaId}`)
+      }
+      
       toast.error(error.message || 'Failed to link media to chapter')
     }
   })
