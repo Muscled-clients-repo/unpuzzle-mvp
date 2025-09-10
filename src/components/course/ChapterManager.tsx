@@ -11,7 +11,8 @@ import {
   ChevronDown, 
   GripVertical,
   Trash2,
-  Library
+  Library,
+  Upload
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCourseCreationUI } from '@/stores/course-creation-ui'

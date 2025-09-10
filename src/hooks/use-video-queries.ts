@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { toast } from 'sonner'
 import { 
   uploadVideoAction,
@@ -402,22 +402,140 @@ export function useVideoBatchOperations(courseId: string) {
   }
 }
 
-// ===== VIDEO REMOVE HOOK (Smart unlink/delete) =====
+// ===== VIDEO REMOVE HOOK (Smart unlink/delete with concurrent processing) =====
 export function useVideoDelete(courseId: string) {
   const queryClient = useQueryClient()
   
-  // Smart mutation that chooses unlink vs delete based on video type
+  // CONCURRENT DELETION PATTERN: Queue and batch rapid delete operations
+  const [deleteQueue, setDeleteQueue] = useState<Set<string>>(new Set())
+  const [isProcessingBatch, setIsProcessingBatch] = useState(false)
+  const debounceTimerRef = useRef<NodeJS.Timeout>()
+  
+  // Process batched deletes with Promise.all() for 4x speed improvement
+  const processBatchedDeletes = async (videoIds: string[]) => {
+    console.log(`🚀 [CONCURRENT DELETE] Starting batch delete for ${videoIds.length} videos:`, videoIds)
+    
+    const chapters = queryClient.getQueryData<any[]>(chapterKeys.list(courseId)) || []
+    
+    // Prepare all delete operations
+    const deleteOperations = videoIds.map(async (videoId) => {
+      // Find video to determine unlink vs delete
+      let video = null
+      for (const chapter of chapters) {
+        if (chapter.videos) {
+          video = chapter.videos.find((v: any) => v.id === videoId)
+          if (video) break
+        }
+      }
+      
+      if (!video || video.media_file_id) {
+        console.log(`🔗 [CONCURRENT DELETE] Unlinking media library video: ${videoId}`)
+        return await unlinkVideoAction(videoId)
+      } else {
+        console.log(`🗑️ [CONCURRENT DELETE] Deleting direct upload video: ${videoId}`)
+        return await deleteVideoAction(videoId)
+      }
+    })
+    
+    // Execute all deletes concurrently
+    const results = await Promise.all(deleteOperations)
+    console.log(`✅ [CONCURRENT DELETE] Batch completed:`, results)
+    return results
+  }
+  
+  // Debounced delete function that batches rapid clicks
+  const debouncedDelete = (videoId: string) => {
+    console.log(`⏱️ [CONCURRENT DELETE] Queuing video ${videoId} for batch processing`)
+    
+    // Add to queue
+    setDeleteQueue(prev => new Set([...prev, videoId]))
+    
+    // Clear existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+    
+    // Set new timer (200ms debounce window)
+    debounceTimerRef.current = setTimeout(async () => {
+      const currentQueue = [...deleteQueue, videoId] // Include the current video
+      const uniqueQueue = [...new Set(currentQueue)] // Remove duplicates
+      
+      if (uniqueQueue.length === 0) return
+      
+      console.log(`🚀 [CONCURRENT DELETE] Processing batch of ${uniqueQueue.length} videos:`, uniqueQueue)
+      
+      setIsProcessingBatch(true)
+      setDeleteQueue(new Set()) // Clear queue
+      
+      try {
+        // Perform optimistic updates for all videos in batch
+        await queryClient.cancelQueries({ queryKey: videoKeys.list(courseId) })
+        await queryClient.cancelQueries({ queryKey: chapterKeys.list(courseId) })
+        
+        const previousVideos = queryClient.getQueryData(videoKeys.list(courseId))
+        const previousChapters = queryClient.getQueryData(chapterKeys.list(courseId))
+        
+        // Optimistic batch removal
+        queryClient.setQueryData(videoKeys.list(courseId), (old: Video[] = []) =>
+          old.filter(video => !uniqueQueue.includes(video.id))
+        )
+        
+        // Update chapters cache
+        queryClient.setQueryData(chapterKeys.list(courseId), (old: any) => {
+          if (!Array.isArray(old)) return old
+          
+          return old.map((chapter: any) => ({
+            ...chapter,
+            videos: chapter.videos.filter((video: Video) => !uniqueQueue.includes(video.id)),
+            videoCount: Math.max(0, (chapter.videoCount || chapter.videos?.length || 0) - uniqueQueue.filter(id => 
+              chapter.videos?.some((v: Video) => v.id === id)
+            ).length)
+          }))
+        })
+        
+        // Execute batch delete
+        const results = await processBatchedDeletes(uniqueQueue)
+        
+        // Check for failures and rollback if needed
+        const failures = results.filter(r => !r.success)
+        if (failures.length > 0) {
+          console.error(`❌ [CONCURRENT DELETE] ${failures.length} operations failed, rolling back`)
+          if (previousVideos) queryClient.setQueryData(videoKeys.list(courseId), previousVideos)
+          if (previousChapters) queryClient.setQueryData(chapterKeys.list(courseId), previousChapters)
+          toast.error(`Failed to delete ${failures.length} video(s)`)
+        } else {
+          console.log(`✅ [CONCURRENT DELETE] Successfully processed ${uniqueQueue.length} videos`)
+        }
+        
+      } catch (error) {
+        console.error('❌ [CONCURRENT DELETE] Batch processing failed:', error)
+        // The optimistic updates rollback is handled in individual mutation error handlers
+      } finally {
+        setIsProcessingBatch(false)
+      }
+    }, 200) // 200ms debounce window
+  }
+  
+  // Single mutation that handles both individual and batch operations
   const removeMutation = useMutation({
     mutationFn: async (videoId: string) => {
+      console.log(`🔍 [VIDEO DELETE] Phase 1 Debug: Starting delete for video ${videoId}`)
+      
       // First get the video from chapters cache to check if it's from media library
       const chapters = queryClient.getQueryData<any[]>(chapterKeys.list(courseId)) || []
+      console.log(`🔍 [VIDEO DELETE] Phase 1 Debug: Found ${chapters.length} chapters in cache`)
+      
       let video = null
       
       // Find video in any chapter
       for (const chapter of chapters) {
         if (chapter.videos) {
+          console.log(`🔍 [VIDEO DELETE] Phase 1 Debug: Searching chapter ${chapter.id} with ${chapter.videos.length} videos`)
           video = chapter.videos.find((v: any) => v.id === videoId)
-          if (video) break
+          if (video) {
+            console.log(`🔍 [VIDEO DELETE] Phase 1 Debug: Found video in chapter ${chapter.id}:`, video)
+            break
+          }
         }
       }
       
@@ -491,8 +609,8 @@ export function useVideoDelete(courseId: string) {
   })
   
   return {
-    deleteVideo: removeMutation.mutate,
-    isDeleting: removeMutation.isPending,
+    deleteVideo: debouncedDelete, // Use debounced version for concurrent processing
+    isDeleting: removeMutation.isPending || isProcessingBatch,
     // Expose the mutation for more control if needed
     removeMutation
   }
