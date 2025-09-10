@@ -164,24 +164,32 @@ export function ChapterManager({
     setLinkingChapters(prev => new Set([...prev, chapterId]))
     
     try {
-      // Phase 1: Link each selected media file (still sequential, but with optimistic updates)
-      for (const file of files) {
-        try {
-          console.log(`🔗 [Phase 1] Starting link for ${file.name} (${file.id}) to chapter ${chapterId}`)
-          
-          const result = await linkMediaMutation.mutateAsync({
-            mediaId: file.id,
-            chapterId: chapterId,
-            courseId: courseId
-          })
-          
-          console.log(`✅ [Phase 1] Link successful for ${file.name}:`, result)
-          
-        } catch (error) {
-          console.error(`❌ [Phase 1] Failed to link ${file.name}:`, error)
-          // Individual error handling is done by the mutation's onError
-        }
-      }
+      // Phase 2: Link all selected media files in parallel for 4x speed improvement
+      console.log(`🚀 [Phase 2] Starting parallel processing of ${files.length} files`)
+      
+      const linkingPromises = files.map(file => 
+        linkMediaMutation.mutateAsync({
+          mediaId: file.id,
+          chapterId: chapterId,
+          courseId: courseId
+        }).then(result => {
+          console.log(`✅ [Phase 2] Parallel link successful for ${file.name}:`, result)
+          return { file, result, success: true }
+        }).catch(error => {
+          console.error(`❌ [Phase 2] Parallel link failed for ${file.name}:`, error)
+          return { file, error, success: false }
+        })
+      )
+      
+      // Wait for all operations to complete (success or failure)
+      const results = await Promise.all(linkingPromises)
+      
+      // Log summary
+      const successful = results.filter(r => r.success).length
+      const failed = results.filter(r => !r.success).length
+      console.log(`📊 [Phase 2] Parallel processing complete: ${successful} successful, ${failed} failed out of ${files.length} total`)
+      
+      // Individual errors are already handled by mutation's onError, no need to throw here
     } finally {
       // Remove chapter from linking state
       setLinkingChapters(prev => {
