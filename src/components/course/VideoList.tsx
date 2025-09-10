@@ -192,15 +192,9 @@ export function VideoList({
     })
   }, [batchRenameMutation, pendingChanges, editingVideo, videoTitle, videos])
   
-  // ARCHITECTURE-COMPLIANT: Sync with Zustand store only when not editing
-  const videoPendingChangesFromStore = ui.getVideoPendingChanges()
-  useEffect(() => {
-    // PROFESSIONAL FORM PATTERN: Don't sync state during active editing to prevent edit mode exit
-    if (!editingVideo && Object.keys(videoPendingChangesFromStore).length === 0) {
-      // Zustand store was cleared, clear local state too
-      setPendingChanges({})
-    }
-  }, [videoPendingChangesFromStore, editingVideo])
+  // REMOVED: Flawed sync logic that clears pending changes incorrectly
+  // The old logic cleared pendingChanges whenever Zustand was empty, 
+  // but Zustand gets cleared during server operations, causing data loss
 
   // ARCHITECTURE-COMPLIANT: Notify parent of pending changes (exclude real-time editing state)
   useEffect(() => {
@@ -334,6 +328,11 @@ export function VideoList({
 
 
   const getStatusIcon = (video: Video) => {
+    // ARCHITECTURE-COMPLIANT: Linking state takes priority (TanStack state)
+    if ((video as any)._isLinking) {
+      return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+    }
+    
     switch (video.status) {
       case 'uploading':
         return <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -349,6 +348,11 @@ export function VideoList({
   }
 
   const getStatusIndicator = (video: Video) => {
+    // ARCHITECTURE-COMPLIANT: Linking state takes priority (TanStack state)
+    if ((video as any)._isLinking) {
+      return <Badge variant="secondary">Linking...</Badge>
+    }
+    
     switch (video.status) {
       case 'uploading':
         return <Badge variant="secondary">Uploading</Badge>
@@ -419,6 +423,12 @@ export function VideoList({
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
+              
+              // ARCHITECTURE-COMPLIANT: Prevent editing during server operations (TanStack state)
+              if ((video as any)._isLinking) {
+                return // Don't allow editing while video is being linked
+              }
+              
               if (editingVideo !== video.id) {
                 // Save any current edit before starting new one
                 if (editingVideo && videoTitle.trim()) {
@@ -516,13 +526,19 @@ export function VideoList({
                 <p 
                   className={cn(
                     "text-sm font-medium cursor-pointer select-none hover:bg-primary/10 hover:text-primary px-2 py-1 rounded transition-colors",
-                    video.markedForDeletion && "line-through"
+                    video.markedForDeletion && "line-through",
+                    // ARCHITECTURE-COMPLIANT: Visual feedback based on TanStack state
+                    (video as any)._isLinking && "opacity-60 cursor-not-allowed hover:bg-transparent hover:text-inherit"
                   )}
-                  title="Click to edit filename"
+                  title={(video as any)._isLinking ? "Adding to chapter..." : "Click to edit filename"}
                   data-video-edit={video.id}
                 >
                   {getDisplayName(video)}
-                  {pendingChanges[video.id] && (
+                  {/* Show different indicators for different states */}
+                  {(video as any)._isLinking && (
+                    <span className="ml-2 text-xs text-blue-500 animate-pulse">⊚ Linking...</span>
+                  )}
+                  {pendingChanges[video.id] && !(video as any)._isLinking && (
                     <span className="ml-2 text-xs text-orange-500">●</span>
                   )}
                 </p>

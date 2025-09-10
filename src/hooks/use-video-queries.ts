@@ -516,7 +516,8 @@ export function useLinkMediaToChapter() {
           updated_at: new Date().toISOString(),
           // Mark as optimistic for potential rollback
           _isOptimistic: true,
-          _originalMediaId: mediaId
+          _originalMediaId: mediaId,
+          _isLinking: true // ARCHITECTURE-COMPLIANT: TanStack owns server operation state
         }
         
         // Optimistically add video to chapter
@@ -555,7 +556,11 @@ export function useLinkMediaToChapter() {
                   ...chapter,
                   videos: chapter.videos.map((video: Video) => 
                     (video as any)._originalMediaId === variables.mediaId
-                      ? { ...realVideo, _isOptimistic: false } // Replace with real data
+                      ? { 
+                          ...realVideo, 
+                          _isOptimistic: false,
+                          _isLinking: false // ARCHITECTURE-COMPLIANT: Clear linking state
+                        }
                       : video
                   )
                 }
