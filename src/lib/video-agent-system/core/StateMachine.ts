@@ -1266,7 +1266,7 @@ export class VideoAgentStateMachine {
     
     let systemMessage = ''
     let aiMessage = ''
-    let reflectionData: any = {
+    const reflectionData: any = {
       type: payload.type,
       videoTimestamp: currentVideoTime
     }

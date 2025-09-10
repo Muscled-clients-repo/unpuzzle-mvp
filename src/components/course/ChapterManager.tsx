@@ -30,6 +30,8 @@ interface ChapterManagerProps {
   onCreateChapter: (title: string) => void
   onUpdateChapter: (chapterId: string, updates: Partial<Chapter>) => void
   onDeleteChapter: (chapterId: string) => void
+  isDeletingChapter?: boolean // TanStack deletion state
+  deletingChapterIds?: Set<string> // NEW: Specific chapters being deleted
   onReorderChapters: (chapters: Chapter[]) => void
   onVideoRename: (videoId: string, newName: string) => void
   batchRenameMutation?: any // TanStack Query mutation
@@ -48,6 +50,8 @@ export function ChapterManager({
   onCreateChapter,
   onUpdateChapter,
   onDeleteChapter,
+  isDeletingChapter,
+  deletingChapterIds,
   onReorderChapters,
   onVideoRename,
   batchRenameMutation,
@@ -84,6 +88,10 @@ export function ChapterManager({
   const [dragOverChapter, setDragOverChapter] = useState<string | null>(null)
   const [showMediaSelector, setShowMediaSelector] = useState<string | null>(null)
   const [linkingChapters, setLinkingChapters] = useState<Set<string>>(new Set())
+  // Use parent-managed deletion state or fallback to internal state
+  const [internalDeletingChapters, setInternalDeletingChapters] = useState<Set<string>>(new Set())
+  const deletingChapters = deletingChapterIds || internalDeletingChapters
+  const setDeletingChapters = deletingChapterIds ? () => {} : setInternalDeletingChapters
 
   const toggleChapter = (chapterId: string) => {
     setExpandedChapters(prev => {
@@ -199,6 +207,55 @@ export function ChapterManager({
     }
   }
 
+  // Chapter deletion handler - simplified when using parent-managed state
+  const handleChapterDeletion = async (chapterId: string) => {
+    console.log(`🗑️ [CHAPTER MANAGER] handleChapterDeletion called with:`, chapterId, 'type:', typeof chapterId)
+    
+    // If using internal state management, mark chapter as deleting
+    if (!deletingChapterIds) {
+      setDeletingChapters(prev => new Set([...prev, chapterId]))
+    }
+    
+    try {
+      // Call the parent's delete handler which should use TanStack mutation
+      await onDeleteChapter(chapterId)
+      console.log(`✅ Chapter ${chapterId} deletion initiated successfully`)
+    } catch (error) {
+      console.error(`❌ Error deleting chapter ${chapterId}:`, error)
+      // Clear deletion state on immediate error (only if using internal state)
+      if (!deletingChapterIds) {
+        setDeletingChapters(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(chapterId)
+          return newSet
+        })
+      }
+    }
+  }
+
+  // Cleanup internal deletion state when chapters are removed (only when using internal state)
+  useEffect(() => {
+    if (!deletingChapterIds && internalDeletingChapters.size > 0) {
+      const chapterIds = new Set(chapters.map(ch => ch.id))
+      
+      setInternalDeletingChapters(prev => {
+        const newSet = new Set(prev)
+        let hasChanges = false
+        
+        // Remove any deletion states for chapters that no longer exist in data
+        prev.forEach(chapterId => {
+          if (!chapterIds.has(chapterId)) {
+            newSet.delete(chapterId)
+            hasChanges = true
+            console.log(`🧹 [CHAPTER MANAGER] Clearing internal deletion state for removed chapter: ${chapterId}`)
+          }
+        })
+        
+        return hasChanges ? newSet : prev
+      })
+    }
+  }, [chapters, deletingChapterIds, internalDeletingChapters])
+
   return (
     <div className={cn("space-y-4", className)}>
 
@@ -222,8 +279,8 @@ export function ChapterManager({
         {chapters.length > 0 && (
           <>
             {chapters.map((chapter, index) => {
-              const isMarkedForDeletion = ui.pendingDeletes.has(chapter.id)
               const isPendingCreation = (chapter as any)._isPendingCreation
+              const isBeingDeleted = deletingChapters.has(chapter.id) // Chapter-specific deletion state
               
               return (
             <Card
@@ -235,9 +292,9 @@ export function ChapterManager({
               }}
               onDragLeave={() => setDragOverChapter(null)}
               className={cn(
-                "transition-colors",
+                "transition-all duration-500",
                 dragOverChapter === chapter.id && "border-primary bg-primary/5",
-                isMarkedForDeletion && "opacity-50 bg-red-50 border-red-200"
+                isBeingDeleted && "opacity-50 scale-95 bg-red-50 border-red-200 animate-pulse"
                 // Removed pending creation styling - new chapters look like normal chapters
               )}
             >
@@ -314,9 +371,9 @@ export function ChapterManager({
                             {ui.getChapterPendingChanges()[chapter.id] && (
                               <span className="ml-2 text-xs text-orange-500">●</span>
                             )}
-                            {isMarkedForDeletion && (
-                              <span className="ml-2 px-2 py-1 bg-red-100 text-red-800 text-xs rounded-md font-medium">
-                                Will be deleted
+                            {isBeingDeleted && (
+                              <span className="ml-2 px-2 py-1 bg-red-100 text-red-800 text-xs rounded-md font-medium animate-pulse">
+                                Unlinking videos...
                               </span>
                             )}
                           </h3>
@@ -359,9 +416,14 @@ export function ChapterManager({
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8"
-                      onClick={() => onDeleteChapter(chapter.id)}
+                      onClick={() => handleChapterDeletion(chapter.id)}
+                      disabled={isBeingDeleted}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      {isBeingDeleted ? (
+                        <div className="animate-spin h-4 w-4 border border-current border-t-transparent rounded-full" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
                     </Button>
                   </div>
                 </div>

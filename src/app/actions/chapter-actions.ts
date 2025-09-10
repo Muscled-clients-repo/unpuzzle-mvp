@@ -5,7 +5,7 @@ import { backblazeService } from '@/services/video/backblaze-service'
 import { revalidatePath } from 'next/cache'
 
 // Result types
-export interface ActionResult<T = any> {
+export interface ActionResult<T = unknown> {
   success: boolean
   data?: T
   error?: string
@@ -17,7 +17,7 @@ export interface VirtualChapter {
   id: string
   title: string
   courseId: string
-  videos: any[]
+  videos: unknown[]
   videoCount: number
   totalDuration?: string
 }
@@ -32,6 +32,34 @@ async function requireAuth() {
   }
   
   return user
+}
+
+// Helper function to broadcast WebSocket messages from Server Actions
+async function broadcastWebSocketMessage(message: {
+  type: string
+  courseId: string
+  operationId?: string
+  data: unknown
+  timestamp: number
+}) {
+  try {
+    console.log(`📤 [WEBSOCKET] Broadcasting to server:`, message.type)
+    const response = await fetch('http://localhost:8080/broadcast', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(message),
+    })
+    
+    if (!response.ok) {
+      console.error(`❌ [WEBSOCKET] Failed to broadcast ${message.type}:`, response.statusText)
+    } else {
+      console.log(`✅ [WEBSOCKET] Successfully broadcast ${message.type}`)
+    }
+  } catch (error) {
+    console.error(`❌ [WEBSOCKET] Error broadcasting ${message.type}:`, error)
+  }
 }
 
 /**
@@ -396,11 +424,19 @@ export async function updateChapterAction(
  */
 export async function deleteChapterAction(
   courseId: string,
-  chapterId: string
-): Promise<ActionResult> {
+  chapterId: string,
+  operationId?: string
+): Promise<ActionResult & { operationId?: string; immediate?: boolean }> {
   try {
     const user = await requireAuth()
     const supabase = await createClient()
+    
+    // Debug logging to understand the chapterId parameter
+    console.log('🗑️ [DELETE] Server action called with:', { courseId, chapterId, operationId })
+    console.log('🗑️ [DELETE] chapterId type:', typeof chapterId, 'value:', chapterId)
+    
+    // Ensure chapterId is a string primitive to avoid client reference issues
+    const chapterIdString = `${chapterId}` // Force string conversion
     
     // Verify course ownership
     const { data: course, error: courseError } = await supabase
@@ -422,7 +458,7 @@ export async function deleteChapterAction(
       .from('videos')
       .select('id, backblaze_file_id, filename')
       .eq('course_id', courseId)
-      .eq('chapter_id', chapterId)
+      .eq('chapter_id', chapterIdString)
     
     if (fetchError) throw fetchError
     
@@ -445,7 +481,7 @@ export async function deleteChapterAction(
       .from('videos')
       .delete()
       .eq('course_id', courseId)
-      .eq('chapter_id', chapterId)
+      .eq('chapter_id', chapterIdString)
     
     if (deleteVideosError) throw deleteVideosError
     
@@ -453,16 +489,34 @@ export async function deleteChapterAction(
     const { error: deleteChapterError } = await supabase
       .from('course_chapters')
       .delete()
-      .eq('id', chapterId)
+      .eq('id', chapterIdString)
       .eq('course_id', courseId)
     
     if (deleteChapterError) throw deleteChapterError
     
     revalidatePath(`/instructor/course/${courseId}`)
     
+    // Broadcast chapter deletion completion via WebSocket
+    if (operationId) {
+      setTimeout(() => {
+        broadcastWebSocketMessage({
+          type: 'chapter-delete-complete',
+          courseId,
+          operationId,
+          data: {
+            chapterId: chapterIdString,
+            videoCount: videos?.length || 0
+          },
+          timestamp: Date.now()
+        })
+      }, 100) // Small delay to ensure database transaction is committed
+    }
+    
     return {
       success: true,
-      message: `Chapter and ${videos?.length || 0} videos deleted successfully`
+      message: `Chapter and ${videos?.length || 0} videos deleted successfully`,
+      operationId,
+      immediate: !!operationId
     }
   } catch (error) {
     console.error('Delete chapter error:', error)

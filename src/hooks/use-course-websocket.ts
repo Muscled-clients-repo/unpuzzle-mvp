@@ -150,7 +150,8 @@ export function useCourseWebSocket(courseId: string) {
         tracker.receivedEvents.add('chapter-delete-complete')
         checkOperationComplete(data.operationId)
       } else {
-        toast.success('Chapter deleted')
+        // Toast handled by Observer pattern in use-chapter-queries.ts
+        console.log('🗑️ Chapter deleted (toast handled by Observer pattern)')
       }
     }
   }, [courseId, checkOperationComplete])

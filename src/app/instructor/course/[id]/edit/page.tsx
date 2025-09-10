@@ -35,8 +35,9 @@ import { useVideoBatchOperations, useVideoDelete } from '@/hooks/use-video-queri
 import { useFormState } from '@/hooks/use-form-state'
 import { ChapterManager } from '@/components/course/ChapterManager'
 import { SimpleVideoPreview } from "@/components/ui/SimpleVideoPreview"
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
 import { getCourseAction } from '@/app/actions/course-actions'
-import { getChaptersAction } from '@/app/actions/chapter-actions'
+import { getChaptersForCourseAction } from '@/app/actions/chapter-actions'
 
 export default function EditCourseV3Page(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params)
@@ -63,7 +64,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
           }),
           queryClient.prefetchQuery({
             queryKey: chapterKeys.list(courseId),
-            queryFn: () => getChaptersAction(courseId),
+            queryFn: () => getChaptersForCourseAction(courseId),
             staleTime: 1000 * 60 * 5 // 5 minutes cache for better performance
           })
         ]
@@ -127,6 +128,38 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   // Manual save state for immediate button feedback
   const [isSavingManually, setIsSavingManually] = React.useState(false)
   
+  // Chapter deletion confirmation state
+  const [chapterToDelete, setChapterToDelete] = React.useState<{id: string, title: string, videoCount: number} | null>(null)
+  
+  // Track chapters being deleted (for visual feedback)
+  const [deletingChapterIds, setDeletingChapterIds] = React.useState<Set<string>>(new Set())
+  
+  // Debounced save state to prevent flickering during WebSocket updates
+  const [debouncedHasChanges, setDebouncedHasChanges] = React.useState(false)
+
+  // Clean up deletion state when chapters are successfully deleted
+  React.useEffect(() => {
+    if (chapters && deletingChapterIds.size > 0) {
+      const currentChapterIds = new Set(chapters.map(ch => ch.id))
+      
+      setDeletingChapterIds(prev => {
+        const newSet = new Set(prev)
+        let hasChanges = false
+        
+        // Remove any deletion states for chapters that no longer exist
+        prev.forEach(chapterId => {
+          if (!currentChapterIds.has(chapterId)) {
+            console.log('🧹 [EDIT PAGE] Clearing deletion state for successfully deleted chapter:', chapterId)
+            newSet.delete(chapterId)
+            hasChanges = true
+          }
+        })
+        
+        return hasChanges ? newSet : prev
+      })
+    }
+  }, [chapters, deletingChapterIds])
+
   // Comprehensive loading state for all save operations
   const isSaving = isSavingManually || isUpdating || isBatchUpdating || isUpdatingChapters || isDeletingChapters || isDeletingVideos || hasPendingVideoDeletes
   
@@ -154,6 +187,15 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
     pendingDeletesCount, // Pending deletions count from Zustand
     chapters // Pending chapter creations in TanStack
   ])
+
+  // Debounce hasChanges to prevent flickering during rapid WebSocket updates
+  React.useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedHasChanges(hasChanges)
+    }, 100)
+    
+    return () => clearTimeout(timeoutId)
+  }, [hasChanges])
   
   // ARCHITECTURE-COMPLIANT: No data copying or synchronization
   
@@ -168,20 +210,44 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   }
   
   const handleDeleteChapter = (chapterId: string) => {
-    // ARCHITECTURE-COMPLIANT: Only mark for deletion in UI store (Zustand)
-    // Actual deletion happens on Save via TanStack mutations
-    if (ui.pendingDeletes.has(chapterId)) {
-      ui.unmarkForDeletion(chapterId)
-    } else {
-      ui.markForDeletion(chapterId)
-      // Also mark all videos in this chapter for deletion
-      const chapter = chapters?.find(ch => ch.id === chapterId)
-      if (chapter?.videos) {
-        chapter.videos.forEach(video => {
-          ui.markForDeletion(video.id)
-        })
-      }
+    console.log('🗑️ [EDIT PAGE] handleDeleteChapter called with:', chapterId, 'type:', typeof chapterId)
+    
+    // Mark chapter as being deleted immediately for visual feedback
+    setDeletingChapterIds(prev => new Set([...prev, chapterId]))
+    
+    // Find chapter details
+    const chapter = chapters?.find(ch => ch.id === chapterId)
+    if (!chapter) return
+
+    const videoCount = chapter.videos?.length || 0
+    
+    // Skip confirmation for empty chapters - delete immediately
+    if (videoCount === 0) {
+      confirmDeleteChapter(chapterId)
+      return
     }
+    
+    // Show confirmation for chapters with videos
+    setChapterToDelete({
+      id: chapterId,
+      title: chapter.title,
+      videoCount
+    })
+  }
+  
+  const confirmDeleteChapter = async (chapterIdParam?: string) => {
+    console.log('🗑️ [EDIT PAGE] confirmDeleteChapter called with param:', chapterIdParam, 'type:', typeof chapterIdParam)
+    const chapterId = chapterIdParam || chapterToDelete?.id
+    console.log('🗑️ [EDIT PAGE] Final chapterId:', chapterId, 'type:', typeof chapterId)
+    if (!chapterId) return
+    
+    // Close dialog immediately - TanStack will handle the rest
+    setChapterToDelete(null)
+    
+    // Use the standard TanStack delete function 
+    // The server action already handles video unlinking
+    console.log('🗑️ [EDIT PAGE] About to call deleteChapter with:', chapterId, 'type:', typeof chapterId)
+    deleteChapter(chapterId)
   }
   
   const handleReorderChapters = (newOrder: any[]) => {
@@ -636,7 +702,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
               
               <Button
                 onClick={handleSave}
-                disabled={!hasChanges || isSaving}
+                disabled={!debouncedHasChanges || isSaving}
                 size="sm"
               >
                 {isSaving ? (
@@ -644,7 +710,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
                 ) : (
                   <Save className="mr-2 h-4 w-4" />
                 )}
-                {isSaving ? 'Saving...' : hasChanges ? 'Save' : 'Saved'}
+                {isSaving ? 'Saving...' : debouncedHasChanges ? 'Save' : 'Saved'}
               </Button>
             </div>
           </div>
@@ -722,6 +788,8 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
                   onCreateChapter={handleCreateChapter}
                   onUpdateChapter={handleUpdateChapter}
                   onDeleteChapter={handleDeleteChapter}
+                  isDeletingChapter={isDeletingChapters}
+                  deletingChapterIds={deletingChapterIds}
                   onReorderChapters={handleReorderChapters}
                   onVideoRename={handleVideoRename}
                   batchRenameMutation={{
@@ -750,6 +818,36 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
           onClose={ui.closeModal}
         />
       )}
+
+      {/* Chapter Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!chapterToDelete}
+        onClose={() => {
+          // Clear dialog state
+          const chapterId = chapterToDelete?.id
+          setChapterToDelete(null)
+          
+          // Clear visual feedback when dialog is cancelled
+          if (chapterId) {
+            console.log('🗑️ [EDIT PAGE] Clearing deletion state for cancelled chapter:', chapterId)
+            setDeletingChapterIds(prev => {
+              const newSet = new Set(prev)
+              newSet.delete(chapterId)
+              return newSet
+            })
+          }
+        }}
+        onConfirm={confirmDeleteChapter}
+        title="Delete Chapter"
+        message={chapterToDelete ? 
+          `Are you sure you want to delete "${chapterToDelete.title}"?${chapterToDelete.videoCount > 0 ? ` This will unlink ${chapterToDelete.videoCount} video${chapterToDelete.videoCount !== 1 ? 's' : ''} from the chapter.` : ''} This action cannot be undone.` 
+          : ''
+        }
+        confirmText="Yes, Delete Chapter"
+        cancelText="Cancel"
+        destructive={true}
+        isLoading={isDeletingChapters}
+      />
       
       {/* Removed noisy modal debug logs */}
     </div>

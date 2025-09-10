@@ -110,7 +110,10 @@ export function useChaptersEdit(courseId: string) {
         queryClient.invalidateQueries({ queryKey: chapterKeys.list(courseId) })
         
         if (event.operationId) {
-          toast.success('Chapter deleted')
+          // Delay toast to allow UI to update first
+          setTimeout(() => {
+            toast.success('Chapter deleted')
+          }, 150)
         }
       })
     ]
@@ -188,18 +191,48 @@ export function useChaptersEdit(courseId: string) {
   
   // Delete chapter mutation (soft delete)
   const deleteMutation = useMutation({
-    mutationFn: ({ chapterId, operationId }: { chapterId: string, operationId?: string }) => 
-      deleteChapterAction(courseId, chapterId, operationId),
+    mutationFn: async ({ chapterId, operationId }: { chapterId: string, operationId?: string }) => {
+      // Debug the actual chapterId being passed
+      console.log('🗑️ [HOOK] Raw chapterId:', chapterId, 'type:', typeof chapterId)
+      
+      // Extract string value if it's wrapped in an object or if it's an event
+      let chapterIdString: string
+      if (typeof chapterId === 'object' && chapterId !== null) {
+        // Check if it's a React event object
+        if ('nativeEvent' in chapterId || '_reactName' in chapterId) {
+          console.error('🚨 [HOOK] Received React event instead of chapterId - this indicates a bug in the call chain')
+          
+          // Try to extract chapterId from the event target's data attributes
+          const target = (chapterId as any).target as HTMLElement
+          const extractedId = target?.getAttribute('data-chapter-id') || 
+                             target?.closest('[data-chapter-id]')?.getAttribute('data-chapter-id')
+          
+          if (extractedId) {
+            console.log('🔧 [HOOK] Recovered chapterId from event target:', extractedId)
+            chapterIdString = extractedId
+          } else {
+            console.error('🚨 [HOOK] Could not recover chapterId from event object')
+            throw new Error('Invalid chapterId: received React event object and could not recover ID')
+          }
+        } else {
+          // If it's an object with an id property
+          chapterIdString = (chapterId as any).id || String(chapterId)
+        }
+      } else {
+        chapterIdString = String(chapterId)
+      }
+      
+      console.log('🗑️ [HOOK] Converted chapterId:', chapterIdString, 'operationId:', operationId)
+      return deleteChapterAction(courseId, chapterIdString, operationId)
+    },
     
     onMutate: async ({ chapterId }) => {
       await queryClient.cancelQueries({ queryKey: chapterKeys.list(courseId) })
       
       const previousChapters = queryClient.getQueryData(chapterKeys.list(courseId))
       
-      // Optimistic update - remove chapter
-      queryClient.setQueryData(chapterKeys.list(courseId), (old: Chapter[] = []) =>
-        old.filter(chapter => chapter.id !== chapterId)
-      )
+      // NO optimistic update for deletions - wait for server confirmation
+      // Visual feedback is handled by deletingChapters state in components
       
       return { previousChapters, deletedChapterId: chapterId }
     },
@@ -275,8 +308,11 @@ export function useChaptersEdit(courseId: string) {
     updateMutation.mutate({ chapterId, updates, operationId })
   }
   
-  // WebSocket-enabled chapter delete function (with Observer pattern)
+
+  // WebSocket-enabled chapter delete function (with Observer pattern) - keeping for legacy support
   const deleteChapterWithWebSocket = (chapterId: string) => {
+    console.log(`🗑️ [WEBSOCKET] deleteChapterWithWebSocket called with:`, chapterId, 'type:', typeof chapterId)
+    
     const operationId = websocket.generateOperationId()
     console.log(`🗑️ Starting WebSocket chapter delete: ${operationId}`)
     

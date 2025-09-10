@@ -104,6 +104,8 @@ export function useWebSocketConnection(userId: string) {
             'upload-complete': COURSE_EVENTS.UPLOAD_COMPLETE,
             'video-update-complete': COURSE_EVENTS.VIDEO_UPDATE_COMPLETE,
             'chapter-update-complete': COURSE_EVENTS.CHAPTER_UPDATE_COMPLETE,
+            'chapter-create-complete': COURSE_EVENTS.CHAPTER_CREATE_COMPLETE,
+            'chapter-delete-complete': COURSE_EVENTS.CHAPTER_DELETE_COMPLETE,
             // Media events
             'media-upload-progress': MEDIA_EVENTS.MEDIA_UPLOAD_PROGRESS,
             'media-upload-complete': MEDIA_EVENTS.MEDIA_UPLOAD_COMPLETE,

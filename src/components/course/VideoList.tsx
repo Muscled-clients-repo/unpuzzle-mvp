@@ -144,7 +144,7 @@ export function VideoList({
     if (!batchRenameMutation) return
     
     // Include any currently active edit
-    let finalChanges = { ...pendingChanges }
+    const finalChanges = { ...pendingChanges }
     
     // If user is currently editing, include that change
     if (editingVideo && videoTitle.trim()) {
@@ -444,7 +444,7 @@ export function VideoList({
                 const currentTarget = e.currentTarget as HTMLElement
                 
                 // Check both target and currentTarget for the data attribute
-                let cursorIntent = target.getAttribute('data-cursor-position') || 
+                const cursorIntent = target.getAttribute('data-cursor-position') || 
                                  currentTarget.querySelector('[data-cursor-position]')?.getAttribute('data-cursor-position')
                 
                 let clickPosition: number | 'start' | 'end'

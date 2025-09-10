@@ -68,7 +68,7 @@ interface MediaStoreState {
 
 // Temporary cache for React Strict Mode stability (like course system persistence)
 let uploadCache: Record<string, MediaUploadItem> = {}
-let bulkOperationCache: Record<string, BulkOperationItem> = {}
+const bulkOperationCache: Record<string, BulkOperationItem> = {}
 
 export const useMediaStore = create<MediaStoreState>((set, get) => ({
   // View preferences
