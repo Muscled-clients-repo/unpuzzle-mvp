@@ -414,24 +414,48 @@ export function useVideoDelete(courseId: string) {
   const [isProcessingBatch, setIsProcessingBatch] = useState(false)
   const debounceTimerRef = useRef<NodeJS.Timeout>()
   
-  // PHASE 5: Process batched deletes with optimized chapter lookup
+  // ACCURATE "SAVED" STATE: Track individual delete operations  
+  const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(new Set())
+  
+  // PHASE 5: Process batched deletes with optimized chapter lookup and operation tracking
   const processBatchedDeletes = async (videoIds: string[]) => {
     console.log(`🚀 [CONCURRENT DELETE] Starting batch delete for ${videoIds.length} videos:`, videoIds)
     
     const chapters = queryClient.getQueryData<any[]>(chapterKeys.list(courseId)) || []
     
+    // ACCURATE "SAVED" STATE: Add all videos to pending deletes before starting
+    setPendingDeletes(prev => new Set([...prev, ...videoIds]))
+    
     // PHASE 5: Prepare all delete operations with optimized video lookup
     const deleteOperations = videoIds.map(async (videoId) => {
-      // Use centralized helper function for video lookup
-      const result = findVideoInChapters(chapters, videoId)
-      const video = result?.video
-      
-      if (!video || video.media_file_id) {
-        console.log(`🔗 [CONCURRENT DELETE] Unlinking media library video: ${videoId}`)
-        return await unlinkVideoAction(videoId)
-      } else {
-        console.log(`🗑️ [CONCURRENT DELETE] Deleting direct upload video: ${videoId}`)
-        return await deleteVideoAction(videoId)
+      try {
+        // Use centralized helper function for video lookup
+        const result = findVideoInChapters(chapters, videoId)
+        const video = result?.video
+        
+        let deleteResult;
+        if (!video || video.media_file_id) {
+          console.log(`🔗 [CONCURRENT DELETE] Unlinking media library video: ${videoId}`)
+          deleteResult = await unlinkVideoAction(videoId)
+        } else {
+          console.log(`🗑️ [CONCURRENT DELETE] Deleting direct upload video: ${videoId}`)
+          deleteResult = await deleteVideoAction(videoId)
+        }
+        
+        // ACCURATE "SAVED" STATE: Remove from pending on success
+        if (deleteResult.success) {
+          setPendingDeletes(prev => {
+            const newSet = new Set(prev)
+            newSet.delete(videoId)
+            return newSet
+          })
+        }
+        
+        return { ...deleteResult, videoId }
+      } catch (error) {
+        console.error(`❌ [CONCURRENT DELETE] Failed to delete ${videoId}:`, error)
+        // Keep in pending deletes if failed (user can retry)
+        return { success: false, error: error.message, videoId }
       }
     })
     
@@ -444,6 +468,9 @@ export function useVideoDelete(courseId: string) {
   // Debounced delete function that batches rapid clicks
   const debouncedDelete = (videoId: string) => {
     console.log(`⏱️ [CONCURRENT DELETE] Queuing video ${videoId} for batch processing`)
+    
+    // ACCURATE "SAVED" STATE: Track this video as pending immediately
+    setPendingDeletes(prev => new Set([...prev, videoId]))
     
     // Add to queue
     setDeleteQueue(prev => new Set([...prev, videoId]))
@@ -559,6 +586,13 @@ export function useVideoDelete(courseId: string) {
       if (result.success) {
         // PHASE 2: Video successfully deleted/unlinked - no need to check video list cache
         console.log(`✅ Video removed successfully (individual operation)`)
+        
+        // ACCURATE "SAVED" STATE: Remove from pending deletes on success
+        setPendingDeletes(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(videoId)
+          return newSet
+        })
         // No individual toast - handled by consolidated save toast
       }
     },
@@ -578,6 +612,9 @@ export function useVideoDelete(courseId: string) {
   return {
     deleteVideo: debouncedDelete, // Use debounced version for concurrent processing
     isDeleting: removeMutation.isPending || isProcessingBatch,
+    // ACCURATE "SAVED" STATE: Expose pending deletes count for button state
+    pendingDeletesCount: pendingDeletes.size,
+    hasPendingDeletes: pendingDeletes.size > 0,
     // Expose the mutation for more control if needed
     removeMutation
   }

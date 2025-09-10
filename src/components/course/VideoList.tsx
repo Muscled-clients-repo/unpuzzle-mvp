@@ -256,7 +256,8 @@ export function VideoList({
     const videoName = getCurrentServerName(video) // ARCHITECTURE-COMPLIANT: Use server data as form initial value
     setEditingVideo(video.id)
     setEditingIndex(index)
-    setVideoTitle(videoName)
+    // CONTROLLED INPUT FIX: Ensure videoTitle is always a string
+    setVideoTitle(videoName || '')
     setHasSelectedText(false) // Reset flag so we can select text once
     
     if (clickPosition === 'start') {
@@ -461,10 +462,10 @@ export function VideoList({
           >
             {editingVideo === video.id ? (
               <Input
-                value={videoTitle || ''}
+                value={typeof videoTitle === 'string' ? videoTitle : ''}
                 onChange={(e) => {
                   const newValue = e.target.value
-                  setVideoTitle(newValue)
+                  setVideoTitle(newValue || '')
                   // ARCHITECTURE-COMPLIANT: No real-time tracking during typing (causes edit mode exit)
                 }}
                 onBlur={() => {

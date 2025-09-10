@@ -99,7 +99,8 @@ export function ChapterManager({
 
   const handleStartEditChapter = (chapter: Chapter) => {
     setEditingChapter(chapter.id)
-    setChapterTitle(ui.getChapterPendingChanges()[chapter.id] || chapter.title)
+    // CONTROLLED INPUT FIX: Ensure chapterTitle is always a string
+    setChapterTitle(ui.getChapterPendingChanges()[chapter.id] || chapter.title || '')
   }
 
   const handleSaveChapterEdit = (chapterId: string) => {
@@ -268,10 +269,10 @@ export function ChapterManager({
                       {/* Chapter title - clickable to edit */}
                       {editingChapter === chapter.id ? (
                         <Input
-                          value={chapterTitle}
+                          value={typeof chapterTitle === 'string' ? chapterTitle : ''}
                           onChange={(e) => {
                             const newTitle = e.target.value
-                            setChapterTitle(newTitle)
+                            setChapterTitle(newTitle || '')
                             
                             // Only set pending changes if value actually differs from original
                             const originalTitle = chapter.title

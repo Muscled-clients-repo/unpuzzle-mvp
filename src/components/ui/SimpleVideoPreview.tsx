@@ -16,6 +16,9 @@ interface SimpleVideoPreviewProps {
   video: {
     id?: string
     name?: string
+    title?: string
+    filename?: string
+    originalFilename?: string
     video_url?: string
     url?: string
     backblaze_url?: string
@@ -79,7 +82,7 @@ export function SimpleVideoPreview({ video, isOpen, onClose, title, autoPlay = t
     <SimpleModal
       isOpen={isOpen}
       onClose={onClose}
-      title={title || video?.name || video?.title || video?.originalFilename || extractFilename(video?.filename) || video?.fileName || video?.file_name || video?.originalName || "Video Preview"}
+      title={title || video?.name || video?.title || video?.originalFilename || video?.filename || extractFilename(video?.filename) || video?.fileName || video?.file_name || video?.originalName || "Video Preview"}
       maxWidth="max-w-4xl"
     >
       <div className="p-0">
@@ -112,6 +115,15 @@ export function SimpleVideoPreview({ video, isOpen, onClose, title, autoPlay = t
                 poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='400'%3E%3Crect width='100%25' height='100%25' fill='%23000'/%3E%3C/svg%3E"
                 onError={(e) => {
                   console.error('Video playback error:', e)
+                  const target = e.target as HTMLVideoElement
+                  const error = target.error
+                  if (error) {
+                    console.error('Video error details:', {
+                      code: error.code,
+                      message: error.message,
+                      url: target.src
+                    })
+                  }
                 }}
               >
                 Your browser does not support the video tag.

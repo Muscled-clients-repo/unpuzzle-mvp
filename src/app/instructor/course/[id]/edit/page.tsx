@@ -118,7 +118,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   // ARCHITECTURE-COMPLIANT: UI Orchestration - read from TanStack mutations directly
   const { batchUpdateVideos, batchUpdateVideosMutation, isBatchUpdating, videoPendingChanges } = useVideoBatchOperations(courseId)
   const { updateChapter, updateChapterMutation, deleteChapter, deleteChapterMutation, isUpdating: isUpdatingChapters, isDeleting: isDeletingChapters } = useChaptersEdit(courseId)
-  const { deleteVideo, isDeleting: isDeletingVideos } = useVideoDelete(courseId)
+  const { deleteVideo, isDeleting: isDeletingVideos, hasPendingDeletes: hasPendingVideoDeletes } = useVideoDelete(courseId)
   
   // Get unified content pending changes count (stable primitive)
   const contentPendingChangesCount = ui.getContentPendingChangesCount()
@@ -128,7 +128,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   const [isSavingManually, setIsSavingManually] = React.useState(false)
   
   // Comprehensive loading state for all save operations
-  const isSaving = isSavingManually || isUpdating || isBatchUpdating || isUpdatingChapters || isDeletingChapters || isDeletingVideos
+  const isSaving = isSavingManually || isUpdating || isBatchUpdating || isUpdatingChapters || isDeletingChapters || isDeletingVideos || hasPendingVideoDeletes
   
   // ARCHITECTURE-COMPLIANT: UI Orchestration - read from appropriate stores without mixing data
   const hasChanges = React.useMemo(() => {
@@ -668,7 +668,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
                 <Label htmlFor="title">Course Title</Label>
                 <Input
                   id="title"
-                  value={formState.values.title}
+                  value={formState.values.title || ''}
                   onChange={(e) => handleInputChange('title', e.target.value)}
                   placeholder="Enter course title"
                   className="font-medium"
