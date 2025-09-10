@@ -140,9 +140,8 @@ export function useCourseWebSocket(courseId: string) {
 
     console.log('🗑️ Chapter deleted via WebSocket:', data)
     
-    // Temporarily disable invalidation to prevent infinite loops
+    // PHASE 4: Only invalidate chapters cache - eliminate videoKeys.list() confusion
     // queryClient.invalidateQueries({ queryKey: chapterKeys.list(courseId) })
-    queryClient.invalidateQueries({ queryKey: videoKeys.list(courseId) })
     
     // Track operation completion
     if (data.operationId) {
