@@ -38,6 +38,7 @@ import { SimpleVideoPreview } from "@/components/ui/SimpleVideoPreview"
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
 import { getCourseAction } from '@/app/actions/course-actions'
 import { getChaptersForCourseAction } from '@/app/actions/chapter-actions'
+import { scanOrphanedFilesAction, generateCleanupSQLAction } from '@/app/actions/cleanup-actions'
 
 export default function EditCourseV3Page(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params)
@@ -136,6 +137,11 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   
   // Debounced save state to prevent flickering during WebSocket updates
   const [debouncedHasChanges, setDebouncedHasChanges] = React.useState(false)
+  
+  // Admin cleanup state
+  const [isScanning, setIsScanning] = React.useState(false)
+  const [cleanupSQL, setCleanupSQL] = React.useState<string>('')
+  const [showCleanupSection, setShowCleanupSection] = React.useState(false)
 
   // Clean up deletion state when chapters are successfully deleted
   React.useEffect(() => {
@@ -277,6 +283,27 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   
   const handleVideoPreview = (video: any) => {
     ui.openModal('video-preview', video)
+  }
+
+  // Admin cleanup handlers
+  const handleScanOrphanedFiles = async () => {
+    setIsScanning(true)
+    setCleanupSQL('')
+    try {
+      const sql = await generateCleanupSQLAction()
+      setCleanupSQL(sql)
+      toast.success('Orphaned files scan complete! Check the SQL output below.')
+    } catch (error) {
+      console.error('Scan failed:', error)
+      toast.error('Failed to scan orphaned files. Check console for details.')
+    } finally {
+      setIsScanning(false)
+    }
+  }
+
+  const copyCleanupSQL = () => {
+    navigator.clipboard.writeText(cleanupSQL)
+    toast.success('SQL copied to clipboard! Paste in Supabase SQL Editor.')
   }
   
   const handlePendingChangesUpdate = (
@@ -782,6 +809,74 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
             </CardHeader>
             <CardContent className="p-0">
               <div className="px-6 pb-6">
+                {/* Admin Cleanup Section */}
+                <div className="mb-6">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowCleanupSection(!showCleanupSection)}
+                    className="mb-3"
+                  >
+                    {showCleanupSection ? 'Hide' : 'Show'} Admin Cleanup Tools
+                  </Button>
+
+                  {showCleanupSection && (
+                    <Card className="border-orange-200 bg-orange-50 dark:bg-orange-950 dark:border-orange-800">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-orange-600" />
+                          Database-Backblaze Sync Cleanup
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">
+                          Scan for orphaned database records where files don't exist in Backblaze storage.
+                        </div>
+                        
+                        <div className="flex gap-3">
+                          <Button
+                            onClick={handleScanOrphanedFiles}
+                            disabled={isScanning}
+                            size="sm"
+                            className="flex items-center gap-2"
+                          >
+                            {isScanning ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Scanning...
+                              </>
+                            ) : (
+                              'Scan for Orphaned Files'
+                            )}
+                          </Button>
+                          
+                          {cleanupSQL && (
+                            <Button
+                              onClick={copyCleanupSQL}
+                              variant="outline"
+                              size="sm"
+                            >
+                              Copy SQL to Clipboard
+                            </Button>
+                          )}
+                        </div>
+
+                        {cleanupSQL && (
+                          <div className="space-y-2">
+                            <Label className="text-xs font-medium">SQL to run in Supabase SQL Editor:</Label>
+                            <div className="bg-gray-900 text-green-400 p-3 rounded text-xs font-mono whitespace-pre-wrap max-h-40 overflow-auto">
+                              {cleanupSQL}
+                            </div>
+                            <div className="text-xs text-orange-600 dark:text-orange-400">
+                              ⚠️ Copy the SQL above and run it in your Supabase SQL Editor to clean up orphaned records.
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+
                 <ChapterManager
                   chapters={chapters || []}
                   courseId={courseId}

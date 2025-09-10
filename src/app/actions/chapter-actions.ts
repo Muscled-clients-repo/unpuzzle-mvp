@@ -1,7 +1,6 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { backblazeService } from '@/services/video/backblaze-service'
 import { revalidatePath } from 'next/cache'
 
 // Result types
@@ -453,30 +452,16 @@ export async function deleteChapterAction(
       throw new Error('Unauthorized: You do not own this course')
     }
     
-    // Get all videos in this chapter for Backblaze cleanup
+    // Get video count for reporting (no Backblaze deletion needed)
     const { data: videos, error: fetchError } = await supabase
       .from('videos')
-      .select('id, backblaze_file_id, filename')
+      .select('id')
       .eq('course_id', courseId)
       .eq('chapter_id', chapterIdString)
     
     if (fetchError) throw fetchError
     
-    // Delete from Backblaze
-    const deletionPromises = (videos || []).map(async (video) => {
-      if (video.backblaze_file_id && video.filename) {
-        try {
-          await backblazeService.deleteVideo(video.backblaze_file_id, video.filename)
-        } catch (error) {
-          console.error(`Failed to delete video ${video.id} from Backblaze:`, error)
-          // Continue with other deletions
-        }
-      }
-    })
-    
-    await Promise.all(deletionPromises)
-    
-    // Delete all videos from database
+    // UNLINK all videos from chapter (no cloud storage deletion)
     const { error: deleteVideosError } = await supabase
       .from('videos')
       .delete()
@@ -514,7 +499,7 @@ export async function deleteChapterAction(
     
     return {
       success: true,
-      message: `Chapter and ${videos?.length || 0} videos deleted successfully`,
+      message: `Chapter deleted and ${videos?.length || 0} videos unlinked successfully`,
       operationId,
       immediate: !!operationId
     }
