@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { FloatingUploadPanel } from "@/components/ui/FloatingUploadPanel"
 import { UnifiedDropzone } from "@/components/media/unified-dropzone"
-import { useMediaFiles, useDeleteMediaFile, useUploadMediaFile, useBulkDeleteFiles } from "@/hooks/use-media-queries"
+import { useMediaFiles, useDeleteMediaFile, useUploadMediaFile, useBulkDeleteFiles, useExistingTags } from "@/hooks/use-media-queries"
 import { useMediaStore } from "@/stores/media-store"
 import { SimpleVideoPreview } from "@/components/ui/SimpleVideoPreview"
 import { FileDetailsModal } from "@/components/media/FileDetailsModal"
@@ -26,7 +26,8 @@ import {
   Play,
   Trash2,
   MoreHorizontal,
-  Info
+  Info,
+  Tag
 } from "lucide-react"
 import {
   Select,
@@ -46,6 +47,7 @@ import { cn } from "@/lib/utils"
 export default function MediaPage() {
   // ARCHITECTURE-COMPLIANT: Form state in useState
   const [searchQuery, setSearchQuery] = useState('')
+  const [showTagSuggestions, setShowTagSuggestions] = useState(false)
   const [previewingFile, setPreviewingFile] = useState<any>(null)
   const [detailsFile, setDetailsFile] = useState<any>(null)
   
@@ -76,6 +78,7 @@ export default function MediaPage() {
   
   // ARCHITECTURE-COMPLIANT: Server state in TanStack Query
   const { data: mediaFiles = [], isLoading, error } = useMediaFiles()
+  const { data: existingTags = [] } = useExistingTags()
   const deleteMutation = useDeleteMediaFile()
   const uploadMutation = useUploadMediaFile()
   const bulkDeleteMutation = useBulkDeleteFiles()
@@ -166,12 +169,69 @@ export default function MediaPage() {
     }
   }
 
+  const renderTagBadges = (tags: string[] | null | undefined, maxVisible: number = 3) => {
+    if (!tags || tags.length === 0) {
+      return (
+        <div className="flex items-center gap-1">
+          <Tag className="h-3 w-3 text-muted-foreground/50" />
+          <Badge variant="outline" className="text-xs opacity-50 border-dashed">
+            No tags
+          </Badge>
+        </div>
+      )
+    }
+
+    const visibleTags = tags.slice(0, maxVisible)
+    const remainingCount = tags.length - maxVisible
+
+    return (
+      <div className="flex items-center gap-1 flex-wrap">
+        <Tag className="h-3 w-3 text-blue-500 flex-shrink-0" />
+        <div className="flex flex-wrap gap-1">
+          {visibleTags.map((tag, index) => (
+            <Badge 
+              key={index} 
+              variant="secondary" 
+              className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+            >
+              {tag}
+            </Badge>
+          ))}
+          {remainingCount > 0 && (
+            <Badge 
+              variant="outline" 
+              className="text-xs px-2 py-0.5 opacity-70 border-blue-200"
+            >
+              +{remainingCount}
+            </Badge>
+          )}
+        </div>
+      </div>
+    )
+  }
+
 
   const filteredMedia = mediaFiles.filter(item => {
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase())
+    const searchLower = searchQuery.toLowerCase()
+    const matchesName = item.name.toLowerCase().includes(searchLower)
+    const matchesTags = item.tags?.some(tag => 
+      tag.toLowerCase().includes(searchLower)
+    ) || false
+    const matchesSearch = matchesName || matchesTags
     const matchesFilter = filterType === 'all' || item.type === filterType
     return matchesSearch && matchesFilter
   })
+
+  // Filter tags for autocomplete suggestions
+  const tagSuggestions = existingTags.filter(tag =>
+    tag.toLowerCase().includes(searchQuery.toLowerCase()) && 
+    searchQuery.length > 0
+  ).slice(0, 5) // Limit to 5 suggestions
+
+  const handleTagSuggestionClick = (tag: string) => {
+    setSearchQuery(tag)
+    setShowTagSuggestions(false)
+  }
 
   // Drag selection hook with file IDs for range selection
   const allFileIds = filteredMedia.map(item => item.id)
@@ -298,11 +358,41 @@ export default function MediaPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search media files..."
+            placeholder="Search by name or tags..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value)
+              setShowTagSuggestions(e.target.value.length > 0)
+            }}
+            onFocus={() => setShowTagSuggestions(searchQuery.length > 0)}
+            onBlur={() => setTimeout(() => setShowTagSuggestions(false), 200)} // Delay to allow click
             className="pl-10"
           />
+          
+          {/* Tag Autocomplete Suggestions */}
+          {showTagSuggestions && tagSuggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-background border rounded-md shadow-lg">
+              <div className="p-2 text-xs text-muted-foreground border-b">
+                Tag suggestions:
+              </div>
+              <div className="max-h-40 overflow-y-auto">
+                {tagSuggestions.map((tag, index) => (
+                  <button
+                    key={index}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                    onClick={() => handleTagSuggestionClick(tag)}
+                  >
+                    <Badge variant="secondary" className="text-xs">
+                      {tag}
+                    </Badge>
+                    <span className="text-muted-foreground text-xs">
+                      Search by tag
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Filter by Type */}
@@ -378,9 +468,9 @@ export default function MediaPage() {
                   data-selectable={item.id}
                   className={cn(
                     "group relative bg-card border rounded-lg overflow-hidden hover:shadow-md cursor-pointer",
-                    "transition-all duration-700 ease-out transform",
+                    "transform",
                     isSelected && "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950",
-                    isDeleting && "opacity-0 scale-90 pointer-events-none"
+                    isDeleting && "opacity-0 scale-90 pointer-events-none transition-all duration-700 ease-out"
                   )}
                   onClick={(e) => {
                     // Handle individual item clicks with modifier key support
@@ -400,6 +490,15 @@ export default function MediaPage() {
                     </div>
                   )}
                   
+                  {/* Tag indicator */}
+                  {!isSelected && item.tags && item.tags.length > 0 && (
+                    <div className="absolute top-2 left-2 z-10">
+                      <div className="w-5 h-5 bg-blue-500/90 rounded-full flex items-center justify-center">
+                        <Tag className="w-3 h-3 text-white" />
+                      </div>
+                    </div>
+                  )}
+                  
                   {/* Thumbnail/Preview */}
                   <div className="aspect-video bg-muted flex items-center justify-center">
                     {getTypeIcon(item.type)}
@@ -412,12 +511,17 @@ export default function MediaPage() {
                       <span>{item.size}</span>
                       <span>{item.uploadedAt}</span>
                     </div>
-                    <Badge 
-                      variant={item.usage === 'Unused' ? 'secondary' : 'outline'}
-                      className="text-xs"
-                    >
-                      {item.usage}
-                    </Badge>
+                    <div className="flex items-center justify-between mb-2">
+                      <Badge 
+                        variant={item.usage === 'Unused' ? 'secondary' : 'outline'}
+                        className="text-xs"
+                      >
+                        {item.usage}
+                      </Badge>
+                    </div>
+                    <div className="mt-2">
+                      {renderTagBadges(item.tags, 2)}
+                    </div>
                   </div>
 
                   {/* Actions */}
@@ -482,9 +586,9 @@ export default function MediaPage() {
                   data-selectable={item.id}
                   className={cn(
                     "flex items-center gap-4 p-4 bg-card border rounded-lg hover:bg-accent/50 cursor-pointer",
-                    "transition-all duration-700 ease-out transform",
+                    "transform",
                     isSelected && "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950",
-                    isDeleting && "opacity-0 scale-90 pointer-events-none"
+                    isDeleting && "opacity-0 scale-90 pointer-events-none transition-all duration-700 ease-out"
                   )}
                   onClick={(e) => {
                     // Handle individual item clicks with modifier key support
@@ -510,6 +614,9 @@ export default function MediaPage() {
                   <div className="flex-1 min-w-0">
                     <h4 className="font-medium truncate">{item.name}</h4>
                     <p className="text-sm text-muted-foreground">{item.size} • {item.uploadedAt}</p>
+                    <div className="mt-1">
+                      {renderTagBadges(item.tags, 4)}
+                    </div>
                   </div>
                   <Badge variant={item.usage === 'Unused' ? 'secondary' : 'outline'}>
                     {item.usage}

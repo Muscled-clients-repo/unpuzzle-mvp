@@ -1,7 +1,7 @@
 "use client"
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getMediaFilesAction, deleteMediaFileAction, uploadMediaFileAction, getMediaFileHistoryAction, generateBulkDeletePreviewAction, bulkDeleteMediaFilesAction } from '@/app/actions/media-actions'
+import { getMediaFilesAction, deleteMediaFileAction, uploadMediaFileAction, getMediaFileHistoryAction, generateBulkDeletePreviewAction, bulkDeleteMediaFilesAction, getExistingTagsAction, bulkAddTagsAction, bulkRemoveTagsAction, bulkReplaceTagsAction } from '@/app/actions/media-actions'
 import { toast } from 'sonner'
 import { courseEventObserver, MEDIA_EVENTS } from '@/lib/course-event-observer'
 import { useEffect } from 'react'
@@ -15,6 +15,7 @@ export interface MediaFile {
   usage: string
   uploadedAt: string
   thumbnail: string | null
+  tags?: string[] | null // Database tags field
   // Internal fields for preview functionality
   backblaze_file_id?: string
   backblaze_url?: string
@@ -307,6 +308,109 @@ export function useBulkDeleteFiles() {
       
       // Don't remove files on error - let animation reset
       queryClient.invalidateQueries({ queryKey: ['media-files'] })
+    }
+  })
+}
+
+export function useExistingTags() {
+  return useQuery({
+    queryKey: ['media-tags'],
+    queryFn: async () => {
+      const result = await getExistingTagsAction()
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to fetch tags')
+      }
+      return result.tags
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
+  })
+}
+
+export function useBulkAddTags() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async ({ fileIds, tagsToAdd }: { fileIds: string[], tagsToAdd: string[] }) => {
+      const result = await bulkAddTagsAction(fileIds, tagsToAdd)
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to add tags')
+      }
+      return result
+    },
+    
+    onSuccess: (result) => {
+      const { summary } = result
+      toast.success(`✅ Added tags "${summary.tagsAdded.join(', ')}" to ${summary.succeeded} file${summary.succeeded !== 1 ? 's' : ''}`)
+      
+      // Invalidate and refetch media files
+      queryClient.invalidateQueries({ queryKey: ['media-files'] })
+      // Invalidate tags list to include new tags
+      queryClient.invalidateQueries({ queryKey: ['media-tags'] })
+    },
+    
+    onError: (error) => {
+      console.error('Bulk add tags mutation error:', error)
+      toast.error(`❌ Failed to add tags: ${error.message}`)
+    }
+  })
+}
+
+export function useBulkRemoveTags() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async ({ fileIds, tagsToRemove }: { fileIds: string[], tagsToRemove: string[] }) => {
+      const result = await bulkRemoveTagsAction(fileIds, tagsToRemove)
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to remove tags')
+      }
+      return result
+    },
+    
+    onSuccess: (result) => {
+      const { summary } = result
+      toast.success(`✅ Removed tags "${summary.tagsRemoved.join(', ')}" from ${summary.succeeded} file${summary.succeeded !== 1 ? 's' : ''}`)
+      
+      // Invalidate and refetch media files
+      queryClient.invalidateQueries({ queryKey: ['media-files'] })
+      // Invalidate tags list to update suggestions
+      queryClient.invalidateQueries({ queryKey: ['media-tags'] })
+    },
+    
+    onError: (error) => {
+      console.error('Bulk remove tags mutation error:', error)
+      toast.error(`❌ Failed to remove tags: ${error.message}`)
+    }
+  })
+}
+
+export function useBulkReplaceTags() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async ({ fileIds, newTags }: { fileIds: string[], newTags: string[] }) => {
+      const result = await bulkReplaceTagsAction(fileIds, newTags)
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to replace tags')
+      }
+      return result
+    },
+    
+    onSuccess: (result) => {
+      const { summary } = result
+      const tagText = summary.newTags.length > 0 ? `"${summary.newTags.join(', ')}"` : 'no tags'
+      toast.success(`✅ Replaced tags with ${tagText} on ${summary.succeeded} file${summary.succeeded !== 1 ? 's' : ''}`)
+      
+      // Invalidate and refetch media files
+      queryClient.invalidateQueries({ queryKey: ['media-files'] })
+      // Invalidate tags list to update suggestions
+      queryClient.invalidateQueries({ queryKey: ['media-tags'] })
+    },
+    
+    onError: (error) => {
+      console.error('Bulk replace tags mutation error:', error)
+      toast.error(`❌ Failed to replace tags: ${error.message}`)
     }
   })
 }

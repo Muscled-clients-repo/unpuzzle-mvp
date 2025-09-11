@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge"
 import { useMediaStore } from "@/stores/media-store"
 import { useBulkDeletePreview } from '@/hooks/use-media-queries'
 import { BulkDeleteConfirmationModal } from './BulkDeleteConfirmationModal'
-import { Trash2, X, CheckSquare, Loader2 } from "lucide-react"
+import { BulkTagModal } from './BulkTagModal'
+import { Trash2, X, CheckSquare, Loader2, Tag } from "lucide-react"
 
 interface BulkSelectionToolbarProps {
   onBulkDelete?: (operationId: string) => void
@@ -26,6 +27,7 @@ export function BulkSelectionToolbar({ onBulkDelete, allFileIds = [] }: BulkSele
   
   const selectedCount = selectedFiles.size
   const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [showTagModal, setShowTagModal] = useState(false)
   
   // TanStack mutation for preview generation
   const { mutate: generatePreview, isPending: isGeneratingPreview } = useBulkDeletePreview()
@@ -120,6 +122,18 @@ export function BulkSelectionToolbar({ onBulkDelete, allFileIds = [] }: BulkSele
             
             {/* Action buttons */}
             <div className="flex gap-2">
+              {/* Edit Tags button */}
+              <Button 
+                size="sm" 
+                variant="secondary" 
+                onClick={() => setShowTagModal(true)}
+                className="h-8"
+                disabled={isDeleteLoading}
+              >
+                <Tag className="w-4 h-4 mr-2" />
+                Edit Tags
+              </Button>
+              
               {/* Enhanced delete button with preview */}
               <Button 
                 size="sm" 
@@ -157,6 +171,14 @@ export function BulkSelectionToolbar({ onBulkDelete, allFileIds = [] }: BulkSele
         isOpen={showConfirmModal}
         onClose={handleCloseModal}
         onConfirm={handleConfirmDelete}
+      />
+
+      {/* Bulk Tag Modal */}
+      <BulkTagModal
+        isOpen={showTagModal}
+        onClose={() => setShowTagModal(false)}
+        selectedFileIds={Array.from(selectedFiles)}
+        selectedFileCount={selectedCount}
       />
     </>
   )

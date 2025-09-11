@@ -300,6 +300,7 @@ export async function getMediaFilesAction() {
       usage: file.usage_count ? `${file.usage_count} uses` : 'Unused',
       uploadedAt: new Date(file.created_at).toLocaleDateString(),
       thumbnail: file.thumbnail_url,
+      tags: file.tags, // Include tags from database
       // Include minimal data needed for preview functionality only
       backblaze_file_id: file.backblaze_file_id,
       backblaze_url: file.backblaze_url,
@@ -765,6 +766,347 @@ export async function deleteMediaFileAction(fileId: string) {
     return { 
       success: false,
       error: error instanceof Error ? error.message : 'Failed to delete file'
+    }
+  }
+}
+
+export async function getExistingTagsAction() {
+  try {
+    const supabase = await createSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return {
+        success: false,
+        error: 'User not authenticated',
+        tags: []
+      }
+    }
+
+    // Get all media files for this user and extract unique tags
+    const { data: mediaFiles, error } = await supabase
+      .from('media_files')
+      .select('tags')
+      .eq('uploaded_by', user.id)
+      .eq('status', 'active')
+      .not('tags', 'is', null)
+
+    if (error) {
+      console.error('❌ Failed to fetch tags:', error)
+      return {
+        success: false,
+        error: error.message,
+        tags: []
+      }
+    }
+
+    // Extract unique tags from all files
+    const allTags = new Set<string>()
+    mediaFiles.forEach(file => {
+      if (file.tags && Array.isArray(file.tags)) {
+        file.tags.forEach(tag => allTags.add(tag))
+      }
+    })
+
+    const uniqueTags = Array.from(allTags).sort()
+
+    return {
+      success: true,
+      tags: uniqueTags
+    }
+  } catch (error) {
+    console.error('❌ Failed to get existing tags:', error)
+    return { 
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to get tags',
+      tags: []
+    }
+  }
+}
+
+export async function bulkAddTagsAction(fileIds: string[], tagsToAdd: string[]) {
+  try {
+    const supabase = await createSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return {
+        success: false,
+        error: 'User not authenticated'
+      }
+    }
+
+    if (!fileIds.length || !tagsToAdd.length) {
+      return {
+        success: false,
+        error: 'No files or tags provided'
+      }
+    }
+
+    const results = []
+
+    for (const fileId of fileIds) {
+      // Get current file data
+      const { data: currentFile, error: fetchError } = await supabase
+        .from('media_files')
+        .select('tags, name')
+        .eq('id', fileId)
+        .eq('uploaded_by', user.id)
+        .single()
+
+      if (fetchError) {
+        console.error(`❌ Failed to fetch file ${fileId}:`, fetchError)
+        results.push({ fileId, success: false, error: fetchError.message })
+        continue
+      }
+
+      // Merge existing tags with new tags (no duplicates)
+      const currentTags = currentFile.tags || []
+      const newTags = [...new Set([...currentTags, ...tagsToAdd])]
+
+      // Update file with new tags
+      const { error: updateError } = await supabase
+        .from('media_files')
+        .update({ tags: newTags })
+        .eq('id', fileId)
+        .eq('uploaded_by', user.id)
+
+      if (updateError) {
+        console.error(`❌ Failed to update tags for file ${fileId}:`, updateError)
+        results.push({ fileId, success: false, error: updateError.message })
+        continue
+      }
+
+      // Add history entry
+      const { error: historyError } = await supabase.rpc('add_media_file_history', {
+        p_media_file_id: fileId,
+        p_action: 'updated',
+        p_description: `Tags added: ${tagsToAdd.join(', ')} to "${currentFile.name}"`,
+        p_metadata: {
+          operation: 'bulk_add_tags',
+          tags_added: tagsToAdd,
+          new_tags: newTags
+        }
+      })
+
+      if (historyError) {
+        console.warn(`⚠️ Failed to add history for ${fileId}:`, historyError)
+      }
+
+      results.push({ fileId, success: true })
+    }
+
+    const successCount = results.filter(r => r.success).length
+    const failureCount = results.filter(r => !r.success).length
+
+    console.log(`✅ Bulk add tags complete: ${successCount} succeeded, ${failureCount} failed`)
+
+    return {
+      success: true,
+      results,
+      summary: {
+        total: fileIds.length,
+        succeeded: successCount,
+        failed: failureCount,
+        tagsAdded: tagsToAdd
+      }
+    }
+  } catch (error) {
+    console.error('❌ Failed to bulk add tags:', error)
+    return { 
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to add tags'
+    }
+  }
+}
+
+export async function bulkRemoveTagsAction(fileIds: string[], tagsToRemove: string[]) {
+  try {
+    const supabase = await createSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return {
+        success: false,
+        error: 'User not authenticated'
+      }
+    }
+
+    if (!fileIds.length || !tagsToRemove.length) {
+      return {
+        success: false,
+        error: 'No files or tags provided'
+      }
+    }
+
+    const results = []
+
+    for (const fileId of fileIds) {
+      // Get current file data
+      const { data: currentFile, error: fetchError } = await supabase
+        .from('media_files')
+        .select('tags, name')
+        .eq('id', fileId)
+        .eq('uploaded_by', user.id)
+        .single()
+
+      if (fetchError) {
+        console.error(`❌ Failed to fetch file ${fileId}:`, fetchError)
+        results.push({ fileId, success: false, error: fetchError.message })
+        continue
+      }
+
+      // Remove specified tags from current tags
+      const currentTags = currentFile.tags || []
+      const newTags = currentTags.filter(tag => !tagsToRemove.includes(tag))
+
+      // Update file with filtered tags
+      const { error: updateError } = await supabase
+        .from('media_files')
+        .update({ tags: newTags.length > 0 ? newTags : null })
+        .eq('id', fileId)
+        .eq('uploaded_by', user.id)
+
+      if (updateError) {
+        console.error(`❌ Failed to update tags for file ${fileId}:`, updateError)
+        results.push({ fileId, success: false, error: updateError.message })
+        continue
+      }
+
+      // Add history entry
+      const { error: historyError } = await supabase.rpc('add_media_file_history', {
+        p_media_file_id: fileId,
+        p_action: 'updated',
+        p_description: `Tags removed: ${tagsToRemove.join(', ')} from "${currentFile.name}"`,
+        p_metadata: {
+          operation: 'bulk_remove_tags',
+          tags_removed: tagsToRemove,
+          new_tags: newTags
+        }
+      })
+
+      if (historyError) {
+        console.warn(`⚠️ Failed to add history for ${fileId}:`, historyError)
+      }
+
+      results.push({ fileId, success: true })
+    }
+
+    const successCount = results.filter(r => r.success).length
+    const failureCount = results.filter(r => !r.success).length
+
+    console.log(`✅ Bulk remove tags complete: ${successCount} succeeded, ${failureCount} failed`)
+
+    return {
+      success: true,
+      results,
+      summary: {
+        total: fileIds.length,
+        succeeded: successCount,
+        failed: failureCount,
+        tagsRemoved: tagsToRemove
+      }
+    }
+  } catch (error) {
+    console.error('❌ Failed to bulk remove tags:', error)
+    return { 
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to remove tags'
+    }
+  }
+}
+
+export async function bulkReplaceTagsAction(fileIds: string[], newTags: string[]) {
+  try {
+    const supabase = await createSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return {
+        success: false,
+        error: 'User not authenticated'
+      }
+    }
+
+    if (!fileIds.length) {
+      return {
+        success: false,
+        error: 'No files provided'
+      }
+    }
+
+    const results = []
+
+    for (const fileId of fileIds) {
+      // Get current file data
+      const { data: currentFile, error: fetchError } = await supabase
+        .from('media_files')
+        .select('tags, name')
+        .eq('id', fileId)
+        .eq('uploaded_by', user.id)
+        .single()
+
+      if (fetchError) {
+        console.error(`❌ Failed to fetch file ${fileId}:`, fetchError)
+        results.push({ fileId, success: false, error: fetchError.message })
+        continue
+      }
+
+      // Remove duplicates from new tags
+      const uniqueNewTags = [...new Set(newTags)]
+
+      // Update file with new tags (replace all existing)
+      const { error: updateError } = await supabase
+        .from('media_files')
+        .update({ tags: uniqueNewTags.length > 0 ? uniqueNewTags : null })
+        .eq('id', fileId)
+        .eq('uploaded_by', user.id)
+
+      if (updateError) {
+        console.error(`❌ Failed to update tags for file ${fileId}:`, updateError)
+        results.push({ fileId, success: false, error: updateError.message })
+        continue
+      }
+
+      // Add history entry
+      const { error: historyError } = await supabase.rpc('add_media_file_history', {
+        p_media_file_id: fileId,
+        p_action: 'updated',
+        p_description: `Tags replaced on "${currentFile.name}" with: ${uniqueNewTags.length > 0 ? uniqueNewTags.join(', ') : 'no tags'}`,
+        p_metadata: {
+          operation: 'bulk_replace_tags',
+          old_tags: currentFile.tags || [],
+          new_tags: uniqueNewTags
+        }
+      })
+
+      if (historyError) {
+        console.warn(`⚠️ Failed to add history for ${fileId}:`, historyError)
+      }
+
+      results.push({ fileId, success: true })
+    }
+
+    const successCount = results.filter(r => r.success).length
+    const failureCount = results.filter(r => !r.success).length
+
+    console.log(`✅ Bulk replace tags complete: ${successCount} succeeded, ${failureCount} failed`)
+
+    return {
+      success: true,
+      results,
+      summary: {
+        total: fileIds.length,
+        succeeded: successCount,
+        failed: failureCount,
+        newTags: [...new Set(newTags)]
+      }
+    }
+  } catch (error) {
+    console.error('❌ Failed to bulk replace tags:', error)
+    return { 
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to replace tags'
     }
   }
 }
