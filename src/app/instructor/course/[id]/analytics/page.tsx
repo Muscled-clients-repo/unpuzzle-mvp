@@ -20,6 +20,9 @@ import {
   Play
 } from "lucide-react"
 import Link from "next/link"
+import { PageContainer } from "@/components/layout/page-container"
+import { PageContentHeader } from "@/components/layout/page-content-header"
+import { StatsGrid } from "@/components/layout/stats-grid"
 
 export default function CourseAnalyticsPageClean() {
   const params = useParams()
@@ -41,36 +44,31 @@ export default function CourseAnalyticsPageClean() {
 
   if (!course) {
     return (
-      <div className="container mx-auto p-6">
+      <PageContainer>
         <div className="text-center">Loading course analytics...</div>
-      </div>
+      </PageContainer>
     )
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-            <Link href="/instructor" className="hover:text-foreground">Dashboard</Link>
-            <ChevronRight className="h-4 w-4" />
-            <span>{course.courseName}</span>
-          </div>
-          <h1 className="text-3xl font-bold">{course.courseName} Analytics</h1>
-          <p className="text-muted-foreground">
-            {course.activeStudents} active students • {course.totalStudents} total enrolled
-          </p>
-        </div>
+    <PageContainer>
+      <PageContentHeader
+        title={`${course.courseName} Analytics`}
+        description={`${course.activeStudents} active students • ${course.totalStudents} total enrolled`}
+        breadcrumbs={[
+          { label: "Dashboard", href: "/instructor" },
+          { label: course.courseName, href: "#" }
+        ]}
+      >
         <Button asChild>
           <Link href={`/instructor/course/${courseId}/edit`}>
             Edit Course
           </Link>
         </Button>
-      </div>
+      </PageContentHeader>
 
       {/* Key Metrics */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <StatsGrid columns={5}>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Avg Learn Rate</CardTitle>
@@ -125,7 +123,7 @@ export default function CourseAnalyticsPageClean() {
             <p className="text-xs text-muted-foreground">Needs response</p>
           </CardContent>
         </Card>
-      </div>
+      </StatsGrid>
 
       {/* Tabs */}
       <Tabs value={selectedTab} onValueChange={setSelectedTab}>
@@ -380,6 +378,6 @@ export default function CourseAnalyticsPageClean() {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </PageContainer>
   )
 }

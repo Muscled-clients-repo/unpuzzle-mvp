@@ -26,6 +26,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { PageContainer } from "@/components/layout/page-container"
+import { PageHeaderSkeleton, Skeleton } from "@/components/common/universal-skeleton"
 
 // New architecture imports
 import { useQueryClient } from '@tanstack/react-query'
@@ -528,24 +529,11 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   if (isDataLoading) {
     return (
       <PageContainer>
-        {/* Lightweight skeleton with CSS-only animation */}
         <div className="space-y-6">
           {/* Header skeleton */}
           <div className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b">
             <div className="container mx-auto px-6 py-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="h-8 w-8 bg-muted animate-pulse rounded" />
-                  <div className="space-y-2">
-                    <div className="h-6 w-48 bg-muted animate-pulse rounded" />
-                    <div className="h-4 w-20 bg-muted/60 animate-pulse rounded" />
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-20 bg-muted animate-pulse rounded" />
-                  <div className="h-8 w-16 bg-primary/20 animate-pulse rounded" />
-                </div>
-              </div>
+              <PageHeaderSkeleton showActions={true} />
             </div>
           </div>
 
@@ -555,21 +543,21 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
             <div className="lg:col-span-1">
               <Card className="sticky top-24">
                 <CardHeader>
-                  <div className="h-6 w-32 bg-muted animate-pulse rounded" />
-                  <div className="h-4 w-40 bg-muted/60 animate-pulse rounded" />
+                  <Skeleton className="h-6 w-32" />
+                  <Skeleton className="h-4 w-40" />
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="space-y-2">
-                    <div className="h-4 w-20 bg-muted/60 animate-pulse rounded" />
-                    <div className="h-10 w-full bg-muted animate-pulse rounded" />
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-10 w-full" />
                   </div>
                   <div className="space-y-2">
-                    <div className="h-4 w-16 bg-muted/60 animate-pulse rounded" />
-                    <div className="h-10 w-full bg-muted animate-pulse rounded" />
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-10 w-full" />
                   </div>
                   <div className="space-y-2">
-                    <div className="h-4 w-24 bg-muted/60 animate-pulse rounded" />
-                    <div className="h-24 w-full bg-muted animate-pulse rounded" />
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-24 w-full" />
                   </div>
                 </CardContent>
               </Card>
@@ -579,11 +567,11 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
             <div className="lg:col-span-2">
               <Card>
                 <CardHeader>
-                  <div className="h-6 w-36 bg-muted animate-pulse rounded" />
-                  <div className="h-4 w-64 bg-muted/60 animate-pulse rounded" />
+                  <Skeleton className="h-6 w-36" />
+                  <Skeleton className="h-4 w-64" />
                 </CardHeader>
                 <CardContent className="p-6 space-y-4">
-                  <div className="h-9 w-32 bg-primary/20 animate-pulse rounded" />
+                  <Skeleton className="h-9 w-32" />
                   
                   {/* Chapter skeletons */}
                   {[1, 2].map((i) => (
@@ -591,13 +579,13 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
                       <CardHeader className="pb-3">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <div className="h-5 w-5 bg-muted animate-pulse rounded" />
-                            <div className="h-5 w-40 bg-muted animate-pulse rounded" />
-                            <div className="h-5 w-8 bg-muted/60 animate-pulse rounded-full" />
+                            <Skeleton className="h-5 w-5 rounded" />
+                            <Skeleton className="h-5 w-40" />
+                            <Skeleton className="h-5 w-8 rounded-full" />
                           </div>
                           <div className="flex items-center gap-2">
-                            <div className="h-8 w-8 bg-muted/60 animate-pulse rounded" />
-                            <div className="h-8 w-8 bg-muted/60 animate-pulse rounded" />
+                            <Skeleton className="h-8 w-8 rounded" />
+                            <Skeleton className="h-8 w-8 rounded" />
                           </div>
                         </div>
                       </CardHeader>
@@ -605,15 +593,15 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
                         <div className="space-y-3">
                           {[1, 2].map((j) => (
                             <div key={j} className="flex items-center gap-3 p-3 border rounded-lg">
-                              <div className="h-4 w-4 bg-muted/60 animate-pulse rounded" />
-                              <div className="h-8 w-8 bg-muted animate-pulse rounded" />
+                              <Skeleton className="h-4 w-4 rounded" />
+                              <Skeleton className="h-8 w-8 rounded" />
                               <div className="flex-1">
-                                <div className="h-4 w-48 bg-muted animate-pulse rounded mb-1" />
-                                <div className="h-3 w-24 bg-muted/60 animate-pulse rounded" />
+                                <Skeleton className="h-4 w-48 mb-1" />
+                                <Skeleton className="h-3 w-24" />
                               </div>
                               <div className="flex items-center gap-2">
-                                <div className="h-6 w-6 bg-muted/60 animate-pulse rounded" />
-                                <div className="h-6 w-6 bg-muted/60 animate-pulse rounded" />
+                                <Skeleton className="h-6 w-6 rounded" />
+                                <Skeleton className="h-6 w-6 rounded" />
                               </div>
                             </div>
                           ))}
@@ -621,9 +609,9 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
                           {/* Upload area skeleton */}
                           <div className="border-2 border-dashed border-muted/30 rounded-lg p-6">
                             <div className="text-center space-y-2">
-                              <div className="h-8 w-8 bg-muted/60 animate-pulse rounded mx-auto" />
-                              <div className="h-4 w-32 bg-muted animate-pulse rounded mx-auto" />
-                              <div className="h-3 w-40 bg-muted/60 animate-pulse rounded mx-auto" />
+                              <Skeleton className="h-8 w-8 rounded mx-auto" />
+                              <Skeleton className="h-4 w-32 mx-auto" />
+                              <Skeleton className="h-3 w-40 mx-auto" />
                             </div>
                           </div>
                         </div>

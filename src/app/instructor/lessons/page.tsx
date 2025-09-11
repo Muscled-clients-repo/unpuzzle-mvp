@@ -8,14 +8,11 @@ import { useAppStore } from "@/stores/app-store"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { PageContainer } from "@/components/layout/page-container"
+import { PageContentHeader } from "@/components/layout/page-content-header"
+import { StatsGrid } from "@/components/layout/stats-grid"
+import { FiltersSection } from "@/components/layout"
+import { SearchInput, FilterDropdown } from "@/components/ui/filters"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,23 +77,19 @@ export default function TeachLessonsPage() {
 
   return (
     <ErrorBoundary>
-      <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">My Lessons</h1>
-          <p className="text-muted-foreground">
-            Create standalone video lessons for marketing and quick tutorials
-          </p>
-        </div>
-        <Button onClick={() => router.push('/instructor/lesson/new')}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create Lesson
-        </Button>
-      </div>
+      <PageContainer>
+        <PageContentHeader
+          title="My Lessons"
+          description="Create standalone video lessons for marketing and quick tutorials"
+        >
+          <Button onClick={() => router.push('/instructor/lesson/new')}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Lesson
+          </Button>
+        </PageContentHeader>
 
-      {/* Stats Overview */}
-      <div className="grid gap-4 md:grid-cols-4">
+        {/* Stats Overview */}
+        <StatsGrid columns={4}>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Lessons</CardTitle>
@@ -156,32 +149,29 @@ export default function TeachLessonsPage() {
             </p>
           </CardContent>
         </Card>
-      </div>
+        </StatsGrid>
 
-      {/* Filters and Search */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-          <Input
+        {/* Filters and Search */}
+        <FiltersSection className="mb-6">
+          <SearchInput
             placeholder="Search lessons or tags..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
+            onChange={setSearchQuery}
           />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[180px]">
-            <Filter className="mr-2 h-4 w-4" />
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Lessons</SelectItem>
-            <SelectItem value="published">Published</SelectItem>
-            <SelectItem value="draft">Draft</SelectItem>
-            <SelectItem value="processing">Processing</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+          <FilterDropdown
+            value={statusFilter}
+            onChange={setStatusFilter}
+            placeholder="Filter by status"
+            width="w-[180px]"
+            icon={<Filter className="h-4 w-4" />}
+            options={[
+              { value: "all", label: "All Lessons" },
+              { value: "published", label: "Published" },
+              { value: "draft", label: "Draft" },
+              { value: "processing", label: "Processing" }
+            ]}
+          />
+        </FiltersSection>
 
       {/* Lessons Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -355,7 +345,7 @@ export default function TeachLessonsPage() {
           </div>
         </Card>
       )}
-      </div>
+      </PageContainer>
     </ErrorBoundary>
   )
 }

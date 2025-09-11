@@ -37,6 +37,9 @@ import {
   RefreshCw
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { PageContainer } from "@/components/layout/page-container"
+import { PageContentHeader } from "@/components/layout/page-content-header"
+import { StatsGrid } from "@/components/layout/stats-grid"
 
 export default function InstructorDashboard() {
   const { 
@@ -59,9 +62,11 @@ export default function InstructorDashboard() {
 
   if (!instructorStats) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
+      <PageContainer>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        </div>
+      </PageContainer>
     )
   }
 
@@ -137,17 +142,13 @@ export default function InstructorDashboard() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Header with Date Range Picker */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">Analytics Overview</h1>
-          <p className="text-muted-foreground">
-            {selectedInstructorCourse === 'all' 
-              ? 'Track performance across all courses'
-              : `Performance for ${courseAnalytics.find(c => c.courseId === selectedInstructorCourse)?.courseName}`}
-          </p>
-        </div>
+    <PageContainer>
+      <PageContentHeader
+        title="Analytics Overview"
+        description={selectedInstructorCourse === 'all' 
+          ? 'Track performance across all courses'
+          : `Performance for ${courseAnalytics.find(c => c.courseId === selectedInstructorCourse)?.courseName}`}
+      >
         <div className="flex items-center gap-2">
           <DateRangePicker />
           <Button variant="outline" size="icon" onClick={loadChartData}>
@@ -157,10 +158,10 @@ export default function InstructorDashboard() {
             <Download className="h-4 w-4" />
           </Button>
         </div>
-      </div>
+      </PageContentHeader>
 
       {/* Key Metrics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <StatsGrid columns={4}>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
@@ -256,9 +257,9 @@ export default function InstructorDashboard() {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </StatsGrid>
 
-      {/* Revenue Chart */}
+      {/* Revenue Chart */
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -547,6 +548,6 @@ export default function InstructorDashboard() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PageContainer>
   )
 }

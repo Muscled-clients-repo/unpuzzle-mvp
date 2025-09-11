@@ -5,6 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { PageContainer } from "@/components/layout/page-container"
+import { PageContentHeader } from "@/components/layout/page-content-header"
+import { StatsGrid } from "@/components/layout/stats-grid"
+import { FiltersSection } from "@/components/layout"
+import { SearchInput } from "@/components/ui/filters"
 import { Progress } from "@/components/ui/progress"
 import {
   Table,
@@ -182,16 +187,14 @@ export default function InstructorStudentsPage() {
 
   return (
     <ErrorBoundary>
-      <div className="flex-1 p-6">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2">Students</h1>
-            <p className="text-muted-foreground">
-              Monitor and support your students' learning journey
-            </p>
-          </div>
+      <PageContainer>
+        <PageContentHeader
+          title="Students"
+          description="Monitor and support your students' learning journey"
+        />
 
-          {/* Summary Cards */}
-          <div className="grid gap-4 md:grid-cols-4 mb-8">
+        {/* Summary Cards */}
+        <StatsGrid columns={4}>
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Total Students</CardTitle>
@@ -237,24 +240,20 @@ export default function InstructorStudentsPage() {
                 <p className="text-xs text-muted-foreground">Platform average</p>
               </CardContent>
             </Card>
-          </div>
+        </StatsGrid>
 
-          {/* Search and Filters */}
-          <div className="flex gap-4 mb-6">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search students..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <Button variant="outline" size="sm">
-              <Filter className="mr-2 h-4 w-4" />
-              Filters
-            </Button>
-          </div>
+        {/* Search and Filters */}
+        <FiltersSection className="mb-6">
+          <SearchInput
+            placeholder="Search students..."
+            value={searchQuery}
+            onChange={setSearchQuery}
+          />
+          <Button variant="outline" size="sm">
+            <Filter className="mr-2 h-4 w-4" />
+            Filters
+          </Button>
+        </FiltersSection>
 
           {/* Students Table */}
           <Card>
@@ -400,7 +399,7 @@ export default function InstructorStudentsPage() {
               </Table>
             </CardContent>
           </Card>
-      </div>
+      </PageContainer>
     </ErrorBoundary>
   )
 }
