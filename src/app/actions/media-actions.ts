@@ -592,7 +592,7 @@ export async function bulkDeleteMediaFilesAction(fileIds: string[], operationId:
         // Add history entry
         const { error: historyError } = await supabase.rpc('add_media_file_history', {
           p_media_file_id: fileId,
-          p_action: 'bulk_deleted',
+          p_action: 'deleted',
           p_description: `File "${fileInfo.name}" bulk deleted (${formatFileSize(fileInfo.file_size)})`,
           p_metadata: {
             file_size: fileInfo.file_size,
