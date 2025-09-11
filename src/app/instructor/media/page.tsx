@@ -14,6 +14,7 @@ import { useQuery } from "@tanstack/react-query"
 import { SimpleVideoPreview } from "@/components/ui/SimpleVideoPreview"
 import { FileDetailsModal } from "@/components/media/FileDetailsModal"
 import { BulkSelectionToolbar } from "@/components/media/BulkSelectionToolbar"
+import { MediaPageContentHeader } from "@/components/media/media-page-content-header"
 import { useDragSelection } from "@/hooks/use-drag-selection"
 import {
   Upload,
@@ -368,27 +369,9 @@ export default function MediaPage() {
   return (
     <div className="container mx-auto p-6 max-w-7xl">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Media Library</h1>
-          <p className="text-muted-foreground">
-            Manage and organize your course content
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="secondary">
-            {filteredMedia.length} files
-          </Badge>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={clearModals}
-            className="text-xs"
-          >
-            Clear Modals
-          </Button>
-        </div>
-      </div>
+      <MediaPageContentHeader 
+        fileCount={filteredMedia.length}
+      />
 
       {/* Progress Panel - Shows upload and bulk operation progress */}
 
