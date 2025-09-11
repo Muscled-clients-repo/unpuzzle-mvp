@@ -18,49 +18,51 @@ Complete timeline of everything that happened to each file:
 - Usage across different content
 - Replacement and version updates
 
-### ✅ **Search & Filter**
+### ✅ **Search & Filter** ✅
 Find files quickly using multiple criteria:
-- Search by filename
-- Filter by file type (video, image, audio)
-- Sort by upload date, file size, usage status
-- Filter by used/unused status
+- ✅ Search by filename
+- ✅ Search by tags (with autocomplete)
+- ✅ Filter by file type (video, image, audio)
+- ✅ Filter by course usage
+- ✅ Sort by upload date, file size, usage status
 
-### ✅ **File Metadata**
+### ✅ **File Metadata** ✅  
 Rich information for each file:
-- Original filename and current name
-- File size and format details
-- Upload timestamp
-- File type and MIME information
-- Storage location references
+- ✅ Original filename and current name
+- ✅ File size and format details
+- ✅ Upload timestamp
+- ✅ File type and MIME information
+- ✅ Tags (JSON array with display badges)
+- ✅ Storage location references
 
-### ✅ **Bulk Operations**
+### ✅ **Bulk Operations** ✅
 Efficient management of multiple files:
-- Select multiple files at once
-- Batch delete unused files
-- Bulk rename operations
+- ✅ Select multiple files at once (checkbox toggle mode + drag selection)
+- ✅ Batch delete unused files (with smooth animations)  
+- ✅ Bulk tagging operations (add/remove tags to multiple files)
 - Mass file organization
 
 ---
 
 ## Usage Tracking & Analytics
 
-### ✅ **Usage Status**
+### ✅ **Usage Status** ✅
 Clear indication of file utilization:
-- "Used" - Files actively referenced in courses
-- "Unused" - Files available but not currently linked
-- Visual badges and indicators
+- ✅ "Used" - Files actively referenced in courses  
+- ✅ Course filtering dropdown with file counts
+- ✅ Real-time usage tracking via media_usage table
 
-### ✅ **Where Used**
+### ✅ **Where Used** ✅
 Detailed usage tracking:
-- Click any file to see which courses use it
-- View specific chapters and lessons
-- Track usage across multiple content areas
+- ✅ Course usage data via media_usage table joins
+- ✅ Filter media by specific courses
+- ✅ Track usage across multiple content areas
 
-### ✅ **Usage Count**
+### ✅ **Usage Count** ✅
 Quantitative usage metrics:
-- Number of places each file is referenced
-- Popular vs rarely used content identification
-- Content reuse statistics
+- ✅ Course dropdown shows file count per course
+- ✅ Popular vs rarely used content identification
+- ✅ Real-time usage statistics via database joins
 
 ### ✅ **Orphaned Files**
 Identify storage optimization opportunities:
