@@ -15,6 +15,8 @@ import { SimpleVideoPreview } from "@/components/ui/SimpleVideoPreview"
 import { FileDetailsModal } from "@/components/media/FileDetailsModal"
 import { BulkSelectionToolbar } from "@/components/media/BulkSelectionToolbar"
 import { MediaPageContentHeader } from "@/components/media/media-page-content-header"
+import { MediaFiltersSection } from "@/components/media/media-filters-section"
+import { MediaGrid } from "@/components/media/media-grid"
 import { useDragSelection } from "@/hooks/use-drag-selection"
 import {
   Upload,
@@ -385,382 +387,48 @@ export default function MediaPage() {
         />
       </div>
 
-      {/* Filters and Controls */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        {/* Search */}
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by name or tags..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value)
-              setShowTagSuggestions(e.target.value.length > 0)
-            }}
-            onFocus={() => setShowTagSuggestions(searchQuery.length > 0)}
-            onBlur={() => setTimeout(() => setShowTagSuggestions(false), 200)} // Delay to allow click
-            className="pl-10"
-          />
-          
-          {/* Tag Autocomplete Suggestions */}
-          {showTagSuggestions && tagSuggestions.length > 0 && (
-            <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-background border rounded-md shadow-lg">
-              <div className="p-2 text-xs text-muted-foreground border-b">
-                Tag suggestions:
-              </div>
-              <div className="max-h-40 overflow-y-auto">
-                {tagSuggestions.map((tag, index) => (
-                  <button
-                    key={index}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                    onClick={() => handleTagSuggestionClick(tag)}
-                  >
-                    <Badge variant="secondary" className="text-xs">
-                      {tag}
-                    </Badge>
-                    <span className="text-muted-foreground text-xs">
-                      Search by tag
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+      {/* CHECKPOINT 2C: Complete Search + Course + Filter + Sort + Selection + View */}
+      <MediaFiltersSection
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+        showTagSuggestions={showTagSuggestions}
+        onShowTagSuggestions={setShowTagSuggestions}
+        tagSuggestions={tagSuggestions}
+        onTagSuggestionClick={handleTagSuggestionClick}
+        selectedCourse={selectedInstructorCourse}
+        onSelectedCourseChange={setSelectedInstructorCourse}
+        courses={realCourses}
+        mediaFiles={mediaFiles}
+        filterType={filterType}
+        onFilterTypeChange={setFilterType}
+        sortOrder={sortOrder}
+        onSortOrderChange={setSortOrder}
+        isSelectionMode={isSelectionMode}
+        onSelectionModeChange={setIsSelectionMode}
+        onClearSelection={clearSelection}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+      />
 
-        {/* Filter by Course */}
-        <Select value={selectedInstructorCourse} onValueChange={setSelectedInstructorCourse}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="All Courses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Courses</SelectItem>
-            <SelectItem value="unused">Unused Files</SelectItem>
-            <div className="my-1 h-px bg-border" />
-            {realCourses.map(course => {
-              // Count media files used in this course
-              const mediaCount = mediaFiles.filter(file => 
-                file.media_usage?.some(usage => usage.course_id === course.id)
-              ).length
-              
-              return (
-                <SelectItem key={course.id} value={course.id}>
-                  <div className="flex items-center justify-between w-full">
-                    <span className="truncate">{course.title}</span>
-                    <Badge variant="outline" className="text-xs ml-2">
-                      {mediaCount}
-                    </Badge>
-                  </div>
-                </SelectItem>
-              )
-            })}
-          </SelectContent>
-        </Select>
-
-        {/* Filter by Type */}
-        <Select value={filterType} onValueChange={setFilterType}>
-          <SelectTrigger className="w-[140px]">
-            <Filter className="h-4 w-4 mr-2" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Files</SelectItem>
-            <SelectItem value="video">Videos</SelectItem>
-            <SelectItem value="image">Images</SelectItem>
-            <SelectItem value="document">Documents</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* Sort */}
-        <Button 
-          variant="outline" 
-          onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-        >
-          {sortOrder === 'asc' ? <SortAsc className="h-4 w-4 mr-2" /> : <SortDesc className="h-4 w-4 mr-2" />}
-          Date
-        </Button>
-
-        {/* Select Mode Toggle */}
-        <Button 
-          variant="outline"
-          className={cn(
-            "relative z-50 border-2 transition-colors",
-            isSelectionMode 
-              ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700 hover:border-blue-700" 
-              : "bg-background border-border hover:bg-muted"
-          )}
-          onClick={() => {
-            console.log('🔘 Select button clicked! Current mode:', isSelectionMode)
-            setIsSelectionMode(!isSelectionMode)
-            if (isSelectionMode) {
-              console.log('🧹 Clearing selections on exit')
-              clearSelection()
-            }
-          }}
-          style={{ pointerEvents: 'all' }}
-        >
-          {isSelectionMode ? <CheckSquare className="h-4 w-4 mr-2" /> : <Square className="h-4 w-4 mr-2" />}
-          {isSelectionMode ? 'Exit Select' : 'Select'}
-        </Button>
-
-        {/* View Mode */}
-        <div className="flex rounded-md border">
-          <Button
-            variant={viewMode === 'grid' ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => setViewMode('grid')}
-            className="rounded-r-none"
-          >
-            <Grid3X3 className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={viewMode === 'list' ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => setViewMode('list')}
-            className="rounded-l-none"
-          >
-            <List className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Media Grid/List with Selection Support */}
-      <div ref={containerRef} className="relative">
-        {/* Drag selection rectangle */}
-        {isDragActive && dragRectangle && (
-          <div 
-            className="absolute border-2 border-blue-500 bg-blue-500/10 pointer-events-none z-10 rounded"
-            style={{
-              left: dragRectangle.left,
-              top: dragRectangle.top,
-              width: dragRectangle.width,
-              height: dragRectangle.height
-            }}
-          />
-        )}
-        
-        {viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 transition-all duration-700 ease-out">
-            {filteredMedia
-              .filter(item => !hiddenFiles.has(item.id)) // Remove hidden files from render
-              .map((item) => {
-              const isSelected = selectedFiles.has(item.id) || selectedDuringDrag.has(item.id)
-              const isDeleting = deletingFiles.has(item.id)
-              
-              return (
-                <div
-                  key={item.id}
-                  data-selectable={item.id}
-                  className={cn(
-                    "group relative bg-card border rounded-lg overflow-hidden hover:shadow-md cursor-pointer",
-                    "transform",
-                    isSelected && "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950",
-                    isDeleting && "opacity-0 scale-90 pointer-events-none transition-all duration-700 ease-out"
-                  )}
-                  onClick={(e) => {
-                    // Only handle selection clicks when in selection mode
-                    if (!isDeleting && isSelectionMode) {
-                      handleItemSelection(item.id, e)
-                    }
-                  }}
-                >
-                  {/* Checkbox - only show in selection mode */}
-                  {isSelectionMode && (
-                    <div className="absolute top-2 left-2 z-20">
-                      <div className={cn(
-                        "w-6 h-6 rounded-md flex items-center justify-center border-2",
-                        isSelected 
-                          ? "bg-blue-500 border-blue-500 text-white" 
-                          : "bg-background border-gray-300 hover:border-gray-400"
-                      )}>
-                        {isSelected && <CheckSquare className="w-4 h-4" />}
-                      </div>
-                    </div>
-                  )}
-                  
-                  
-                  {/* Thumbnail/Preview */}
-                  <div className="aspect-video bg-muted flex items-center justify-center">
-                    {getTypeIcon(item.type)}
-                  </div>
-
-                  {/* Content */}
-                  <div className="p-3">
-                    <h4 className="font-medium truncate mb-1">{item.name}</h4>
-                    <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
-                      <span>{item.size}</span>
-                      <span>{item.uploadedAt}</span>
-                    </div>
-                    <div className="flex items-center justify-between mb-2">
-                      <Badge 
-                        variant={item.usage === 'Unused' ? 'secondary' : 'outline'}
-                        className="text-xs"
-                      >
-                        {item.usage}
-                      </Badge>
-                    </div>
-                    <div className="mt-2">
-                      {renderTagBadges(item.tags, 2)}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-8 w-8 p-0 bg-background/80 backdrop-blur-sm"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                          }}
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={(e) => {
-                          e.stopPropagation()
-                          handlePreview(item)
-                        }}>
-                          <Play className="h-4 w-4 mr-2" />
-                          Preview
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => {
-                          e.stopPropagation()
-                          setDetailsFile(item)
-                        }}>
-                          <Info className="h-4 w-4 mr-2" />
-                          Details
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          className="text-destructive"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleDelete(item.id)
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="space-y-2 transition-all duration-700 ease-out">
-            {filteredMedia
-              .filter(item => !hiddenFiles.has(item.id)) // Remove hidden files from render
-              .map((item) => {
-              const isSelected = selectedFiles.has(item.id) || selectedDuringDrag.has(item.id)
-              const isDeleting = deletingFiles.has(item.id)
-              
-              return (
-                <div
-                  key={item.id}
-                  data-selectable={item.id}
-                  className={cn(
-                    "flex items-center gap-4 p-4 bg-card border rounded-lg hover:bg-accent/50 cursor-pointer",
-                    "transform",
-                    isSelected && "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950",
-                    isDeleting && "opacity-0 scale-90 pointer-events-none transition-all duration-700 ease-out"
-                  )}
-                  onClick={(e) => {
-                    // Only handle selection clicks when in selection mode
-                    if (!isDeleting && isSelectionMode) {
-                      handleItemSelection(item.id, e)
-                    }
-                  }}
-                >
-                  {/* Checkbox - only show in selection mode */}
-                  {isSelectionMode && (
-                    <div className="flex-shrink-0 mr-3">
-                      <div className={cn(
-                        "w-5 h-5 rounded-md flex items-center justify-center border-2",
-                        isSelected 
-                          ? "bg-blue-500 border-blue-500 text-white" 
-                          : "bg-background border-gray-300 hover:border-gray-400"
-                      )}>
-                        {isSelected && <CheckSquare className="w-3 h-3" />}
-                      </div>
-                    </div>
-                  )}
-                  
-                  <div className="flex-shrink-0">
-                    {getTypeIcon(item.type)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-medium truncate">{item.name}</h4>
-                    <p className="text-sm text-muted-foreground">{item.size} • {item.uploadedAt}</p>
-                    <div className="mt-1">
-                      {renderTagBadges(item.tags, 4)}
-                    </div>
-                  </div>
-                  <Badge variant={item.usage === 'Unused' ? 'secondary' : 'outline'}>
-                    {item.usage}
-                  </Badge>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-8 w-8 p-0"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                        }}
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={(e) => {
-                        e.stopPropagation()
-                        handlePreview(item)
-                      }}>
-                        <Play className="h-4 w-4 mr-2" />
-                        Preview
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={(e) => {
-                        e.stopPropagation()
-                        setDetailsFile(item)
-                      }}>
-                        <Info className="h-4 w-4 mr-2" />
-                        Details
-                      </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        className="text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleDelete(item.id)
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      {filteredMedia.length === 0 && (
-        <div className="text-center py-12">
-          <FileVideo className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-semibold mb-2">No media files found</h3>
-          <p className="text-muted-foreground">
-            {searchQuery ? 'Try adjusting your search terms' : 'Upload some files to get started'}
-          </p>
-        </div>
-      )}
+      {/* CHECKPOINT 4: Media Grid/List with Selection Support */}
+      <MediaGrid
+        filteredMedia={filteredMedia}
+        hiddenFiles={hiddenFiles}
+        selectedFiles={selectedFiles}
+        selectedDuringDrag={selectedDuringDrag}
+        deletingFiles={deletingFiles}
+        viewMode={viewMode}
+        isSelectionMode={isSelectionMode}
+        searchQuery={searchQuery}
+        isDragActive={isDragActive}
+        dragRectangle={dragRectangle}
+        containerRef={containerRef}
+        handleItemSelection={handleItemSelection}
+        handlePreview={handlePreview}
+        setDetailsFile={setDetailsFile}
+        handleDelete={handleDelete}
+        renderTagBadges={renderTagBadges}
+      />
 
       {/* Bulk Selection Toolbar */}
       <BulkSelectionToolbar 
