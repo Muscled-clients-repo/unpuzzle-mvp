@@ -1,7 +1,7 @@
 "use client"
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getMediaFilesAction, deleteMediaFileAction, uploadMediaFileAction, getMediaFileHistoryAction } from '@/app/actions/media-actions'
+import { getMediaFilesAction, deleteMediaFileAction, uploadMediaFileAction, getMediaFileHistoryAction, generateBulkDeletePreviewAction, bulkDeleteMediaFilesAction } from '@/app/actions/media-actions'
 import { toast } from 'sonner'
 import { courseEventObserver, MEDIA_EVENTS } from '@/lib/course-event-observer'
 import { useEffect } from 'react'
@@ -241,5 +241,72 @@ export function useMediaFileHistory(fileId: string | null) {
       return result
     },
     enabled: !!fileId
+  })
+}
+
+export function useBulkDeletePreview() {
+  return useMutation({
+    mutationFn: async (fileIds: string[]) => {
+      return await generateBulkDeletePreviewAction(fileIds)
+    },
+    onError: (error) => {
+      console.error('Bulk delete preview error:', error)
+      toast.error('❌ Failed to generate deletion preview')
+    }
+  })
+}
+
+export function useBulkDeleteFiles() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async ({ fileIds, operationId, onAnimationStart }: { 
+      fileIds: string[]; 
+      operationId: string;
+      onAnimationStart?: (fileIds: string[]) => void;
+    }) => {
+      // Trigger animation start callback
+      if (onAnimationStart) {
+        onAnimationStart(fileIds)
+      }
+      
+      // Delay to allow animation to play (longer for visible effect)
+      await new Promise(resolve => setTimeout(resolve, 1200))
+      
+      return await bulkDeleteMediaFilesAction(fileIds, operationId)
+    },
+    
+    onMutate: async ({ fileIds, onAnimationStart }) => {
+      // Don't remove from UI immediately - let animation handle it
+      console.log('🗑️ [BULK DELETE] Starting deletion with animation for:', fileIds)
+    },
+    
+    onSuccess: (result, { fileIds }) => {
+      if (result.success) {
+        toast.success(`✅ Successfully deleted ${fileIds.length} file${fileIds.length !== 1 ? 's' : ''}`)
+        
+        // Remove from UI after animation completes
+        queryClient.setQueryData(['media-files'], (oldData: MediaFile[] | undefined) => {
+          if (!oldData) return []
+          return oldData.filter(file => !fileIds.includes(file.id))
+        })
+        
+        // Invalidate and refetch to get fresh data
+        queryClient.invalidateQueries({ queryKey: ['media-files'] })
+      } else {
+        toast.error(`❌ Bulk delete failed: ${result.error}`)
+        
+        // Don't remove files on failure - let animation reset
+        queryClient.invalidateQueries({ queryKey: ['media-files'] })
+      }
+    },
+    
+    onError: (error, { fileIds }) => {
+      console.error('Bulk delete mutation error:', error)
+      toast.error(`❌ Failed to delete ${fileIds.length} file${fileIds.length !== 1 ? 's' : ''}`)
+      
+      // Don't remove files on error - let animation reset
+      queryClient.invalidateQueries({ queryKey: ['media-files'] })
+    }
   })
 }

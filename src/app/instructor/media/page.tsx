@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { FloatingUploadPanel } from "@/components/ui/FloatingUploadPanel"
 import { UnifiedDropzone } from "@/components/media/unified-dropzone"
-import { useMediaFiles, useDeleteMediaFile, useUploadMediaFile } from "@/hooks/use-media-queries"
+import { useMediaFiles, useDeleteMediaFile, useUploadMediaFile, useBulkDeleteFiles } from "@/hooks/use-media-queries"
 import { useMediaStore } from "@/stores/media-store"
 import { SimpleVideoPreview } from "@/components/ui/SimpleVideoPreview"
 import { FileDetailsModal } from "@/components/media/FileDetailsModal"
@@ -49,6 +49,10 @@ export default function MediaPage() {
   const [previewingFile, setPreviewingFile] = useState<any>(null)
   const [detailsFile, setDetailsFile] = useState<any>(null)
   
+  // State for tracking files being deleted (for animation)
+  const [deletingFiles, setDeletingFiles] = useState<Set<string>>(new Set())
+  const [hiddenFiles, setHiddenFiles] = useState<Set<string>>(new Set())
+  
   // Container ref for drag selection
   const containerRef = useRef<HTMLDivElement>(null)
   
@@ -74,6 +78,7 @@ export default function MediaPage() {
   const { data: mediaFiles = [], isLoading, error } = useMediaFiles()
   const deleteMutation = useDeleteMediaFile()
   const uploadMutation = useUploadMediaFile()
+  const bulkDeleteMutation = useBulkDeleteFiles()
 
   // ARCHITECTURE-COMPLIANT: Upload handlers for TanStack Query integration
   const handleFilesSelected = (files: File[]) => {
@@ -86,6 +91,43 @@ export default function MediaPage() {
   const handleDelete = async (fileId: string) => {
     deleteMutation.mutate(fileId)
   }
+
+  const handleBulkDelete = useCallback((operationId: string) => {
+    console.log('🗑️ [BULK DELETE] Starting bulk deletion with operationId:', operationId)
+    
+    const fileIds = Array.from(selectedFiles)
+    console.log('Selected files for deletion:', fileIds)
+    
+    // Execute bulk delete with animation callback
+    bulkDeleteMutation.mutate({ 
+      fileIds, 
+      operationId,
+      onAnimationStart: (deletingFileIds) => {
+        // Phase 1: Start fade-out animation
+        setDeletingFiles(new Set(deletingFileIds))
+        
+        // Phase 2: After fade completes, hide from render to trigger reflow
+        setTimeout(() => {
+          setHiddenFiles(new Set(deletingFileIds))
+        }, 800) // Give more time to see the fade-out
+      }
+    })
+    
+    // Clear selection after operation starts
+    clearSelection()
+  }, [selectedFiles, clearSelection, bulkDeleteMutation, setDeletingFiles, setHiddenFiles])
+
+  // Clean up deleting files state when operation completes
+  useEffect(() => {
+    if ((deletingFiles.size > 0 || hiddenFiles.size > 0) && !bulkDeleteMutation.isPending) {
+      // Clear deleting and hidden state after a delay to allow animation to complete
+      const timer = setTimeout(() => {
+        setDeletingFiles(new Set())
+        setHiddenFiles(new Set())
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [deletingFiles.size, hiddenFiles.size, bulkDeleteMutation.isPending])
 
   const clearModals = () => {
     setPreviewingFile(null)
@@ -323,21 +365,28 @@ export default function MediaPage() {
         )}
         
         {viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {filteredMedia.map((item) => {
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 transition-all duration-700 ease-out">
+            {filteredMedia
+              .filter(item => !hiddenFiles.has(item.id)) // Remove hidden files from render
+              .map((item) => {
               const isSelected = selectedFiles.has(item.id) || selectedDuringDrag.has(item.id)
+              const isDeleting = deletingFiles.has(item.id)
               
               return (
                 <div
                   key={item.id}
                   data-selectable={item.id}
                   className={cn(
-                    "group relative bg-card border rounded-lg overflow-hidden hover:shadow-md transition-all cursor-pointer",
-                    isSelected && "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950"
+                    "group relative bg-card border rounded-lg overflow-hidden hover:shadow-md cursor-pointer",
+                    "transition-all duration-700 ease-out transform",
+                    isSelected && "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950",
+                    isDeleting && "opacity-0 scale-90 pointer-events-none"
                   )}
                   onClick={(e) => {
                     // Handle individual item clicks with modifier key support
-                    handleItemSelection(item.id, e)
+                    if (!isDeleting) {
+                      handleItemSelection(item.id, e)
+                    }
                   }}
                 >
                   {/* Selection indicator */}
@@ -420,21 +469,28 @@ export default function MediaPage() {
             })}
           </div>
         ) : (
-          <div className="space-y-2">
-            {filteredMedia.map((item) => {
+          <div className="space-y-2 transition-all duration-700 ease-out">
+            {filteredMedia
+              .filter(item => !hiddenFiles.has(item.id)) // Remove hidden files from render
+              .map((item) => {
               const isSelected = selectedFiles.has(item.id) || selectedDuringDrag.has(item.id)
+              const isDeleting = deletingFiles.has(item.id)
               
               return (
                 <div
                   key={item.id}
                   data-selectable={item.id}
                   className={cn(
-                    "flex items-center gap-4 p-4 bg-card border rounded-lg hover:bg-accent/50 transition-all cursor-pointer",
-                    isSelected && "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950"
+                    "flex items-center gap-4 p-4 bg-card border rounded-lg hover:bg-accent/50 cursor-pointer",
+                    "transition-all duration-700 ease-out transform",
+                    isSelected && "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950",
+                    isDeleting && "opacity-0 scale-90 pointer-events-none"
                   )}
                   onClick={(e) => {
                     // Handle individual item clicks with modifier key support
-                    handleItemSelection(item.id, e)
+                    if (!isDeleting) {
+                      handleItemSelection(item.id, e)
+                    }
                   }}
                 >
                   {/* Selection indicator */}
@@ -518,7 +574,7 @@ export default function MediaPage() {
 
       {/* Bulk Selection Toolbar */}
       <BulkSelectionToolbar 
-        onBulkDelete={undefined} // Will be enabled in Phase 2
+        onBulkDelete={handleBulkDelete} // Phase 2 enabled
         allFileIds={filteredMedia.map(item => item.id)}
       />
 

@@ -381,6 +381,318 @@ function formatFileSize(bytes: number): string {
   return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i]
 }
 
+export interface BulkDeletePreview {
+  operationId: string
+  totalItems: number
+  totalSize: number
+  totalSizeFormatted: string
+  affectedCourses: string[]
+  warnings: string[]
+  estimatedTime: number
+}
+
+export async function generateBulkDeletePreviewAction(fileIds: string[]): Promise<{ success: boolean; preview?: BulkDeletePreview; error?: string }> {
+  try {
+    const supabase = await createSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      return {
+        success: false,
+        error: 'User not authenticated'
+      }
+    }
+
+    if (!fileIds.length) {
+      return {
+        success: false,
+        error: 'No files selected for deletion'
+      }
+    }
+
+    console.log('🔍 Generating bulk delete preview for', fileIds.length, 'files')
+
+    // Fetch file information for preview
+    const { data: files, error: fetchError } = await supabase
+      .from('media_files')
+      .select(`
+        id,
+        name,
+        file_size,
+        file_type,
+        usage_count,
+        media_usage(
+          course_id,
+          resource_type,
+          resource_id,
+          courses(title)
+        )
+      `)
+      .in('id', fileIds)
+      .eq('uploaded_by', user.id)
+      .eq('status', 'active')
+
+    if (fetchError) {
+      console.error('❌ Failed to fetch file info for preview:', fetchError)
+      return {
+        success: false,
+        error: 'Failed to analyze selected files'
+      }
+    }
+
+    if (!files.length) {
+      return {
+        success: false,
+        error: 'No valid files found for deletion'
+      }
+    }
+
+    // Calculate totals
+    const totalSize = files.reduce((sum, file) => sum + file.file_size, 0)
+    const totalSizeFormatted = formatFileSize(totalSize)
+
+    // Find affected courses
+    const affectedCourses = Array.from(
+      new Set(
+        files.flatMap(file => 
+          file.media_usage?.map(usage => usage.courses?.title).filter(Boolean) || []
+        )
+      )
+    ) as string[]
+
+    // Generate warnings
+    const warnings: string[] = []
+    
+    // Check for files in use
+    const filesInUse = files.filter(file => (file.usage_count || 0) > 0)
+    if (filesInUse.length > 0) {
+      warnings.push(`${filesInUse.length} file(s) are currently used in courses and will be removed`)
+    }
+
+    // Check for large files
+    const largeFiles = files.filter(file => file.file_size > 100 * 1024 * 1024) // 100MB
+    if (largeFiles.length > 0) {
+      warnings.push(`${largeFiles.length} large file(s) selected - deletion may take longer`)
+    }
+
+    // Check if this will affect multiple courses
+    if (affectedCourses.length > 3) {
+      warnings.push(`Files are used across ${affectedCourses.length} courses`)
+    }
+
+    // Estimate time (rough calculation: 1 second per file + 0.5 seconds per 10MB)
+    const estimatedTime = Math.max(2, files.length + Math.floor(totalSize / (10 * 1024 * 1024) * 0.5))
+
+    const operationId = `bulk_delete_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
+
+    const preview: BulkDeletePreview = {
+      operationId,
+      totalItems: files.length,
+      totalSize,
+      totalSizeFormatted,
+      affectedCourses: affectedCourses.slice(0, 5), // Limit to 5 for UI
+      warnings,
+      estimatedTime
+    }
+
+    console.log('✅ Bulk delete preview generated:', preview)
+
+    return {
+      success: true,
+      preview
+    }
+  } catch (error) {
+    console.error('❌ Failed to generate bulk delete preview:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to generate preview'
+    }
+  }
+}
+
+export async function bulkDeleteMediaFilesAction(fileIds: string[], operationId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      return {
+        success: false,
+        error: 'User not authenticated'
+      }
+    }
+
+    if (!fileIds.length) {
+      return {
+        success: false,
+        error: 'No files selected for deletion'
+      }
+    }
+
+    console.log('🗑️ Starting bulk deletion for', fileIds.length, 'files with operationId:', operationId)
+
+    // Broadcast operation start
+    broadcastWebSocketMessage({
+      type: 'bulk-delete-progress',
+      operationId,
+      data: {
+        userId: user.id,
+        totalItems: fileIds.length,
+        completedItems: 0,
+        status: 'starting',
+        progress: 0
+      }
+    })
+
+    const results = []
+    let completedCount = 0
+
+    // Process files one by one with progress updates
+    for (let i = 0; i < fileIds.length; i++) {
+      const fileId = fileIds[i]
+      
+      try {
+        // Get file info before deleting
+        const { data: fileInfo, error: fetchError } = await supabase
+          .from('media_files')
+          .select('name, file_size, file_type')
+          .eq('id', fileId)
+          .eq('uploaded_by', user.id)
+          .single()
+
+        if (fetchError) {
+          console.error(`❌ Failed to fetch file ${fileId}:`, fetchError)
+          results.push({ fileId, success: false, error: 'File not found' })
+          continue
+        }
+
+        // Remove from media_usage first
+        const { error: usageError } = await supabase
+          .from('media_usage')
+          .delete()
+          .eq('media_file_id', fileId)
+
+        if (usageError) {
+          console.warn(`⚠️ Failed to remove usage tracking for ${fileId}:`, usageError)
+        }
+
+        // Soft delete the media file
+        const { error: deleteError } = await supabase
+          .from('media_files')
+          .update({ status: 'deleted' })
+          .eq('id', fileId)
+          .eq('uploaded_by', user.id)
+
+        if (deleteError) {
+          console.error(`❌ Failed to delete file ${fileId}:`, deleteError)
+          results.push({ fileId, success: false, error: deleteError.message })
+          continue
+        }
+
+        // Add history entry
+        const { error: historyError } = await supabase.rpc('add_media_file_history', {
+          p_media_file_id: fileId,
+          p_action: 'bulk_deleted',
+          p_description: `File "${fileInfo.name}" bulk deleted (${formatFileSize(fileInfo.file_size)})`,
+          p_metadata: {
+            file_size: fileInfo.file_size,
+            file_type: fileInfo.file_type,
+            operation_id: operationId,
+            bulk_operation: true
+          }
+        })
+
+        if (historyError) {
+          console.warn(`⚠️ Failed to add history for ${fileId}:`, historyError)
+        }
+
+        results.push({ fileId, success: true })
+        completedCount++
+
+        console.log(`✅ Deleted file ${i + 1}/${fileIds.length}: ${fileInfo.name}`)
+
+        // Broadcast progress
+        const progress = Math.round((completedCount / fileIds.length) * 100)
+        broadcastWebSocketMessage({
+          type: 'bulk-delete-progress',
+          operationId,
+          data: {
+            userId: user.id,
+            totalItems: fileIds.length,
+            completedItems: completedCount,
+            status: 'processing',
+            progress,
+            currentFile: fileInfo.name
+          }
+        })
+
+        // Small delay to prevent overwhelming the database
+        if (i < fileIds.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
+
+      } catch (error) {
+        console.error(`❌ Error deleting file ${fileId}:`, error)
+        results.push({ 
+          fileId, 
+          success: false, 
+          error: error instanceof Error ? error.message : 'Unknown error' 
+        })
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length
+    const failureCount = results.filter(r => !r.success).length
+
+    console.log(`✅ Bulk deletion complete: ${successCount} succeeded, ${failureCount} failed`)
+
+    // Broadcast completion
+    broadcastWebSocketMessage({
+      type: 'bulk-delete-progress',
+      operationId,
+      data: {
+        userId: user.id,
+        totalItems: fileIds.length,
+        completedItems: successCount,
+        failedItems: failureCount,
+        status: 'complete',
+        progress: 100,
+        results
+      }
+    })
+
+    // Revalidate the media page
+    revalidatePath('/instructor/media')
+
+    return {
+      success: successCount > 0,
+      error: failureCount > 0 ? `${failureCount} files failed to delete` : undefined
+    }
+
+  } catch (error) {
+    console.error('❌ Bulk deletion failed:', error)
+    
+    // Broadcast error
+    broadcastWebSocketMessage({
+      type: 'bulk-delete-progress',
+      operationId,
+      data: {
+        userId: user?.id || 'unknown',
+        totalItems: fileIds.length,
+        completedItems: 0,
+        status: 'error',
+        progress: 0,
+        error: error instanceof Error ? error.message : 'Bulk deletion failed'
+      }
+    })
+    
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Bulk deletion failed'
+    }
+  }
+}
+
 export async function deleteMediaFileAction(fileId: string) {
   try {
     const supabase = await createSupabaseClient()

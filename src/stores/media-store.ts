@@ -17,6 +17,19 @@ interface BulkOperationItem {
   error?: string
 }
 
+interface BulkOperationPreview {
+  selectedItems: Set<string>
+  operationType: 'delete' | 'move' | 'tag'
+  previewData: {
+    totalSize: number
+    totalSizeFormatted: string
+    affectedCourses: string[]
+    warnings: string[]
+    estimatedTime: number
+    operationId: string
+  }
+}
+
 interface MediaStoreState {
   // View preferences
   viewMode: 'grid' | 'list'
@@ -95,6 +108,15 @@ interface MediaStoreState {
   removeBulkOperation: (operationId: string) => void
   clearCompletedBulkOperations: () => void
   getBulkOperationsArray: () => BulkOperationItem[]
+  
+  // Enhanced bulk operation preview state
+  bulkOperationPreview: BulkOperationPreview | null
+  isPreviewLoading: boolean
+  
+  // Preview actions
+  setBulkOperationPreview: (preview: BulkOperationPreview | null) => void
+  setPreviewLoading: (loading: boolean) => void
+  clearOperationPreview: () => void
 }
 
 // Temporary cache for React Strict Mode stability (like course system persistence)
@@ -352,6 +374,10 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
   
   // Bulk operations progress (following same pattern)
   bulkOperations: {},
+  
+  // Enhanced bulk operation preview state
+  bulkOperationPreview: null,
+  isPreviewLoading: false,
   addBulkOperation: (operation) => set(state => ({
     bulkOperations: { ...state.bulkOperations, [operation.operationId]: operation }
   })),
@@ -373,4 +399,12 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     return { bulkOperations: newOperations }
   }),
   getBulkOperationsArray: () => Object.values(get().bulkOperations),
+  
+  // Preview actions implementation
+  setBulkOperationPreview: (preview) => set({ bulkOperationPreview: preview }),
+  setPreviewLoading: (loading) => set({ isPreviewLoading: loading }),
+  clearOperationPreview: () => set({ 
+    bulkOperationPreview: null, 
+    isPreviewLoading: false 
+  }),
 }))
