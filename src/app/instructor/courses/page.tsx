@@ -42,6 +42,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { PageContainer } from "@/components/layout/page-container"
+import { PageContentHeader } from "@/components/layout/page-content-header"
+import { StatsGrid } from "@/components/layout/stats-grid"
+import { StatsCardsSkeleton } from "@/components/common/universal-skeleton"
 
 export default function TeachCoursesPage() {
   const router = useRouter()
@@ -115,41 +119,25 @@ export default function TeachCoursesPage() {
 
   return (
     <ErrorBoundary>
-      <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">My Courses</h1>
-          <p className="text-muted-foreground">
-            Manage your courses and track their performance
-          </p>
-        </div>
-        <Button onClick={() => router.push('/instructor/course/new')}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create New Course
-        </Button>
-      </div>
+      <PageContainer>
+        {/* Header */}
+        <PageContentHeader
+          title="My Courses"
+          description="Manage your courses and track their performance"
+        >
+          <Button onClick={() => router.push('/instructor/course/new')}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create New Course
+          </Button>
+        </PageContentHeader>
 
-      {/* Stats Overview */}
-      {!hasInitialized || authLoading || coursesLoading ? (
-        // Skeleton loading for stats
-        <div className="grid gap-4 md:grid-cols-4">
-          {[1,2,3,4].map((i) => (
-            <Card key={i}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <div className="h-4 bg-gradient-to-r from-muted to-muted/50 rounded w-20 animate-pulse" />
-                <div className="h-4 w-4 bg-gradient-to-r from-muted to-muted/50 rounded animate-pulse" />
-              </CardHeader>
-              <CardContent>
-                <div className="h-8 bg-gradient-to-r from-muted to-muted/50 rounded w-12 animate-pulse mb-2" />
-                <div className="h-3 bg-gradient-to-r from-muted to-muted/50 rounded w-16 animate-pulse" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        // Actual stats
-        <div className="grid gap-4 md:grid-cols-4">
+        {/* Stats Overview */}
+        {!hasInitialized || authLoading || coursesLoading ? (
+          // Skeleton loading for stats
+          <StatsCardsSkeleton count={4} />
+        ) : (
+          // Actual stats
+          <StatsGrid columns={4}>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Courses</CardTitle>
@@ -210,11 +198,11 @@ export default function TeachCoursesPage() {
               </p>
             </CardContent>
           </Card>
-        </div>
-      )}
+          </StatsGrid>
+        )}
 
-      {/* Filters and Search */}
-      <div className="flex flex-col sm:flex-row gap-4">
+        {/* Filters and Search */}
+        <div className="flex flex-col sm:flex-row gap-4 mt-6 mb-6">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
@@ -417,7 +405,7 @@ export default function TeachCoursesPage() {
           </div>
         </Card>
       )}
-      </div>
+      </PageContainer>
     </ErrorBoundary>
   )
 }

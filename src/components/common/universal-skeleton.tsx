@@ -167,3 +167,26 @@ export function PageHeaderSkeleton({ className }: SkeletonProps) {
     </div>
   )
 }
+
+/**
+ * Filters section skeleton
+ */
+export function FiltersSectionSkeleton({ 
+  itemCount = 5, 
+  className 
+}: { 
+  itemCount?: number
+  className?: string 
+}) {
+  return (
+    <div className={cn("flex flex-col sm:flex-row gap-4 mb-6", className)}>
+      {/* Search input skeleton - flex-1 */}
+      <Skeleton className="h-10 flex-1" />
+      
+      {/* Additional filter skeletons */}
+      {Array.from({ length: itemCount - 1 }, (_, i) => (
+        <Skeleton key={i} className="h-10 w-36" />
+      ))}
+    </div>
+  )
+}

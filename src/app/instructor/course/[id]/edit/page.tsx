@@ -25,6 +25,7 @@ import {
   Upload
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { PageContainer } from "@/components/layout/page-container"
 
 // New architecture imports
 import { useQueryClient } from '@tanstack/react-query'
@@ -526,7 +527,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   
   if (isDataLoading) {
     return (
-      <div className="container mx-auto p-6 max-w-7xl">
+      <PageContainer>
         {/* Lightweight skeleton with CSS-only animation */}
         <div className="space-y-6">
           {/* Header skeleton */}
@@ -634,7 +635,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
             </div>
           </div>
         </div>
-      </div>
+      </PageContainer>
     )
   }
 
@@ -671,7 +672,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl">
+    <PageContainer>
       {/* Sticky Header */}
       <div className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
         <div className="container mx-auto px-6 py-4">
@@ -853,6 +854,6 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
       />
       
       {/* Removed noisy modal debug logs */}
-    </div>
+    </PageContainer>
   )
 }

@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { ChevronRight, Loader2 } from "lucide-react"
+import { PageContainer } from "@/components/layout/page-container"
 import { cn } from "@/lib/utils"
 
 
@@ -65,7 +66,7 @@ export default function CreateCoursePage() {
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl">
+    <PageContainer>
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
@@ -210,6 +211,6 @@ export default function CreateCoursePage() {
             </div>
           </CardContent>
         </Card>
-    </div>
+    </PageContainer>
   )
 }

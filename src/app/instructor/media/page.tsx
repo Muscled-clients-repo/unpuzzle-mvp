@@ -17,6 +17,8 @@ import { BulkSelectionToolbar } from "@/components/media/BulkSelectionToolbar"
 import { MediaPageContentHeader } from "@/components/media/media-page-content-header"
 import { MediaFiltersSection } from "@/components/media/media-filters-section"
 import { MediaGrid } from "@/components/media/media-grid"
+import { PageContainer } from "@/components/layout/page-container"
+import { PageHeaderSkeleton, FiltersSectionSkeleton, MediaCardSkeleton, Skeleton } from "@/components/common/universal-skeleton"
 import { useDragSelection } from "@/hooks/use-drag-selection"
 import {
   Upload,
@@ -315,61 +317,36 @@ export default function MediaPage() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6 max-w-7xl">
+      <PageContainer>
         {/* Header Skeleton */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <div className="h-8 bg-gradient-to-r from-muted to-muted/50 rounded w-48 animate-pulse mb-2" />
-            <div className="h-4 bg-gradient-to-r from-muted to-muted/50 rounded w-64 animate-pulse" />
-          </div>
-          <div className="h-6 bg-gradient-to-r from-muted to-muted/50 rounded w-16 animate-pulse" />
-        </div>
+        <PageHeaderSkeleton />
 
         {/* Upload Zone Skeleton */}
         <div className="mb-8">
-          <div className="h-32 bg-gradient-to-r from-muted to-muted/50 rounded-lg animate-pulse" />
+          <Skeleton className="h-32 rounded-lg" />
         </div>
 
         {/* Filters Skeleton */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          <div className="h-10 bg-gradient-to-r from-muted to-muted/50 rounded flex-1 animate-pulse" />
-          <div className="h-10 bg-gradient-to-r from-muted to-muted/50 rounded w-36 animate-pulse" />
-          <div className="h-10 bg-gradient-to-r from-muted to-muted/50 rounded w-20 animate-pulse" />
-          <div className="h-10 bg-gradient-to-r from-muted to-muted/50 rounded w-20 animate-pulse" />
-        </div>
+        <FiltersSectionSkeleton itemCount={5} />
 
         {/* Media Grid Skeleton */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {[1,2,3,4,5,6,7,8].map((i) => (
-            <div key={i} className="bg-card border rounded-lg overflow-hidden">
-              <div className="aspect-video bg-gradient-to-r from-muted to-muted/50 animate-pulse" />
-              <div className="p-3">
-                <div className="h-5 bg-gradient-to-r from-muted to-muted/50 rounded w-3/4 animate-pulse mb-2" />
-                <div className="flex justify-between mb-2">
-                  <div className="h-4 bg-gradient-to-r from-muted to-muted/50 rounded w-12 animate-pulse" />
-                  <div className="h-4 bg-gradient-to-r from-muted to-muted/50 rounded w-16 animate-pulse" />
-                </div>
-                <div className="h-5 bg-gradient-to-r from-muted to-muted/50 rounded w-16 animate-pulse" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+        <MediaCardSkeleton count={8} />
+      </PageContainer>
     )
   }
 
   if (error) {
     return (
-      <div className="container mx-auto p-6 max-w-7xl">
+      <PageContainer>
         <div className="text-center py-12">
           <p className="text-destructive">Failed to load media files</p>
         </div>
-      </div>
+      </PageContainer>
     )
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl">
+    <PageContainer>
       {/* Header */}
       <MediaPageContentHeader 
         fileCount={filteredMedia.length}
@@ -465,6 +442,6 @@ export default function MediaPage() {
         )}
         position="bottom-right" // Can be changed to "top" or "bottom-center"
       />
-    </div>
+    </PageContainer>
   )
 }
