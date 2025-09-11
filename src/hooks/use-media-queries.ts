@@ -16,6 +16,12 @@ export interface MediaFile {
   uploadedAt: string
   thumbnail: string | null
   tags?: string[] | null // Database tags field
+  media_usage?: Array<{
+    course_id: string
+    resource_type: string
+    resource_id: string
+    courses?: { title: string }
+  }> | null // Course usage data
   // Internal fields for preview functionality
   backblaze_file_id?: string
   backblaze_url?: string

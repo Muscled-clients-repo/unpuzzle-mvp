@@ -8,6 +8,7 @@ import { FloatingUploadPanel } from "@/components/ui/FloatingUploadPanel"
 import { UnifiedDropzone } from "@/components/media/unified-dropzone"
 import { useMediaFiles, useDeleteMediaFile, useUploadMediaFile, useBulkDeleteFiles, useExistingTags } from "@/hooks/use-media-queries"
 import { useMediaStore } from "@/stores/media-store"
+import { useAppStore } from "@/stores/app-store"
 import { SimpleVideoPreview } from "@/components/ui/SimpleVideoPreview"
 import { FileDetailsModal } from "@/components/media/FileDetailsModal"
 import { BulkSelectionToolbar } from "@/components/media/BulkSelectionToolbar"
@@ -82,6 +83,13 @@ export default function MediaPage() {
   const deleteMutation = useDeleteMediaFile()
   const uploadMutation = useUploadMediaFile()
   const bulkDeleteMutation = useBulkDeleteFiles()
+
+  // Course selection state from app store
+  const { 
+    courseAnalytics = [], 
+    selectedInstructorCourse, 
+    setSelectedInstructorCourse 
+  } = useAppStore()
 
   // ARCHITECTURE-COMPLIANT: Upload handlers for TanStack Query integration
   const handleFilesSelected = (files: File[]) => {
@@ -219,7 +227,18 @@ export default function MediaPage() {
     ) || false
     const matchesSearch = matchesName || matchesTags
     const matchesFilter = filterType === 'all' || item.type === filterType
-    return matchesSearch && matchesFilter
+    
+    // Course filtering logic
+    let matchesCourse = true
+    if (selectedInstructorCourse === 'unused') {
+      // Show only files not used in any course
+      matchesCourse = !item.media_usage || item.media_usage.length === 0
+    } else if (selectedInstructorCourse !== 'all') {
+      // Show only files used in the selected course
+      matchesCourse = item.media_usage?.some(usage => usage.course_id === selectedInstructorCourse) || false
+    }
+    
+    return matchesSearch && matchesFilter && matchesCourse
   })
 
   // Filter tags for autocomplete suggestions
@@ -395,6 +414,28 @@ export default function MediaPage() {
           )}
         </div>
 
+        {/* Filter by Course */}
+        <Select value={selectedInstructorCourse} onValueChange={setSelectedInstructorCourse}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="All Courses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Courses</SelectItem>
+            <SelectItem value="unused">Unused Files</SelectItem>
+            <div className="my-1 h-px bg-border" />
+            {courseAnalytics.map(course => (
+              <SelectItem key={course.courseId} value={course.courseId}>
+                <div className="flex items-center justify-between w-full">
+                  <span className="truncate">{course.courseName}</span>
+                  <Badge variant="outline" className="text-xs ml-2">
+                    {course.totalStudents}
+                  </Badge>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         {/* Filter by Type */}
         <Select value={filterType} onValueChange={setFilterType}>
           <SelectTrigger className="w-[140px]">
@@ -522,6 +563,11 @@ export default function MediaPage() {
                     <div className="mt-2">
                       {renderTagBadges(item.tags, 2)}
                     </div>
+                    {item.media_usage && item.media_usage.length > 0 && (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        <span>📚 Used in {item.media_usage.length} course{item.media_usage.length !== 1 ? 's' : ''}</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions */}
@@ -617,6 +663,11 @@ export default function MediaPage() {
                     <div className="mt-1">
                       {renderTagBadges(item.tags, 4)}
                     </div>
+                    {item.media_usage && item.media_usage.length > 0 && (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        <span>📚 Used in {item.media_usage.length} course{item.media_usage.length !== 1 ? 's' : ''}</span>
+                      </div>
+                    )}
                   </div>
                   <Badge variant={item.usage === 'Unused' ? 'secondary' : 'outline'}>
                     {item.usage}

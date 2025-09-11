@@ -3,7 +3,6 @@
 import { usePathname } from "next/navigation"
 import { Header } from "@/components/layout/header"
 import { Sidebar } from "@/components/layout/sidebar"
-import { CourseSelector } from "@/components/instructor/course-selector"
 export default function InstructorLayout({
   children,
 }: {
@@ -19,7 +18,6 @@ export default function InstructorLayout({
       {!isFullscreenPage && <Header />}
       {!isFullscreenPage && <Sidebar role="instructor" />}
       <div className={isFullscreenPage ? "" : "md:pl-64 pt-16"}>
-        {!isFullscreenPage && <CourseSelector />}
         <main className={isFullscreenPage ? "min-h-screen" : "min-h-[calc(100vh-4rem)]"}>
           {children}
         </main>
