@@ -10,7 +10,30 @@ interface DragRectangle {
   height: number
 }
 
-// Helper function to calculate drag rectangle from two points
+// Helper function to convert screen coordinates to container-relative coordinates
+function getContainerRelativeCoords(
+  event: MouseEvent, 
+  container: HTMLElement
+): { x: number, y: number } {
+  const rect = container.getBoundingClientRect()
+  return {
+    x: event.clientX - rect.left + container.scrollLeft,
+    y: event.clientY - rect.top + container.scrollTop
+  }
+}
+
+// Helper function to determine selection mode based on modifier keys
+function getSelectionMode(event: MouseEvent): 'replace' | 'add' | 'range' {
+  if (event.shiftKey) {
+    return 'range'
+  } else if (event.ctrlKey || event.metaKey) { // Ctrl on Windows/Linux, Cmd on Mac
+    return 'add'
+  } else {
+    return 'replace'
+  }
+}
+
+// Helper function to calculate drag rectangle from two points (container-relative)
 function getDragRectangle(
   startPoint: { x: number, y: number } | null, 
   currentPoint: { x: number, y: number } | null
@@ -25,11 +48,14 @@ function getDragRectangle(
   return { left, top, width, height }
 }
 
-// Helper function to find elements intersecting with drag rectangle
+// Helper function to find elements intersecting with drag rectangle (optimized)
 function getIntersectingElements(
   startPoint: { x: number, y: number },
   currentPoint: { x: number, y: number },
-  container: HTMLElement | null
+  container: HTMLElement | null,
+  selectionMode: 'replace' | 'add' | 'range' = 'replace',
+  lastSelectedId: string | null = null,
+  allFileIds: string[] = []
 ): string[] {
   if (!container) return []
   
@@ -38,47 +64,98 @@ function getIntersectingElements(
   
   const selectableElements = container.querySelectorAll('[data-selectable]')
   const intersectingIds: string[] = []
+  const containerRect = container.getBoundingClientRect()
   
-  selectableElements.forEach(element => {
-    const rect = element.getBoundingClientRect()
-    const containerRect = container.getBoundingClientRect()
+  // Use container-relative coordinates throughout
+  const dragLeft = dragRect.left
+  const dragTop = dragRect.top
+  const dragRight = dragLeft + dragRect.width
+  const dragBottom = dragTop + dragRect.height
+  
+  // For range selection, we need to determine which items are in the drag area
+  // and then select the range from lastSelectedId to those items
+  if (selectionMode === 'range' && lastSelectedId && allFileIds.length > 0) {
+    // Find items that intersect with drag rectangle
+    const dragIntersectedIds: string[] = []
     
-    // Convert drag rectangle to container-relative coordinates
-    const dragLeft = dragRect.left - containerRect.left + container.scrollLeft
-    const dragTop = dragRect.top - containerRect.top + container.scrollTop
-    const dragRight = dragLeft + dragRect.width
-    const dragBottom = dragTop + dragRect.height
-    
-    // Convert element rectangle to container-relative coordinates
-    const elemLeft = rect.left - containerRect.left + container.scrollLeft
-    const elemTop = rect.top - containerRect.top + container.scrollTop
-    const elemRight = elemLeft + rect.width
-    const elemBottom = elemTop + rect.height
-    
-    // Check for intersection
-    const intersects = !(
-      dragRight < elemLeft ||
-      dragLeft > elemRight ||
-      dragBottom < elemTop ||
-      dragTop > elemBottom
-    )
-    
-    if (intersects) {
-      const fileId = element.getAttribute('data-selectable')
-      if (fileId) {
-        intersectingIds.push(fileId)
+    selectableElements.forEach(element => {
+      const rect = element.getBoundingClientRect()
+      
+      // Convert element rectangle to container-relative coordinates
+      const elemLeft = rect.left - containerRect.left + container.scrollLeft
+      const elemTop = rect.top - containerRect.top + container.scrollTop
+      const elemRight = elemLeft + rect.width
+      const elemBottom = elemTop + rect.height
+      
+      // Check for intersection
+      const intersects = !(
+        dragRight < elemLeft ||
+        dragLeft > elemRight ||
+        dragBottom < elemTop ||
+        dragTop > elemBottom
+      )
+      
+      if (intersects) {
+        const fileId = element.getAttribute('data-selectable')
+        if (fileId) {
+          dragIntersectedIds.push(fileId)
+        }
       }
-    }
-  })
-  
-  return intersectingIds
+    })
+    
+    // For each intersected item, create range selection from lastSelectedId
+    const rangeIds = new Set<string>()
+    dragIntersectedIds.forEach(targetId => {
+      const fromIndex = allFileIds.indexOf(lastSelectedId)
+      const toIndex = allFileIds.indexOf(targetId)
+      
+      if (fromIndex !== -1 && toIndex !== -1) {
+        const start = Math.min(fromIndex, toIndex)
+        const end = Math.max(fromIndex, toIndex)
+        for (let i = start; i <= end; i++) {
+          rangeIds.add(allFileIds[i])
+        }
+      }
+    })
+    
+    return Array.from(rangeIds)
+  } else {
+    // Normal drag intersection detection
+    selectableElements.forEach(element => {
+      const rect = element.getBoundingClientRect()
+      
+      // Convert element rectangle to container-relative coordinates
+      const elemLeft = rect.left - containerRect.left + container.scrollLeft
+      const elemTop = rect.top - containerRect.top + container.scrollTop
+      const elemRight = elemLeft + rect.width
+      const elemBottom = elemTop + rect.height
+      
+      // Check for intersection using standard algorithm
+      const intersects = !(
+        dragRight < elemLeft ||
+        dragLeft > elemRight ||
+        dragBottom < elemTop ||
+        dragTop > elemBottom
+      )
+      
+      if (intersects) {
+        const fileId = element.getAttribute('data-selectable')
+        if (fileId) {
+          intersectingIds.push(fileId)
+        }
+      }
+    })
+    
+    return intersectingIds
+  }
 }
 
 // ARCHITECTURE-COMPLIANT: React hook for drag selection behavior
-export function useDragSelection(containerRef: RefObject<HTMLElement>) {
+export function useDragSelection(containerRef: RefObject<HTMLElement>, allFileIds: string[] = []) {
   const {
     dragSelection,
     selectedFiles,
+    lastSelectedId,
     startDragSelection,
     updateDragSelection,
     finalizeDragSelection,
@@ -113,52 +190,48 @@ export function useDragSelection(containerRef: RefObject<HTMLElement>) {
     }
   }, [autoScroll.isScrolling, autoScroll.direction, autoScroll.speed, containerRef])
   
-  // Mouse event handlers
-  const handleMouseDown = useCallback((event: MouseEvent) => {
-    // Only start drag selection if clicking on empty space or selectable items
+  // Global mouse event handlers using Event Delegation Hierarchy
+  const handleGlobalMouseDown = useCallback((event: MouseEvent) => {
     const target = event.target as HTMLElement
+    const container = containerRef.current
+    
+    // Only handle events within our container
+    if (!container?.contains(target)) return
+    
+    // Check if this is a selectable item or empty space
     const isSelectableItem = target.closest('[data-selectable]')
-    const isEmptySpace = !target.closest('button, input, [role="button"]')
+    const isInteractiveElement = target.closest('button, input, [role="button"], a')
     
-    console.log('[DRAG] mousedown detected:', { target: target.tagName, isSelectableItem: !!isSelectableItem, isEmptySpace })
-    
-    if (isEmptySpace || isSelectableItem) {
-      // Don't prevent default here - let clicks work normally
-      // Only prevent when we're sure it's a drag
+    // Only start drag selection for selectable items or empty space (not interactive elements)
+    if ((isSelectableItem || !isInteractiveElement) && !isInteractiveElement) {
+      // Determine selection mode based on modifier keys
+      const selectionMode = getSelectionMode(event)
       
-      const containerRect = containerRef.current?.getBoundingClientRect()
-      if (!containerRect) return
+      // Convert to container-relative coordinates immediately
+      const containerPoint = getContainerRelativeCoords(event, container)
       
-      // Convert to container-relative coordinates
-      const point = {
-        x: event.clientX,
-        y: event.clientY
-      }
-      
-      console.log('[DRAG] Starting drag selection at:', point)
-      startDragSelection(point)
+      startDragSelection(containerPoint, selectionMode)
     }
   }, [startDragSelection, containerRef])
   
   const handleMouseMove = useCallback((event: MouseEvent) => {
     if (!dragSelection.isActive || !containerRef.current) return
     
-    console.log('[DRAG] Mouse move during drag')
-    
-    // Now that we're moving, prevent text selection
+    // Now that we're moving, prevent text selection and default behaviors
     event.preventDefault()
     
-    // Update drag rectangle
-    const currentPoint = { x: event.clientX, y: event.clientY }
+    // Convert to container-relative coordinates
+    const currentPoint = getContainerRelativeCoords(event, containerRef.current)
     
-    // Calculate intersecting elements
+    // Calculate intersecting elements using container-relative coordinates with selection mode
     const intersectingIds = getIntersectingElements(
       dragSelection.startPoint!,
       currentPoint,
-      containerRef.current
+      containerRef.current,
+      dragSelection.selectionMode,
+      lastSelectedId,
+      allFileIds
     )
-    
-    console.log('[DRAG] Intersecting elements:', intersectingIds)
     
     updateDragSelection(currentPoint, intersectingIds)
     
@@ -185,9 +258,12 @@ export function useDragSelection(containerRef: RefObject<HTMLElement>) {
   
   const handleMouseUp = useCallback((event: MouseEvent) => {
     if (dragSelection.isActive) {
+      const container = containerRef.current
+      if (!container) return
+      
       // Check if this was a meaningful drag (moved more than 5 pixels)
       const startPoint = dragSelection.startPoint
-      const currentPoint = { x: event.clientX, y: event.clientY }
+      const currentPoint = getContainerRelativeCoords(event, container)
       
       if (startPoint) {
         const distance = Math.sqrt(
@@ -196,12 +272,12 @@ export function useDragSelection(containerRef: RefObject<HTMLElement>) {
         )
         
         if (distance > 5) {
-          // Meaningful drag - prevent click events from firing and finalize selection
+          // Meaningful drag - prevent click events and finalize selection
           event.preventDefault()
-          event.stopPropagation()
+          event.stopImmediatePropagation()
           finalizeDragSelection()
         } else {
-          // Just a click - cancel drag selection and let click events fire normally
+          // Just a click - cancel drag selection and allow normal click handling
           cancelDragSelection()
         }
       } else {
@@ -210,7 +286,7 @@ export function useDragSelection(containerRef: RefObject<HTMLElement>) {
       
       stopAutoScroll()
     }
-  }, [dragSelection, finalizeDragSelection, cancelDragSelection, stopAutoScroll])
+  }, [dragSelection, finalizeDragSelection, cancelDragSelection, stopAutoScroll, containerRef])
   
   // Handle escape key to cancel drag selection
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
@@ -220,24 +296,15 @@ export function useDragSelection(containerRef: RefObject<HTMLElement>) {
     }
   }, [dragSelection.isActive, cancelDragSelection, stopAutoScroll])
   
-  // Setup event listeners
+  // Setup global event listeners for Event Delegation Hierarchy
   useEffect(() => {
-    const container = containerRef.current
-    if (!container) {
-      console.log('[DRAG] No container ref available')
-      return
-    }
-    
-    console.log('[DRAG] Setting up event listeners on container:', container)
-    
-    // Add mouse down listener to container
-    container.addEventListener('mousedown', handleMouseDown)
+    // Use capture phase to intercept events before they reach children
+    document.addEventListener('mousedown', handleGlobalMouseDown, true)
     
     return () => {
-      console.log('[DRAG] Cleaning up event listeners')
-      container.removeEventListener('mousedown', handleMouseDown)
+      document.removeEventListener('mousedown', handleGlobalMouseDown, true)
     }
-  }, [handleMouseDown, containerRef])
+  }, [handleGlobalMouseDown])
   
   useEffect(() => {
     if (dragSelection.isActive) {

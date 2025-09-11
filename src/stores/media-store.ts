@@ -28,6 +28,7 @@ interface MediaStoreState {
   
   // Selection state
   selectedFiles: Set<string>
+  lastSelectedId: string | null // For range selection anchor
   
   // Drag selection state
   dragSelection: {
@@ -35,6 +36,8 @@ interface MediaStoreState {
     startPoint: { x: number, y: number } | null
     currentPoint: { x: number, y: number } | null
     selectedDuringDrag: Set<string>
+    selectionMode: 'replace' | 'add' | 'range' // Based on modifier keys
+    originalSelection: Set<string> | null // Store original selection for replace mode cancellation
   }
   
   // Auto-scroll state
@@ -51,7 +54,7 @@ interface MediaStoreState {
   clearSelection: () => void
   
   // Drag selection methods
-  startDragSelection: (point: { x: number, y: number }) => void
+  startDragSelection: (point: { x: number, y: number }, mode: 'replace' | 'add' | 'range') => void
   updateDragSelection: (point: { x: number, y: number }, intersectingIds: string[]) => void
   finalizeDragSelection: () => void
   cancelDragSelection: () => void
@@ -109,13 +112,16 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
   
   // Selection state
   selectedFiles: new Set<string>(),
+  lastSelectedId: null,
   
   // Drag selection state
   dragSelection: {
     isActive: false,
     startPoint: null,
     currentPoint: null,
-    selectedDuringDrag: new Set<string>()
+    selectedDuringDrag: new Set<string>(),
+    selectionMode: 'replace',
+    originalSelection: null
   },
   
   // Auto-scroll state
@@ -134,7 +140,7 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     } else {
       newSelection.add(fileId)
     }
-    set({ selectedFiles: newSelection })
+    set({ selectedFiles: newSelection, lastSelectedId: fileId })
   },
   
   selectRange: (fromId, toId, allFileIds) => {
@@ -161,24 +167,37 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
   clearSelection: () => {
     set({ 
       selectedFiles: new Set<string>(),
+      lastSelectedId: null,
       dragSelection: {
         isActive: false,
         startPoint: null,
         currentPoint: null,
-        selectedDuringDrag: new Set<string>()
+        selectedDuringDrag: new Set<string>(),
+        selectionMode: 'replace',
+        originalSelection: null
       }
     })
   },
   
   // Drag selection methods
-  startDragSelection: (point) => {
-    console.log('[STORE] Starting drag selection at:', point)
+  startDragSelection: (point, mode) => {
+    const { selectedFiles } = get()
+    
+    // Store original selection for cancellation restore
+    const originalSelection = new Set(selectedFiles)
+    
+    // For replace mode, clear existing selection immediately when drag starts
+    const newSelectedFiles = mode === 'replace' ? new Set<string>() : selectedFiles
+    
     set({
+      selectedFiles: newSelectedFiles,
       dragSelection: {
         isActive: true,
         startPoint: point,
         currentPoint: point,
-        selectedDuringDrag: new Set<string>()
+        selectedDuringDrag: new Set<string>(),
+        selectionMode: mode,
+        originalSelection: originalSelection
       }
     })
   },
@@ -200,8 +219,24 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
     const { selectedFiles, dragSelection } = get()
     if (!dragSelection.isActive) return
     
-    // Merge selected during drag with existing selection
-    const newSelection = new Set([...selectedFiles, ...dragSelection.selectedDuringDrag])
+    let newSelection: Set<string>
+    
+    switch (dragSelection.selectionMode) {
+      case 'replace':
+        // For replace mode, selection was already cleared at start, just set the drag selection
+        newSelection = new Set(dragSelection.selectedDuringDrag)
+        break
+      case 'add':
+        // Add drag selection to existing selection
+        newSelection = new Set([...selectedFiles, ...dragSelection.selectedDuringDrag])
+        break
+      case 'range':
+        // For range selection, the selectedDuringDrag already contains the range
+        newSelection = new Set([...selectedFiles, ...dragSelection.selectedDuringDrag])
+        break
+      default:
+        newSelection = selectedFiles
+    }
     
     set({
       selectedFiles: newSelection,
@@ -209,18 +244,29 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
         isActive: false,
         startPoint: null,
         currentPoint: null,
-        selectedDuringDrag: new Set<string>()
+        selectedDuringDrag: new Set<string>(),
+        selectionMode: 'replace',
+        originalSelection: null
       }
     })
   },
   
   cancelDragSelection: () => {
+    const { dragSelection } = get()
+    
+    // For replace mode, restore the original selection if cancelled
+    // For other modes, selection stays as is
+    const shouldRestoreSelection = dragSelection.selectionMode === 'replace' && dragSelection.originalSelection
+    
     set({
+      selectedFiles: shouldRestoreSelection ? dragSelection.originalSelection! : get().selectedFiles,
       dragSelection: {
         isActive: false,
         startPoint: null,
         currentPoint: null,
-        selectedDuringDrag: new Set<string>()
+        selectedDuringDrag: new Set<string>(),
+        selectionMode: 'replace',
+        originalSelection: null
       }
     })
   },

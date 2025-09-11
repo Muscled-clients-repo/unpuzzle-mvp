@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -63,27 +63,12 @@ export default function MediaPage() {
     sortOrder,
     setSortOrder,
     selectedFiles,
+    lastSelectedId,
     toggleSelection,
+    selectRange,
     clearSelection,
   } = useMediaStore()
   
-  // Drag selection hook
-  const { isDragActive, dragRectangle, selectedDuringDrag } = useDragSelection(containerRef)
-  
-  // Track if we just finished a drag to prevent click from firing
-  const dragJustFinished = useRef(false)
-  
-  // Reset drag flag when drag stops
-  useEffect(() => {
-    if (!isDragActive && dragJustFinished.current) {
-      // Give a brief moment for the drag to complete before allowing clicks
-      setTimeout(() => {
-        dragJustFinished.current = false
-      }, 100)
-    } else if (isDragActive) {
-      dragJustFinished.current = true
-    }
-  }, [isDragActive])
   
   // ARCHITECTURE-COMPLIANT: Server state in TanStack Query
   const { data: mediaFiles = [], isLoading, error } = useMediaFiles()
@@ -145,6 +130,33 @@ export default function MediaPage() {
     const matchesFilter = filterType === 'all' || item.type === filterType
     return matchesSearch && matchesFilter
   })
+
+  // Drag selection hook with file IDs for range selection
+  const allFileIds = filteredMedia.map(item => item.id)
+  const { isDragActive, dragRectangle, selectedDuringDrag } = useDragSelection(containerRef, allFileIds)
+
+  // Handle individual item selection with modifier key support
+  const handleItemSelection = useCallback((fileId: string, event?: React.MouseEvent) => {
+    // Only handle selection if not currently dragging
+    if (isDragActive) return
+    
+    if (event) {
+      if (event.shiftKey && lastSelectedId && allFileIds.length > 0) {
+        // Range selection with Shift+click
+        selectRange(lastSelectedId, fileId, allFileIds)
+      } else if (event.ctrlKey || event.metaKey) {
+        // Add/remove from selection with Ctrl/Cmd+click
+        toggleSelection(fileId)
+      } else {
+        // Normal click - replace selection
+        clearSelection()
+        toggleSelection(fileId)
+      }
+    } else {
+      // Fallback for direct calls without event
+      toggleSelection(fileId)
+    }
+  }, [isDragActive, toggleSelection, selectRange, clearSelection, lastSelectedId, allFileIds])
 
   if (isLoading) {
     return (
@@ -302,8 +314,8 @@ export default function MediaPage() {
           <div 
             className="absolute border-2 border-blue-500 bg-blue-500/10 pointer-events-none z-10 rounded"
             style={{
-              left: dragRectangle.left - (containerRef.current?.getBoundingClientRect().left || 0),
-              top: dragRectangle.top - (containerRef.current?.getBoundingClientRect().top || 0),
+              left: dragRectangle.left,
+              top: dragRectangle.top,
               width: dragRectangle.width,
               height: dragRectangle.height
             }}
@@ -323,18 +335,9 @@ export default function MediaPage() {
                     "group relative bg-card border rounded-lg overflow-hidden hover:shadow-md transition-all cursor-pointer",
                     isSelected && "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950"
                   )}
-                  onMouseDown={(e) => {
-                    // Allow drag selection to start, but also handle single clicks on items
-                    // The drag selection hook will distinguish between clicks and drags
-                  }}
                   onClick={(e) => {
-                    // Don't handle clicks if we just finished a drag
-                    if (dragJustFinished.current) {
-                      e.preventDefault()
-                      return
-                    }
-                    // Handle individual item clicks
-                    toggleSelection(item.id)
+                    // Handle individual item clicks with modifier key support
+                    handleItemSelection(item.id, e)
                   }}
                 >
                   {/* Selection indicator */}
@@ -429,18 +432,9 @@ export default function MediaPage() {
                     "flex items-center gap-4 p-4 bg-card border rounded-lg hover:bg-accent/50 transition-all cursor-pointer",
                     isSelected && "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950"
                   )}
-                  onMouseDown={(e) => {
-                    // Allow drag selection to start, but also handle single clicks on items
-                    // The drag selection hook will distinguish between clicks and drags
-                  }}
                   onClick={(e) => {
-                    // Don't handle clicks if we just finished a drag
-                    if (dragJustFinished.current) {
-                      e.preventDefault()
-                      return
-                    }
-                    // Handle individual item clicks
-                    toggleSelection(item.id)
+                    // Handle individual item clicks with modifier key support
+                    handleItemSelection(item.id, e)
                   }}
                 >
                   {/* Selection indicator */}
