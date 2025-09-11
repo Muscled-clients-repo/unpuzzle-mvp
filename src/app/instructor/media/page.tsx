@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -10,6 +10,8 @@ import { useMediaFiles, useDeleteMediaFile, useUploadMediaFile } from "@/hooks/u
 import { useMediaStore } from "@/stores/media-store"
 import { SimpleVideoPreview } from "@/components/ui/SimpleVideoPreview"
 import { FileDetailsModal } from "@/components/media/FileDetailsModal"
+import { BulkSelectionToolbar } from "@/components/media/BulkSelectionToolbar"
+import { useDragSelection } from "@/hooks/use-drag-selection"
 import {
   Upload,
   Search,
@@ -47,6 +49,9 @@ export default function MediaPage() {
   const [previewingFile, setPreviewingFile] = useState<any>(null)
   const [detailsFile, setDetailsFile] = useState<any>(null)
   
+  // Container ref for drag selection
+  const containerRef = useRef<HTMLDivElement>(null)
+  
   // ARCHITECTURE-COMPLIANT: UI state in Zustand
   const {
     viewMode,
@@ -57,7 +62,28 @@ export default function MediaPage() {
     setFilterType,
     sortOrder,
     setSortOrder,
+    selectedFiles,
+    toggleSelection,
+    clearSelection,
   } = useMediaStore()
+  
+  // Drag selection hook
+  const { isDragActive, dragRectangle, selectedDuringDrag } = useDragSelection(containerRef)
+  
+  // Track if we just finished a drag to prevent click from firing
+  const dragJustFinished = useRef(false)
+  
+  // Reset drag flag when drag stops
+  useEffect(() => {
+    if (!isDragActive && dragJustFinished.current) {
+      // Give a brief moment for the drag to complete before allowing clicks
+      setTimeout(() => {
+        dragJustFinished.current = false
+      }, 100)
+    } else if (isDragActive) {
+      dragJustFinished.current = true
+    }
+  }, [isDragActive])
   
   // ARCHITECTURE-COMPLIANT: Server state in TanStack Query
   const { data: mediaFiles = [], isLoading, error } = useMediaFiles()
@@ -269,109 +295,222 @@ export default function MediaPage() {
         </div>
       </div>
 
-      {/* Media Grid/List */}
-      {viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {filteredMedia.map((item) => (
-            <div
-              key={item.id}
-              className="group relative bg-card border rounded-lg overflow-hidden hover:shadow-md transition-shadow"
-            >
-              {/* Thumbnail/Preview */}
-              <div className="aspect-video bg-muted flex items-center justify-center">
-                {getTypeIcon(item.type)}
-              </div>
-
-              {/* Content */}
-              <div className="p-3">
-                <h4 className="font-medium truncate mb-1">{item.name}</h4>
-                <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
-                  <span>{item.size}</span>
-                  <span>{item.uploadedAt}</span>
-                </div>
-                <Badge 
-                  variant={item.usage === 'Unused' ? 'secondary' : 'outline'}
-                  className="text-xs"
+      {/* Media Grid/List with Selection Support */}
+      <div ref={containerRef} className="relative">
+        {/* Drag selection rectangle */}
+        {isDragActive && dragRectangle && (
+          <div 
+            className="absolute border-2 border-blue-500 bg-blue-500/10 pointer-events-none z-10 rounded"
+            style={{
+              left: dragRectangle.left - (containerRef.current?.getBoundingClientRect().left || 0),
+              top: dragRectangle.top - (containerRef.current?.getBoundingClientRect().top || 0),
+              width: dragRectangle.width,
+              height: dragRectangle.height
+            }}
+          />
+        )}
+        
+        {viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {filteredMedia.map((item) => {
+              const isSelected = selectedFiles.has(item.id) || selectedDuringDrag.has(item.id)
+              
+              return (
+                <div
+                  key={item.id}
+                  data-selectable={item.id}
+                  className={cn(
+                    "group relative bg-card border rounded-lg overflow-hidden hover:shadow-md transition-all cursor-pointer",
+                    isSelected && "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950"
+                  )}
+                  onMouseDown={(e) => {
+                    // Allow drag selection to start, but also handle single clicks on items
+                    // The drag selection hook will distinguish between clicks and drags
+                  }}
+                  onClick={(e) => {
+                    // Don't handle clicks if we just finished a drag
+                    if (dragJustFinished.current) {
+                      e.preventDefault()
+                      return
+                    }
+                    // Handle individual item clicks
+                    toggleSelection(item.id)
+                  }}
                 >
-                  {item.usage}
-                </Badge>
-              </div>
+                  {/* Selection indicator */}
+                  {isSelected && (
+                    <div className="absolute top-2 left-2 z-20">
+                      <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Thumbnail/Preview */}
+                  <div className="aspect-video bg-muted flex items-center justify-center">
+                    {getTypeIcon(item.type)}
+                  </div>
 
-              {/* Actions */}
-              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handlePreview(item)}>
-                      <Play className="h-4 w-4 mr-2" />
-                      Preview
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setDetailsFile(item)}>
-                      <Info className="h-4 w-4 mr-2" />
-                      Details
-                    </DropdownMenuItem>
-                    <DropdownMenuItem 
-                      className="text-destructive"
-                      onClick={() => handleDelete(item.id)}
+                  {/* Content */}
+                  <div className="p-3">
+                    <h4 className="font-medium truncate mb-1">{item.name}</h4>
+                    <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
+                      <span>{item.size}</span>
+                      <span>{item.uploadedAt}</span>
+                    </div>
+                    <Badge 
+                      variant={item.usage === 'Unused' ? 'secondary' : 'outline'}
+                      className="text-xs"
                     >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {filteredMedia.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center gap-4 p-4 bg-card border rounded-lg hover:bg-accent/50 transition-colors"
-            >
-              <div className="flex-shrink-0">
-                {getTypeIcon(item.type)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="font-medium truncate">{item.name}</h4>
-                <p className="text-sm text-muted-foreground">{item.size} • {item.uploadedAt}</p>
-              </div>
-              <Badge variant={item.usage === 'Unused' ? 'secondary' : 'outline'}>
-                {item.usage}
-              </Badge>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => handlePreview(item)}>
-                    <Play className="h-4 w-4 mr-2" />
-                    Preview
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setDetailsFile(item)}>
-                    <Info className="h-4 w-4 mr-2" />
-                    Details
-                  </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    className="text-destructive"
-                    onClick={() => handleDelete(item.id)}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          ))}
-        </div>
-      )}
+                      {item.usage}
+                    </Badge>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 w-8 p-0 bg-background/80 backdrop-blur-sm"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                          }}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={(e) => {
+                          e.stopPropagation()
+                          handlePreview(item)
+                        }}>
+                          <Play className="h-4 w-4 mr-2" />
+                          Preview
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => {
+                          e.stopPropagation()
+                          setDetailsFile(item)
+                        }}>
+                          <Info className="h-4 w-4 mr-2" />
+                          Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          className="text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDelete(item.id)
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredMedia.map((item) => {
+              const isSelected = selectedFiles.has(item.id) || selectedDuringDrag.has(item.id)
+              
+              return (
+                <div
+                  key={item.id}
+                  data-selectable={item.id}
+                  className={cn(
+                    "flex items-center gap-4 p-4 bg-card border rounded-lg hover:bg-accent/50 transition-all cursor-pointer",
+                    isSelected && "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950"
+                  )}
+                  onMouseDown={(e) => {
+                    // Allow drag selection to start, but also handle single clicks on items
+                    // The drag selection hook will distinguish between clicks and drags
+                  }}
+                  onClick={(e) => {
+                    // Don't handle clicks if we just finished a drag
+                    if (dragJustFinished.current) {
+                      e.preventDefault()
+                      return
+                    }
+                    // Handle individual item clicks
+                    toggleSelection(item.id)
+                  }}
+                >
+                  {/* Selection indicator */}
+                  {isSelected && (
+                    <div className="flex-shrink-0">
+                      <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="flex-shrink-0">
+                    {getTypeIcon(item.type)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-medium truncate">{item.name}</h4>
+                    <p className="text-sm text-muted-foreground">{item.size} • {item.uploadedAt}</p>
+                  </div>
+                  <Badge variant={item.usage === 'Unused' ? 'secondary' : 'outline'}>
+                    {item.usage}
+                  </Badge>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-8 w-8 p-0"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                        }}
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={(e) => {
+                        e.stopPropagation()
+                        handlePreview(item)
+                      }}>
+                        <Play className="h-4 w-4 mr-2" />
+                        Preview
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={(e) => {
+                        e.stopPropagation()
+                        setDetailsFile(item)
+                      }}>
+                        <Info className="h-4 w-4 mr-2" />
+                        Details
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        className="text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDelete(item.id)
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
 
       {filteredMedia.length === 0 && (
         <div className="text-center py-12">
@@ -382,6 +521,12 @@ export default function MediaPage() {
           </p>
         </div>
       )}
+
+      {/* Bulk Selection Toolbar */}
+      <BulkSelectionToolbar 
+        onBulkDelete={undefined} // Will be enabled in Phase 2
+        allFileIds={filteredMedia.map(item => item.id)}
+      />
 
       {/* Preview Modal */}
       {previewingFile && (

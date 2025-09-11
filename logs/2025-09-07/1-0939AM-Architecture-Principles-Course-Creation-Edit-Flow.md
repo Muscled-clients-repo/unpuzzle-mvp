@@ -417,3 +417,121 @@ Cross-domain analytics aggregation occurs server-side using parallel queries acr
 4. **Capacity Planning**: Analyzes growth trends across storage, usage, and performance domains
 
 These three patterns specifically address the unique challenges of media asset management while maintaining strict architectural compliance with the existing 3-layer SSOT distribution pattern established for course creation workflows.
+
+---
+
+## Advanced User Interaction Patterns for Bulk Operations
+
+The 3-layer SSOT architecture excels at business logic operations but requires specialized patterns for complex user interactions like drag-to-select, multi-selection, and bulk operations. These patterns maintain architectural compliance while enabling professional-grade user experiences.
+
+### Drag Selection Architecture Pattern (Media-Specific)
+
+Drag selection represents a complex interaction requiring coordination between DOM events, visual feedback, and state management. This pattern extends the 3-layer SSOT architecture without violating layer boundaries.
+
+#### Core Interaction Principles
+
+**Event Delegation Hierarchy**: Drag selection requires careful event management to prevent conflicts between individual item selection and bulk drag operations. The pattern uses event delegation at the container level to capture drag intentions while allowing individual clicks to function normally. Event timing becomes critical - distinguishing clicks from drags requires movement threshold detection and proper event phase management.
+
+**Coordinate System Consistency**: Professional drag selection requires consistent coordinate handling across different interaction phases. Screen coordinates from mouse events must be normalized to container-relative coordinates for accurate intersection detection. Scroll offset handling ensures drag selection works correctly in scrollable containers without coordinate drift.
+
+**Visual Feedback Immediacy**: Drag selection demands immediate visual feedback for professional user experience. Visual rectangle rendering must occur on the first mouse movement, not after state updates complete. This requires coordination between DOM manipulation and state management without violating layer boundaries.
+
+#### State Management for Complex Interactions
+
+**Temporal State Separation**: Drag selection introduces temporal state that differs from persistent selection state. During drag operations, temporary selection preview state exists alongside permanent selection state. These states must remain distinct until drag completion to enable proper cancellation and rollback behavior.
+
+**State Transition Management**: Drag operations involve multiple state phases: inactive → starting → active → completing → resolved. Each phase has distinct visual and behavioral requirements. State transitions must be atomic to prevent intermediate states from corrupting the user interface or creating race conditions.
+
+**Selection Merge Strategies**: Drag completion requires merging temporary drag selections with existing permanent selections. The merge strategy (replace, add, subtract) depends on modifier keys and user intent. This coordination happens in the UI orchestration layer without violating state ownership boundaries.
+
+#### Architecture Compliance for Interactive Operations
+
+**Zustand Ownership of Interaction State**: All drag-related UI state belongs in Zustand - drag rectangle coordinates, active drag status, temporary selections, and visual feedback state. This state is ephemeral and UI-specific, making Zustand the appropriate owner according to the 3-layer pattern.
+
+**Event Handler Layer Coordination**: DOM event handlers coordinate between browser events and Zustand actions without owning state. Event handlers translate browser events into action calls and manage timing-sensitive operations like threshold detection and coordinate normalization.
+
+**Component Visual Coordination**: Components read drag state from Zustand and coordinate visual feedback without owning interaction logic. Visual elements like drag rectangles and selection highlights are derived from Zustand state, maintaining single source of truth principles.
+
+### Multi-Selection Interaction Patterns
+
+Multi-selection extends basic selection with modifier key support and range selection capabilities. This pattern builds on the drag selection foundation while adding keyboard interaction complexity.
+
+#### Modifier Key Architecture
+
+**Selection Mode Determination**: Modifier keys (Ctrl, Shift, Meta) determine selection behavior at interaction time. The pattern detects modifier state during event capture and coordinates with existing selection state to determine the appropriate merge strategy. This detection happens in event handlers before state updates.
+
+**Range Selection Coordination**: Shift-click range selection requires coordination between current selection anchor and target selection. The pattern maintains selection anchor state in Zustand and calculates ranges using DOM order rather than state order to ensure predictable behavior across different sorting and filtering operations.
+
+**Cross-Platform Modifier Handling**: Professional applications handle platform-specific modifier key differences (Ctrl vs Cmd, different right-click behaviors). The pattern normalizes modifier key detection across platforms while maintaining native user expectations for each platform.
+
+#### Bulk Operation State Management
+
+**Selection Set Management**: Bulk operations require efficient set operations for large item collections. The pattern uses Set data structures in Zustand for O(1) selection operations while maintaining serializable state. Set operations (add, remove, toggle, clear) coordinate with visual feedback without performance degradation.
+
+**Operation Preview State**: Bulk operations benefit from preview state showing intended operation effects before confirmation. This preview state exists alongside active selection state, allowing users to understand operation scope before execution. Preview state management follows the same Zustand ownership patterns as active selection.
+
+**Cross-Component Selection Coordination**: Selection state must coordinate across multiple components (list items, toolbar, status indicators) without tight coupling. Components read selection state from Zustand and coordinate actions through the same store, maintaining loose coupling while ensuring consistent behavior.
+
+### Performance Patterns for Interactive UI
+
+Complex interactions require performance considerations beyond standard CRUD operations. These patterns ensure interactive operations maintain professional responsiveness standards.
+
+#### Interaction Response Time Standards
+
+**Sub-100ms Visual Feedback**: All interactive operations must provide visual feedback within 100ms of user action. This includes selection highlights, drag rectangle appearance, and hover state changes. Feedback timing takes precedence over state persistence - visual updates occur immediately while state updates can be asynchronous.
+
+**Smooth Animation Coordination**: Interactive animations (drag rectangles, selection transitions) must maintain 60fps performance. Animation state coordination with business logic state requires careful timing to prevent animation stuttering during state updates. Animation state can be separate from business logic state when necessary for performance.
+
+**Memory Management for Complex State**: Large selection sets and frequent interaction state updates require memory management considerations. The pattern includes state cleanup strategies for completed interactions and efficient data structures for large item collections.
+
+#### Event Handling Performance
+
+**Event Throttling Strategies**: High-frequency events (mousemove, scroll) require throttling to maintain performance during complex interactions. The pattern establishes throttling strategies that maintain interaction smoothness while preventing event handler overload.
+
+**Debouncing for State Updates**: Rapid user interactions may trigger frequent state updates that can cause performance degradation. The pattern uses debouncing for non-critical state updates while maintaining immediate feedback for critical visual updates.
+
+**DOM Query Optimization**: Intersection detection and element queries during drag operations require optimization to maintain performance. The pattern caches DOM queries and uses efficient selection algorithms to prevent performance degradation during complex selections.
+
+### Integration with Existing Architecture Patterns
+
+These interaction patterns extend rather than replace existing architecture principles. They maintain compatibility with form state management, server action patterns, and TanStack Query integration.
+
+#### Server Action Integration
+
+**Bulk Operation Server Actions**: Complex selections coordinate with server actions for bulk operations (delete, move, tag). Selection state from Zustand feeds into TanStack mutations that call server actions, maintaining the established server action pattern while enabling bulk operations.
+
+**Optimistic Updates for Bulk Operations**: Bulk operations use TanStack Query's optimistic update capabilities to provide immediate feedback for large operations. Selection state coordinates with optimistic updates to show operation progress and handle partial failures gracefully.
+
+#### Form State Coordination
+
+**Selection-Driven Form State**: Bulk edit forms populate based on current selection state. Form state initialization reads from Zustand selection state while maintaining form state independence. This coordination follows UI orchestration patterns without violating layer boundaries.
+
+**Selection Validation**: Form validation for bulk operations considers selection state constraints (minimum selections, type compatibility). Validation logic coordinates between form state and selection state through computed values rather than state mixing.
+
+#### Cross-Feature Pattern Reuse
+
+**Consistent Interaction Patterns**: Drag selection patterns established for media management apply consistently across course lists, lesson reordering, and chapter organization. This consistency reduces cognitive load and implementation complexity while maintaining architectural compliance.
+
+**Progressive Enhancement**: Interactive patterns enhance basic functionality without replacing it. Individual selection, keyboard navigation, and simple operations remain functional when complex interactions are disabled or unavailable, ensuring accessibility and robustness.
+
+### Testing Strategies for Interactive Patterns
+
+Complex interactions require specialized testing approaches beyond standard unit and integration tests.
+
+#### Interaction Testing Principles
+
+**Event Simulation Accuracy**: Interactive pattern tests must accurately simulate browser events including timing, coordinates, and modifier keys. Test patterns establish reliable event simulation that matches real user interaction patterns across different browsers and devices.
+
+**State Transition Verification**: Interactive operations involve multiple state transitions that must be verified in tests. Test patterns verify each transition phase and ensure proper cleanup when interactions are cancelled or completed.
+
+**Visual State Testing**: Interactive patterns produce visual feedback that must be verified in tests. Test patterns include visual state assertions for drag rectangles, selection highlights, and animation states to ensure user experience quality.
+
+#### Performance Testing for Interactions
+
+**Response Time Validation**: Interactive pattern tests verify response time requirements for visual feedback and state updates. Performance tests ensure interactions meet professional responsiveness standards under various load conditions.
+
+**Memory Leak Detection**: Complex interaction state can cause memory leaks if not properly managed. Test patterns include memory leak detection for interaction cleanup and state management efficiency.
+
+**Cross-Browser Compatibility**: Interactive patterns must work consistently across browsers with different event handling characteristics. Test patterns verify interaction behavior across target browsers and devices to ensure consistent user experience.
+
+These advanced interaction patterns enable professional-grade user experiences while maintaining the architectural integrity established by the 3-layer SSOT distribution pattern. They provide the foundation for implementing complex bulk operations that match the quality standards of professional applications while remaining maintainable and testable.

@@ -27,10 +27,38 @@ interface MediaStoreState {
   setShowUploadDashboard: (show: boolean) => void
   
   // Selection state
-  selectedFiles: string[]
-  setSelectedFiles: (files: string[]) => void
-  toggleFileSelection: (fileId: string) => void
+  selectedFiles: Set<string>
+  
+  // Drag selection state
+  dragSelection: {
+    isActive: boolean
+    startPoint: { x: number, y: number } | null
+    currentPoint: { x: number, y: number } | null
+    selectedDuringDrag: Set<string>
+  }
+  
+  // Auto-scroll state
+  autoScroll: {
+    isScrolling: boolean
+    direction: 'up' | 'down' | null
+    speed: number
+  }
+  
+  // Selection methods
+  toggleSelection: (fileId: string) => void
+  selectRange: (fromId: string, toId: string, allFileIds: string[]) => void
+  selectAll: (fileIds: string[]) => void
   clearSelection: () => void
+  
+  // Drag selection methods
+  startDragSelection: (point: { x: number, y: number }) => void
+  updateDragSelection: (point: { x: number, y: number }, intersectingIds: string[]) => void
+  finalizeDragSelection: () => void
+  cancelDragSelection: () => void
+  
+  // Auto-scroll methods
+  startAutoScroll: (direction: 'up' | 'down', speed: number) => void
+  stopAutoScroll: () => void
   
   // Filter preferences (persisted)
   filterType: string
@@ -80,18 +108,143 @@ export const useMediaStore = create<MediaStoreState>((set, get) => ({
   setShowUploadDashboard: (show) => set({ showUploadDashboard: show }),
   
   // Selection state
-  selectedFiles: [],
-  setSelectedFiles: (files) => set({ selectedFiles: files }),
-  toggleFileSelection: (fileId) => {
+  selectedFiles: new Set<string>(),
+  
+  // Drag selection state
+  dragSelection: {
+    isActive: false,
+    startPoint: null,
+    currentPoint: null,
+    selectedDuringDrag: new Set<string>()
+  },
+  
+  // Auto-scroll state
+  autoScroll: {
+    isScrolling: false,
+    direction: null,
+    speed: 0
+  },
+  
+  // Selection methods
+  toggleSelection: (fileId) => {
     const { selectedFiles } = get()
-    const isSelected = selectedFiles.includes(fileId)
-    set({
-      selectedFiles: isSelected 
-        ? selectedFiles.filter(id => id !== fileId)
-        : [...selectedFiles, fileId]
+    const newSelection = new Set(selectedFiles)
+    if (newSelection.has(fileId)) {
+      newSelection.delete(fileId)
+    } else {
+      newSelection.add(fileId)
+    }
+    set({ selectedFiles: newSelection })
+  },
+  
+  selectRange: (fromId, toId, allFileIds) => {
+    const fromIndex = allFileIds.indexOf(fromId)
+    const toIndex = allFileIds.indexOf(toId)
+    
+    if (fromIndex === -1 || toIndex === -1) return
+    
+    const start = Math.min(fromIndex, toIndex)
+    const end = Math.max(fromIndex, toIndex)
+    const rangeIds = allFileIds.slice(start, end + 1)
+    
+    const { selectedFiles } = get()
+    const newSelection = new Set(selectedFiles)
+    rangeIds.forEach(id => newSelection.add(id))
+    
+    set({ selectedFiles: newSelection })
+  },
+  
+  selectAll: (fileIds) => {
+    set({ selectedFiles: new Set(fileIds) })
+  },
+  
+  clearSelection: () => {
+    set({ 
+      selectedFiles: new Set<string>(),
+      dragSelection: {
+        isActive: false,
+        startPoint: null,
+        currentPoint: null,
+        selectedDuringDrag: new Set<string>()
+      }
     })
   },
-  clearSelection: () => set({ selectedFiles: [] }),
+  
+  // Drag selection methods
+  startDragSelection: (point) => {
+    console.log('[STORE] Starting drag selection at:', point)
+    set({
+      dragSelection: {
+        isActive: true,
+        startPoint: point,
+        currentPoint: point,
+        selectedDuringDrag: new Set<string>()
+      }
+    })
+  },
+  
+  updateDragSelection: (point, intersectingIds) => {
+    const { dragSelection } = get()
+    if (!dragSelection.isActive) return
+    
+    set({
+      dragSelection: {
+        ...dragSelection,
+        currentPoint: point,
+        selectedDuringDrag: new Set(intersectingIds)
+      }
+    })
+  },
+  
+  finalizeDragSelection: () => {
+    const { selectedFiles, dragSelection } = get()
+    if (!dragSelection.isActive) return
+    
+    // Merge selected during drag with existing selection
+    const newSelection = new Set([...selectedFiles, ...dragSelection.selectedDuringDrag])
+    
+    set({
+      selectedFiles: newSelection,
+      dragSelection: {
+        isActive: false,
+        startPoint: null,
+        currentPoint: null,
+        selectedDuringDrag: new Set<string>()
+      }
+    })
+  },
+  
+  cancelDragSelection: () => {
+    set({
+      dragSelection: {
+        isActive: false,
+        startPoint: null,
+        currentPoint: null,
+        selectedDuringDrag: new Set<string>()
+      }
+    })
+  },
+  
+  // Auto-scroll methods
+  startAutoScroll: (direction, speed) => {
+    set({
+      autoScroll: {
+        isScrolling: true,
+        direction,
+        speed
+      }
+    })
+  },
+  
+  stopAutoScroll: () => {
+    set({
+      autoScroll: {
+        isScrolling: false,
+        direction: null,
+        speed: 0
+      }
+    })
+  },
   
   // Filter preferences
   filterType: 'all',
