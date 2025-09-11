@@ -151,7 +151,7 @@ function getIntersectingElements(
 }
 
 // ARCHITECTURE-COMPLIANT: React hook for drag selection behavior
-export function useDragSelection(containerRef: RefObject<HTMLElement>, allFileIds: string[] = []) {
+export function useDragSelection(containerRef: RefObject<HTMLElement>, allFileIds: string[] = [], enabled: boolean = true) {
   const {
     dragSelection,
     selectedFiles,
@@ -298,13 +298,15 @@ export function useDragSelection(containerRef: RefObject<HTMLElement>, allFileId
   
   // Setup global event listeners for Event Delegation Hierarchy
   useEffect(() => {
+    if (!enabled) return
+    
     // Use capture phase to intercept events before they reach children
     document.addEventListener('mousedown', handleGlobalMouseDown, true)
     
     return () => {
       document.removeEventListener('mousedown', handleGlobalMouseDown, true)
     }
-  }, [handleGlobalMouseDown])
+  }, [handleGlobalMouseDown, enabled])
   
   useEffect(() => {
     if (dragSelection.isActive) {

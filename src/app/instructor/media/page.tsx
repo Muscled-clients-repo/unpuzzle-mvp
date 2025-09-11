@@ -9,6 +9,8 @@ import { UnifiedDropzone } from "@/components/media/unified-dropzone"
 import { useMediaFiles, useDeleteMediaFile, useUploadMediaFile, useBulkDeleteFiles, useExistingTags } from "@/hooks/use-media-queries"
 import { useMediaStore } from "@/stores/media-store"
 import { useAppStore } from "@/stores/app-store"
+import { getInstructorCourses } from "@/app/actions/get-instructor-courses"
+import { useQuery } from "@tanstack/react-query"
 import { SimpleVideoPreview } from "@/components/ui/SimpleVideoPreview"
 import { FileDetailsModal } from "@/components/media/FileDetailsModal"
 import { BulkSelectionToolbar } from "@/components/media/BulkSelectionToolbar"
@@ -28,7 +30,9 @@ import {
   Trash2,
   MoreHorizontal,
   Info,
-  Tag
+  Tag,
+  CheckSquare,
+  Square
 } from "lucide-react"
 import {
   Select,
@@ -56,6 +60,9 @@ export default function MediaPage() {
   const [deletingFiles, setDeletingFiles] = useState<Set<string>>(new Set())
   const [hiddenFiles, setHiddenFiles] = useState<Set<string>>(new Set())
   
+  // Selection mode state
+  const [isSelectionMode, setIsSelectionMode] = useState(false)
+  
   // Container ref for drag selection
   const containerRef = useRef<HTMLDivElement>(null)
   
@@ -76,7 +83,6 @@ export default function MediaPage() {
     clearSelection,
   } = useMediaStore()
   
-  
   // ARCHITECTURE-COMPLIANT: Server state in TanStack Query
   const { data: mediaFiles = [], isLoading, error } = useMediaFiles()
   const { data: existingTags = [] } = useExistingTags()
@@ -86,10 +92,18 @@ export default function MediaPage() {
 
   // Course selection state from app store
   const { 
-    courseAnalytics = [], 
     selectedInstructorCourse, 
-    setSelectedInstructorCourse 
+    setSelectedInstructorCourse,
+    user
   } = useAppStore()
+
+  // Fetch real courses using TanStack Query
+  const { data: realCourses = [] } = useQuery({
+    queryKey: ['instructor-courses', user?.id],
+    queryFn: () => getInstructorCourses(user?.id || ''),
+    enabled: !!user?.id,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  })
 
   // ARCHITECTURE-COMPLIANT: Upload handlers for TanStack Query integration
   const handleFilesSelected = (files: File[]) => {
@@ -252,14 +266,31 @@ export default function MediaPage() {
     setShowTagSuggestions(false)
   }
 
-  // Drag selection hook with file IDs for range selection
+  // Drag selection hook with file IDs for range selection  
   const allFileIds = filteredMedia.map(item => item.id)
-  const { isDragActive, dragRectangle, selectedDuringDrag } = useDragSelection(containerRef, allFileIds)
+  const { isDragActive, dragRectangle, selectedDuringDrag } = useDragSelection(
+    containerRef, 
+    allFileIds,
+    isSelectionMode // Only enable drag selection when in selection mode
+  )
+
+  // Temporarily disabled auto-enter/exit to debug issues
+  // TODO: Re-enable after fixing selection issues
+  
+  // Temporarily disabled auto-exit to fix immediate toggle-off issue
+  // TODO: Re-implement auto-exit with proper logic later
+  
+  // useEffect(() => {
+  //   if (isSelectionMode && selectedFiles.size === 0) {
+  //     console.log('🔄 Auto-exiting selection mode - no files selected')
+  //     setIsSelectionMode(false)
+  //   }
+  // }, [selectedFiles.size, isSelectionMode])
 
   // Handle individual item selection with modifier key support
   const handleItemSelection = useCallback((fileId: string, event?: React.MouseEvent) => {
-    // Only handle selection if not currently dragging
-    if (isDragActive) return
+    // Only handle selection if in selection mode and not currently dragging
+    if (!isSelectionMode || isDragActive) return
     
     if (event) {
       if (event.shiftKey && lastSelectedId && allFileIds.length > 0) {
@@ -277,7 +308,7 @@ export default function MediaPage() {
       // Fallback for direct calls without event
       toggleSelection(fileId)
     }
-  }, [isDragActive, toggleSelection, selectRange, clearSelection, lastSelectedId, allFileIds])
+  }, [isSelectionMode, isDragActive, toggleSelection, selectRange, clearSelection, lastSelectedId, allFileIds])
 
   if (isLoading) {
     return (
@@ -423,16 +454,23 @@ export default function MediaPage() {
             <SelectItem value="all">All Courses</SelectItem>
             <SelectItem value="unused">Unused Files</SelectItem>
             <div className="my-1 h-px bg-border" />
-            {courseAnalytics.map(course => (
-              <SelectItem key={course.courseId} value={course.courseId}>
-                <div className="flex items-center justify-between w-full">
-                  <span className="truncate">{course.courseName}</span>
-                  <Badge variant="outline" className="text-xs ml-2">
-                    {course.totalStudents}
-                  </Badge>
-                </div>
-              </SelectItem>
-            ))}
+            {realCourses.map(course => {
+              // Count media files used in this course
+              const mediaCount = mediaFiles.filter(file => 
+                file.media_usage?.some(usage => usage.course_id === course.id)
+              ).length
+              
+              return (
+                <SelectItem key={course.id} value={course.id}>
+                  <div className="flex items-center justify-between w-full">
+                    <span className="truncate">{course.title}</span>
+                    <Badge variant="outline" className="text-xs ml-2">
+                      {mediaCount}
+                    </Badge>
+                  </div>
+                </SelectItem>
+              )
+            })}
           </SelectContent>
         </Select>
 
@@ -457,6 +495,29 @@ export default function MediaPage() {
         >
           {sortOrder === 'asc' ? <SortAsc className="h-4 w-4 mr-2" /> : <SortDesc className="h-4 w-4 mr-2" />}
           Date
+        </Button>
+
+        {/* Select Mode Toggle */}
+        <Button 
+          variant="outline"
+          className={cn(
+            "relative z-50 border-2 transition-colors",
+            isSelectionMode 
+              ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700 hover:border-blue-700" 
+              : "bg-background border-border hover:bg-muted"
+          )}
+          onClick={() => {
+            console.log('🔘 Select button clicked! Current mode:', isSelectionMode)
+            setIsSelectionMode(!isSelectionMode)
+            if (isSelectionMode) {
+              console.log('🧹 Clearing selections on exit')
+              clearSelection()
+            }
+          }}
+          style={{ pointerEvents: 'all' }}
+        >
+          {isSelectionMode ? <CheckSquare className="h-4 w-4 mr-2" /> : <Square className="h-4 w-4 mr-2" />}
+          {isSelectionMode ? 'Exit Select' : 'Select'}
         </Button>
 
         {/* View Mode */}
@@ -514,31 +575,26 @@ export default function MediaPage() {
                     isDeleting && "opacity-0 scale-90 pointer-events-none transition-all duration-700 ease-out"
                   )}
                   onClick={(e) => {
-                    // Handle individual item clicks with modifier key support
-                    if (!isDeleting) {
+                    // Only handle selection clicks when in selection mode
+                    if (!isDeleting && isSelectionMode) {
                       handleItemSelection(item.id, e)
                     }
                   }}
                 >
-                  {/* Selection indicator */}
-                  {isSelected && (
+                  {/* Checkbox - only show in selection mode */}
+                  {isSelectionMode && (
                     <div className="absolute top-2 left-2 z-20">
-                      <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
-                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
+                      <div className={cn(
+                        "w-6 h-6 rounded-md flex items-center justify-center border-2",
+                        isSelected 
+                          ? "bg-blue-500 border-blue-500 text-white" 
+                          : "bg-background border-gray-300 hover:border-gray-400"
+                      )}>
+                        {isSelected && <CheckSquare className="w-4 h-4" />}
                       </div>
                     </div>
                   )}
                   
-                  {/* Tag indicator */}
-                  {!isSelected && item.tags && item.tags.length > 0 && (
-                    <div className="absolute top-2 left-2 z-10">
-                      <div className="w-5 h-5 bg-blue-500/90 rounded-full flex items-center justify-center">
-                        <Tag className="w-3 h-3 text-white" />
-                      </div>
-                    </div>
-                  )}
                   
                   {/* Thumbnail/Preview */}
                   <div className="aspect-video bg-muted flex items-center justify-center">
@@ -563,11 +619,6 @@ export default function MediaPage() {
                     <div className="mt-2">
                       {renderTagBadges(item.tags, 2)}
                     </div>
-                    {item.media_usage && item.media_usage.length > 0 && (
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        <span>📚 Used in {item.media_usage.length} course{item.media_usage.length !== 1 ? 's' : ''}</span>
-                      </div>
-                    )}
                   </div>
 
                   {/* Actions */}
@@ -637,19 +688,22 @@ export default function MediaPage() {
                     isDeleting && "opacity-0 scale-90 pointer-events-none transition-all duration-700 ease-out"
                   )}
                   onClick={(e) => {
-                    // Handle individual item clicks with modifier key support
-                    if (!isDeleting) {
+                    // Only handle selection clicks when in selection mode
+                    if (!isDeleting && isSelectionMode) {
                       handleItemSelection(item.id, e)
                     }
                   }}
                 >
-                  {/* Selection indicator */}
-                  {isSelected && (
-                    <div className="flex-shrink-0">
-                      <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
+                  {/* Checkbox - only show in selection mode */}
+                  {isSelectionMode && (
+                    <div className="flex-shrink-0 mr-3">
+                      <div className={cn(
+                        "w-5 h-5 rounded-md flex items-center justify-center border-2",
+                        isSelected 
+                          ? "bg-blue-500 border-blue-500 text-white" 
+                          : "bg-background border-gray-300 hover:border-gray-400"
+                      )}>
+                        {isSelected && <CheckSquare className="w-3 h-3" />}
                       </div>
                     </div>
                   )}
@@ -663,11 +717,6 @@ export default function MediaPage() {
                     <div className="mt-1">
                       {renderTagBadges(item.tags, 4)}
                     </div>
-                    {item.media_usage && item.media_usage.length > 0 && (
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        <span>📚 Used in {item.media_usage.length} course{item.media_usage.length !== 1 ? 's' : ''}</span>
-                      </div>
-                    )}
                   </div>
                   <Badge variant={item.usage === 'Unused' ? 'secondary' : 'outline'}>
                     {item.usage}

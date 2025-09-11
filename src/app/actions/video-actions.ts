@@ -771,6 +771,7 @@ export async function linkMediaToChapterAction(
   chapterId: string,
   courseId: string
 ): Promise<ActionResult> {
+  console.log('🚀 [MEDIA LINKING] Function called with:', { mediaId, chapterId, courseId })
   try {
     const user = await requireAuth() // REUSE: Line 16-25 pattern
     const supabase = await createClient()
@@ -872,18 +873,23 @@ export async function linkMediaToChapterAction(
     console.log('[MEDIA LINKING] Video created successfully:', linkedVideo.id)
     
     // NEW: Track usage for delete protection
+    // Since chapters use text IDs, we need to handle this differently
+    // For now, let's use the video ID as the resource_id since videos have UUIDs
     const { error: usageError } = await supabase
       .from('media_usage')
       .insert({
         media_file_id: mediaId,
         resource_type: 'chapter',
-        resource_id: chapterId,
+        resource_id: linkedVideo.id, // Use video UUID instead of chapter text ID
         course_id: courseId
       })
     
     if (usageError) {
       console.error('[MEDIA LINKING] Usage tracking error:', usageError)
+      console.error('[MEDIA LINKING] Failed to insert:', { mediaId, chapterId, courseId })
       // Don't fail the operation for usage tracking errors
+    } else {
+      console.log('[MEDIA LINKING] Usage tracking successful for:', { mediaId, chapterId, courseId })
     }
     
     // NEW: Update usage count in media_files

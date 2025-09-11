@@ -277,7 +277,15 @@ export async function getMediaFilesAction() {
 
     const { data: mediaFiles, error } = await supabase
       .from('media_files')
-      .select('*')
+      .select(`
+        *,
+        media_usage(
+          course_id,
+          resource_type,
+          resource_id,
+          courses(title)
+        )
+      `)
       .eq('uploaded_by', user.id)
       .eq('status', 'active')
       .order('created_at', { ascending: false })
@@ -290,6 +298,7 @@ export async function getMediaFilesAction() {
         media: []
       }
     }
+
 
     // Transform database records to match the expected MediaFile interface
     const transformedFiles = mediaFiles.map(file => ({
