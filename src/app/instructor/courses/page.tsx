@@ -12,13 +12,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { 
   Plus,
   Search,
@@ -46,6 +39,8 @@ import { PageContainer } from "@/components/layout/page-container"
 import { PageContentHeader } from "@/components/layout/page-content-header"
 import { StatsGrid } from "@/components/layout/stats-grid"
 import { StatsCardsSkeleton } from "@/components/common/universal-skeleton"
+import { FiltersSection } from "@/components/layout"
+import { SearchInput, FilterDropdown } from "@/components/ui/filters"
 
 export default function TeachCoursesPage() {
   const router = useRouter()
@@ -202,40 +197,39 @@ export default function TeachCoursesPage() {
         )}
 
         {/* Filters and Search */}
-        <div className="flex flex-col sm:flex-row gap-4 mt-6 mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-          <Input
+        <FiltersSection className="mt-6 mb-6">
+          <SearchInput
             placeholder="Search courses..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
+            onChange={setSearchQuery}
           />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[180px]">
-            <Filter className="mr-2 h-4 w-4" />
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Courses</SelectItem>
-            <SelectItem value="published">Published</SelectItem>
-            <SelectItem value="draft">Draft</SelectItem>
-            <SelectItem value="under_review">Under Review</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={sortBy} onValueChange={setSortBy}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Sort by" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="lastUpdated">Last Updated</SelectItem>
-            <SelectItem value="students">Most Students</SelectItem>
-            <SelectItem value="revenue">Highest Revenue</SelectItem>
-            <SelectItem value="completionRate">Completion Rate</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+          
+          <FilterDropdown
+            value={statusFilter}
+            onChange={setStatusFilter}
+            placeholder="Filter by status"
+            width="w-[180px]"
+            icon={<Filter className="h-4 w-4" />}
+            options={[
+              { value: "all", label: "All Courses" },
+              { value: "published", label: "Published" },
+              { value: "draft", label: "Draft" },
+              { value: "under_review", label: "Under Review" }
+            ]}
+          />
+          <FilterDropdown
+            value={sortBy}
+            onChange={setSortBy}
+            placeholder="Sort by"
+            width="w-[180px]"
+            options={[
+              { value: "lastUpdated", label: "Last Updated" },
+              { value: "students", label: "Most Students" },
+              { value: "revenue", label: "Highest Revenue" },
+              { value: "completionRate", label: "Completion Rate" }
+            ]}
+          />
+        </FiltersSection>
 
       {/* Courses Grid */}
       {!hasInitialized || authLoading || coursesLoading ? (
