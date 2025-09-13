@@ -15,6 +15,7 @@ export function CommunityHeader() {
   const [isVideoPlaying, setIsVideoPlaying] = useState(false)
   const [currentActivity, setCurrentActivity] = useState(0)
   const [activeTab, setActiveTab] = useState('community')
+  const [showFloatingCTA, setShowFloatingCTA] = useState(false)
   
   const navigationTabs = [
     { id: 'community', label: 'Community', icon: Home },
@@ -173,11 +174,26 @@ export function CommunityHeader() {
     return () => clearInterval(interval)
   }, [])
 
+  // Handle scroll for floating CTA
+  useEffect(() => {
+    const handleScroll = () => {
+      const heroSection = document.getElementById('hero-section')
+      if (heroSection) {
+        const heroBottom = heroSection.offsetTop + heroSection.offsetHeight
+        const scrollPosition = window.scrollY + window.innerHeight * 0.3
+        setShowFloatingCTA(scrollPosition > heroBottom)
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
   const currentItem = galleryItems[currentSlide]
 
   return (
     <div className="bg-white">
-      <div className="max-w-7xl mx-auto px-4 py-16">
+      <div id="hero-section" className="max-w-7xl mx-auto px-4 py-16">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 items-start">
           {/* Left Side - Gallery */}
           <div className="lg:col-span-2">
@@ -430,11 +446,6 @@ export function CommunityHeader() {
                     </div>
                   ))}
                 </div>
-                <div className="mt-4">
-                  <button className="text-sm text-gray-600 hover:text-gray-900 font-medium">
-                    View all activity →
-                  </button>
-                </div>
               </div>
             </div>
 
@@ -471,6 +482,27 @@ export function CommunityHeader() {
           </div>
         </div>
       </div>
+      
+      {/* Floating CTA Box */}
+      {showFloatingCTA && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-xl max-w-xs">
+            <div className="text-center">
+              <div className="text-sm font-semibold text-gray-900 mb-2">🏆 37 spots left</div>
+              <div className="flex items-center justify-center gap-1 mb-3">
+                <span className="text-sm text-gray-400 line-through">$197</span>
+                <span className="text-xl font-bold text-gray-900">$97</span>
+                <span className="text-sm text-gray-600">/month</span>
+              </div>
+              <button className="w-full bg-gray-900 text-white font-medium py-2 px-4 rounded-lg hover:bg-black transition-colors text-sm flex items-center justify-center gap-2 group">
+                Join Community
+                <ArrowRight className="h-3 w-3 group-hover:translate-x-1 transition-transform" />
+              </button>
+              <div className="text-xs text-gray-500 mt-2">30-day guarantee</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
