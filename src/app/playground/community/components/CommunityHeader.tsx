@@ -1,12 +1,68 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, Play, Pause, ArrowRight, Users, Crown, Star, BookOpen, Target, VideoIcon } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Play, Pause, ArrowRight, Users, Crown, Star, BookOpen, Target, VideoIcon, Home, GraduationCap, FileText, Trophy, TrendingUp, DollarSign } from 'lucide-react'
+import { CommunityPostsFeed } from './CommunityPostsFeed'
+import { CommunityGoalsSection } from './CommunityGoalsSection'
+import { GoalDiggersLeaderboard } from './GoalDiggersLeaderboard'
+import { CommunityCoursesSection } from './CommunityCoursesSection'
+import { CommunityResourcesSection } from './CommunityResourcesSection'
+import { SuccessProofSection } from './SuccessProofSection'
+import { AffiliatesSection } from './AffiliatesSection'
 
 export function CommunityHeader() {
   const [currentSlide, setCurrentSlide] = useState(0)
   const [isVideoPlaying, setIsVideoPlaying] = useState(false)
   const [currentActivity, setCurrentActivity] = useState(0)
+  const [activeTab, setActiveTab] = useState('community')
+  
+  const navigationTabs = [
+    { id: 'community', label: 'Community', icon: Home },
+    { id: 'goals', label: 'Goals', icon: Target },
+    { id: 'goal-diggers', label: 'Goal Diggers', icon: Trophy },
+    { id: 'success-proof', label: 'Success Proof', icon: TrendingUp },
+    { id: 'affiliates', label: 'Affiliates', icon: DollarSign },
+    { id: 'courses', label: 'Courses', icon: GraduationCap },
+    { id: 'resources', label: 'Resources', icon: FileText }
+  ]
+  
+  const recentActivities = [
+    {
+      id: 1,
+      user: 'Sarah M.',
+      action: 'completed "Building Your First Shopify App"',
+      time: '2 mins ago',
+      type: 'course'
+    },
+    {
+      id: 2,
+      user: 'John D.',
+      action: 'reached $5k milestone',
+      time: '5 mins ago',
+      type: 'goal'
+    },
+    {
+      id: 3,
+      user: 'Lisa K.',
+      action: 'shared a new resource: "Claude Code Cheat Sheet"',
+      time: '12 mins ago',
+      type: 'resource'
+    },
+    {
+      id: 4,
+      user: 'Mike R.',
+      action: 'joined the AI Software Agency track',
+      time: '18 mins ago',
+      type: 'member'
+    },
+    {
+      id: 5,
+      user: 'Jenny L.',
+      action: 'completed reflection for Week 3',
+      time: '25 mins ago',
+      type: 'course'
+    }
+  ]
   
   const liveActivities = [
     {
@@ -106,16 +162,7 @@ export function CommunityHeader() {
     setCurrentSlide(index)
   }
 
-  // Auto-advance slides (except when video is playing)
-  useEffect(() => {
-    if (!isVideoPlaying) {
-      const interval = setInterval(() => {
-        nextSlide()
-      }, 5000)
-      
-      return () => clearInterval(interval)
-    }
-  }, [isVideoPlaying])
+  // Removed auto-advance - gallery is now manual only
   
   // Auto-advance activities
   useEffect(() => {
@@ -143,6 +190,7 @@ export function CommunityHeader() {
                 Where problems become profit and developers become entrepreneurs
               </p>
             </div>
+            
             {/* Main Gallery */}
             <div className="relative bg-gray-100 rounded-lg overflow-hidden aspect-video mb-4">
               {currentItem.type === 'video' ? (
@@ -329,6 +377,96 @@ export function CommunityHeader() {
                   ✅ 30-day money-back guarantee
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Community Navigation & Recent Activity */}
+        <div className="max-w-7xl mx-auto px-4 py-12">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            {/* Left Column - Navigation + Recent Activity */}
+            <div className="lg:col-span-1 space-y-8">
+              {/* Navigation */}
+              <div>
+                <nav className="space-y-2">
+                  {navigationTabs.map((tab) => {
+                    const Icon = tab.icon
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg font-medium text-sm transition-colors ${
+                          activeTab === tab.id
+                            ? 'bg-gray-900 text-white'
+                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                        }`}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {tab.label}
+                      </button>
+                    )
+                  })}
+                </nav>
+              </div>
+
+              {/* Recent Activity */}
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Recent Activity</h3>
+                <div className="space-y-3">
+                  {recentActivities.slice(0, 4).map((activity) => (
+                    <div key={activity.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                      <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
+                        activity.type === 'course' ? 'bg-blue-500' :
+                        activity.type === 'goal' ? 'bg-green-500' :
+                        activity.type === 'resource' ? 'bg-purple-500' :
+                        'bg-gray-500'
+                      }`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-900">
+                          <span className="font-medium">{activity.user}</span> {activity.action}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">{activity.time}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4">
+                  <button className="text-sm text-gray-600 hover:text-gray-900 font-medium">
+                    View all activity →
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Content Area - Tab-specific content */}
+            <div className="lg:col-span-3">
+              {activeTab === 'community' && <CommunityPostsFeed />}
+              {activeTab === 'goals' && (
+                <CommunityGoalsSection 
+                  userRole="member" 
+                  memberName="John D."
+                  isOwnProfile={true}
+                />
+              )}
+              {activeTab === 'goal-diggers' && (
+                <GoalDiggersLeaderboard userRole="member" />
+              )}
+              {activeTab === 'success-proof' && (
+                <SuccessProofSection userRole="guest" />
+              )}
+              {activeTab === 'affiliates' && (
+                <AffiliatesSection userRole="member" isAffiliate={true} />
+              )}
+              {activeTab === 'courses' && (
+                <CommunityCoursesSection 
+                  userRole="member" 
+                  memberName="John D."
+                  isOwnProfile={true}
+                />
+              )}
+              {activeTab === 'resources' && (
+                <CommunityResourcesSection userRole="guest" />
+              )}
             </div>
           </div>
         </div>
