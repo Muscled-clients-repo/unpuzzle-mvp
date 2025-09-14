@@ -277,25 +277,25 @@ export function DailyGoalTracker() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Target className="h-8 w-8 text-gray-600" />
+              <Target className="h-8 w-8 text-gray-600 dark:text-gray-400" />
               <div>
-                <CardTitle className="text-2xl">{mockGoal.title}</CardTitle>
-                <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
-                  <span>Current: <span className="font-semibold text-gray-900">{mockGoal.currentAmount}</span></span>
-                  <span>Target: <span className="font-semibold text-gray-900">{mockGoal.targetAmount}</span></span>
+                <CardTitle className="text-2xl text-gray-900 dark:text-gray-100">{mockGoal.title}</CardTitle>
+                <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  <span>Current: <span className="font-semibold text-gray-900 dark:text-gray-100">{mockGoal.currentAmount}</span></span>
+                  <span>Target: <span className="font-semibold text-gray-900 dark:text-gray-100">{mockGoal.targetAmount}</span></span>
                   <span>Started: {new Date(mockGoal.startDate).toLocaleDateString()}</span>
                 </div>
               </div>
             </div>
             <div className="text-right">
-              <div className="text-4xl font-bold text-gray-900">Day {currentDay}</div>
-              <div className="text-sm text-gray-600">{mockGoal.progress}% Complete</div>
+              <div className="text-4xl font-bold text-gray-900 dark:text-gray-100">Day {currentDay}</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">{mockGoal.progress}% Complete</div>
             </div>
           </div>
           <div className="mt-4">
-            <div className="w-full bg-gray-200 rounded-full h-3">
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
               <div 
-                className="bg-gray-900 h-3 rounded-full transition-all"
+                className="bg-gray-900 dark:bg-gray-300 h-3 rounded-full transition-all"
                 style={{ width: `${mockGoal.progress}%` }}
               />
             </div>
@@ -320,7 +320,7 @@ export function DailyGoalTracker() {
           {todaysEntry && todaysEntry.activities.filter(a => a.type === 'auto').length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-medium text-gray-700">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Unpuzzle tracked your activity today ({todaysEntry.activities.filter(a => a.type === 'auto').length} activities)
                 </h4>
                 {todaysEntry.activities.filter(a => a.type === 'auto').length > 3 && (
@@ -337,11 +337,11 @@ export function DailyGoalTracker() {
                 {todaysEntry.activities
                   .filter(a => a.type === 'auto')
                   .map((activity) => (
-                    <div key={activity.id} className="flex items-center gap-2 p-2 bg-blue-50 rounded border border-blue-200">
+                    <div key={activity.id} className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-gray-800 rounded border border-blue-200 dark:border-gray-700">
                       <span className="text-sm">{getActivityIcon(activity.category)}</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-blue-900 text-xs font-medium truncate">{activity.description}</p>
-                        <div className="flex items-center gap-2 text-xs text-blue-600">
+                        <p className="text-blue-900 dark:text-gray-100 text-xs font-medium truncate">{activity.description}</p>
+                        <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-gray-400">
                           <span>{new Date(activity.timestamp).toLocaleTimeString('en-US', { 
                             hour: 'numeric', 
                             minute: '2-digit',
@@ -375,7 +375,7 @@ export function DailyGoalTracker() {
           
           {/* Single journal-style input */}
           <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-3">
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
               What else did you do today to get closer to your goal?
             </h4>
             
@@ -428,7 +428,7 @@ Share what you accomplished, any challenges you faced, insights you gained, or h
             <Calendar className="h-5 w-5" />
             Daily Progress Timeline
           </CardTitle>
-          <p className="text-gray-600">Track your daily actions and see your consistent progress</p>
+          <p className="text-gray-600 dark:text-gray-400">Track your daily actions and see your consistent progress</p>
         </CardHeader>
         <CardContent>
           <div className="space-y-8">
@@ -446,7 +446,7 @@ Share what you accomplished, any challenges you faced, insights you gained, or h
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
-                      <h3 className="font-semibold text-lg text-gray-900">
+                      <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
                         {new Date(entry.date).toLocaleDateString('en-US', { 
                           weekday: 'long', 
                           month: 'short', 
@@ -457,7 +457,7 @@ Share what you accomplished, any challenges you faced, insights you gained, or h
                         <Badge className="bg-gray-100 text-gray-800">Today</Badge>
                       )}
                     </div>
-                    <div className="text-sm text-gray-500">
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
                       {entry.activities.length} activities completed
                     </div>
                   </div>
@@ -468,15 +468,15 @@ Share what you accomplished, any challenges you faced, insights you gained, or h
                   {/* Separate auto-tracked and manual activities */}
                   {entry.activities.filter(a => a.type === 'auto').length > 0 && (
                     <div className="space-y-1">
-                      <h5 className="text-xs font-medium text-blue-700 mb-1">
+                      <h5 className="text-xs font-medium text-blue-700 dark:text-gray-300 mb-1">
                         Unpuzzle tracked ({entry.activities.filter(a => a.type === 'auto').length})
                       </h5>
                       {entry.activities.filter(a => a.type === 'auto').map((activity) => (
-                        <div key={activity.id} className="flex items-center gap-2 p-2 bg-blue-50 rounded border border-blue-200">
+                        <div key={activity.id} className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-gray-800 rounded border border-blue-200 dark:border-gray-700">
                           <span className="text-sm">{getActivityIcon(activity.category)}</span>
                           <div className="flex-1 min-w-0">
-                            <p className="text-blue-900 text-xs font-medium truncate">{activity.description}</p>
-                            <div className="flex items-center gap-2 text-xs text-blue-600">
+                            <p className="text-blue-900 dark:text-gray-100 text-xs font-medium truncate">{activity.description}</p>
+                            <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-gray-400">
                               <span>{new Date(activity.timestamp).toLocaleTimeString('en-US', { 
                                 hour: 'numeric', 
                                 minute: '2-digit',
@@ -499,9 +499,9 @@ Share what you accomplished, any challenges you faced, insights you gained, or h
                   {/* Student's daily message */}
                   {entry.studentNote ? (
                     <div className="mt-3">
-                      <h5 className="text-xs font-medium text-gray-700 mb-2">Your daily update</h5>
-                      <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                        <p className="text-gray-800 text-sm leading-relaxed">{entry.studentNote}</p>
+                      <h5 className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Your daily update</h5>
+                      <div className="p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg">
+                        <p className="text-gray-800 dark:text-gray-100 text-sm leading-relaxed">{entry.studentNote}</p>
                       </div>
                     </div>
                   ) : entry.day === currentDay ? (
