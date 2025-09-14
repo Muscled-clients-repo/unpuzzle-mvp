@@ -10,14 +10,27 @@ import { CommunityResourcesSection } from './CommunityResourcesSection'
 import { SuccessProofSection } from './SuccessProofSection'
 import { AffiliatesSection } from './AffiliatesSection'
 
-export function CommunityHeader() {
+interface CommunityHeaderProps {
+  communityPosts?: any[]
+  userRole?: 'guest' | 'member' | 'instructor'
+  goalData?: {
+    similarMembers?: Array<{ name: string; progress: number; days: number }>
+    recentlyCompletedMembers?: Array<{ name: string; goal: string; days: number; rank: number }>
+    recentActivities?: Array<{ id: number; user: string; action: string; time: string; type: string }>
+  }
+  goalDiggers?: any[]
+  hiddenTabs?: string[]
+  coursesByGoal?: any[]
+}
+
+export function CommunityHeader({ communityPosts, userRole = 'member', goalData, goalDiggers, hiddenTabs = [], coursesByGoal }: CommunityHeaderProps) {
   const [currentSlide, setCurrentSlide] = useState(0)
   const [isVideoPlaying, setIsVideoPlaying] = useState(false)
   const [currentActivity, setCurrentActivity] = useState(0)
   const [activeTab, setActiveTab] = useState('community')
   const [showFloatingCTA, setShowFloatingCTA] = useState(false)
   
-  const navigationTabs = [
+  const allNavigationTabs = [
     { id: 'community', label: 'Community', icon: Home },
     { id: 'goals', label: 'Goals', icon: Target },
     { id: 'goal-diggers', label: 'Goal Diggers', icon: Trophy },
@@ -26,6 +39,8 @@ export function CommunityHeader() {
     { id: 'courses', label: 'Courses', icon: GraduationCap },
     { id: 'resources', label: 'Resources', icon: FileText }
   ]
+  
+  const navigationTabs = allNavigationTabs.filter(tab => !hiddenTabs.includes(tab.id))
   
   const recentActivities = [
     {
@@ -429,7 +444,7 @@ export function CommunityHeader() {
               <div>
                 <h3 className="text-lg font-bold text-gray-900 mb-4">Recent Activity</h3>
                 <div className="space-y-3">
-                  {recentActivities.slice(0, 4).map((activity) => (
+                  {(goalData?.recentActivities || recentActivities).slice(0, 4).map((activity) => (
                     <div key={activity.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                       <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
                         activity.type === 'course' ? 'bg-blue-500' :
@@ -451,16 +466,18 @@ export function CommunityHeader() {
 
             {/* Right Content Area - Tab-specific content */}
             <div className="lg:col-span-3">
-              {activeTab === 'community' && <CommunityPostsFeed />}
+              {activeTab === 'community' && <CommunityPostsFeed posts={communityPosts} userRole={userRole} />}
               {activeTab === 'goals' && (
                 <CommunityGoalsSection 
-                  userRole="member" 
+                  userRole={userRole} 
                   memberName="John D."
                   isOwnProfile={true}
+                  similarMembers={goalData?.similarMembers}
+                  recentlyCompletedMembers={goalData?.recentlyCompletedMembers}
                 />
               )}
               {activeTab === 'goal-diggers' && (
-                <GoalDiggersLeaderboard userRole="member" />
+                <GoalDiggersLeaderboard userRole={userRole} goalDiggers={goalDiggers} />
               )}
               {activeTab === 'success-proof' && (
                 <SuccessProofSection userRole="guest" />
@@ -470,9 +487,10 @@ export function CommunityHeader() {
               )}
               {activeTab === 'courses' && (
                 <CommunityCoursesSection 
-                  userRole="member" 
+                  userRole={userRole} 
                   memberName="John D."
                   isOwnProfile={true}
+                  coursesByGoal={coursesByGoal}
                 />
               )}
               {activeTab === 'resources' && (

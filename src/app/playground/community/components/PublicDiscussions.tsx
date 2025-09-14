@@ -1,7 +1,12 @@
 import { MessageCircle, Heart, Clock, ArrowRight } from 'lucide-react'
 import { mockDiscussions } from '../mock-data/stories'
+import type { PlaygroundCommunity } from '../types'
 
-export function PublicDiscussions() {
+interface PublicDiscussionsProps {
+  discussions?: PlaygroundCommunity.Discussion[]
+}
+
+export function PublicDiscussions({ discussions = mockDiscussions }: PublicDiscussionsProps) {
   const getGoalIcon = (goalType: string) => {
     switch (goalType) {
       case 'shopify': return '🛍️'
@@ -35,7 +40,7 @@ export function PublicDiscussions() {
 
       {/* Discussions */}
       <div className="divide-y divide-gray-100">
-        {mockDiscussions.map((discussion) => (
+        {discussions.map((discussion) => (
           <div key={discussion.id} className="p-6 hover:bg-gray-50 transition-colors">
             {/* Discussion Header */}
             <div className="flex items-center gap-3 mb-3">

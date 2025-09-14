@@ -32,9 +32,10 @@ interface CommunityCoursesProps {
   userRole: 'guest' | 'member' | 'instructor'
   memberName?: string
   isOwnProfile?: boolean
+  coursesByGoal?: CoursesByGoal[]
 }
 
-export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = false }: CommunityCoursesProps) {
+export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = false, coursesByGoal }: CommunityCoursesProps) {
   const [filter, setFilter] = useState('all')
   const [sort, setSort] = useState('goal-order')
 
@@ -228,7 +229,8 @@ export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = f
     }
   ]
 
-  const allCourses = mockCoursesByGoal.flatMap(goal => goal.courses)
+  const allCoursesByGoal = coursesByGoal || mockCoursesByGoal
+  const allCourses = allCoursesByGoal.flatMap(goal => goal.courses)
   
   const filteredCourses = allCourses.filter(course => {
     switch (filter) {
@@ -245,7 +247,7 @@ export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = f
       case 'marketing':
         return course.category === 'marketing'
       case 'current-goal':
-        return mockCoursesByGoal.find(g => g.status === 'current')?.courses.includes(course)
+        return allCoursesByGoal.find(g => g.status === 'current')?.courses.includes(course)
       default:
         return true
     }
@@ -260,8 +262,8 @@ export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = f
       case 'videos':
         return b.videos - a.videos
       default: // goal-order
-        const aGoal = mockCoursesByGoal.find(g => g.courses.includes(a))
-        const bGoal = mockCoursesByGoal.find(g => g.courses.includes(b))
+        const aGoal = allCoursesByGoal.find(g => g.courses.includes(a))
+        const bGoal = allCoursesByGoal.find(g => g.courses.includes(b))
         if (aGoal?.status !== bGoal?.status) {
           const statusOrder = { 'current': 1, 'completed': 2, 'upcoming': 3 }
           return statusOrder[aGoal?.status || 'upcoming'] - statusOrder[bGoal?.status || 'upcoming']
@@ -339,7 +341,7 @@ export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = f
 
       {/* Courses by Goal */}
       <div className="space-y-8">
-        {mockCoursesByGoal.map((goalGroup) => (
+        {allCoursesByGoal.map((goalGroup) => (
           <div key={goalGroup.goalLevel} className="space-y-4">
             {/* Goal Header */}
             <div className="flex items-center gap-3">

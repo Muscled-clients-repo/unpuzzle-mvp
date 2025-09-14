@@ -1,33 +1,39 @@
 import { BarChart3, Clock, Trophy, Zap } from 'lucide-react'
+import { mockCommunityStats } from '../mock-data/stories'
+import type { PlaygroundCommunity } from '../types'
 
-export function CommunityStats() {
+interface CommunityStatsProps {
+  communityStats?: PlaygroundCommunity.CommunityStats
+}
+
+export function CommunityStats({ communityStats = mockCommunityStats }: CommunityStatsProps) {
   const stats = [
     {
       icon: Trophy,
       label: 'Active This Week',
-      value: '1,247',
+      value: communityStats.activeThisWeek.toLocaleString(),
       subtext: 'members learning',
       color: 'text-green-600'
     },
     {
       icon: BarChart3,
       label: 'Average Learn Rate',
-      value: '42 min/hr',
+      value: `${communityStats.avgLearnRate} min/hr`,
       subtext: 'video consumption',
       color: 'text-blue-600'
     },
     {
       icon: Zap,
-      label: 'Goals Completed',
-      value: '156',
-      subtext: 'this month',
+      label: 'Total Earnings',
+      value: communityStats.totalEarnings,
+      subtext: 'by members',
       color: 'text-purple-600'
     },
     {
       icon: Clock,
-      label: 'New Members',
-      value: '89',
-      subtext: 'this week',
+      label: 'Total Members',
+      value: communityStats.totalMembers.toLocaleString(),
+      subtext: 'in community',
       color: 'text-orange-600'
     }
   ]

@@ -1,7 +1,12 @@
 import { Calendar, DollarSign, Target, ArrowRight } from 'lucide-react'
 import { mockSuccessStories } from '../mock-data/stories'
+import type { PlaygroundCommunity } from '../types'
 
-export function SuccessStoriesSection() {
+interface SuccessStoriesSectionProps {
+  successStories?: PlaygroundCommunity.SuccessStory[]
+}
+
+export function SuccessStoriesSection({ successStories = mockSuccessStories }: SuccessStoriesSectionProps) {
   const getGoalIcon = (goalType: string) => {
     switch (goalType) {
       case 'shopify': return '🛍️'
@@ -32,7 +37,7 @@ export function SuccessStoriesSection() {
 
       {/* Stories */}
       <div className="p-6 space-y-6">
-        {mockSuccessStories.slice(0, 3).map((story) => (
+        {successStories.slice(0, 3).map((story) => (
           <div key={story.id} className="border-l-4 border-green-400 pl-4">
             {/* Story Header */}
             <div className="flex items-start justify-between mb-2">

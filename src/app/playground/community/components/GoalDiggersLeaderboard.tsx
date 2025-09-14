@@ -21,9 +21,10 @@ interface GoalDigger {
 
 interface GoalDiggersLeaderboardProps {
   userRole: 'guest' | 'member' | 'instructor'
+  goalDiggers?: GoalDigger[]
 }
 
-export function GoalDiggersLeaderboard({ userRole }: GoalDiggersLeaderboardProps) {
+export function GoalDiggersLeaderboard({ userRole, goalDiggers }: GoalDiggersLeaderboardProps) {
   const [sortBy, setSortBy] = useState('ranking')
   const [filterBy, setFilterBy] = useState('all')
 
@@ -149,7 +150,8 @@ export function GoalDiggersLeaderboard({ userRole }: GoalDiggersLeaderboardProps
     }
   ]
 
-  const sortedDiggers = [...mockGoalDiggers].sort((a, b) => {
+  const allGoalDiggers = goalDiggers || mockGoalDiggers
+  const sortedDiggers = [...allGoalDiggers].sort((a, b) => {
     switch (sortBy) {
       case 'learnRate':
         return b.learnRate - a.learnRate
@@ -295,7 +297,7 @@ export function GoalDiggersLeaderboard({ userRole }: GoalDiggersLeaderboardProps
                       </div>
                       <div>
                         <div className="font-semibold text-gray-900">
-                          {isRestricted ? `Member ${String.fromCharCode(65 + index)}` : digger.name}
+                          {digger.name}
                         </div>
                         {digger.badge && (
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${getBadgeColor(digger.badge)}`}>

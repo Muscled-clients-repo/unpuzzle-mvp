@@ -31,7 +31,12 @@ interface Reply {
   timestamp: string
 }
 
-export function CommunityPostsFeed() {
+interface CommunityPostsFeedProps {
+  posts?: Post[]
+  userRole?: 'guest' | 'member' | 'instructor'
+}
+
+export function CommunityPostsFeed({ posts, userRole = 'member' }: CommunityPostsFeedProps) {
   const [filter, setFilter] = useState('all')
   const [newPost, setNewPost] = useState('')
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
@@ -104,7 +109,9 @@ export function CommunityPostsFeed() {
     { value: 'my-posts', label: 'My Posts' }
   ]
 
-  const filteredPosts = mockPosts.filter(post => {
+  const allPosts = posts || mockPosts
+  
+  const filteredPosts = allPosts.filter(post => {
     switch (filter) {
       case 'instructor':
         return post.author.role === 'instructor'
@@ -143,26 +150,28 @@ export function CommunityPostsFeed() {
 
   return (
     <div className="space-y-6">
-      {/* Post Creation Form */}
-      <div className="bg-white border border-gray-200 rounded-lg p-4">
-        <textarea
-          value={newPost}
-          onChange={(e) => setNewPost(e.target.value)}
-          placeholder="Share something with the community..."
-          className="w-full resize-none border-0 focus:ring-0 focus:outline-none text-gray-900 placeholder-gray-500"
-          rows={3}
-        />
-        <div className="flex justify-end mt-3">
-          <button
-            onClick={handleSubmitPost}
-            disabled={!newPost.trim()}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Send className="h-4 w-4" />
-            Post
-          </button>
+      {/* Post Creation Form - Hidden for guests */}
+      {userRole !== 'guest' && (
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <textarea
+            value={newPost}
+            onChange={(e) => setNewPost(e.target.value)}
+            placeholder="Share something with the community..."
+            className="w-full resize-none border-0 focus:ring-0 focus:outline-none text-gray-900 placeholder-gray-500"
+            rows={3}
+          />
+          <div className="flex justify-end mt-3">
+            <button
+              onClick={handleSubmitPost}
+              disabled={!newPost.trim()}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Send className="h-4 w-4" />
+              Post
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Filter Dropdown */}
       <div className="flex justify-between items-center">

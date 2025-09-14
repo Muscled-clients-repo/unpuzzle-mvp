@@ -1,13 +1,22 @@
 import { useState } from 'react'
 import { TrendingUp, TrendingDown, Minus, Crown, Clock, Trophy, Target } from 'lucide-react'
 import { mockLeaderboard, mockLearnRateLeaderboard } from '../mock-data/members'
+import type { PlaygroundCommunity } from '../types'
 
 type LeaderboardType = 'earnings' | 'learnRate'
 
-export function LeaderboardSection() {
+interface LeaderboardSectionProps {
+  earningsLeaderboard?: PlaygroundCommunity.LeaderboardEntry[]
+  learnRateLeaderboard?: PlaygroundCommunity.LeaderboardEntry[]
+}
+
+export function LeaderboardSection({ 
+  earningsLeaderboard = mockLeaderboard, 
+  learnRateLeaderboard = mockLearnRateLeaderboard 
+}: LeaderboardSectionProps) {
   const [activeTab, setActiveTab] = useState<LeaderboardType>('earnings')
   
-  const currentLeaderboard = activeTab === 'earnings' ? mockLeaderboard : mockLearnRateLeaderboard
+  const currentLeaderboard = activeTab === 'earnings' ? earningsLeaderboard : learnRateLeaderboard
 
   const getChangeIcon = (change: number) => {
     if (change > 0) return <TrendingUp className="h-4 w-4 text-green-500" />

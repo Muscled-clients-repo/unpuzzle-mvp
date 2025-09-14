@@ -61,9 +61,17 @@ interface CommunityGoalsSectionProps {
   userRole: 'guest' | 'member' | 'instructor'
   isOwnProfile?: boolean
   memberName?: string
+  similarMembers?: Array<{ name: string; progress: number; days: number }>
+  recentlyCompletedMembers?: Array<{ name: string; goal: string; days: number; rank: number }>
 }
 
-export function CommunityGoalsSection({ userRole, isOwnProfile = false, memberName }: CommunityGoalsSectionProps) {
+export function CommunityGoalsSection({ 
+  userRole, 
+  isOwnProfile = false, 
+  memberName, 
+  similarMembers,
+  recentlyCompletedMembers 
+}: CommunityGoalsSectionProps) {
   const [expandedGoal, setExpandedGoal] = React.useState<string | null>(null)
 
   // Mock data - replace with real data
@@ -192,7 +200,7 @@ export function CommunityGoalsSection({ userRole, isOwnProfile = false, memberNa
       {/* Header */}
       <div className="text-center">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          {getDisplayName()} Goal Journey
+          {isRestricted ? 'How Our Members Achieve Goals' : `${getDisplayName()} Goal Journey`}
         </h2>
         <p className="text-gray-600">
           {isRestricted 
@@ -427,11 +435,11 @@ export function CommunityGoalsSection({ userRole, isOwnProfile = false, memberNa
                   Working on {isRestricted ? '$5K Shopify Agency' : currentGoal.targetAmount + ' Shopify Agency'}
                 </h4>
                 <div className="space-y-3">
-                  {[
+                  {(similarMembers || [
                     { name: isRestricted ? 'Member A' : 'Sarah M.', progress: 82, days: 45 },
                     { name: isRestricted ? 'Member B' : 'Alex R.', progress: 65, days: 60 },
                     { name: isRestricted ? 'Member C' : 'Lisa K.', progress: 58, days: 72 }
-                  ].map((member, index) => (
+                  ]).map((member, index) => (
                     <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
@@ -460,11 +468,11 @@ export function CommunityGoalsSection({ userRole, isOwnProfile = false, memberNa
             <div className="pt-4 border-t border-gray-100">
               <h4 className="text-sm font-medium text-gray-900 mb-3">Recently Completed Goals</h4>
               <div className="space-y-2">
-                {[
+                {(recentlyCompletedMembers || [
                   { name: isRestricted ? 'Member D' : 'Mike T.', goal: '$3K', days: 85, rank: 2 },
                   { name: isRestricted ? 'Member E' : 'Jenny L.', goal: '$2K', days: 120, rank: 7 },
                   { name: isRestricted ? 'Member F' : 'Tom W.', goal: '$3K', days: 95, rank: 4 }
-                ].map((member, index) => (
+                ]).map((member, index) => (
                   <div key={index} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
                     <div className="flex items-center gap-2">
                       <div className="w-6 h-6 bg-gray-300 rounded-full flex items-center justify-center">
