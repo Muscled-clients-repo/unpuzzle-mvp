@@ -33,6 +33,7 @@ interface SidebarProps {
 const learnerNavItems = [
   { href: "/student", label: "Dashboard", icon: Home },
   { href: "/student/courses", label: "My Courses", icon: BookOpen },
+  { href: "/student/goals", label: "Goals", icon: Target },
   { href: "/student/reflections", label: "Reflections", icon: MessageSquare },
 ]
 
