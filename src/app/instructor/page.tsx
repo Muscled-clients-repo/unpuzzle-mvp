@@ -21,6 +21,7 @@ import {
   ResponsiveContainer,
   Legend,
   ReferenceLine,
+  ComposedChart,
 } from "recharts"
 import { 
   DollarSign, 
@@ -259,7 +260,6 @@ export default function InstructorDashboard() {
         </Card>
       </StatsGrid>
 
-      {/* Revenue Chart */
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -276,7 +276,7 @@ export default function InstructorDashboard() {
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={combinedChartData}>
+            <ComposedChart data={combinedChartData}>
               <defs>
                 <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
@@ -313,14 +313,12 @@ export default function InstructorDashboard() {
                 dot={false}
                 name="Previous Period"
               />
-            </AreaChart>
+            </ComposedChart>
           </ResponsiveContainer>
         </CardContent>
-      </Card>
+        </Card>
 
-
-      {/* Live Analytics Section */}
-      <div className="space-y-6">
+        <div className="space-y-6">
         {/* Routes Table with Live User Counts */}
         <Card>
           <CardHeader>
