@@ -58,19 +58,19 @@ interface ExecutionMetrics {
 }
 
 interface CommunityGoalsSectionProps {
-  userRole: 'guest' | 'member' | 'instructor'
+  userRole: 'guest' | 'student' | 'instructor'
   isOwnProfile?: boolean
   memberName?: string
-  similarMembers?: Array<{ name: string; progress: number; days: number }>
-  recentlyCompletedMembers?: Array<{ name: string; goal: string; days: number; rank: number }>
+  similarStudents?: Array<{ name: string; progress: number; days: number }>
+  recentlyCompletedStudents?: Array<{ name: string; goal: string; days: number; rank: number }>
 }
 
 export function CommunityGoalsSection({ 
   userRole, 
   isOwnProfile = false, 
   memberName, 
-  similarMembers,
-  recentlyCompletedMembers 
+  similarStudents,
+  recentlyCompletedStudents 
 }: CommunityGoalsSectionProps) {
   const [expandedGoal, setExpandedGoal] = React.useState<string | null>(null)
 
@@ -204,7 +204,7 @@ export function CommunityGoalsSection({
         </h2>
         <p className="text-gray-600">
           {isRestricted 
-            ? 'See how our members progress toward their goals'
+            ? 'See how our students progress toward their goals'
             : 'Complete timeline of goals and milestones achieved'
           }
         </p>
@@ -423,7 +423,7 @@ export function CommunityGoalsSection({
           <div className="flex items-center gap-3 mb-6">
             <h3 className="font-semibold text-gray-900">Similar Goals</h3>
             <span className="text-sm text-gray-500">
-              {isRestricted ? '12' : '8'} members
+              {isRestricted ? '12' : '8'} students
             </span>
           </div>
 
@@ -435,7 +435,7 @@ export function CommunityGoalsSection({
                   Working on {isRestricted ? '$5K Shopify Agency' : currentGoal.targetAmount + ' Shopify Agency'}
                 </h4>
                 <div className="space-y-3">
-                  {(similarMembers || [
+                  {(similarStudents || [
                     { name: isRestricted ? 'Member A' : 'Sarah M.', progress: 82, days: 45 },
                     { name: isRestricted ? 'Member B' : 'Alex R.', progress: 65, days: 60 },
                     { name: isRestricted ? 'Member C' : 'Lisa K.', progress: 58, days: 72 }
@@ -468,7 +468,7 @@ export function CommunityGoalsSection({
             <div className="pt-4 border-t border-gray-100">
               <h4 className="text-sm font-medium text-gray-900 mb-3">Recently Completed Goals</h4>
               <div className="space-y-2">
-                {(recentlyCompletedMembers || [
+                {(recentlyCompletedStudents || [
                   { name: isRestricted ? 'Member D' : 'Mike T.', goal: '$3K', days: 85, rank: 2 },
                   { name: isRestricted ? 'Member E' : 'Jenny L.', goal: '$2K', days: 120, rank: 7 },
                   { name: isRestricted ? 'Member F' : 'Tom W.', goal: '$3K', days: 95, rank: 4 }
@@ -494,7 +494,7 @@ export function CommunityGoalsSection({
             {/* View All Link */}
             <div className="pt-4 border-t border-gray-100 text-center">
               <button className="text-sm text-blue-600 hover:text-blue-700">
-                View all members →
+                View all students →
               </button>
             </div>
           </div>

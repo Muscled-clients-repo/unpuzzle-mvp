@@ -22,7 +22,7 @@ interface Resource {
 }
 
 interface CommunityResourcesProps {
-  userRole: 'guest' | 'member' | 'instructor'
+  userRole: 'guest' | 'student' | 'instructor'
 }
 
 export function CommunityResourcesSection({ userRole }: CommunityResourcesProps) {

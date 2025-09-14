@@ -1,4 +1,4 @@
-export interface GuestSimilarMember {
+export interface GuestSimilarStudent {
   name: string
   progress: number
   days: number
@@ -11,16 +11,16 @@ export interface GuestRecentActivity {
   user: string
   action: string
   time: string
-  type: 'course' | 'goal' | 'resource' | 'member'
+  type: 'course' | 'goal' | 'resource' | 'student'
 }
 
-export const guestSimilarMembers: GuestSimilarMember[] = [
+export const guestSimilarStudents: GuestSimilarStudent[] = [
   { name: 's*****h', progress: 82, days: 45 },
   { name: 'a***x', progress: 65, days: 60 },
   { name: 'l***a', progress: 58, days: 72 }
 ]
 
-export const guestRecentlyCompletedMembers: GuestSimilarMember[] = [
+export const guestRecentlyCompletedStudents: GuestSimilarStudent[] = [
   { name: 'm***e', goal: '$3K', days: 85, rank: 2 },
   { name: 'j****y', goal: '$2K', days: 120, rank: 7 },
   { name: 't***m', goal: '$3K', days: 95, rank: 4 }
@@ -53,7 +53,7 @@ export const guestRecentActivities: GuestRecentActivity[] = [
     user: 'm****r',
     action: 'joined the Development Agency track',
     time: '18 mins ago',
-    type: 'member'
+    type: 'student'
   },
   {
     id: 5,

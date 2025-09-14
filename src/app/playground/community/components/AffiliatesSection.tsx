@@ -24,7 +24,7 @@ interface TopAffiliate {
 }
 
 interface AffiliatesSectionProps {
-  userRole: 'guest' | 'member' | 'instructor'
+  userRole: 'guest' | 'student' | 'instructor'
   isAffiliate?: boolean
 }
 
@@ -133,7 +133,7 @@ export function AffiliatesSection({ userRole, isAffiliate = false }: AffiliatesS
             Affiliate Program
           </h2>
           <p className="text-gray-600 max-w-2xl mx-auto">
-            Earn 30% commission for every member you refer. Help entrepreneurs succeed while building passive income.
+            Earn 30% commission for every student you refer. Help entrepreneurs succeed while building passive income.
           </p>
         </div>
 
@@ -144,7 +144,7 @@ export function AffiliatesSection({ userRole, isAffiliate = false }: AffiliatesS
               <DollarSign className="h-6 w-6 text-white" />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">30% Commission</h3>
-            <p className="text-gray-600 text-sm">Earn $29.10 for every $97 member you refer</p>
+            <p className="text-gray-600 text-sm">Earn $29.10 for every $97 student you refer</p>
           </div>
 
           <div className="text-center p-6 bg-blue-50 border border-blue-200 rounded-lg">
@@ -152,7 +152,7 @@ export function AffiliatesSection({ userRole, isAffiliate = false }: AffiliatesS
               <Users className="h-6 w-6 text-white" />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">High Conversion</h3>
-            <p className="text-gray-600 text-sm">Our members see real results, making referrals easier</p>
+            <p className="text-gray-600 text-sm">Our students see real results, making referrals easier</p>
           </div>
 
           <div className="text-center p-6 bg-purple-50 border border-purple-200 rounded-lg">
@@ -208,7 +208,7 @@ export function AffiliatesSection({ userRole, isAffiliate = false }: AffiliatesS
             Join Community First - $97/month
           </button>
           <p className="text-sm text-gray-500 mt-3">
-            Affiliate program available to members after 30 days
+            Affiliate program available to students after 30 days
           </p>
         </div>
       </div>

@@ -116,7 +116,7 @@ export function StickyCTA() {
         {/* Social Proof */}
         <div className="text-center">
           <div className="text-xs text-blue-200 mb-1">
-            2,847+ members already earning
+            2,847+ students already earning
           </div>
           <div className="text-xs text-green-300 font-semibold">
             💰 $12.4M+ total earned by community

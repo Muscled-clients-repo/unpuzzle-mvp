@@ -12,10 +12,10 @@ import { AffiliatesSection } from './AffiliatesSection'
 
 interface CommunityHeaderProps {
   communityPosts?: any[]
-  userRole?: 'guest' | 'member' | 'instructor'
+  userRole?: 'guest' | 'student' | 'instructor'
   goalData?: {
-    similarMembers?: Array<{ name: string; progress: number; days: number }>
-    recentlyCompletedMembers?: Array<{ name: string; goal: string; days: number; rank: number }>
+    similarStudents?: Array<{ name: string; progress: number; days: number }>
+    recentlyCompletedStudents?: Array<{ name: string; goal: string; days: number; rank: number }>
     recentActivities?: Array<{ id: number; user: string; action: string; time: string; type: string }>
   }
   goalDiggers?: any[]
@@ -23,7 +23,7 @@ interface CommunityHeaderProps {
   coursesByGoal?: any[]
 }
 
-export function CommunityHeader({ communityPosts, userRole = 'member', goalData, goalDiggers, hiddenTabs = [], coursesByGoal }: CommunityHeaderProps) {
+export function CommunityHeader({ communityPosts, userRole = 'student', goalData, goalDiggers, hiddenTabs = [], coursesByGoal }: CommunityHeaderProps) {
   const [currentSlide, setCurrentSlide] = useState(0)
   const [isVideoPlaying, setIsVideoPlaying] = useState(false)
   const [currentActivity, setCurrentActivity] = useState(0)
@@ -472,8 +472,8 @@ export function CommunityHeader({ communityPosts, userRole = 'member', goalData,
                   userRole={userRole} 
                   memberName="John D."
                   isOwnProfile={true}
-                  similarMembers={goalData?.similarMembers}
-                  recentlyCompletedMembers={goalData?.recentlyCompletedMembers}
+                  similarStudents={goalData?.similarStudents}
+                  recentlyCompletedStudents={goalData?.recentlyCompletedStudents}
                 />
               )}
               {activeTab === 'goal-diggers' && (
@@ -483,7 +483,7 @@ export function CommunityHeader({ communityPosts, userRole = 'member', goalData,
                 <SuccessProofSection userRole="guest" />
               )}
               {activeTab === 'affiliates' && (
-                <AffiliatesSection userRole="member" isAffiliate={true} />
+                <AffiliatesSection userRole="student" isAffiliate={true} />
               )}
               {activeTab === 'courses' && (
                 <CommunityCoursesSection 

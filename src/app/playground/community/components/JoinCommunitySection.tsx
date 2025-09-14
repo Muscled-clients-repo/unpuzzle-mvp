@@ -15,19 +15,19 @@ export function JoinCommunitySection() {
       icon: '🛍️',
       title: 'Shopify Agency',
       description: 'Build apps & themes for clients',
-      members: '1,234'
+      students: '1,234'
     },
     {
       icon: '🤖',
       title: 'AI Software Agency', 
       description: 'Full-stack apps with Claude Code',
-      members: '856'
+      students: '856'
     },
     {
       icon: '💰',
       title: 'SaaS Builder',
       description: 'Launch your own software',
-      members: '423'
+      students: '423'
     }
   ]
 
@@ -48,7 +48,7 @@ export function JoinCommunitySection() {
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div className="text-center">
             <div className="text-2xl font-bold">2,847</div>
-            <div className="text-xs text-blue-100">Active Members</div>
+            <div className="text-xs text-blue-100">Active Students</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold">$12.4M+</div>
@@ -72,7 +72,7 @@ export function JoinCommunitySection() {
                   <div className="font-medium">{goal.title}</div>
                   <div className="text-sm text-blue-100">{goal.description}</div>
                 </div>
-                <div className="text-xs text-blue-200">{goal.members} members</div>
+                <div className="text-xs text-blue-200">{goal.students} students</div>
               </div>
             </div>
           ))}
@@ -100,7 +100,7 @@ export function JoinCommunitySection() {
         </button>
         
         <p className="text-xs text-blue-200 text-center mt-3">
-          Join 2,847+ members building $500k+ agencies
+          Join 2,847+ students building $500k+ agencies
         </p>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import { PlaygroundCommunity } from '../types'
 
-export const mockMembers: PlaygroundCommunity.Member[] = [
+export const mockStudents: PlaygroundCommunity.Student[] = [
   {
     id: '1',
     displayName: 'Alex M.',
@@ -23,7 +23,7 @@ export const mockMembers: PlaygroundCommunity.Member[] = [
   },
   {
     id: '3',
-    displayName: 'Member X',
+    displayName: 'Student X',
     earningsRange: '$50k+',
     goalType: 'shopify',
     achievements: ['First $1k', 'First $5k', 'First $10k', 'First $25k', 'First $50k'],
@@ -56,35 +56,35 @@ export const mockMembers: PlaygroundCommunity.Member[] = [
 export const mockLeaderboard: PlaygroundCommunity.LeaderboardEntry[] = [
   {
     rank: 1,
-    member: mockMembers[2], // Member X
+    student: mockStudents[2], // Member X
     earnings: '$50k+',
     timeframe: 'lifetime',
     change: 0
   },
   {
     rank: 2,
-    member: mockMembers[0], // Alex M.
+    student: mockStudents[0], // Alex M.
     earnings: '$25k-$50k',
     timeframe: 'lifetime', 
     change: 1
   },
   {
     rank: 3,
-    member: mockMembers[1], // Sarah L.
+    student: mockStudents[1], // Sarah L.
     earnings: '$10k-$25k',
     timeframe: 'lifetime',
     change: -1
   },
   {
     rank: 4,
-    member: mockMembers[4], // Maria R.
+    student: mockStudents[4], // Maria R.
     earnings: '$10k-$25k',
     timeframe: 'lifetime',
     change: 2
   },
   {
     rank: 5,
-    member: mockMembers[3], // David K.
+    student: mockStudents[3], // David K.
     earnings: '$5k-$10k',
     timeframe: 'lifetime',
     change: -1
@@ -94,35 +94,35 @@ export const mockLeaderboard: PlaygroundCommunity.LeaderboardEntry[] = [
 export const mockLearnRateLeaderboard: PlaygroundCommunity.LeaderboardEntry[] = [
   {
     rank: 1,
-    member: mockMembers[3], // David K.
+    student: mockStudents[3], // David K.
     earnings: '$5k-$10k',
     timeframe: 'week',
     change: 3
   },
   {
     rank: 2,
-    member: mockMembers[1], // Sarah L.
+    student: mockStudents[1], // Sarah L.
     earnings: '$10k-$25k', 
     timeframe: 'week',
     change: 0
   },
   {
     rank: 3,
-    member: mockMembers[0], // Alex M.
+    student: mockStudents[0], // Alex M.
     earnings: '$25k-$50k',
     timeframe: 'week',
     change: -1
   },
   {
     rank: 4,
-    member: mockMembers[4], // Maria R.
+    student: mockStudents[4], // Maria R.
     earnings: '$10k-$25k',
     timeframe: 'week',
     change: 1
   },
   {
     rank: 5,
-    member: mockMembers[2], // Member X
+    student: mockStudents[2], // Member X
     earnings: '$50k+',
     timeframe: 'week',
     change: -3

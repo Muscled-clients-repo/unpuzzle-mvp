@@ -12,7 +12,7 @@ export function CommunityStats({ communityStats = mockCommunityStats }: Communit
       icon: Trophy,
       label: 'Active This Week',
       value: communityStats.activeThisWeek.toLocaleString(),
-      subtext: 'members learning',
+      subtext: 'students learning',
       color: 'text-green-600'
     },
     {
@@ -26,12 +26,12 @@ export function CommunityStats({ communityStats = mockCommunityStats }: Communit
       icon: Zap,
       label: 'Total Earnings',
       value: communityStats.totalEarnings,
-      subtext: 'by members',
+      subtext: 'by students',
       color: 'text-purple-600'
     },
     {
       icon: Clock,
-      label: 'Total Members',
+      label: 'Total Students',
       value: communityStats.totalMembers.toLocaleString(),
       subtext: 'in community',
       color: 'text-orange-600'

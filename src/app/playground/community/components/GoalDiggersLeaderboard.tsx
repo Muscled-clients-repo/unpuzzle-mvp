@@ -20,7 +20,7 @@ interface GoalDigger {
 }
 
 interface GoalDiggersLeaderboardProps {
-  userRole: 'guest' | 'member' | 'instructor'
+  userRole: 'guest' | 'student' | 'instructor'
   goalDiggers?: GoalDigger[]
 }
 
@@ -221,7 +221,7 @@ export function GoalDiggersLeaderboard({ userRole, goalDiggers }: GoalDiggersLea
         </h2>
         <p className="text-gray-600">
           {isRestricted 
-            ? 'See how our top members are crushing their goals'
+            ? 'See how our top students are crushing their goals'
             : 'Compete with fellow entrepreneurs on their goal journey'
           }
         </p>

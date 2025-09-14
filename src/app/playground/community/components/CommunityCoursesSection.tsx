@@ -29,7 +29,7 @@ interface CoursesByGoal {
 }
 
 interface CommunityCoursesProps {
-  userRole: 'guest' | 'member' | 'instructor'
+  userRole: 'guest' | 'student' | 'instructor'
   memberName?: string
   isOwnProfile?: boolean
   coursesByGoal?: CoursesByGoal[]
@@ -298,7 +298,7 @@ export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = f
         </h2>
         <p className="text-gray-600">
           {isRestricted 
-            ? 'See the structured learning path our members follow'
+            ? 'See the structured learning path our students follow'
             : 'Progress through courses designed for your specific goal track'
           }
         </p>
@@ -409,7 +409,7 @@ export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = f
                   </h3>
 
                   <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                    {isRestricted ? 'Course content preview available to members only' : course.description}
+                    {isRestricted ? 'Course content preview available to students only' : course.description}
                   </p>
 
                   <div className="flex items-center gap-4 text-xs text-gray-500 mb-3">

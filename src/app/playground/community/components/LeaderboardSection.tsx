@@ -72,7 +72,7 @@ export function LeaderboardSection({
         <div className="space-y-4">
           {currentLeaderboard.map((entry, index) => (
             <div
-              key={entry.member.id}
+              key={entry.student.id}
               className={`flex items-center gap-4 p-4 rounded-lg transition-colors ${
                 index === 0 
                   ? 'bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200' 
@@ -91,10 +91,10 @@ export function LeaderboardSection({
               {/* Member Info */}
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="font-medium text-gray-900">{entry.member.displayName}</span>
-                  <span className="text-lg">{getGoalIcon(entry.member.goalType)}</span>
+                  <span className="font-medium text-gray-900">{entry.student.displayName}</span>
+                  <span className="text-lg">{getGoalIcon(entry.student.goalType)}</span>
                   <span className="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded-full capitalize">
-                    {entry.member.goalType}
+                    {entry.student.goalType}
                   </span>
                 </div>
                 
@@ -102,11 +102,11 @@ export function LeaderboardSection({
                   <span>
                     {activeTab === 'earnings' 
                       ? `Earned: ${entry.earnings}`
-                      : `Learn Rate: ${entry.member.learnRate} min/hr`
+                      : `Learn Rate: ${entry.student.learnRate} min/hr`
                     }
                   </span>
                   <span>•</span>
-                  <span>{entry.member.achievements.length} achievements</span>
+                  <span>{entry.student.achievements.length} achievements</span>
                 </div>
               </div>
 

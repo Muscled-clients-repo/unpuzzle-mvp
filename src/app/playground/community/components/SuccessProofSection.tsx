@@ -7,7 +7,7 @@ interface SuccessPost {
   id: string
   author: {
     name: string
-    role: 'instructor' | 'member'
+    role: 'instructor' | 'student'
     avatar?: string
     goal: string // current goal they're working on
   }
@@ -30,7 +30,7 @@ interface SuccessPost {
 }
 
 interface SuccessProofSectionProps {
-  userRole: 'guest' | 'member' | 'instructor'
+  userRole: 'guest' | 'student' | 'instructor'
 }
 
 export function SuccessProofSection({ userRole }: SuccessProofSectionProps) {
@@ -43,7 +43,7 @@ export function SuccessProofSection({ userRole }: SuccessProofSectionProps) {
   const mockSuccessPosts: SuccessPost[] = [
     {
       id: '1',
-      author: { name: 'Sarah M.', role: 'member', goal: '$5K Shopify Agency' },
+      author: { name: 'Sarah M.', role: 'student', goal: '$5K Shopify Agency' },
       type: 'revenue',
       title: 'First $5K month achieved! 🎉',
       description: 'Just hit my $5K monthly revenue goal! Started with Claude Code fundamentals 6 months ago, now managing 8 Shopify clients. This screenshot from Stripe shows this month\'s earnings - couldn\'t have done it without this community!',
@@ -58,7 +58,7 @@ export function SuccessProofSection({ userRole }: SuccessProofSectionProps) {
     },
     {
       id: '2',
-      author: { name: 'John D.', role: 'member', goal: '$3K Shopify Agency' },
+      author: { name: 'John D.', role: 'student', goal: '$3K Shopify Agency' },
       type: 'client-win',
       title: 'Landed my biggest client yet - $15K project!',
       description: 'Used the proposal templates from the resources section and cold outreach scripts. This luxury brand wants a complete Shopify Plus migration. Contract signed yesterday! 💪',
@@ -77,7 +77,7 @@ export function SuccessProofSection({ userRole }: SuccessProofSectionProps) {
     },
     {
       id: '3',
-      author: { name: 'Lisa K.', role: 'member', goal: '$10K SaaS MVP' },
+      author: { name: 'Lisa K.', role: 'student', goal: '$10K SaaS MVP' },
       type: 'milestone',
       title: '500 users signed up in 2 weeks! 📈',
       description: 'My SaaS tool for Shopify analytics just crossed 500 users! Built the entire thing using Claude Code techniques learned here. Revenue is at $2.1K MRR already. Here\'s the analytics dashboard:',
@@ -96,7 +96,7 @@ export function SuccessProofSection({ userRole }: SuccessProofSectionProps) {
     },
     {
       id: '4',
-      author: { name: 'Mike R.', role: 'member', goal: '$2K Shopify Agency' },
+      author: { name: 'Mike R.', role: 'student', goal: '$2K Shopify Agency' },
       type: 'goal-completed',
       title: '🏆 $2K Goal SMASHED! Moving to $3K track',
       description: 'Started 4 months ago with zero coding experience. Today I hit my $2K monthly goal consistently for 3 months! Time to level up. Thank you to everyone who helped along the way!',
@@ -115,7 +115,7 @@ export function SuccessProofSection({ userRole }: SuccessProofSectionProps) {
     },
     {
       id: '5',
-      author: { name: 'Emma S.', role: 'member', goal: '$8K SaaS MVP' },
+      author: { name: 'Emma S.', role: 'student', goal: '$8K SaaS MVP' },
       type: 'testimonial',
       title: 'Client testimonial that made my week 💖',
       description: 'My client just sent this after delivering their Shopify store optimization. 40% conversion rate increase and they\'re over the moon! These results speak for themselves.',
@@ -132,7 +132,7 @@ export function SuccessProofSection({ userRole }: SuccessProofSectionProps) {
     },
     {
       id: '6',
-      author: { name: 'Alex T.', role: 'member', goal: '$1K Shopify Agency' },
+      author: { name: 'Alex T.', role: 'student', goal: '$1K Shopify Agency' },
       type: 'client-win',
       title: 'First paying client! $800 Shopify build 🎯',
       description: 'After 2 months of learning, I just signed my first client! A local restaurant needs a Shopify store. Using everything I learned in the fundamentals course. So excited!',
@@ -147,7 +147,7 @@ export function SuccessProofSection({ userRole }: SuccessProofSectionProps) {
     },
     {
       id: '7',
-      author: { name: 'Jenny L.', role: 'member', goal: '$15K SaaS MVP' },
+      author: { name: 'Jenny L.', role: 'student', goal: '$15K SaaS MVP' },
       type: 'revenue',
       title: 'SaaS hit $8K MRR! Halfway to my goal 🚀',
       description: 'My Shopify app for inventory management is growing fast! Just crossed $8K in monthly recurring revenue. Using Claude Code for all development. Here\'s this month\'s Stripe dashboard:',
@@ -239,7 +239,7 @@ export function SuccessProofSection({ userRole }: SuccessProofSectionProps) {
           Success Proof
         </h2>
         <p className="text-gray-600">
-          Real results from our community members - screenshots, testimonials, and milestone achievements
+          Real results from our community students - screenshots, testimonials, and milestone achievements
         </p>
       </div>
 
@@ -326,7 +326,7 @@ export function SuccessProofSection({ userRole }: SuccessProofSectionProps) {
               
               <p className="text-gray-700 mb-4 leading-relaxed">
                 {isRestricted 
-                  ? `Amazing success story from one of our members! Join the community to see the full details and screenshots.`
+                  ? `Amazing success story from one of our students! Join the community to see the full details and screenshots.`
                   : post.description
                 }
               </p>
@@ -438,7 +438,7 @@ export function SuccessProofSection({ userRole }: SuccessProofSectionProps) {
           <TrendingUp className="h-8 w-8 text-green-600 mx-auto mb-3" />
           <h3 className="font-semibold text-gray-900 mb-2">See Your Success Story Here</h3>
           <p className="text-gray-600 mb-4">
-            Join hundreds of members sharing their wins, revenue screenshots, and milestone achievements.
+            Join hundreds of students sharing their wins, revenue screenshots, and milestone achievements.
           </p>
           <button className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors">
             Start Your Journey - $97/month

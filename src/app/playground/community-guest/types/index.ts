@@ -3,7 +3,7 @@ export namespace PlaygroundCommunity {
   export type EarningsRange = '$0-$1k' | '$1k-$5k' | '$5k-$10k' | '$10k-$25k' | '$25k-$50k' | '$50k+'
   export type Timeframe = 'week' | 'month' | 'year' | 'lifetime'
 
-  export interface Member {
+  export interface Student {
     id: string
     displayName: string
     earningsRange: EarningsRange
@@ -16,7 +16,7 @@ export namespace PlaygroundCommunity {
 
   export interface LeaderboardEntry {
     rank: number
-    member: Member
+    student: Student
     earnings: EarningsRange
     timeframe: Timeframe
     change: number // position change from previous period
@@ -24,7 +24,7 @@ export namespace PlaygroundCommunity {
 
   export interface SuccessStory {
     id: string
-    memberName: string // Anonymous like "Member X"
+    studentName: string // Anonymous like "Student X"
     achievement: string
     earnings?: string
     goalType: GoalType
@@ -43,7 +43,7 @@ export namespace PlaygroundCommunity {
   }
 
   export interface CommunityStats {
-    totalMembers: number
+    totalStudents: number
     activeThisWeek: number
     totalEarnings: string
     avgLearnRate: number
