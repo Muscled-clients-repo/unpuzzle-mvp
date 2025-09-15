@@ -7,6 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { getUserGoalProgress, getDailyGoalData, createOrUpdateDailyNote } from '@/lib/actions/goals-actions'
+import { toast } from 'sonner'
+import { DailyNoteImage } from './DailyNoteImage'
+import { DailyNoteImageViewer } from './DailyNoteImageViewer'
 
 interface DailyActivity {
   id: string
@@ -29,6 +34,16 @@ interface DailyEntry {
   date: string
   activities: DailyActivity[]
   studentNote?: string
+  attachedFiles?: Array<{
+    id: string
+    filename: string
+    original_filename: string
+    file_size: number
+    mime_type: string
+    cdn_url?: string
+    storage_path: string
+    message_text?: string | null
+  }>
 }
 
 interface Goal {
@@ -231,11 +246,136 @@ export function DailyGoalTracker() {
   const [dailyNote, setDailyNote] = useState('')
   const [selectedDay, setSelectedDay] = useState<number | null>(null)
   const [showAllActivities, setShowAllActivities] = useState(false)
+  const [isEditingNote, setIsEditingNote] = useState(false)
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([])
+  const [isDragOver, setIsDragOver] = useState(false)
+  const [imageViewerOpen, setImageViewerOpen] = useState(false)
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0)
+  const [selectedEntry, setSelectedEntry] = useState<DailyEntry | null>(null)
+  const queryClient = useQueryClient()
 
-  // For now, use the highest day in our mock data as "current day"
-  // In real implementation, this would calculate based on actual start date
-  const currentDay = Math.max(...mockDailyEntries.map(entry => entry.day))
-  const todaysEntry = mockDailyEntries.find(entry => entry.day === currentDay)
+  // Get user's goal progress
+  const { data: goalProgress, isLoading: isLoadingGoal } = useQuery({
+    queryKey: ['user-goal-progress'],
+    queryFn: getUserGoalProgress
+  })
+
+  // Get daily notes and actions data
+  const { data: dailyData, isLoading: isLoadingData } = useQuery({
+    queryKey: ['daily-goal-data'],
+    queryFn: () => {
+      const startDate = new Date()
+      startDate.setDate(startDate.getDate() - 30)
+      return getDailyGoalData({
+        startDate: startDate.toISOString().split('T')[0],
+        limit: 50
+      })
+    },
+    refetchInterval: 30000 // Refetch every 30 seconds for auto-tracked activities
+  })
+
+  // Mutation for creating daily notes
+  const createNoteMutation = useMutation({
+    mutationFn: createOrUpdateDailyNote,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['daily-goal-data'] })
+      setDailyNote('')
+      setIsEditingNote(false)
+      setAttachedFiles([])
+      toast.success('Daily update saved!')
+    },
+    onError: (error) => {
+      toast.error('Failed to save daily update')
+      console.error(error)
+    }
+  })
+
+  // Use real goal data or fallback to mock
+  const currentGoal = goalProgress ? {
+    id: '1',
+    title: goalProgress.goal_title || 'Set Your Goal',
+    currentAmount: goalProgress.goal_current_amount || '$0',
+    targetAmount: goalProgress.goal_target_amount || '$1,000',
+    progress: goalProgress.goal_progress || 0,
+    targetDate: goalProgress.goal_target_date || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    startDate: goalProgress.goal_start_date || new Date().toISOString().split('T')[0],
+    status: goalProgress.goal_status || 'active'
+  } : mockGoal
+
+  // Transform real data to match V1 format
+  const transformedDailyEntries = React.useMemo(() => {
+    if (!dailyData) return mockDailyEntries
+    
+    const { dailyNotes, userActions } = dailyData
+    const entriesMap = new Map<string, DailyEntry>()
+    
+    // Group user actions by date
+    userActions.forEach(action => {
+      const date = action.action_date
+      if (!entriesMap.has(date)) {
+        const daysSinceStart = Math.floor((new Date(date).getTime() - new Date(currentGoal.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1
+        entriesMap.set(date, {
+          day: daysSinceStart,
+          date,
+          activities: [],
+          studentNote: undefined
+        })
+      }
+      
+      const entry = entriesMap.get(date)!
+      entry.activities.push({
+        id: action.id,
+        type: action.action_type?.is_auto_tracked ? 'auto' : 'manual',
+        category: mapActionTypeToCategory(action.action_type?.name || ''),
+        description: action.description,
+        timestamp: action.created_at,
+        metadata: action.metadata
+      })
+    })
+    
+    // Add daily notes
+    dailyNotes.forEach(note => {
+      const date = note.note_date
+      if (!entriesMap.has(date)) {
+        const daysSinceStart = Math.floor((new Date(date).getTime() - new Date(currentGoal.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1
+        entriesMap.set(date, {
+          day: daysSinceStart,
+          date,
+          activities: [],
+          studentNote: undefined,
+          attachedFiles: []
+        })
+      }
+      
+      const entry = entriesMap.get(date)!
+      entry.studentNote = note.note
+      // Add attached files if they exist
+      if (note.attachedFiles) {
+        entry.attachedFiles = note.attachedFiles
+      }
+    })
+    
+    // Convert to array and sort by day descending
+    return Array.from(entriesMap.values()).sort((a, b) => b.day - a.day)
+  }, [dailyData, currentGoal.startDate])
+
+  const currentDay = transformedDailyEntries.length > 0 ? Math.max(...transformedDailyEntries.map(entry => entry.day)) : 1
+  const todaysEntry = transformedDailyEntries.find(entry => entry.day === currentDay)
+
+  // Helper function to map action type names to V1 categories
+  const mapActionTypeToCategory = (actionTypeName: string): DailyActivity['category'] => {
+    const name = actionTypeName.toLowerCase()
+    if (name.includes('video')) return 'video'
+    if (name.includes('quiz')) return 'quiz' 
+    if (name.includes('reflection')) return 'reflection'
+    if (name.includes('hint')) return 'hint'
+    if (name.includes('question')) return 'question'
+    if (name.includes('call')) return 'call'
+    if (name.includes('research')) return 'research'
+    if (name.includes('application') || name.includes('proposal')) return 'application'
+    if (name.includes('portfolio')) return 'portfolio'
+    return 'research' // default fallback
+  }
 
   const getActivityIcon = (category: string) => {
     switch (category) {
@@ -265,9 +405,75 @@ export function DailyGoalTracker() {
     setActivityType('')
   }
 
+  const handleFilesDrop = (files: FileList) => {
+    const newFiles = Array.from(files)
+    setAttachedFiles(prev => [...prev, ...newFiles])
+    console.log('Files attached:', newFiles.map(f => f.name))
+  }
+
+  const removeFile = (index: number) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleFilePicker = () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.multiple = true
+    input.accept = 'image/*,application/pdf,.txt,.doc,.docx'
+    input.onchange = (e) => {
+      const target = e.target as HTMLInputElement
+      if (target.files) {
+        handleFilesDrop(target.files)
+      }
+    }
+    input.click()
+  }
+
+  const openImageViewer = (entry: DailyEntry, imageIndex: number) => {
+    console.log('🖼️ openImageViewer called:', { entry, imageIndex })
+    setSelectedEntry(entry)
+    setSelectedImageIndex(imageIndex)
+    setImageViewerOpen(true)
+    console.log('🖼️ Modal state set to open')
+  }
+
+  const closeImageViewer = () => {
+    setImageViewerOpen(false)
+    setSelectedEntry(null)
+    setSelectedImageIndex(0)
+  }
+
   const updateDailyNote = () => {
-    console.log('Updating daily note:', dailyNote)
-    setDailyNote('')
+    if (!dailyNote.trim()) return
+    
+    // Prepare FormData for files if any are attached
+    let formData: FormData | undefined
+    if (attachedFiles.length > 0) {
+      formData = new FormData()
+      attachedFiles.forEach((file, index) => {
+        formData!.append(`file_${index}`, file)
+      })
+    }
+    
+    createNoteMutation.mutate({
+      note: dailyNote.trim(),
+      noteDate: new Date().toISOString().split('T')[0],
+      files: formData
+    })
+  }
+
+  // Loading state
+  if (isLoadingGoal || isLoadingData) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white mx-auto"></div>
+            <p className="mt-2 text-gray-600 dark:text-gray-400">Loading your goal progress...</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -279,24 +485,24 @@ export function DailyGoalTracker() {
             <div className="flex items-center gap-3">
               <Target className="h-8 w-8 text-gray-600 dark:text-gray-400" />
               <div>
-                <CardTitle className="text-2xl text-gray-900 dark:text-gray-100">{mockGoal.title}</CardTitle>
+                <CardTitle className="text-2xl text-gray-900 dark:text-gray-100">{currentGoal.title}</CardTitle>
                 <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  <span>Current: <span className="font-semibold text-gray-900 dark:text-gray-100">{mockGoal.currentAmount}</span></span>
-                  <span>Target: <span className="font-semibold text-gray-900 dark:text-gray-100">{mockGoal.targetAmount}</span></span>
-                  <span>Started: {new Date(mockGoal.startDate).toLocaleDateString()}</span>
+                  <span>Current: <span className="font-semibold text-gray-900 dark:text-gray-100">{currentGoal.currentAmount}</span></span>
+                  <span>Target: <span className="font-semibold text-gray-900 dark:text-gray-100">{currentGoal.targetAmount}</span></span>
+                  <span>Started: {new Date(currentGoal.startDate).toLocaleDateString()}</span>
                 </div>
               </div>
             </div>
             <div className="text-right">
               <div className="text-4xl font-bold text-gray-900 dark:text-gray-100">Day {currentDay}</div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">{mockGoal.progress}% Complete</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">{currentGoal.progress}% Complete</div>
             </div>
           </div>
           <div className="mt-4">
             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
               <div 
                 className="bg-gray-900 dark:bg-gray-300 h-3 rounded-full transition-all"
-                style={{ width: `${mockGoal.progress}%` }}
+                style={{ width: `${currentGoal.progress}%` }}
               />
             </div>
           </div>
@@ -373,7 +579,8 @@ export function DailyGoalTracker() {
             </div>
           )}
           
-          {/* Single journal-style input */}
+          {/* Single journal-style input - only show if no note exists for today */}
+          {!todaysEntry?.studentNote && (
           <div>
             <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
               What else did you do today to get closer to your goal?
@@ -381,13 +588,28 @@ export function DailyGoalTracker() {
             
             {/* Drag and drop area */}
             <div 
-              className="border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-gray-400 transition-colors"
+              className={`border-2 border-dashed rounded-lg p-6 transition-colors ${
+                isDragOver 
+                  ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20' 
+                  : 'border-gray-300 hover:border-gray-400'
+              }`}
               onDrop={(e) => {
                 e.preventDefault()
-                console.log('Files dropped:', e.dataTransfer.files)
+                setIsDragOver(false)
+                handleFilesDrop(e.dataTransfer.files)
               }}
-              onDragOver={(e) => e.preventDefault()}
-              onDragEnter={(e) => e.preventDefault()}
+              onDragOver={(e) => {
+                e.preventDefault()
+                setIsDragOver(true)
+              }}
+              onDragEnter={(e) => {
+                e.preventDefault()
+                setIsDragOver(true)
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault()
+                setIsDragOver(false)
+              }}
             >
               <Textarea
                 placeholder="Applied to 5 UI jobs on LinkedIn today. Also had a great call with a potential client about their e-commerce redesign - they want to pay $1200! 
@@ -398,26 +620,57 @@ Share what you accomplished, any challenges you faced, insights you gained, or h
                 className="min-h-[120px] border-none resize-none shadow-none p-0 focus-visible:ring-0 bg-transparent"
               />
               
+              {/* Attached files display */}
+              {attachedFiles.length > 0 && (
+                <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded border">
+                  <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                    Attached files ({attachedFiles.length}):
+                  </div>
+                  <div className="space-y-2">
+                    {attachedFiles.map((file, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 bg-white dark:bg-gray-700 rounded border">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm">📎</span>
+                          <span className="text-sm text-gray-700 dark:text-gray-300 truncate">
+                            {file.name}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            ({Math.round(file.size / 1024)}KB)
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => removeFile(index)}
+                          className="text-red-500 hover:text-red-700 text-sm"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
               <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                   <span>📎 Drag files here or</span>
                   <button 
                     className="text-blue-600 hover:text-blue-700 font-medium"
-                    onClick={() => console.log('File picker opened')}
+                    onClick={handleFilePicker}
                   >
                     browse to attach
                   </button>
                 </div>
                 <Button 
                   onClick={updateDailyNote} 
-                  disabled={!dailyNote.trim()}
+                  disabled={!dailyNote.trim() || createNoteMutation.isPending}
                   className="bg-gray-900 hover:bg-gray-800"
                 >
-                  Save Day {currentDay}
+                  {createNoteMutation.isPending ? 'Saving...' : `Save Day ${currentDay}`}
                 </Button>
               </div>
             </div>
           </div>
+          )}
         </CardContent>
       </Card>
 
@@ -432,7 +685,7 @@ Share what you accomplished, any challenges you faced, insights you gained, or h
         </CardHeader>
         <CardContent>
           <div className="space-y-8">
-            {mockDailyEntries.map((entry) => (
+            {transformedDailyEntries.map((entry) => (
               <div key={entry.day} className="relative">
                 {/* Day Indicator */}
                 <div className="flex items-center gap-4 mb-4">
@@ -499,10 +752,174 @@ Share what you accomplished, any challenges you faced, insights you gained, or h
                   {/* Student's daily message */}
                   {entry.studentNote ? (
                     <div className="mt-3">
-                      <h5 className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Your daily update</h5>
-                      <div className="p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg">
-                        <p className="text-gray-800 dark:text-gray-100 text-sm leading-relaxed">{entry.studentNote}</p>
+                      <div className="flex items-center justify-between mb-2">
+                        <h5 className="text-xs font-medium text-gray-700 dark:text-gray-300">Your daily update</h5>
+                        {entry.day === currentDay && !isEditingNote && (
+                          <button
+                            onClick={() => {
+                              setIsEditingNote(true)
+                              setDailyNote('') // Start with empty to add new bullet point
+                            }}
+                            className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                          >
+                            Add more
+                          </button>
+                        )}
                       </div>
+                      <div className="p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg">
+                        <p className="text-gray-800 dark:text-gray-100 text-sm leading-relaxed whitespace-pre-line">{entry.studentNote}</p>
+                        
+                        {/* Display attached files */}
+                        {entry.attachedFiles && entry.attachedFiles.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                            {console.log('🖼️ DEBUG: Attached files for entry:', entry.attachedFiles)}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                              {entry.attachedFiles.map((file, fileIndex) => (
+                                <div key={file.id} className="group relative">
+                                  {file.mime_type.startsWith('image/') ? (
+                                    // Image preview using signed URL
+                                    <div className="relative">
+                                      <DailyNoteImage
+                                        privateUrl={file.cdn_url}
+                                        originalFilename={file.original_filename}
+                                        className="w-full h-32"
+                                        onClick={() => {
+                                          console.log('🖼️ Image clicked!', file.original_filename)
+                                          const imageFiles = entry.attachedFiles?.filter(f => f.mime_type.startsWith('image/')) || []
+                                          const imageIndex = imageFiles.findIndex(f => f.id === file.id)
+                                          console.log('🖼️ Opening viewer with index:', imageIndex, 'of', imageFiles.length, 'images')
+                                          openImageViewer(entry, imageIndex)
+                                        }}
+                                      />
+                                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity rounded-lg flex items-end pointer-events-none">
+                                        <div className="p-2 w-full pointer-events-none">
+                                          <p className="text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity truncate pointer-events-none">
+                                            {file.original_filename}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    // Non-image file
+                                    <div className="flex items-center gap-2 p-3 bg-white dark:bg-gray-600 rounded-lg border border-gray-200 dark:border-gray-500">
+                                      <div className="text-lg">📄</div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-medium text-gray-900 dark:text-gray-100 truncate">
+                                          {file.original_filename}
+                                        </p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                          {Math.round(file.file_size / 1024)}KB
+                                        </p>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Inline edit input - appears right below the note */}
+                      {entry.day === currentDay && isEditingNote && (
+                        <div className="mt-3 p-3 bg-blue-50 dark:bg-gray-800 border border-blue-200 dark:border-gray-600 rounded-lg">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Add another accomplishment:</span>
+                            <button
+                              onClick={() => {
+                                setIsEditingNote(false)
+                                setDailyNote('')
+                              }}
+                              className="text-xs text-gray-500 hover:text-gray-700"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                          
+                          {/* Drag and drop area for inline input */}
+                          <div 
+                            className={`border border-dashed rounded p-3 transition-colors ${
+                              isDragOver 
+                                ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20' 
+                                : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
+                            }`}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              setIsDragOver(false)
+                              handleFilesDrop(e.dataTransfer.files)
+                            }}
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              setIsDragOver(true)
+                            }}
+                            onDragEnter={(e) => {
+                              e.preventDefault()
+                              setIsDragOver(true)
+                            }}
+                            onDragLeave={(e) => {
+                              e.preventDefault()
+                              setIsDragOver(false)
+                            }}
+                          >
+                            <Textarea
+                              placeholder="Another win for today... (or drag files here)"
+                              value={dailyNote}
+                              onChange={(e) => setDailyNote(e.target.value)}
+                              className="min-h-[60px] text-sm border-none resize-none shadow-none p-0 focus-visible:ring-0 bg-transparent"
+                            />
+                            
+                            {/* Attached files display for inline input */}
+                            {attachedFiles.length > 0 && (
+                              <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-700 rounded border">
+                                <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                                  Attached ({attachedFiles.length}):
+                                </div>
+                                <div className="space-y-1">
+                                  {attachedFiles.map((file, index) => (
+                                    <div key={index} className="flex items-center justify-between p-1 bg-white dark:bg-gray-600 rounded text-xs">
+                                      <div className="flex items-center gap-1">
+                                        <span>📎</span>
+                                        <span className="text-gray-700 dark:text-gray-300 truncate max-w-[150px]">
+                                          {file.name}
+                                        </span>
+                                        <span className="text-gray-500">
+                                          ({Math.round(file.size / 1024)}KB)
+                                        </span>
+                                      </div>
+                                      <button
+                                        onClick={() => removeFile(index)}
+                                        className="text-red-500 hover:text-red-700 ml-1"
+                                      >
+                                        ✕
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            
+                            <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
+                              <div className="flex items-center gap-2 text-xs text-gray-500">
+                                <span>📎 Drag files or</span>
+                                <button 
+                                  className="text-blue-600 hover:text-blue-700 font-medium"
+                                  onClick={handleFilePicker}
+                                >
+                                  browse
+                                </button>
+                              </div>
+                              <Button 
+                                onClick={updateDailyNote} 
+                                disabled={!dailyNote.trim() || createNoteMutation.isPending}
+                                size="sm"
+                                className="bg-gray-900 hover:bg-gray-800"
+                              >
+                                {createNoteMutation.isPending ? 'Adding...' : 'Add'}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : entry.day === currentDay ? (
                     <div className="mt-3">
@@ -522,6 +939,16 @@ Share what you accomplished, any challenges you faced, insights you gained, or h
           </div>
         </CardContent>
       </Card>
+
+      {/* Image Viewer Modal */}
+      {selectedEntry && (
+        <DailyNoteImageViewer
+          isOpen={imageViewerOpen}
+          onClose={closeImageViewer}
+          initialImageIndex={selectedImageIndex}
+          dailyEntry={selectedEntry}
+        />
+      )}
     </div>
   )
 }
