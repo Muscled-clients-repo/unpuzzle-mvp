@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getUserGoalProgress, getDailyGoalData, createOrUpdateDailyNote } from '@/lib/actions/goals-actions'
+import { createInstructorResponse, getInstructorResponsesForStudent, updateInstructorResponse } from '@/lib/actions/instructor-goals-actions'
+import { uploadInstructorResponseFiles } from '@/lib/actions/instructor-response-attachments'
 import { toast } from 'sonner'
 import { DailyNoteImage } from './DailyNoteImage'
 import { DailyNoteImageViewer } from './DailyNoteImageViewer'
@@ -69,178 +71,24 @@ const mockGoal: Goal = {
   status: 'active'
 }
 
-const mockDailyEntries: DailyEntry[] = [
-  {
-    day: 8,
-    date: '2024-09-24',
-    activities: [
-      {
-        id: '1',
-        type: 'auto',
-        category: 'video',
-        description: 'Watched "Figma Advanced Prototyping" video',
-        timestamp: '2024-09-24 14:30:00',
-        metadata: { videoTitle: 'Figma Advanced Prototyping', duration: 18 }
-      },
-      {
-        id: '2',
-        type: 'auto',
-        category: 'quiz',
-        description: 'Completed quiz on prototyping principles',
-        timestamp: '2024-09-24 14:55:00',
-        metadata: { quizScore: 85 }
-      }
-    ]
-  },
-  {
-    day: 7,
-    date: '2024-09-23',
-    activities: [
-      {
-        id: '5',
-        type: 'auto',
-        category: 'video',
-        description: 'Watched "User Research Methods" video',
-        timestamp: '2024-09-23 10:15:00',
-        metadata: { videoTitle: 'User Research Methods', duration: 25 }
-      },
-      {
-        id: '6',
-        type: 'auto',
-        category: 'hint',
-        description: 'Used 3 hints during design exercise',
-        timestamp: '2024-09-23 10:45:00',
-        metadata: { hintsUsed: 3 }
-      },
-      {
-        id: '7',
-        type: 'manual',
-        category: 'research',
-        description: 'Researched 10 competitor SaaS designs for inspiration',
-        timestamp: '2024-09-23 15:30:00',
-        metadata: { duration: 90 }
-      }
-    ],
-    studentNote: 'User research is more complex than I thought. Need to practice more.'
-  },
-  {
-    day: 6,
-    date: '2024-09-22',
-    activities: [
-      {
-        id: '8',
-        type: 'auto',
-        category: 'reflection',
-        description: 'Submitted reflection on design thinking process',
-        timestamp: '2024-09-22 11:20:00'
-      },
-      {
-        id: '9',
-        type: 'manual',
-        category: 'call',
-        description: 'Had 30-min call with potential client about website redesign',
-        timestamp: '2024-09-22 14:00:00',
-        metadata: { duration: 30, amount: '$800 project discussed' }
-      }
-    ],
-    studentNote: 'First potential client call! They liked my portfolio but want to see more e-commerce work.'
-  },
-  {
-    day: 5,
-    date: '2024-09-21',
-    activities: [
-      {
-        id: '10',
-        type: 'auto',
-        category: 'video',
-        description: 'Watched "Design Systems Fundamentals"',
-        timestamp: '2024-09-21 13:15:00',
-        metadata: { videoTitle: 'Design Systems Fundamentals', duration: 22 }
-      },
-      {
-        id: '11',
-        type: 'auto',
-        category: 'question',
-        description: 'Asked AI about component libraries',
-        timestamp: '2024-09-21 13:40:00'
-      }
-    ]
-  },
-  {
-    day: 4,
-    date: '2024-09-20',
-    activities: [
-      {
-        id: '12',
-        type: 'manual',
-        category: 'portfolio',
-        description: 'Created mobile version of skincare website design',
-        timestamp: '2024-09-20 16:00:00'
-      }
-    ]
-  },
-  {
-    day: 3,
-    date: '2024-09-19',
-    activities: [
-      {
-        id: '13',
-        type: 'auto',
-        category: 'video',
-        description: 'Watched "Mobile-First Design Principles"',
-        timestamp: '2024-09-19 09:30:00',
-        metadata: { videoTitle: 'Mobile-First Design Principles', duration: 16 }
-      },
-      {
-        id: '14',
-        type: 'manual',
-        category: 'research',
-        description: 'Analyzed 15 top skincare brand websites',
-        timestamp: '2024-09-19 14:20:00',
-        metadata: { duration: 120 }
-      }
-    ]
-  },
-  {
-    day: 2,
-    date: '2024-09-18',
-    activities: [
-      {
-        id: '15',
-        type: 'auto',
-        category: 'video',
-        description: 'Watched "Figma Basics for Beginners"',
-        timestamp: '2024-09-18 11:00:00',
-        metadata: { videoTitle: 'Figma Basics for Beginners', duration: 28 }
-      },
-      {
-        id: '16',
-        type: 'auto',
-        category: 'quiz',
-        description: 'Completed Figma basics quiz',
-        timestamp: '2024-09-18 11:35:00',
-        metadata: { quizScore: 92 }
-      }
-    ]
-  },
-  {
-    day: 1,
-    date: '2024-09-17',
-    activities: [
-      {
-        id: '17',
-        type: 'manual',
-        category: 'research',
-        description: 'Set up goal and researched UI/UX learning path',
-        timestamp: '2024-09-17 16:30:00',
-        metadata: { duration: 45 }
-      }
-    ],
-    studentNote: 'Starting my UI/UX journey! Excited but also nervous. Need to stay consistent.'
-  }
-]
 
-export function DailyGoalTracker() {
+interface DailyGoalTrackerProps {
+  goalProgress?: any
+  dailyData?: any
+  isLoading?: boolean
+  studentId?: string // For instructor view
+  isInstructorView?: boolean
+  instructorId?: string
+}
+
+export function DailyGoalTracker({ 
+  goalProgress: propGoalProgress,
+  dailyData: propDailyData,
+  isLoading: propIsLoading = false,
+  studentId, 
+  isInstructorView = false, 
+  instructorId 
+}: DailyGoalTrackerProps = {}) {
   const [newActivity, setNewActivity] = useState('')
   const [activityType, setActivityType] = useState<string>('')
   const [dailyNote, setDailyNote] = useState('')
@@ -251,16 +99,36 @@ export function DailyGoalTracker() {
   const [isDragOver, setIsDragOver] = useState(false)
   const [imageViewerOpen, setImageViewerOpen] = useState(false)
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
+
+  // Per-day response state for instructors
+  const [respondingToDay, setRespondingToDay] = useState<number | null>(null)
+  const [dayResponseText, setDayResponseText] = useState('')
+  const [isSubmittingDayResponse, setIsSubmittingDayResponse] = useState(false)
+  const [editingResponseId, setEditingResponseId] = useState<string | null>(null)
+  const [editingResponseText, setEditingResponseText] = useState('')
   const [selectedEntry, setSelectedEntry] = useState<DailyEntry | null>(null)
+
+  // File upload state for instructor responses
+  const [responseFiles, setResponseFiles] = useState<File[]>([])
+  const [isResponseDragOver, setIsResponseDragOver] = useState(false)
   const queryClient = useQueryClient()
 
+  // Instructor response state
+  const [instructorResponse, setInstructorResponse] = useState('')
+  const [selectedResponseDate, setSelectedResponseDate] = useState('')
+  const [isSubmittingResponse, setIsSubmittingResponse] = useState(false)
+
   // Get user's goal progress
+  // Use passed props or fallback to fetching data for backwards compatibility
+  // Don't fetch if this is instructor view or if props are being passed
+  const shouldFetchOwnData = !isInstructorView && propGoalProgress === undefined && propDailyData === undefined
+  
   const { data: goalProgress, isLoading: isLoadingGoal } = useQuery({
     queryKey: ['user-goal-progress'],
-    queryFn: getUserGoalProgress
+    queryFn: getUserGoalProgress,
+    enabled: shouldFetchOwnData
   })
 
-  // Get daily notes and actions data
   const { data: dailyData, isLoading: isLoadingData } = useQuery({
     queryKey: ['daily-goal-data'],
     queryFn: () => {
@@ -271,8 +139,14 @@ export function DailyGoalTracker() {
         limit: 50
       })
     },
-    refetchInterval: 30000 // Refetch every 30 seconds for auto-tracked activities
+    refetchInterval: 30000,
+    enabled: shouldFetchOwnData
   })
+
+  // Use props if provided, otherwise use query results
+  const finalGoalProgress = propGoalProgress || goalProgress
+  const finalDailyData = propDailyData || dailyData
+  const isLoading = propIsLoading || isLoadingGoal || isLoadingData
 
   // Mutation for creating daily notes
   const createNoteMutation = useMutation({
@@ -290,23 +164,65 @@ export function DailyGoalTracker() {
     }
   })
 
+  // Query to fetch instructor responses for this student
+  const { data: instructorResponses, refetch: refetchInstructorResponses } = useQuery({
+    queryKey: ['instructor-responses', studentId],
+    queryFn: () => studentId ? getInstructorResponsesForStudent(studentId) : Promise.resolve([]),
+    enabled: !!studentId,
+    staleTime: 30000, // 30 seconds
+  })
+
+  // Mutation for instructor responses
+  const createResponseMutation = useMutation({
+    mutationFn: createInstructorResponse,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['daily-goal-data'] })
+      refetchInstructorResponses() // Refetch to show new response
+      setInstructorResponse('')
+      setSelectedResponseDate('')
+      setIsSubmittingResponse(false)
+      toast.success('Response sent successfully!')
+    },
+    onError: (error) => {
+      toast.error('Failed to send response')
+      console.error(error)
+      setIsSubmittingResponse(false)
+    }
+  })
+
+  // Mutation for updating instructor responses
+  const updateResponseMutation = useMutation({
+    mutationFn: ({ responseId, updates }: { responseId: string, updates: any }) =>
+      updateInstructorResponse(responseId, updates),
+    onSuccess: () => {
+      refetchInstructorResponses()
+      setEditingResponseId(null)
+      setEditingResponseText('')
+      toast.success('Response updated successfully!')
+    },
+    onError: (error) => {
+      toast.error('Failed to update response')
+      console.error(error)
+    }
+  })
+
   // Use real goal data or fallback to mock
-  const currentGoal = goalProgress ? {
+  const currentGoal = finalGoalProgress ? {
     id: '1',
-    title: goalProgress.goal_title || 'Set Your Goal',
-    currentAmount: goalProgress.goal_current_amount || '$0',
-    targetAmount: goalProgress.goal_target_amount || '$1,000',
-    progress: goalProgress.goal_progress || 0,
-    targetDate: goalProgress.goal_target_date || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    startDate: goalProgress.goal_start_date || new Date().toISOString().split('T')[0],
-    status: goalProgress.goal_status || 'active'
+    title: finalGoalProgress.goal_title || 'Set Your Goal',
+    currentAmount: finalGoalProgress.goal_current_amount || '$0',
+    targetAmount: finalGoalProgress.goal_target_amount || '$1,000',
+    progress: finalGoalProgress.goal_progress || 0,
+    targetDate: finalGoalProgress.goal_target_date || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    startDate: finalGoalProgress.goal_start_date || new Date().toISOString().split('T')[0],
+    status: finalGoalProgress.goal_status || 'active'
   } : mockGoal
 
   // Transform real data to match V1 format
   const transformedDailyEntries = React.useMemo(() => {
-    if (!dailyData) return mockDailyEntries
+    if (!finalDailyData) return []
     
-    const { dailyNotes, userActions } = dailyData
+    const { dailyNotes, userActions } = finalDailyData
     const entriesMap = new Map<string, DailyEntry>()
     
     // Group user actions by date
@@ -357,7 +273,7 @@ export function DailyGoalTracker() {
     
     // Convert to array and sort by day descending
     return Array.from(entriesMap.values()).sort((a, b) => b.day - a.day)
-  }, [dailyData, currentGoal.startDate])
+  }, [finalDailyData, currentGoal.startDate])
 
   const currentDay = transformedDailyEntries.length > 0 ? Math.max(...transformedDailyEntries.map(entry => entry.day)) : 1
   const todaysEntry = transformedDailyEntries.find(entry => entry.day === currentDay)
@@ -443,6 +359,38 @@ export function DailyGoalTracker() {
     setSelectedImageIndex(0)
   }
 
+  // File handling for instructor responses
+  const handleResponseFilesDrop = (files: FileList) => {
+    const newFiles = Array.from(files)
+    setResponseFiles(prev => [...prev, ...newFiles])
+    console.log('Response files attached:', newFiles.map(f => f.name))
+  }
+
+  const removeResponseFile = (index: number) => {
+    setResponseFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleResponseFilePicker = () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.multiple = true
+    input.accept = 'image/*,application/pdf,.txt,.doc,.docx'
+    input.onchange = (e) => {
+      const target = e.target as HTMLInputElement
+      if (target.files) {
+        handleResponseFilesDrop(target.files)
+      }
+    }
+    input.click()
+  }
+
+  // Helper function to get instructor response for a specific date (only one per day)
+  const getResponseForDate = (date: string) => {
+    if (!instructorResponses) return null
+    const responses = instructorResponses.filter((response: any) => response.target_date === date)
+    return responses.length > 0 ? responses[0] : null // Only return the first/latest response
+  }
+
   const updateDailyNote = () => {
     if (!dailyNote.trim()) return
     
@@ -462,8 +410,59 @@ export function DailyGoalTracker() {
     })
   }
 
+  // Handle day-specific instructor response submission
+  const handleDayResponse = async (entry: DailyEntry) => {
+    if (!dayResponseText.trim() || !studentId || !isInstructorView) {
+      toast.error('Please enter a response message')
+      return
+    }
+
+    setIsSubmittingDayResponse(true)
+
+    try {
+      // First create the response
+      const response = await createInstructorResponse({
+        studentId,
+        message: dayResponseText.trim(),
+        targetDate: entry.date,
+        responseType: 'feedback'
+      })
+
+      // Then upload files if any
+      if (responseFiles.length > 0 && response) {
+        const formData = new FormData()
+        responseFiles.forEach((file, index) => {
+          formData.append(`file_${index}`, file)
+        })
+
+        try {
+          await uploadInstructorResponseFiles({
+            responseId: response.id,
+            files: formData
+          })
+        } catch (fileError) {
+          console.error('File upload error:', fileError)
+          toast.error('Response sent but some files failed to upload')
+        }
+      }
+
+      // Reset form and refetch data
+      setRespondingToDay(null)
+      setDayResponseText('')
+      setResponseFiles([])
+      setIsSubmittingDayResponse(false)
+      refetchInstructorResponses() // Refetch to show new response
+      toast.success('Response sent successfully!')
+
+    } catch (error) {
+      console.error('Response creation error:', error)
+      setIsSubmittingDayResponse(false)
+      toast.error('Failed to send response')
+    }
+  }
+
   // Loading state
-  if (isLoadingGoal || isLoadingData) {
+  if (isLoading) {
     return (
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-center py-12">
@@ -509,7 +508,9 @@ export function DailyGoalTracker() {
         </CardHeader>
       </Card>
 
-      {/* Today's Activity Input */}
+
+      {/* Today's Activity Input - Only for students */}
+      {!isInstructorView && (
       <Card className="mb-8">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -673,6 +674,7 @@ Share what you accomplished, any challenges you faced, insights you gained, or h
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* Daily Progress Timeline */}
       <Card>
@@ -686,7 +688,7 @@ Share what you accomplished, any challenges you faced, insights you gained, or h
         <CardContent>
           <div className="space-y-8">
             {transformedDailyEntries.map((entry) => (
-              <div key={entry.day} className="relative">
+              <div key={entry.day} className="relative group">
                 {/* Day Indicator */}
                 <div className="flex items-center gap-4 mb-4">
                   <div className={`w-16 h-16 rounded-full flex items-center justify-center font-bold text-white ${
@@ -700,10 +702,10 @@ Share what you accomplished, any challenges you faced, insights you gained, or h
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
                       <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
-                        {new Date(entry.date).toLocaleDateString('en-US', { 
-                          weekday: 'long', 
-                          month: 'short', 
-                          day: 'numeric' 
+                        {new Date(entry.date).toLocaleDateString('en-US', {
+                          weekday: 'long',
+                          month: 'short',
+                          day: 'numeric'
                         })}
                       </h3>
                       {entry.day === currentDay && (
@@ -714,6 +716,29 @@ Share what you accomplished, any challenges you faced, insights you gained, or h
                       {entry.activities.length} activities completed
                     </div>
                   </div>
+
+                  {/* Instructor Respond Button - appears on hover */}
+                  {isInstructorView && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                      onClick={() => {
+                        const existingResponse = getResponseForDate(entry.date)
+                        if (existingResponse) {
+                          setEditingResponseId(existingResponse.id)
+                          setEditingResponseText(existingResponse.message)
+                        } else {
+                          setRespondingToDay(entry.day)
+                          setDayResponseText('')
+                          setResponseFiles([])
+                        }
+                      }}
+                    >
+                      <MessageCircle className="h-4 w-4 mr-2" />
+                      {getResponseForDate(entry.date) ? 'Edit Response' : 'Respond'}
+                    </Button>
+                  )}
                 </div>
 
                 {/* Activities */}
@@ -754,7 +779,7 @@ Share what you accomplished, any challenges you faced, insights you gained, or h
                     <div className="mt-3">
                       <div className="flex items-center justify-between mb-2">
                         <h5 className="text-xs font-medium text-gray-700 dark:text-gray-300">Your daily update</h5>
-                        {entry.day === currentDay && !isEditingNote && (
+                        {entry.day === currentDay && !isEditingNote && !isInstructorView && (
                           <button
                             onClick={() => {
                               setIsEditingNote(true)
@@ -821,7 +846,7 @@ Share what you accomplished, any challenges you faced, insights you gained, or h
                       </div>
                       
                       {/* Inline edit input - appears right below the note */}
-                      {entry.day === currentDay && isEditingNote && (
+                      {entry.day === currentDay && isEditingNote && !isInstructorView && (
                         <div className="mt-3 p-3 bg-blue-50 dark:bg-gray-800 border border-blue-200 dark:border-gray-600 rounded-lg">
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Add another accomplishment:</span>
@@ -928,6 +953,264 @@ Share what you accomplished, any challenges you faced, insights you gained, or h
                       </div>
                     </div>
                   ) : null}
+
+                  {/* Instructor Response Display (only one per day) */}
+                  {getResponseForDate(entry.date) && (
+                    <div className="mt-4">
+                      <h6 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                        Instructor Feedback
+                      </h6>
+                      {editingResponseId === getResponseForDate(entry.date)?.id ? (
+                        // Edit mode
+                        <div className="p-3 bg-blue-50 dark:bg-gray-800 border border-blue-200 dark:border-gray-600 rounded-lg">
+                          <div className="space-y-3">
+                            <Textarea
+                              placeholder="Edit your response..."
+                              value={editingResponseText}
+                              onChange={(e) => setEditingResponseText(e.target.value)}
+                              className="min-h-[80px] text-sm"
+                            />
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setEditingResponseId(null)
+                                  setEditingResponseText('')
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  updateResponseMutation.mutate({
+                                    responseId: getResponseForDate(entry.date)!.id,
+                                    updates: { message: editingResponseText }
+                                  })
+                                }}
+                                disabled={!editingResponseText.trim() || updateResponseMutation.isPending}
+                              >
+                                {updateResponseMutation.isPending ? 'Updating...' : 'Update'}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        // Display mode
+                        <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-800 flex items-center justify-center flex-shrink-0">
+                              <MessageCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs font-medium text-green-700 dark:text-green-300">
+                                  Instructor Response
+                                </span>
+                                <span className="text-xs text-green-600 dark:text-green-400">
+                                  {new Date(getResponseForDate(entry.date)!.created_at).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: 'numeric',
+                                    minute: '2-digit'
+                                  })}
+                                </span>
+                              </div>
+                              <p className="text-sm text-green-800 dark:text-green-200 leading-relaxed">
+                                {getResponseForDate(entry.date)!.message}
+                              </p>
+
+                              {/* Display attached files in instructor responses */}
+                              {getResponseForDate(entry.date)!.attachedFiles && getResponseForDate(entry.date)!.attachedFiles!.length > 0 && (
+                                <div className="mt-3 pt-3 border-t border-green-200 dark:border-green-700">
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                    {getResponseForDate(entry.date)!.attachedFiles!.map((file, fileIndex) => (
+                                      <div key={file.id} className="group relative">
+                                        {file.mime_type.startsWith('image/') ? (
+                                          // Image preview
+                                          <div className="relative">
+                                            <DailyNoteImage
+                                              privateUrl={file.cdn_url}
+                                              originalFilename={file.original_filename}
+                                              className="w-full h-32"
+                                              onClick={() => {
+                                                // Create temporary entry structure for image viewer
+                                                const tempEntry = {
+                                                  ...entry,
+                                                  attachedFiles: getResponseForDate(entry.date)!.attachedFiles
+                                                }
+                                                const imageFiles = getResponseForDate(entry.date)!.attachedFiles!.filter(f => f.mime_type.startsWith('image/')) || []
+                                                const imageIndex = imageFiles.findIndex(f => f.id === file.id)
+                                                openImageViewer(tempEntry, imageIndex)
+                                              }}
+                                            />
+                                            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity rounded-lg flex items-end pointer-events-none">
+                                              <div className="p-2 w-full pointer-events-none">
+                                                <p className="text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity truncate pointer-events-none">
+                                                  {file.original_filename}
+                                                </p>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          // Non-image file
+                                          <div className="flex items-center gap-2 p-3 bg-white dark:bg-green-800 rounded-lg border border-green-200 dark:border-green-600">
+                                            <div className="text-lg">📄</div>
+                                            <div className="flex-1 min-w-0">
+                                              <p className="text-xs font-medium text-green-900 dark:text-green-100 truncate">
+                                                {file.original_filename}
+                                              </p>
+                                              <p className="text-xs text-green-600 dark:text-green-400">
+                                                {Math.round(file.file_size / 1024)}KB
+                                              </p>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Instructor Response Form */}
+                  {isInstructorView && respondingToDay === entry.day && (
+                    <div className="mt-4 p-4 bg-blue-50 dark:bg-gray-800 border border-blue-200 dark:border-gray-600 rounded-lg">
+                      <div className="flex items-center justify-between mb-3">
+                        <h6 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Respond to Day {entry.day}
+                        </h6>
+                        <button
+                          onClick={() => {
+                            setRespondingToDay(null)
+                            setResponseFiles([])
+                          }}
+                          className="text-gray-500 hover:text-gray-700 text-sm"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        {/* Quick Response Templates */}
+                        <div className="flex gap-2 flex-wrap">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setDayResponseText('Great progress! Keep up the excellent work. Your dedication is really showing in your results.')}
+                          >
+                            🌟 Encourage
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setDayResponseText('I\'d like you to focus on [specific area] next. This will help accelerate your progress toward your goal.')}
+                          >
+                            📋 Assign
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setDayResponseText('Let\'s schedule a quick 15-minute call to discuss your progress and next steps. When works best for you?')}
+                          >
+                            📞 Call
+                          </Button>
+                        </div>
+
+                        {/* Response Input */}
+                        <Textarea
+                          placeholder="Provide feedback, encouragement, or assign tasks..."
+                          value={dayResponseText}
+                          onChange={(e) => setDayResponseText(e.target.value)}
+                          className="min-h-[80px] text-sm"
+                        />
+
+                        {/* File Upload Section */}
+                        <div className="space-y-3">
+                          {/* File Drop Zone */}
+                          <div
+                            className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
+                              isResponseDragOver
+                                ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                                : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+                            }`}
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              setIsResponseDragOver(true)
+                            }}
+                            onDragLeave={() => setIsResponseDragOver(false)}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              setIsResponseDragOver(false)
+                              if (e.dataTransfer.files) {
+                                handleResponseFilesDrop(e.dataTransfer.files)
+                              }
+                            }}
+                          >
+                            <div className="text-gray-500 dark:text-gray-400 text-sm">
+                              <span className="text-lg">📎</span>
+                              <p>Drag files here or <button
+                                type="button"
+                                onClick={handleResponseFilePicker}
+                                className="text-blue-600 hover:text-blue-700 underline"
+                              >
+                                click to browse
+                              </button></p>
+                              <p className="text-xs mt-1">Images, PDFs, Word docs (5MB max per file)</p>
+                            </div>
+                          </div>
+
+                          {/* Attached Files List */}
+                          {responseFiles.length > 0 && (
+                            <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-700 rounded border">
+                              <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                Attached files ({responseFiles.length}):
+                              </div>
+                              <div className="space-y-2">
+                                {responseFiles.map((file, index) => (
+                                  <div key={index} className="flex items-center justify-between p-2 bg-white dark:bg-gray-600 rounded border">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm">📎</span>
+                                      <span className="text-sm text-gray-700 dark:text-gray-300 truncate">
+                                        {file.name}
+                                      </span>
+                                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                                        ({Math.round(file.size / 1024)}KB)
+                                      </span>
+                                    </div>
+                                    <button
+                                      onClick={() => removeResponseFile(index)}
+                                      className="text-red-500 hover:text-red-700 text-sm"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Send Button */}
+                        <div className="flex justify-end">
+                          <Button
+                            onClick={() => handleDayResponse(entry)}
+                            disabled={!dayResponseText.trim() || isSubmittingDayResponse}
+                            size="sm"
+                            className="min-w-[100px]"
+                          >
+                            {isSubmittingDayResponse ? 'Sending...' : 'Send Response'}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Timeline connector */}

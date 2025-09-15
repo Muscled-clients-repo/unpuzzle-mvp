@@ -44,6 +44,7 @@ const instructorNavItems = [
   { href: "/instructor/media", label: "Media", icon: Upload },
   { href: "/instructor/confusions", label: "Confusions", icon: MessageSquare },
   { href: "/instructor/students", label: "Students", icon: Users },
+  { href: "/instructor/student-goals", label: "Student Goals", icon: Target },
   { href: "/instructor/engagement", label: "Engagement", icon: TrendingUp },
 ]
 

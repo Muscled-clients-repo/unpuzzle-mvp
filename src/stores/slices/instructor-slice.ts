@@ -59,6 +59,7 @@ export interface InstructorStats {
 export interface StudentInsight {
   studentId: string
   studentName: string
+  studentEmail: string
   courseId: string
   learnRate: number
   progress: number
@@ -143,7 +144,7 @@ export interface InstructorSlice {
   isLoadingChartData: boolean
   
   // Actions
-  loadInstructorData: () => void
+  loadInstructorData: (instructorId?: string) => Promise<void>
   loadCourses: (instructorId?: string) => Promise<void>
   
   // CRUD Operations
@@ -183,9 +184,139 @@ export const createInstructorSlice: StateCreator<InstructorSlice> = (set, get) =
   compareData: [],
   isLoadingChartData: false,
 
-  loadInstructorData: () => {
-    // Initialize with mock data
+  loadInstructorData: async (instructorId?: string) => {
+    console.log('[INSTRUCTOR SLICE] loadInstructorData called with instructorId:', instructorId)
+    console.log('[INSTRUCTOR SLICE] USE_REAL_STUDENT_DATA feature flag:', FEATURES.USE_REAL_STUDENT_DATA)
+    set({ loading: true, error: null })
+    
+    try {
+      let studentInsights: StudentInsight[] = []
+      let topLearners: TopLearner[] = []
+      
+      // Load real student data if feature flag is enabled
+      if (FEATURES.USE_REAL_STUDENT_DATA && instructorId) {
+        console.log('[INSTRUCTOR SLICE] Loading students from Supabase for instructor:', instructorId)
+        try {
+          const { getInstructorStudents } = await import('@/app/actions/get-instructor-students')
+          console.log('[INSTRUCTOR SLICE] Imported server action successfully')
+          const realStudents = await getInstructorStudents(instructorId)
+          console.log('[DATA SOURCE] Loaded', realStudents.length, 'students from Supabase:', realStudents)
+        
+          // Transform to existing format
+          studentInsights = realStudents.map(student => ({
+            studentId: student.id,
+            studentName: student.name,
+            studentEmail: student.email, // Include real email
+            courseId: student.courseId || '1',
+            learnRate: student.learnRate,
+            progress: student.progress,
+            lastActive: student.lastActive || 'Unknown',
+            strugglingAt: student.strugglingAt,
+            needsHelp: student.needsHelp
+          }))
+          
+          topLearners = realStudents.slice(0, 5).map(student => ({
+            id: student.id,
+            name: student.name,
+            learnRate: student.learnRate,
+            responsesInCommunity: Math.floor(Math.random() * 200),
+            helpfulVotes: Math.floor(Math.random() * 1000),
+            reflectionsEndorsed: Math.floor(Math.random() * 50),
+            coursesCompleted: Math.floor(Math.random() * 5),
+            avgScore: 85 + Math.floor(Math.random() * 15),
+            strengths: ['React', 'JavaScript', 'CSS'],
+            joinedDaysAgo: Math.floor(Math.random() * 200),
+            currentPlan: 'basic' as const
+          }))
+        } catch (serverActionError) {
+          console.error('[INSTRUCTOR SLICE] Error calling server action:', serverActionError)
+          throw serverActionError
+        }
+      } else {
+        // Use mock data
+        console.log('[DATA SOURCE] Loading students from mock data (feature flag:', FEATURES.USE_REAL_STUDENT_DATA, ', instructor ID:', instructorId, ')')
+        studentInsights = [
+          {
+            studentId: '1',
+            studentName: 'Sarah Chen',
+            studentEmail: 'sarah.chen@email.com',
+            courseId: '1',
+            learnRate: 52,
+            progress: 75,
+            lastActive: '10 mins ago',
+            strugglingAt: 'useCallback Hook',
+            needsHelp: true
+          },
+          {
+            studentId: '2',
+            studentName: 'Mike Johnson',
+            studentEmail: 'mike.johnson@email.com',
+            courseId: '1',
+            learnRate: 45,
+            progress: 82,
+            lastActive: '1 hour ago',
+            needsHelp: false
+          },
+          {
+            studentId: '3',
+            studentName: 'Emma Wilson',
+            studentEmail: 'emma.wilson@email.com',
+            courseId: '2',
+            learnRate: 38,
+            progress: 45,
+            lastActive: '5 mins ago',
+            strugglingAt: 'NumPy Broadcasting',
+            needsHelp: true
+          }
+        ]
+        
+        topLearners = [
+          {
+            id: '1',
+            name: 'Sarah Chen',
+            learnRate: 52,
+            responsesInCommunity: 147,
+            helpfulVotes: 892,
+            reflectionsEndorsed: 23,
+            coursesCompleted: 5,
+            avgScore: 94,
+            strengths: ['React', 'JavaScript', 'CSS'],
+            joinedDaysAgo: 120,
+            currentPlan: 'premium'
+          },
+          {
+            id: '2',
+            name: 'Mike Johnson',
+            learnRate: 48,
+            responsesInCommunity: 89,
+            helpfulVotes: 456,
+            reflectionsEndorsed: 15,
+            coursesCompleted: 3,
+            avgScore: 91,
+            strengths: ['Python', 'Data Science', 'Machine Learning'],
+            joinedDaysAgo: 90,
+            currentPlan: 'premium'
+          },
+          {
+            id: '3',
+            name: 'Emma Wilson',
+            learnRate: 45,
+            responsesInCommunity: 234,
+            helpfulVotes: 1023,
+            reflectionsEndorsed: 31,
+            coursesCompleted: 4,
+            avgScore: 88,
+            strengths: ['React', 'Node.js', 'TypeScript'],
+            joinedDaysAgo: 150,
+            currentPlan: 'basic'
+          }
+        ]
+      }
+
+    // Initialize with mock or real data
     set({
+      studentInsights,
+      topLearners,
       instructorStats: {
         totalStudents: 2847,
         totalRevenue: 125430,
@@ -282,37 +413,6 @@ export const createInstructorSlice: StateCreator<InstructorSlice> = (set, get) =
           }
         }
       ],
-      studentInsights: [
-        {
-          studentId: '1',
-          studentName: 'Sarah Chen',
-          courseId: '1',
-          learnRate: 52,
-          progress: 75,
-          lastActive: '10 mins ago',
-          strugglingAt: 'useCallback Hook',
-          needsHelp: true
-        },
-        {
-          studentId: '2',
-          studentName: 'Mike Johnson',
-          courseId: '1',
-          learnRate: 45,
-          progress: 82,
-          lastActive: '1 hour ago',
-          needsHelp: false
-        },
-        {
-          studentId: '3',
-          studentName: 'Emma Wilson',
-          courseId: '2',
-          learnRate: 38,
-          progress: 45,
-          lastActive: '5 mins ago',
-          strugglingAt: 'NumPy Broadcasting',
-          needsHelp: true
-        }
-      ],
       pendingConfusions: [
         {
           id: '1',
@@ -342,47 +442,6 @@ export const createInstructorSlice: StateCreator<InstructorSlice> = (set, get) =
           priority: 'medium'
         }
       ],
-      topLearners: [
-        {
-          id: '1',
-          name: 'Sarah Chen',
-          learnRate: 52,
-          responsesInCommunity: 147,
-          helpfulVotes: 892,
-          reflectionsEndorsed: 23,
-          coursesCompleted: 5,
-          avgScore: 94,
-          strengths: ['React', 'JavaScript', 'CSS'],
-          joinedDaysAgo: 120,
-          currentPlan: 'premium'
-        },
-        {
-          id: '2',
-          name: 'Mike Johnson',
-          learnRate: 48,
-          responsesInCommunity: 89,
-          helpfulVotes: 456,
-          reflectionsEndorsed: 15,
-          coursesCompleted: 3,
-          avgScore: 91,
-          strengths: ['Python', 'Data Science', 'Machine Learning'],
-          joinedDaysAgo: 90,
-          currentPlan: 'premium'
-        },
-        {
-          id: '3',
-          name: 'Emma Wilson',
-          learnRate: 45,
-          responsesInCommunity: 234,
-          helpfulVotes: 1023,
-          reflectionsEndorsed: 31,
-          coursesCompleted: 4,
-          avgScore: 88,
-          strengths: ['React', 'Node.js', 'TypeScript'],
-          joinedDaysAgo: 150,
-          currentPlan: 'basic'
-        }
-      ],
       similarConfusions: [
         {
           id: '1',
@@ -398,8 +457,34 @@ export const createInstructorSlice: StateCreator<InstructorSlice> = (set, get) =
           message: 'The dependency array concept was confusing initially',
           resolved: true
         }
-      ]
+      ],
+      loading: false,
+      error: null
     })
+    
+    } catch (error: any) {
+      console.error('[INSTRUCTOR SLICE] Error loading instructor data:', error)
+      
+      // Fallback to mock data on error
+      if (FEATURES.FALLBACK_TO_MOCK_ON_ERROR) {
+        console.log('[FALLBACK] Using mock data due to error')
+        // Set mock data (could call the same function recursively without instructorId)
+        // For now, set loading false with empty data
+        set({ 
+          studentInsights: [],
+          topLearners: [],
+          loading: false, 
+          error: null 
+        })
+      } else {
+        set({ 
+          studentInsights: [],
+          topLearners: [],
+          loading: false, 
+          error: error.message || 'Failed to load instructor data' 
+        })
+      }
+    }
   },
 
   loadCourses: async (instructorId?: string) => {

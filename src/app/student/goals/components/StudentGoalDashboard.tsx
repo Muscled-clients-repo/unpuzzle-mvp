@@ -1,8 +1,8 @@
 'use client'
 
 import React from 'react'
-import { DailyGoalTracker } from './DailyGoalTracker'
+import { StudentDailyGoalTracker } from './StudentDailyGoalTracker'
 
 export function StudentGoalDashboard() {
-  return <DailyGoalTracker />
+  return <StudentDailyGoalTracker />
 }

@@ -29,7 +29,8 @@ import {
   BookOpen,
   ChevronUp,
   ChevronDown,
-  MoreVertical
+  MoreVertical,
+  Target
 } from "lucide-react"
 
 export default function InstructorStudentsPage() {
@@ -40,7 +41,8 @@ export default function InstructorStudentsPage() {
     loadCourses,
     courses,
     loading,
-    error 
+    error,
+    user
   } = useAppStore()
   
   const [searchQuery, setSearchQuery] = useState("")
@@ -48,9 +50,11 @@ export default function InstructorStudentsPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   
   useEffect(() => {
-    loadInstructorData()
-    loadCourses()
-  }, [loadInstructorData, loadCourses])
+    if (user?.id) {
+      loadInstructorData(user.id)
+      loadCourses(user.id)
+    }
+  }, [loadInstructorData, loadCourses, user?.id])
 
   if (loading) return <LoadingSpinner />
   if (error) return <ErrorFallback error={error} />
@@ -389,9 +393,16 @@ export default function InstructorStudentsPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-2 justify-end">
+                          <Button variant="ghost" size="sm" asChild>
+                            <a href={`/instructor/student-goals/${student.id}`}>
+                              <Target className="h-4 w-4" />
+                            </a>
+                          </Button>
+                          <Button variant="ghost" size="sm">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
