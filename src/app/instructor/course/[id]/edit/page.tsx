@@ -40,6 +40,7 @@ import { SimpleVideoPreview } from "@/components/ui/SimpleVideoPreview"
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
 import { getCourseAction } from '@/app/actions/course-actions'
 import { getChaptersForCourseAction } from '@/app/actions/chapter-actions'
+import { CourseTrackGoalSelector } from '@/components/course/CourseTrackGoalSelector'
 
 export default function EditCourseV3Page(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params)
@@ -760,6 +761,9 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
               </div>
             </CardContent>
           </Card>
+
+          {/* Course Track/Goal Selector */}
+          <CourseTrackGoalSelector courseId={courseId} />
         </div>
 
         {/* Course Content - 67% Width */}

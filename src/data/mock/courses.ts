@@ -6,10 +6,10 @@ export interface Course {
     name: string
     avatar: string
   }
-  thumbnail: string
+  thumbnailUrl: string
   price: number
   duration: string
-  students: number
+  enrollmentCount: number
   rating: number
   level: "beginner" | "intermediate" | "advanced"
   category: string
@@ -51,10 +51,10 @@ export const mockCourses: Course[] = [
       name: "Sarah Chen",
       avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah",
     },
-    thumbnail: "https://images.unsplash.com/photo-1516116216624-53e697fedbea?w=800&q=80",
+    thumbnailUrl: "https://images.unsplash.com/photo-1516116216624-53e697fedbea?w=800&q=80",
     price: 79,
     duration: "12 hours",
-    students: 2543,
+    enrollmentCount: 2543,
     rating: 4.8,
     level: "beginner",
     category: "Programming",
@@ -150,10 +150,10 @@ export const mockCourses: Course[] = [
       name: "Dr. James Miller",
       avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=James",
     },
-    thumbnail: "https://images.unsplash.com/photo-1555949963-aa79dcee981c?w=800&q=80",
+    thumbnailUrl: "https://images.unsplash.com/photo-1555949963-aa79dcee981c?w=800&q=80",
     price: 129,
     duration: "20 hours",
-    students: 1832,
+    enrollmentCount: 1832,
     rating: 4.9,
     level: "intermediate",
     category: "Data Science",
@@ -243,10 +243,10 @@ export const mockCourses: Course[] = [
       name: "Emily Rodriguez",
       avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Emily",
     },
-    thumbnail: "https://images.unsplash.com/photo-1432888498266-38ffec3eaf0a?w=800&q=80",
+    thumbnailUrl: "https://images.unsplash.com/photo-1432888498266-38ffec3eaf0a?w=800&q=80",
     price: 99,
     duration: "15 hours",
-    students: 3421,
+    enrollmentCount: 3421,
     rating: 4.7,
     level: "beginner",
     category: "Marketing",

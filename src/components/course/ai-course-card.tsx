@@ -20,6 +20,7 @@ import {
 } from "lucide-react"
 import { Course, UserRole } from "@/types/domain"
 import { cn } from "@/lib/utils"
+import { FeatureGate } from "@/components/common/FeatureGate"
 
 interface AICourseCardProps {
   course: Course
