@@ -49,6 +49,13 @@ Goals to unlock:
 4. Earn $10k MRR with SaaS
 5. Earn $20k MRR with SaaS
 
+after i launch unpuzzle i will do the following:
+1. code vibe coded apps to make more SaaS revenue
+2. continue selling shopify services on upwork
+3. sell web app dev services on upwork using my vibe coded projects as portfolio
+4. create content about my progress and post on unpuzzle for unpuzzle members
+
+
 ## MVP Community Features
 
 ### Community Page (Main Hub)
