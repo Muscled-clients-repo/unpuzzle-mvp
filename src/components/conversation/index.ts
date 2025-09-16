@@ -1,14 +1,7 @@
-// Unified conversation system components
-export { UnifiedConversationContainer } from './UnifiedConversationContainer'
-export { ConversationIntegration } from './ConversationIntegration'
+// Active conversation system components
 export { ConversationIntegrationV2 } from './ConversationIntegrationV2'
 export { DailyGoalTrackerV2 } from './DailyGoalTrackerV2'
-export { MessageList } from './MessageList'
-export { MessageCard } from './MessageCard'
-export { MessageComposer } from './MessageComposer'
-export { ConversationHeader } from './ConversationHeader'
-export { ImageViewerModal } from './ImageViewerModal'
-export { MessageAttachments } from './MessageAttachments'
+export { InlineMessageComposer } from './InlineMessageComposer'
 
 // Re-export types for convenience
 export type {
