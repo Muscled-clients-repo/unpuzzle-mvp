@@ -2,9 +2,18 @@
 
 import { useState, useCallback } from 'react'
 
+export interface ExistingAttachment {
+  id: string
+  url: string
+  name: string
+  size: number
+  mimeType: string
+}
+
 export interface MessageFormState {
   messageText: string
   attachedFiles: File[]
+  existingAttachments: ExistingAttachment[]
   messageType: 'daily_note' | 'instructor_response' | 'activity' | 'milestone'
   targetDate?: string
   replyToId?: string
@@ -16,6 +25,8 @@ export interface MessageFormActions {
   setAttachedFiles: (files: File[]) => void
   addFiles: (files: File[]) => void
   removeFile: (index: number) => void
+  setExistingAttachments: (attachments: ExistingAttachment[]) => void
+  removeExistingAttachment: (id: string) => void
   setMessageType: (type: MessageFormState['messageType']) => void
   setTargetDate: (date: string) => void
   setReplyToId: (id: string | undefined) => void
@@ -33,6 +44,9 @@ export interface MessageFormActions {
 export function useMessageForm(initialValues?: Partial<MessageFormState>): MessageFormState & MessageFormActions {
   const [messageText, setMessageText] = useState(initialValues?.messageText || '')
   const [attachedFiles, setAttachedFiles] = useState<File[]>(initialValues?.attachedFiles || [])
+  const [existingAttachments, setExistingAttachments] = useState<ExistingAttachment[]>(
+    initialValues?.existingAttachments || []
+  )
   const [messageType, setMessageType] = useState<MessageFormState['messageType']>(
     initialValues?.messageType || 'daily_note'
   )
@@ -49,6 +63,11 @@ export function useMessageForm(initialValues?: Partial<MessageFormState>): Messa
     setAttachedFiles(prev => prev.filter((_, i) => i !== index))
   }, [])
 
+  // Existing attachment management
+  const removeExistingAttachment = useCallback((id: string) => {
+    setExistingAttachments(prev => prev.filter(att => att.id !== id))
+  }, [])
+
   // Metadata management
   const updateMetadata = useCallback((key: string, value: any) => {
     setMetadata(prev => ({ ...prev, [key]: value }))
@@ -58,6 +77,7 @@ export function useMessageForm(initialValues?: Partial<MessageFormState>): Messa
   const resetForm = useCallback(() => {
     setMessageText('')
     setAttachedFiles([])
+    setExistingAttachments([])
     setMessageType('daily_note')
     setTargetDate(undefined)
     setReplyToId(undefined)
@@ -65,13 +85,14 @@ export function useMessageForm(initialValues?: Partial<MessageFormState>): Messa
   }, [])
 
   // Computed properties
-  const isDirty = messageText.trim() !== '' || attachedFiles.length > 0
-  const isValid = messageText.trim() !== '' || attachedFiles.length > 0
+  const isDirty = messageText.trim() !== '' || attachedFiles.length > 0 || existingAttachments.length > 0
+  const isValid = messageText.trim() !== '' || attachedFiles.length > 0 || existingAttachments.length > 0
 
   return {
     // State
     messageText,
     attachedFiles,
+    existingAttachments,
     messageType,
     targetDate,
     replyToId,
@@ -82,6 +103,8 @@ export function useMessageForm(initialValues?: Partial<MessageFormState>): Messa
     setAttachedFiles,
     addFiles,
     removeFile,
+    setExistingAttachments,
+    removeExistingAttachment,
     setMessageType,
     setTargetDate,
     setReplyToId,

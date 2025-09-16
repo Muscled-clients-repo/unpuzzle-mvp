@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { generateSignedUrlAction } from '@/app/actions/signed-url-actions'
 
+// Global cache for signed URLs to prevent duplicate API calls
+const signedUrlCache = new Map<string, { url: string, expiresAt: number }>()
+
 interface SignedUrlState {
   url: string | null
   isLoading: boolean
@@ -50,22 +53,43 @@ export function useSignedUrl(
 
   // Generate signed URL
   const generateUrl = useCallback(async (url: string) => {
+    // Check cache first
+    const cached = signedUrlCache.get(url)
+    const now = Date.now()
+
+    if (cached && cached.expiresAt > now + (refreshBeforeMinutes * 60 * 1000)) {
+      console.log('[USE_SIGNED_URL] Using cached signed URL for:', url)
+      setState({
+        url: cached.url,
+        isLoading: false,
+        error: null,
+        expiresAt: cached.expiresAt
+      })
+      return
+    }
+
     setState(prev => ({ ...prev, isLoading: true, error: null }))
 
     try {
       console.log('[USE_SIGNED_URL] Generating signed URL for:', url)
-      
+
       const result = await generateSignedUrlAction(url)
       
       if (result.success && result.data) {
+        // Cache the result
+        signedUrlCache.set(url, {
+          url: result.data.url,
+          expiresAt: result.data.expiresAt
+        })
+
         setState({
           url: result.data.url,
           isLoading: false,
           error: null,
           expiresAt: result.data.expiresAt
         })
-        
-        console.log('[USE_SIGNED_URL] Signed URL generated, expires:', new Date(result.data.expiresAt).toISOString())
+
+        console.log('[USE_SIGNED_URL] Signed URL generated and cached, expires:', new Date(result.data.expiresAt).toISOString())
       } else {
         setState(prev => ({
           ...prev,
@@ -91,8 +115,16 @@ export function useSignedUrl(
 
   // Initial load
   useEffect(() => {
-    if (privateUrl && privateUrl.startsWith('private:')) {
+    if (privateUrl && privateUrl.startsWith('private:') && !privateUrl.includes('temp-upload')) {
       generateUrl(privateUrl)
+    } else if (privateUrl && privateUrl.includes('temp-upload')) {
+      // Temporary upload URL - don't generate signed URL, wait for UI transition
+      setState({
+        url: null,
+        isLoading: false, // Not loading since we're waiting for UI transition
+        error: null,
+        expiresAt: null
+      })
     } else if (privateUrl && !privateUrl.startsWith('private:')) {
       // Direct URL, use as-is (for backwards compatibility)
       setState({

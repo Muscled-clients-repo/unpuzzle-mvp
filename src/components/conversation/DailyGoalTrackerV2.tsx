@@ -5,9 +5,9 @@ import { Target, Calendar, MessageCircle, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { useConversationData, useCreateMessageWithAttachments, useUpdateMessage, useUploadMessageAttachments } from '@/hooks/use-conversation-data'
+import { useConversationData, useCreateMessageWithAttachments, useUpdateMessage, useUploadMessageAttachments, useDeleteMessageAttachment } from '@/hooks/use-conversation-data'
 import { useQueryClient } from '@tanstack/react-query'
-import { useMessageForm } from '@/hooks/use-message-form'
+import { useMessageForm, type ExistingAttachment } from '@/hooks/use-message-form'
 import { useConversationUI } from '@/hooks/use-conversation-ui'
 import { useConversationWebSocket } from '@/hooks/use-conversation-websocket'
 import { useAppStore } from '@/stores/app-store'
@@ -16,6 +16,7 @@ import { InlineMessageComposer } from './InlineMessageComposer'
 import { LoadingSpinner, ErrorFallback } from '@/components/common'
 import { DailyNoteImage } from '@/app/student/goals/components/DailyNoteImage'
 import { DailyNoteImageViewer } from '@/app/student/goals/components/DailyNoteImageViewer'
+import { useUITransitionStore } from '@/stores/ui-transition-store'
 import { formatDate } from '@/lib/utils'
 
 interface DailyGoalTrackerV2Props {
@@ -66,6 +67,9 @@ export function DailyGoalTrackerV2({
     initialIndex: 0
   })
 
+  // UI Transition Store (Zustand layer for UI state)
+  const { setImageTransition, clearImageTransition } = useUITransitionStore()
+
   // Get conversation data
   const {
     data: conversationData,
@@ -88,6 +92,7 @@ export function DailyGoalTrackerV2({
   const createMessageMutation = useCreateMessageWithAttachments()
   const updateMessageMutation = useUpdateMessage()
   const uploadAttachmentsMutation = useUploadMessageAttachments()
+  const deleteAttachmentMutation = useDeleteMessageAttachment()
 
   // Get current user for WebSocket connection
   const { user } = useAppStore()
@@ -188,13 +193,28 @@ export function DailyGoalTrackerV2({
     messageForm.setAttachedFiles([])
   }
 
-  const handleEditStudentNote = (noteId: string, currentContent: string, targetDate: string, day: number) => {
-    setEditingStudentNote({ messageId: noteId, day })
+  const handleEditStudentNote = (noteId: string, currentContent: string, targetDate: string, day: number, attachments: any[] = []) => {
+    // Pre-populate existing attachments
+    const existingAttachments = attachments.map(att => ({
+      id: att.id,
+      url: att.cdn_url,
+      name: att.original_filename,
+      size: att.file_size,
+      mimeType: att.mime_type
+    }))
+
+    setEditingStudentNote({
+      messageId: noteId,
+      day,
+      originalContent: currentContent,
+      originalAttachments: existingAttachments
+    })
     setShowAddMore(false) // Make sure add more is cleared
     messageForm.setMessageText(currentContent)
     messageForm.setMessageType('daily_note')
     messageForm.setTargetDate(targetDate)
     messageForm.setAttachedFiles([])
+    messageForm.setExistingAttachments(existingAttachments)
   }
 
   const handleEditResponse = (responseId: string, currentContent: string, targetDate: string, day: number) => {
@@ -207,7 +227,12 @@ export function DailyGoalTrackerV2({
   }
 
   const [showAddMore, setShowAddMore] = useState(false)
-  const [editingStudentNote, setEditingStudentNote] = useState<{ messageId: string; day: number } | null>(null)
+  const [editingStudentNote, setEditingStudentNote] = useState<{
+    messageId: string;
+    day: number;
+    originalContent: string;
+    originalAttachments: ExistingAttachment[];
+  } | null>(null)
 
   const openImageViewer = (entry: DailyEntry, imageId: string) => {
     const imageFiles = entry.attachedFiles?.filter(file => file.mime_type.startsWith('image/')) || []
@@ -364,7 +389,8 @@ export function DailyGoalTrackerV2({
                                   entry.studentNotes[0].id,
                                   entry.studentNotes[0].content,
                                   entry.studentNotes[0].target_date || entry.date,
-                                  entry.day
+                                  entry.day,
+                                  entry.studentNotes[0].attachments || []
                                 )
                               }}
                               className="text-xs text-blue-600 hover:text-blue-700 font-medium"
@@ -382,7 +408,12 @@ export function DailyGoalTrackerV2({
                           attachedFiles={messageForm.attachedFiles}
                           onAddFiles={messageForm.addFiles}
                           onRemoveFile={messageForm.removeFile}
+                          existingAttachments={messageForm.existingAttachments}
+                          onRemoveExistingAttachment={messageForm.removeExistingAttachment}
                           placeholder="What did you accomplish today to get closer to your goal..."
+                          isEditMode={true}
+                          originalMessageText={editingStudentNote.originalContent}
+                          originalAttachments={editingStudentNote.originalAttachments}
                           onCancel={() => {
                             setEditingStudentNote(null)
                             messageForm.resetForm()
@@ -390,15 +421,40 @@ export function DailyGoalTrackerV2({
                           onSend={async () => {
                             if (!messageForm.isValid) return
 
-                            try {
-                              const newContent = messageForm.messageText
-                              const messageId = editingStudentNote.messageId
+                            const messageId = editingStudentNote.messageId
+                            const currentMessage = entry.studentNotes[0]
+                            const newContent = messageForm.messageText
 
-                              // Exit edit mode immediately (optimistic update)
+                            // Check if anything actually changed
+                            const originalAttachmentIds = (currentMessage.attachments || []).map(att => att.id).sort()
+                            const currentAttachmentIds = messageForm.existingAttachments.map(att => att.id).sort()
+                            const hasNewFiles = messageForm.attachedFiles.length > 0
+                            const contentChanged = newContent !== currentMessage.content
+                            const attachmentsChanged = JSON.stringify(originalAttachmentIds) !== JSON.stringify(currentAttachmentIds)
+
+                            // If nothing changed, just exit edit mode
+                            if (!contentChanged && !attachmentsChanged && !hasNewFiles) {
                               setEditingStudentNote(null)
+                              messageForm.resetForm()
+                              return
+                            }
+
+                            try {
+                              // Handle removed attachments first (mutations handle optimistic updates)
+                              if (attachmentsChanged) {
+                                const removedAttachmentIds = originalAttachmentIds.filter(id =>
+                                  !currentAttachmentIds.includes(id)
+                                )
+
+                                // Delete removed attachments - mutation handles optimistic updates
+                                for (const attachmentId of removedAttachmentIds) {
+                                  console.log('Deleting attachment:', attachmentId)
+                                  deleteAttachmentMutation.mutate(attachmentId)
+                                }
+                              }
 
                               // Handle file attachments if any
-                              if (messageForm.attachedFiles.length > 0) {
+                              if (hasNewFiles) {
                                 // Upload new files as attachments to existing message
                                 const formData = new FormData()
                                 messageForm.attachedFiles.forEach((file, index) => {
@@ -406,21 +462,23 @@ export function DailyGoalTrackerV2({
                                 })
 
                                 // First update the message content
-                                await updateMessageMutation.mutateAsync({
-                                  messageId,
-                                  updates: {
-                                    content: newContent,
-                                    metadata: messageForm.metadata
-                                  }
-                                })
+                                if (contentChanged) {
+                                  await updateMessageMutation.mutateAsync({
+                                    messageId,
+                                    updates: {
+                                      content: newContent,
+                                      metadata: messageForm.metadata
+                                    }
+                                  })
+                                }
 
-                                // Then add the new attachments
+                                // Then add the new attachments - optimistic updates in mutation handle transitions
                                 await uploadAttachmentsMutation.mutateAsync({
                                   messageId,
                                   files: formData
                                 })
-                              } else {
-                                // Update just the content if no new files
+                              } else if (contentChanged) {
+                                // Update just the content if no new files but content changed
                                 await updateMessageMutation.mutateAsync({
                                   messageId,
                                   updates: {
@@ -430,13 +488,14 @@ export function DailyGoalTrackerV2({
                                 })
                               }
 
-                              // Reset form after successful update
+                              // Exit edit mode and reset form after successful operations
+                              setEditingStudentNote(null)
                               messageForm.resetForm()
 
                             } catch (error) {
                               console.error('Failed to update student note:', error)
-                              // Revert edit mode if update failed
-                              setEditingStudentNote({ messageId: editingStudentNote.messageId, day: editingStudentNote.day })
+                              // Keep edit mode on error so user can retry
+                              // Don't need to revert - edit mode is still active
                             }
                           }}
                           isLoading={updateMessageMutation.isPending || uploadAttachmentsMutation.isPending}
@@ -462,6 +521,8 @@ export function DailyGoalTrackerV2({
                                         privateUrl={file.cdn_url}
                                         originalFilename={file.original_filename}
                                         className="w-full h-32"
+                                        attachmentId={file.id}
+                                        fileSize={file.file_size}
                                         onClick={() => openImageViewer(entry, file.id)}
                                       />
                                     ) : (
@@ -504,6 +565,8 @@ export function DailyGoalTrackerV2({
                           attachedFiles={messageForm.attachedFiles}
                           onAddFiles={messageForm.addFiles}
                           onRemoveFile={messageForm.removeFile}
+                          existingAttachments={messageForm.existingAttachments}
+                          onRemoveExistingAttachment={messageForm.removeExistingAttachment}
                           placeholder="What did you accomplish today to get closer to your goal..."
                           onCancel={() => {
                             setShowAddMore(false)
@@ -667,6 +730,8 @@ export function DailyGoalTrackerV2({
                                         privateUrl={file.cdn_url}
                                         originalFilename={file.original_filename}
                                         className="w-full h-32"
+                                        attachmentId={file.id}
+                                        fileSize={file.file_size}
                                         onClick={() => openImageViewer(entry, file.id)}
                                       />
                                     ) : (
@@ -700,6 +765,8 @@ export function DailyGoalTrackerV2({
                       attachedFiles={messageForm.attachedFiles}
                       onAddFiles={messageForm.addFiles}
                       onRemoveFile={messageForm.removeFile}
+                      existingAttachments={messageForm.existingAttachments}
+                      onRemoveExistingAttachment={messageForm.removeExistingAttachment}
                       placeholder="Provide feedback, encouragement, or assign tasks..."
                       onCancel={() => {
                         setRespondingToDay(null)

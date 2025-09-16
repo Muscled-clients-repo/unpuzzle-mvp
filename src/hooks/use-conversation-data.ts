@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getConversationData, createMessage, updateMessage, deleteMessage, getStudentGoalProgress, getMessagesForDate } from '@/lib/actions/conversation-actions'
-import { uploadMessageAttachments } from '@/lib/actions/message-attachments'
+import { uploadMessageAttachments, deleteMessageAttachment } from '@/lib/actions/message-attachments'
 import { toast } from 'sonner'
 
 // TanStack Query hooks for unified conversation system
@@ -196,30 +196,118 @@ export function useDeleteMessage() {
 }
 
 /**
- * Hook for uploading message attachments
+ * Hook for uploading message attachments with UI transition support
  */
 export function useUploadMessageAttachments() {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: uploadMessageAttachments,
-    onSuccess: (results, variables) => {
+    onMutate: async (variables) => {
+      const { messageId, files } = variables
+
+      // Cancel any outgoing refetches for conversation data
+      await queryClient.cancelQueries({ queryKey: ['conversation'] })
+
+      // Snapshot the previous value for rollback
+      const previousData = queryClient.getQueriesData({ queryKey: ['conversation'] })
+
+      // Create optimistic attachments from files
+      const fileArray: File[] = []
+      for (const [key, value] of files.entries()) {
+        if (key.startsWith('file_') && value instanceof File) {
+          fileArray.push(value)
+        }
+      }
+
+      // Generate consistent timestamp for ID matching
+      const timestamp = Date.now()
+
+      const optimisticAttachments = fileArray.map((file, index) => {
+        const attachmentId = `temp-${timestamp}-${index}`
+        const blobUrl = URL.createObjectURL(file)
+
+        // Set up UI transition if it's an image - using file-based mapping
+        if (file.type.startsWith('image/')) {
+          // Set transition state for architecture-compliant blob URL handling
+          import('@/stores/ui-transition-store').then(({ useUITransitionStore }) => {
+            const store = useUITransitionStore.getState()
+            store.setImageTransition(file.name, file.size, blobUrl)
+          })
+        }
+
+        return {
+          id: attachmentId,
+          message_id: messageId,
+          filename: `${timestamp}_${file.name}`,
+          original_filename: file.name,
+          file_size: file.size,
+          mime_type: file.type,
+          cdn_url: `private:temp-upload:${attachmentId}`, // Private URL format for consistency
+          storage_path: '',
+          upload_status: 'uploading' as const,
+          created_at: new Date().toISOString()
+        }
+      })
+
+      // Optimistically add attachments to the message
+      queryClient.setQueriesData({ queryKey: ['conversation'] }, (oldData: any) => {
+        if (!oldData?.messages) return oldData
+
+        return {
+          ...oldData,
+          messages: oldData.messages.map((msg: any) =>
+            msg.id === messageId
+              ? {
+                  ...msg,
+                  attachments: [...(msg.attachments || []), ...optimisticAttachments]
+                }
+              : msg
+          )
+        }
+      })
+
+      return { previousData, optimisticAttachments }
+    },
+    onError: (err, variables, context) => {
+      // Rollback optimistic updates on error
+      if (context?.previousData) {
+        context.previousData.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+      toast.error('File upload failed')
+    },
+    onSuccess: async (results, variables, context) => {
       const successCount = results.filter(r => r.success).length
       const errorCount = results.filter(r => !r.success).length
 
       if (successCount > 0) {
         toast.success(`${successCount} file(s) uploaded successfully!`)
 
-        // Invalidate conversation queries to show new attachments
+        // Standard invalidation to get fresh server data
         queryClient.invalidateQueries({ queryKey: ['conversation'] })
+
+        // Clean up UI transitions after server data loads (Architecture-compliant)
+        setTimeout(async () => {
+          const { useUITransitionStore } = await import('@/stores/ui-transition-store')
+          const store = useUITransitionStore.getState()
+
+          // Clear all transitions for this upload batch using file-based mapping
+          if (context?.optimisticAttachments) {
+            context.optimisticAttachments.forEach((attachment: any) => {
+              if (attachment.mime_type.startsWith('image/')) {
+                const fileKey = `${attachment.original_filename.replace(/[^a-zA-Z0-9]/g, '_')}_${attachment.file_size}`
+                store.clearImageTransition(fileKey)
+              }
+            })
+          }
+        }, 2000) // Allow time for signed URLs to load
       }
 
       if (errorCount > 0) {
         toast.error(`${errorCount} file(s) failed to upload`)
       }
-    },
-    onError: () => {
-      toast.error('File upload failed')
     }
   })
 }
@@ -264,6 +352,55 @@ export function useCreateMessageWithAttachments() {
     },
     onError: () => {
       toast.error('Failed to send message with attachments')
+    }
+  })
+}
+
+/**
+ * Hook for deleting message attachments with proper optimistic updates
+ */
+export function useDeleteMessageAttachment() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: deleteMessageAttachment,
+    onMutate: async (attachmentId: string) => {
+      // Cancel any outgoing refetches for conversation data
+      await queryClient.cancelQueries({ queryKey: ['conversation'] })
+
+      // Snapshot the previous value for rollback
+      const previousData = queryClient.getQueriesData({ queryKey: ['conversation'] })
+
+      // Optimistically update all conversation queries containing this attachment
+      queryClient.setQueriesData({ queryKey: ['conversation'] }, (oldData: any) => {
+        if (!oldData?.messages) return oldData
+
+        return {
+          ...oldData,
+          messages: oldData.messages.map((msg: any) => ({
+            ...msg,
+            attachments: msg.attachments?.filter((att: any) => att.id !== attachmentId) || []
+          }))
+        }
+      })
+
+      return { previousData }
+    },
+    onError: (err, attachmentId, context) => {
+      // Rollback optimistic updates on error
+      if (context?.previousData) {
+        context.previousData.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+      toast.error('Failed to delete attachment')
+    },
+    onSuccess: () => {
+      // Invalidate to ensure fresh data (optional since optimistic update handles most cases)
+      queryClient.invalidateQueries({ queryKey: ['conversation'] })
+      queryClient.invalidateQueries({ queryKey: ['messages-date'] })
+
+      toast.success('Attachment deleted successfully!')
     }
   })
 }

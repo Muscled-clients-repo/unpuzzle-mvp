@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { DailyNoteImage } from '@/app/student/goals/components/DailyNoteImage'
 import { DailyNoteImageViewer } from '@/app/student/goals/components/DailyNoteImageViewer'
 import { UploadProgress } from '@/components/ui/UploadProgress'
+import type { ExistingAttachment } from '@/hooks/use-message-form'
 
 interface InlineMessageComposerProps {
   messageText: string
@@ -21,6 +22,8 @@ interface InlineMessageComposerProps {
   attachedFiles: File[]
   onAddFiles: (files: File[]) => void
   onRemoveFile: (index: number) => void
+  existingAttachments: ExistingAttachment[]
+  onRemoveExistingAttachment: (id: string) => void
   placeholder?: string
   onCancel: () => void
   onSend: () => void
@@ -29,6 +32,9 @@ interface InlineMessageComposerProps {
   isValid: boolean
   isDragOver: boolean
   onDragOver: (isDragOver: boolean) => void
+  isEditMode?: boolean
+  originalMessageText?: string
+  originalAttachments?: ExistingAttachment[]
 }
 
 /**
@@ -41,6 +47,8 @@ export function InlineMessageComposer({
   attachedFiles,
   onAddFiles,
   onRemoveFile,
+  existingAttachments,
+  onRemoveExistingAttachment,
   placeholder = "Write your message...",
   onCancel,
   onSend,
@@ -48,7 +56,10 @@ export function InlineMessageComposer({
   isDirty,
   isValid,
   isDragOver,
-  onDragOver
+  onDragOver,
+  isEditMode = false,
+  originalMessageText = '',
+  originalAttachments = []
 }: InlineMessageComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -63,13 +74,36 @@ export function InlineMessageComposer({
     initialIndex: 0
   })
 
-  // Convert File objects to format expected by image viewer
+  // Change detection for edit mode
+  const hasContentChanged = isEditMode ? messageText.trim() !== originalMessageText.trim() : false
+  const originalAttachmentIds = originalAttachments.map(att => att.id).sort()
+  const currentAttachmentIds = existingAttachments.map(att => att.id).sort()
+  const hasAttachmentsChanged = isEditMode ? JSON.stringify(originalAttachmentIds) !== JSON.stringify(currentAttachmentIds) : false
+  const hasNewFiles = attachedFiles.length > 0
+  const hasChanges = hasContentChanged || hasAttachmentsChanged || hasNewFiles
+
+  // Override isValid for edit mode - only valid if there are actual changes
+  const isValidForSave = isEditMode ? (hasChanges && (messageText.trim() !== '' || existingAttachments.length > 0 || attachedFiles.length > 0)) : isValid
+
+  // Convert File objects and existing attachments to format expected by image viewer
   const createMockDailyEntry = () => {
-    const imageFiles = attachedFiles.filter(file => file.type.startsWith('image/'))
-    return {
-      day: 1,
-      date: new Date().toISOString().split('T')[0],
-      attachedFiles: imageFiles.map(file => ({
+    const newImageFiles = attachedFiles.filter(file => file.type.startsWith('image/'))
+    const existingImageFiles = existingAttachments.filter(att => att.mimeType.startsWith('image/'))
+
+    const allAttachedFiles = [
+      // Existing attachments
+      ...existingImageFiles.map(att => ({
+        id: att.id,
+        filename: att.name,
+        original_filename: att.name,
+        file_size: att.size,
+        mime_type: att.mimeType,
+        cdn_url: att.url,
+        storage_path: '',
+        message_text: messageText || 'Existing attachment'
+      })),
+      // New file attachments
+      ...newImageFiles.map(file => ({
         id: file.name + file.size, // Use filename + size as unique ID
         filename: file.name,
         original_filename: file.name,
@@ -79,6 +113,12 @@ export function InlineMessageComposer({
         storage_path: '',
         message_text: messageText || 'Preview before sending'
       }))
+    ]
+
+    return {
+      day: 1,
+      date: new Date().toISOString().split('T')[0],
+      attachedFiles: allAttachedFiles
     }
   }
 
@@ -142,7 +182,7 @@ export function InlineMessageComposer({
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault()
-                if (isValid && !isLoading) {
+                if (isValidForSave && !isLoading) {
                   onSend()
                 }
               }
@@ -182,27 +222,91 @@ export function InlineMessageComposer({
               Attach
             </Button>
           </div>
-          {!isValid && isDirty && (
+          {!isValidForSave && isDirty && !isEditMode && (
             <span className="text-red-500">Message cannot be empty</span>
           )}
         </div>
       </div>
 
-      {/* Attached Files Display */}
+      {/* Existing Attachments Display */}
+      {existingAttachments.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Current attachments ({existingAttachments.length}):
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {existingAttachments.map((attachment) => (
+              <div key={attachment.id} className="group relative">
+                {attachment.mimeType.startsWith('image/') ? (
+                  <div className="relative">
+                    <DailyNoteImage
+                      privateUrl={attachment.url}
+                      originalFilename={attachment.name}
+                      className="w-full h-32"
+                      onClick={() => !isLoading && openImageViewer(attachment.id)}
+                    />
+
+                    {/* Remove button overlay */}
+                    {!isLoading && (
+                      <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onRemoveExistingAttachment(attachment.id)
+                          }}
+                          className="w-6 h-6 p-0 bg-red-500 hover:bg-red-600 text-white rounded-full"
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 p-3 bg-white dark:bg-gray-600 rounded-lg border border-gray-200 dark:border-gray-500">
+                    <div className="text-lg">📄</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-gray-900 dark:text-gray-100 truncate">
+                        {attachment.name}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {Math.round(attachment.size / 1024)}KB
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onRemoveExistingAttachment(attachment.id)}
+                      disabled={isLoading}
+                      className="text-red-500 hover:text-red-700 p-1"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* New Attached Files Display */}
       {attachedFiles.length > 0 && (
         <div className="space-y-2">
           <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            Attached files ({attachedFiles.length}):
+            New files ({attachedFiles.length}):
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {attachedFiles.map((file, index) => (
               <div key={index} className="group relative">
                 {file.type.startsWith('image/') ? (
                   <div className="relative">
-                    <DailyNoteImage
-                      privateUrl={URL.createObjectURL(file)}
-                      originalFilename={file.name}
-                      className="w-full h-32"
+                    {/* Show actual image preview (WhatsApp/Messenger style) */}
+                    <img
+                      src={URL.createObjectURL(file)}
+                      alt={file.name}
+                      className="w-full h-32 object-cover rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:opacity-90 transition-opacity"
                       onClick={() => !isLoading && openImageViewer(file.name + file.size)}
                     />
 
@@ -281,18 +385,18 @@ export function InlineMessageComposer({
             e.preventDefault()
             onSend()
           }}
-          disabled={!isValid || isLoading}
+          disabled={!isValidForSave || isLoading}
           className="flex items-center gap-2"
         >
           {isLoading ? (
             <>
               <div className="w-4 h-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              Sending...
+              {isEditMode ? 'Saving...' : 'Sending...'}
             </>
           ) : (
             <>
               <Send className="w-4 h-4" />
-              Send
+              {isEditMode ? 'Save' : 'Send'}
             </>
           )}
         </Button>
