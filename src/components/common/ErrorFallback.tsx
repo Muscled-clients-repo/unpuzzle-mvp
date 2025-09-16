@@ -186,7 +186,7 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
 
           <div className="flex justify-center gap-2 mt-4">
             <Badge variant="outline" className="capitalize">
-              {errorObj.type.replace('_', ' ')}
+              {(errorObj.type || 'unknown').replace('_', ' ')}
             </Badge>
             
             {errorObj.recoverable && (
@@ -196,7 +196,7 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
             )}
             
             <Badge variant="outline">
-              {errorObj.timestamp.toLocaleTimeString()}
+              {errorObj.timestamp?.toLocaleTimeString() || 'Unknown time'}
             </Badge>
           </div>
         </CardHeader>
@@ -305,7 +305,7 @@ export function ErrorFallback({ error, resetError, context }: ErrorFallbackProps
                 )}
                 
                 <div>
-                  <strong>Timestamp:</strong> {errorObj.timestamp.toISOString()}
+                  <strong>Timestamp:</strong> {errorObj.timestamp?.toISOString() || 'Unknown time'}
                 </div>
                 
                 {context?.component && (

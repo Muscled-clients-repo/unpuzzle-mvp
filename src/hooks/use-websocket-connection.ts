@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { courseEventObserver, COURSE_EVENTS, MEDIA_EVENTS } from '@/lib/course-event-observer'
+import { courseEventObserver, COURSE_EVENTS, MEDIA_EVENTS, CONVERSATION_EVENTS } from '@/lib/course-event-observer'
 
 interface WebSocketMessage {
   type: string
@@ -111,27 +111,41 @@ export function useWebSocketConnection(userId: string) {
             'media-upload-complete': MEDIA_EVENTS.MEDIA_UPLOAD_COMPLETE,
             'bulk-delete-progress': MEDIA_EVENTS.MEDIA_BULK_DELETE_PROGRESS,
             'bulk-delete-complete': MEDIA_EVENTS.MEDIA_BULK_DELETE_COMPLETE,
-            'media-linked': MEDIA_EVENTS.MEDIA_LINKED
+            'media-linked': MEDIA_EVENTS.MEDIA_LINKED,
+            // Conversation events
+            'conversation-message-created': CONVERSATION_EVENTS.MESSAGE_CREATED,
+            'conversation-message-updated': CONVERSATION_EVENTS.MESSAGE_UPDATED,
+            'conversation-message-deleted': CONVERSATION_EVENTS.MESSAGE_DELETED,
+            'conversation-updated': CONVERSATION_EVENTS.CONVERSATION_UPDATED
           }
           
           const observerEventType = eventTypeMapping[message.type]
           if (observerEventType) {
-            // Course events and media-linked need courseId, other media events need userId
+            // Course events and media-linked need courseId, other media events need userId, conversation events need studentId
             const isCourseEvent = message.type.startsWith('upload-') || message.type.startsWith('video-') || message.type.startsWith('chapter-') || message.type === 'media-linked'
             const isMediaEvent = message.type.startsWith('media-') && message.type !== 'media-linked'
             const isBulkEvent = message.type.startsWith('bulk-')
-            
-            const hasRequiredId = isCourseEvent ? message.courseId : (isMediaEvent || isBulkEvent) ? message.data?.userId : message.data?.courseId
-            const eventId = isCourseEvent ? message.courseId : (isMediaEvent || isBulkEvent) ? message.data?.userId : message.data?.courseId
+            const isConversationEvent = message.type.startsWith('conversation-')
+
+            const hasRequiredId = isCourseEvent ? message.courseId :
+                                 (isMediaEvent || isBulkEvent) ? message.data?.userId :
+                                 isConversationEvent ? message.data?.studentId :
+                                 message.data?.courseId
+            const eventId = isCourseEvent ? message.courseId :
+                           (isMediaEvent || isBulkEvent) ? message.data?.userId :
+                           isConversationEvent ? message.data?.studentId :
+                           message.data?.courseId
             
             console.log(`🔍 [WEBSOCKET DEBUG] Checking message:`, {
               type: message.type,
               isCourseEvent,
               isMediaEvent,
               isBulkEvent,
+              isConversationEvent,
               hasRequiredId,
               eventId,
               userId: message.data?.userId,
+              studentId: message.data?.studentId,
               courseId: message.courseId,
               data: message.data
             })
@@ -151,13 +165,16 @@ export function useWebSocketConnection(userId: string) {
                 finalOperationId
               )
             } else {
-              console.log(`❌ [WEBSOCKET] Message missing required ID:`, { 
-                messageType: message.type, 
+              console.log(`❌ [WEBSOCKET] Message missing required ID:`, {
+                messageType: message.type,
                 isCourseEvent,
                 isMediaEvent,
                 isBulkEvent,
+                isConversationEvent,
                 hasRequiredId,
-                expectedField: isCourseEvent ? 'courseId' : (isMediaEvent || isBulkEvent) ? 'userId' : 'courseId',
+                expectedField: isCourseEvent ? 'courseId' :
+                              (isMediaEvent || isBulkEvent) ? 'userId' :
+                              isConversationEvent ? 'studentId' : 'courseId',
                 data: message.data
               })
             }

@@ -193,6 +193,44 @@ export interface MediaBulkOperationCompleteEvent {
   results: any[]
 }
 
+// Conversation event interfaces
+export interface ConversationMessageCreatedEvent {
+  messageId: string
+  conversationId: string
+  studentId: string
+  messageType: 'daily_note' | 'instructor_response' | 'activity' | 'milestone'
+  senderId: string
+  senderRole: 'student' | 'instructor'
+  content: string
+  targetDate?: string
+  attachments?: any[]
+}
+
+export interface ConversationMessageUpdatedEvent {
+  messageId: string
+  conversationId: string
+  studentId: string
+  senderId: string
+  updates: {
+    content?: string
+    metadata?: any
+  }
+}
+
+export interface ConversationMessageDeletedEvent {
+  messageId: string
+  conversationId: string
+  studentId: string
+  senderId: string
+}
+
+export interface ConversationUpdatedEvent {
+  conversationId: string
+  studentId: string
+  instructorId?: string
+  updates: any
+}
+
 // Event type constants
 export const COURSE_EVENTS = {
   CHAPTER_UPDATE_COMPLETE: 'chapter-update-complete',
@@ -215,9 +253,18 @@ export const MEDIA_EVENTS = {
   MEDIA_LINKED: 'media-linked'
 } as const
 
+// Conversation events (real-time communication)
+export const CONVERSATION_EVENTS = {
+  MESSAGE_CREATED: 'conversation-message-created',
+  MESSAGE_UPDATED: 'conversation-message-updated',
+  MESSAGE_DELETED: 'conversation-message-deleted',
+  CONVERSATION_UPDATED: 'conversation-updated'
+} as const
+
 export type CourseEventType = typeof COURSE_EVENTS[keyof typeof COURSE_EVENTS]
 export type MediaEventType = typeof MEDIA_EVENTS[keyof typeof MEDIA_EVENTS]
-export type AllEventType = CourseEventType | MediaEventType
+export type ConversationEventType = typeof CONVERSATION_EVENTS[keyof typeof CONVERSATION_EVENTS]
+export type AllEventType = CourseEventType | MediaEventType | ConversationEventType
 
 // Development utilities
 if (process.env.NODE_ENV === 'development') {

@@ -48,20 +48,34 @@ export default function InstructorStudentGoalsPage({ params }: PageProps) {
     if (studentInsight) {
       return {
         name: studentInsight.studentName,
-        email: studentInsight.studentEmail // Use real email
+        email: studentInsight.studentEmail,
+        isLoading: false
       }
     }
-    
+
     const topLearner = topLearners.find(l => l.id === studentId)
     if (topLearner) {
       return {
         name: topLearner.name,
-        email: `${topLearner.name.toLowerCase().replace(' ', '.')}@email.com` // Fallback for top learners
+        email: `${topLearner.name.toLowerCase().replace(' ', '.')}@email.com`,
+        isLoading: false
       }
     }
-    
-    return getStudentInfo(studentId) // Fallback to mock data
-  }, [studentId, studentInsights, topLearners])
+
+    // If we have a user but no student data yet, we're still loading
+    if (user?.id && studentInsights.length === 0 && topLearners.length === 0) {
+      return {
+        name: 'Loading...',
+        email: 'Loading student information...',
+        isLoading: true
+      }
+    }
+
+    return {
+      ...getStudentInfo(studentId),
+      isLoading: false
+    }
+  }, [studentId, studentInsights, topLearners, user?.id])
   
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -83,9 +97,18 @@ export default function InstructorStudentGoalsPage({ params }: PageProps) {
                 </div>
                 <div>
                   <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                    {student.name}'s Goals
+                    {student.isLoading ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+                        Loading Student Goals...
+                      </div>
+                    ) : (
+                      `${student.name}'s Goals`
+                    )}
                   </h1>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">{student.email}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {student.isLoading ? 'Please wait...' : student.email}
+                  </p>
                 </div>
               </div>
             </div>
@@ -98,9 +121,9 @@ export default function InstructorStudentGoalsPage({ params }: PageProps) {
       </div>
       
       {/* Use new InstructorStudentGoalTracker wrapper */}
-      <InstructorStudentGoalTracker 
+      <InstructorStudentGoalTracker
         studentId={studentId}
-        instructorId={user?.id || "current-instructor-id"} // Use real instructor ID
+        instructorId={user?.id || ""} // Use real instructor ID
       />
     </div>
   )
