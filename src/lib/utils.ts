@@ -7,6 +7,18 @@ export function cn(...inputs: ClassValue[]) {
 
 // Date and time formatting utilities
 export function formatDate(dateString: string): string {
+  // For date-only strings (YYYY-MM-DD), parse as local date to avoid timezone conversion
+  if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const [year, month, day] = dateString.split('-').map(Number)
+    const date = new Date(year, month - 1, day) // month is 0-indexed
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })
+  }
+
+  // For full datetime strings, use original behavior
   return new Date(dateString).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',

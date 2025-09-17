@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { Target, User, Search, Clock, TrendingUp, Eye } from 'lucide-react'
+import React, { useState } from 'react'
+import { Target, User, Search, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -10,9 +10,10 @@ import { PageContainer } from '@/components/layout/page-container'
 import { PageContentHeader } from '@/components/layout/page-content-header'
 import { StatsGrid } from '@/components/layout/stats-grid'
 import Link from 'next/link'
-import { Progress } from '@/components/ui/progress'
+import { LoadingSpinner, ErrorFallback } from '@/components/common'
+import { useQuery } from '@tanstack/react-query'
+import { createClient } from '@/lib/supabase/client'
 import { useAppStore } from '@/stores/app-store'
-import { ErrorBoundary, LoadingSpinner, ErrorFallback } from '@/components/common'
 
 interface StudentGoal {
   studentId: string
@@ -31,73 +32,94 @@ interface StudentGoal {
   hasUnreadMessages: boolean
 }
 
-// Real student data is now fetched from the app store
+// Real student data is now fetched from database via TanStack Query
 
 export default function InstructorStudentGoalsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed' | 'paused'>('all')
+  const { user } = useAppStore()
 
-  // Use real student data from the app store
-  const { 
-    studentInsights, 
-    topLearners,
-    loadInstructorData,
-    loading,
-    error,
-    user
-  } = useAppStore()
-  
-  useEffect(() => {
-    console.log('[STUDENT GOALS PAGE] useEffect triggered with user:', user)
-    if (user?.id) {
-      console.log('[STUDENT GOALS PAGE] Calling loadInstructorData with user ID:', user.id)
-      loadInstructorData(user.id)
-    } else {
-      console.log('[STUDENT GOALS PAGE] No user ID available')
-    }
-  }, [loadInstructorData, user?.id])
+  // Fetch real student goal assignments from database (TanStack Query layer)
+  const { data: studentGoals, isLoading: goalsLoading, error: goalsError } = useQuery({
+    queryKey: ['instructor-student-goals', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return []
 
-  // Transform real student data to match goals interface
-  const realStudentGoals = React.useMemo(() => {
-    console.log('[STUDENT GOALS PAGE] Building student goals from:', { studentInsights, topLearners })
-    const allStudents = [
-      ...studentInsights.map(student => ({
-        studentId: student.studentId,
-        studentName: student.studentName,
-        studentEmail: student.studentEmail || `${student.studentName.toLowerCase().replace(' ', '.')}@email.com`, // Use real email or fallback
-        goalTitle: 'Goal in Progress', // Default goal title
-        currentAmount: '$0',
-        targetAmount: '$1,000',
-        progress: student.progress || 0,
-        targetDate: '2025-03-17',
-        startDate: '2024-09-17',
-        status: 'active' as const,
-        lastActive: student.lastActive || 'Unknown',
-        daysActive: 30,
-        needsAttention: student.needsHelp || false,
-        hasUnreadMessages: false
-      })),
-      ...topLearners.filter(learner => 
-        !studentInsights.some(s => s.studentName === learner.name)
-      ).map(learner => ({
-        studentId: learner.id,
-        studentName: learner.name,
-        studentEmail: `${learner.name.toLowerCase().replace(' ', '.')}@email.com`,
-        goalTitle: 'Goal in Progress',
-        currentAmount: '$0',
-        targetAmount: '$1,000',
-        progress: Math.floor(Math.random() * 100),
-        targetDate: '2025-03-17',
-        startDate: '2024-09-17',
-        status: 'active' as const,
-        lastActive: `${Math.floor(Math.random() * 24)} hours ago`,
-        daysActive: learner.joinedDaysAgo || 30,
-        needsAttention: false,
-        hasUnreadMessages: false
-      }))
-    ]
-    return allStudents
-  }, [studentInsights, topLearners])
+      const supabase = createClient()
+
+      // Get all students with goal assignments
+      const { data: studentsWithGoals, error } = await supabase
+        .from('profiles')
+        .select(`
+          id,
+          full_name,
+          email,
+          current_goal_id,
+          goal_assigned_at,
+          track_goals (
+            id,
+            name,
+            description,
+            tracks (
+              name
+            )
+          )
+        `)
+        .not('current_goal_id', 'is', null)
+        .order('goal_assigned_at', { ascending: false })
+
+      if (error) {
+        console.error('Failed to fetch student goals:', error)
+        throw new Error('Failed to fetch student goals')
+      }
+
+      if (!studentsWithGoals) return []
+
+      // Transform database data to component interface
+      return studentsWithGoals.map(student => {
+        const goal = student.track_goals
+        const startDate = student.goal_assigned_at || new Date().toISOString()
+
+        // Extract target amount from goal name (same logic as other components)
+        const getTargetAmount = (goalName: string) => {
+          if (goalName.includes('1k')) return '$1,000'
+          if (goalName.includes('3k')) return '$3,000'
+          if (goalName.includes('5k')) return '$5,000'
+          if (goalName.includes('10k')) return '$10,000'
+          if (goalName.includes('20k')) return '$20,000'
+          if (goalName.includes('30k')) return '$30,000'
+          if (goalName.includes('50k')) return '$50,000'
+          if (goalName.includes('100k')) return '$100,000'
+          if (goalName.includes('250k')) return '$250,000'
+          if (goalName.includes('500k')) return '$500,000'
+          return '$1,000' // default
+        }
+
+        // Calculate days since goal assigned
+        const daysActive = Math.max(1, Math.floor((new Date().getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)))
+
+        return {
+          studentId: student.id,
+          studentName: student.full_name || 'Unknown Student',
+          studentEmail: student.email || 'No email',
+          goalTitle: goal?.description || 'No goal assigned',
+          currentAmount: '$0', // TODO: This should come from actual progress tracking
+          targetAmount: getTargetAmount(goal?.name || ''),
+          progress: 0, // TODO: Calculate from actual progress data
+          targetDate: new Date(new Date(startDate).getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 90 days from start
+          startDate: startDate.split('T')[0],
+          status: 'active' as const,
+          lastActive: daysActive === 1 ? 'Today' : `${daysActive} days ago`,
+          daysActive,
+          needsAttention: false, // TODO: Calculate based on actual metrics
+          hasUnreadMessages: false // TODO: Calculate based on conversation data
+        }
+      })
+    },
+    enabled: !!user?.id
+  })
+
+  const realStudentGoals = studentGoals || []
 
   // Filter students based on search and status
   const filteredStudents = realStudentGoals.filter(student => {
@@ -139,8 +161,8 @@ export default function InstructorStudentGoalsPage() {
   const needsAttention = realStudentGoals.filter(s => s.needsAttention).length
   const avgProgress = realStudentGoals.length > 0 ? Math.round(realStudentGoals.reduce((sum, s) => sum + s.progress, 0) / realStudentGoals.length) : 0
 
-  if (loading) return <LoadingSpinner />
-  if (error) return <ErrorFallback error={error} />
+  if (goalsLoading) return <LoadingSpinner />
+  if (goalsError) return <ErrorFallback error={goalsError} />
 
   return (
     <PageContainer>

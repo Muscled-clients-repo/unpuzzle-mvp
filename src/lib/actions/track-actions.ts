@@ -568,28 +568,11 @@ export async function assignGoalToStudentConversation(params: {
   }
 
   // Find the predefined goal in track_goals table based on goalId
-  // Map the questionnaire goal IDs to predefined goal names
-  const goalMapping: Record<string, string> = {
-    'agency-1k': 'Build $10k/month Agency',
-    'agency-5k': 'Build $10k/month Agency',
-    'agency-10k': 'Build $10k/month Agency',
-    'agency-20k': 'Optimize for 80% Margins',
-    'agency-50k': 'Scale to $25k/month',
-    'agency-100k': 'Scale to $25k/month',
-    'agency-250k': 'Scale to $25k/month',
-    'agency-500k': 'Scale to $25k/month',
-    'saas-1k': 'Build First SaaS MVP',
-    'saas-3k': 'Build First SaaS MVP',
-    'saas-5k': 'Reach $5k MRR',
-    'saas-10k': 'Reach $5k MRR',
-    'saas-20k': 'Scale to $20k MRR'
-  }
-
-  const mappedGoalName = goalMapping[goalId]
+  // Direct 1:1 mapping - goalId matches the goal name in database
   const { data: predefinedGoal, error: goalError } = await serviceClient
     .from('track_goals')
     .select('id, track_id')
-    .eq('name', mappedGoalName)
+    .eq('name', goalId)
     .single()
 
   console.log('[GOAL_ASSIGNMENT] Found predefined goal:', { predefinedGoal, goalError })
@@ -618,7 +601,8 @@ export async function assignGoalToStudentConversation(params: {
     .update({
       status: 'active',
       instructor_id: user.id,
-      goal_id: predefinedGoal?.id || null // Use the predefined goal's UUID
+      goal_id: predefinedGoal?.id || null, // Use the predefined goal's UUID
+      goal_title: goalTitle // Save the goal title directly
     })
     .eq('id', conversationId)
 

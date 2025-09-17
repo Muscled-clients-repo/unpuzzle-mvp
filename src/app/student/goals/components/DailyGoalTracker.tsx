@@ -63,9 +63,9 @@ interface Goal {
 const mockGoal: Goal = {
   id: '1',
   title: 'UI/UX Designer to $4K/month',
-  currentAmount: '$450',
+  currentAmount: '$0',
   targetAmount: '$4,000',
-  progress: 11,
+  progress: 0,
   targetDate: '2025-03-17',
   startDate: '2024-09-17',
   status: 'active'

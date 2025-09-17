@@ -103,16 +103,24 @@ export function DailyGoalTrackerV2({
   const { isConnected } = useConversationWebSocket(studentId, user?.id)
 
   // Mock goal data (in real app, this would come from props or separate query)
+  console.log('🔍 DEBUG DailyGoalTrackerV2 goalProgress prop:', goalProgress)
+
   const currentGoal = goalProgress || {
     id: '1',
     title: 'UI/UX Designer to $4K/month',
-    currentAmount: '$450',
+    currentAmount: '$0',
     targetAmount: '$4,000',
-    progress: 11,
+    progress: 0,
     targetDate: '2025-03-17',
     startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 7 days ago
     status: 'active'
   }
+
+  console.log('🔍 DEBUG currentGoal being used:', {
+    isUsingRealData: !!goalProgress,
+    currentGoal: currentGoal,
+    startDate: currentGoal.startDate
+  })
 
   // Transform conversation messages into daily entries
   const dailyEntries = useMemo(() => {
@@ -131,6 +139,14 @@ export function DailyGoalTrackerV2({
       conversationData.messages.forEach(message => {
         const date = message.target_date || message.created_at.split('T')[0]
         const daysSinceStart = Math.floor((new Date(date).getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
+
+        console.log('🔍 DEBUG Processing message:')
+        console.log('  messageId:', message.id)
+        console.log('  messageType:', message.message_type)
+        console.log('  targetDate:', message.target_date)
+        console.log('  createdAt:', message.created_at)
+        console.log('  calculatedDate:', date)
+        console.log('  daysSinceStart:', daysSinceStart)
 
         if (!entriesMap.has(date)) {
           entriesMap.set(date, {
@@ -172,10 +188,19 @@ export function DailyGoalTrackerV2({
       })
     }
 
-    // If no entries exist yet, create today's entry so new students can start
-    if (entriesMap.size === 0) {
-      const today = new Date().toISOString().split('T')[0]
+    // Always ensure today's entry exists (for new daily progress)
+    const today = new Date().toISOString().split('T')[0]
+    console.log('🔍 DEBUG Daily Entry Creation:', {
+      today,
+      startDate: currentGoal.startDate,
+      hasToday: entriesMap.has(today),
+      existingDates: Array.from(entriesMap.keys()),
+      existingDays: Array.from(entriesMap.values()).map(e => ({ date: e.date, day: e.day }))
+    })
+
+    if (!entriesMap.has(today)) {
       const todaysSinceStart = Math.floor((new Date(today).getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
+      console.log('🔍 DEBUG Creating today entry:', { today, todaysSinceStart, calculatedFromStart: startDate })
       entriesMap.set(today, {
         day: todaysSinceStart,
         date: today,
@@ -462,7 +487,15 @@ export function DailyGoalTrackerV2({
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
                       <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
-                        {formatDate(entry.date)}
+                        {(() => {
+                          const formatted = formatDate(entry.date)
+                          console.log('🔍 DEBUG formatDate conversion:', {
+                            inputDate: entry.date,
+                            formattedOutput: formatted,
+                            rawDateObject: new Date(entry.date)
+                          })
+                          return formatted
+                        })()}
                       </h3>
                       {entry.day === currentDay && (
                         <Badge className="bg-gray-100 text-gray-800">Today</Badge>

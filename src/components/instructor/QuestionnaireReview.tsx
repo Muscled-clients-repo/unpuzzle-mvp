@@ -63,22 +63,22 @@ export function QuestionnaireReview({
   const getTrackGoals = (track: 'agency' | 'saas') => {
     if (track === 'agency') {
       return [
-        { id: 'agency-1k', label: 'Earn $1k total from agency services', amount: 1000 },
-        { id: 'agency-5k', label: 'Earn $5k total from agency services', amount: 5000 },
-        { id: 'agency-10k', label: 'Earn $10k total from agency services', amount: 10000 },
-        { id: 'agency-20k', label: 'Earn $20k total from agency services', amount: 20000 },
-        { id: 'agency-50k', label: 'Earn $50k total from agency services', amount: 50000 },
-        { id: 'agency-100k', label: 'Earn $100k total from agency services', amount: 100000 },
-        { id: 'agency-250k', label: 'Earn $250k total from agency services', amount: 250000 },
-        { id: 'agency-500k', label: 'Earn $500k total from agency services', amount: 500000 }
+        { id: 'agency-1k', label: 'Earn $1,000 total revenue from agency services', amount: 1000 },
+        { id: 'agency-5k', label: 'Earn $5,000 total revenue from agency services', amount: 5000 },
+        { id: 'agency-10k', label: 'Earn $10,000 total revenue from agency services', amount: 10000 },
+        { id: 'agency-30k', label: 'Earn $30,000 total revenue from agency services', amount: 30000 },
+        { id: 'agency-50k', label: 'Earn $50,000 total revenue from agency services', amount: 50000 },
+        { id: 'agency-100k', label: 'Earn $100,000 total revenue from agency services', amount: 100000 },
+        { id: 'agency-250k', label: 'Earn $250,000 total revenue from agency services', amount: 250000 },
+        { id: 'agency-500k', label: 'Earn $500,000 total revenue from agency services', amount: 500000 }
       ]
     } else {
       return [
-        { id: 'saas-1k', label: 'Reach $1k Monthly Recurring Revenue', amount: 1000 },
-        { id: 'saas-3k', label: 'Reach $3k Monthly Recurring Revenue', amount: 3000 },
-        { id: 'saas-5k', label: 'Reach $5k Monthly Recurring Revenue', amount: 5000 },
-        { id: 'saas-10k', label: 'Reach $10k Monthly Recurring Revenue', amount: 10000 },
-        { id: 'saas-20k', label: 'Reach $20k Monthly Recurring Revenue', amount: 20000 }
+        { id: 'saas-1k-mrr', label: 'Reach $1,000 Monthly Recurring Revenue', amount: 1000 },
+        { id: 'saas-3k-mrr', label: 'Reach $3,000 Monthly Recurring Revenue', amount: 3000 },
+        { id: 'saas-5k-mrr', label: 'Reach $5,000 Monthly Recurring Revenue', amount: 5000 },
+        { id: 'saas-10k-mrr', label: 'Reach $10,000 Monthly Recurring Revenue', amount: 10000 },
+        { id: 'saas-20k-mrr', label: 'Reach $20,000 Monthly Recurring Revenue', amount: 20000 }
       ]
     }
   }
@@ -88,21 +88,24 @@ export function QuestionnaireReview({
 
     if (trackType === 'agency') {
       if (questionnaireData.hasEarned1k === 'false') {
-        return goals[0] // Start with $1k
+        return goals[0] // Start with agency-1k
       } else if (questionnaireData.earningsAmount) {
         const earned = questionnaireData.earningsAmount
-        if (earned < 5000) return goals[1] // $5k
-        if (earned < 10000) return goals[2] // $10k
-        if (earned < 20000) return goals[3] // $20k
-        if (earned < 50000) return goals[4] // $50k
-        return goals[5] // $100k+
+        if (earned < 5000) return goals[1] // agency-5k
+        if (earned < 10000) return goals[2] // agency-10k
+        if (earned < 30000) return goals[3] // agency-30k
+        if (earned < 50000) return goals[4] // agency-50k
+        if (earned < 100000) return goals[5] // agency-100k
+        if (earned < 250000) return goals[6] // agency-250k
+        return goals[7] // agency-500k
       }
     } else {
       // SaaS track - start based on technical skills
       const techScore = (questionnaireData.designSkillLevel || 0) + (questionnaireData.codingSkillLevel || 0)
-      if (techScore < 10) return goals[0] // $1k MRR
-      if (techScore < 15) return goals[1] // $3k MRR
-      return goals[2] // $5k MRR
+      if (techScore < 10) return goals[0] // saas-1k-mrr
+      if (techScore < 15) return goals[1] // saas-3k-mrr
+      if (techScore < 18) return goals[2] // saas-5k-mrr
+      return goals[3] // saas-10k-mrr
     }
 
     return goals[0]

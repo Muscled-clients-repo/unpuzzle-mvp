@@ -12,6 +12,8 @@ export function StudentGoalDashboard() {
   // Fetch student's assigned goal from their profile
   const { data: goalData, isLoading: goalLoading } = useQuery({
     queryKey: ['student-goal', user?.id],
+    staleTime: 0, // Force fresh data
+    cacheTime: 0, // Don't cache
     queryFn: async () => {
       if (!user?.id) return null
 
@@ -35,7 +37,10 @@ export function StudentGoalDashboard() {
         .eq('id', user.id)
         .single()
 
+      console.log('🔍 DEBUG StudentGoalDashboard query result:', { profile, profileError })
+
       if (profileError || !profile?.current_goal_id) {
+        console.log('🔍 DEBUG No goal assigned or error:', { profileError, hasGoal: !!profile?.current_goal_id })
         return null
       }
 
@@ -43,13 +48,33 @@ export function StudentGoalDashboard() {
       const goal = profile.track_goals
       const startDate = profile.goal_assigned_at || new Date().toISOString()
 
+      console.log('🔍 DEBUG Goal data transformation:', {
+        goalAssignedAt: profile.goal_assigned_at,
+        startDate,
+        goalName: goal?.name,
+        goalDescription: goal?.description
+      })
+
+      // Extract target amount from goal name
+      const getTargetAmount = (goalName: string) => {
+        if (goalName.includes('1k')) return '$1,000'
+        if (goalName.includes('3k')) return '$3,000'
+        if (goalName.includes('5k')) return '$5,000'
+        if (goalName.includes('10k')) return '$10,000'
+        if (goalName.includes('20k')) return '$20,000'
+        if (goalName.includes('30k')) return '$30,000'
+        if (goalName.includes('50k')) return '$50,000'
+        if (goalName.includes('100k')) return '$100,000'
+        if (goalName.includes('250k')) return '$250,000'
+        if (goalName.includes('500k')) return '$500,000'
+        return '$1,000' // default
+      }
+
       return {
         id: goal.id,
-        title: goal.name,
+        title: goal.description, // Use the full description as title
         currentAmount: '$0', // This should come from actual progress tracking
-        targetAmount: goal.name.includes('$10k') ? '$10,000' :
-                     goal.name.includes('$5k') ? '$5,000' :
-                     goal.name.includes('$20k') ? '$20,000' : '$10,000',
+        targetAmount: getTargetAmount(goal.name),
         progress: 0, // This should come from actual progress calculation
         targetDate: new Date(new Date(startDate).getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 90 days from start
         startDate: startDate.split('T')[0],
