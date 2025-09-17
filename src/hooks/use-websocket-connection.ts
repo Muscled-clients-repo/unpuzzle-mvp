@@ -120,13 +120,15 @@ export function useWebSocketConnection(userId: string) {
             // Student goal events
             'goal-reassignment': STUDENT_EVENTS.GOAL_REASSIGNMENT,
             // Course goal events
-            'course-goal-assignment-changed': 'course-goal-assignment-changed'
+            'course-goal-assignment-changed': 'course-goal-assignment-changed',
+            // Course status events
+            'course-status-changed': COURSE_EVENTS.STATUS_CHANGED
           }
           
           const observerEventType = eventTypeMapping[message.type]
           if (observerEventType) {
             // Course events and media-linked need courseId, other media events need userId, conversation events need studentId, goal events need userId, course-goal events are global
-            const isCourseEvent = message.type.startsWith('upload-') || message.type.startsWith('video-') || message.type.startsWith('chapter-') || message.type === 'media-linked'
+            const isCourseEvent = message.type.startsWith('upload-') || message.type.startsWith('video-') || message.type.startsWith('chapter-') || message.type === 'media-linked' || message.type === 'course-status-changed'
             const isMediaEvent = message.type.startsWith('media-') && message.type !== 'media-linked'
             const isBulkEvent = message.type.startsWith('bulk-')
             const isConversationEvent = message.type.startsWith('conversation-')

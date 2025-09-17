@@ -249,15 +249,23 @@ export interface CourseGoalAssignmentEvent {
   action: 'assigned' | 'unassigned'
 }
 
+// Course status change event interface
+export interface CourseStatusChangeEvent {
+  courseId: string
+  status: 'published' | 'draft'
+  course: any
+}
+
 // Event type constants
 export const COURSE_EVENTS = {
   CHAPTER_UPDATE_COMPLETE: 'chapter-update-complete',
-  CHAPTER_CREATE_COMPLETE: 'chapter-create-complete', 
+  CHAPTER_CREATE_COMPLETE: 'chapter-create-complete',
   CHAPTER_DELETE_COMPLETE: 'chapter-delete-complete',
   VIDEO_UPDATE_COMPLETE: 'video-update-complete',
   VIDEO_DELETE_COMPLETE: 'video-delete-complete',
   UPLOAD_PROGRESS: 'upload-progress',
-  UPLOAD_COMPLETE: 'upload-complete'
+  UPLOAD_COMPLETE: 'upload-complete',
+  STATUS_CHANGED: 'course-status-changed'
 } as const
 
 // Media events (extending the same observer system)

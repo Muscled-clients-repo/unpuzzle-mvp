@@ -41,6 +41,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
 import { getCourseAction, publishCourseAction, unpublishCourseAction } from '@/app/actions/course-actions'
 import { getChaptersForCourseAction } from '@/app/actions/chapter-actions'
 import { CourseTrackGoalSelector } from '@/components/course/CourseTrackGoalSelector'
+import { courseEventObserver, COURSE_EVENTS } from '@/lib/course-event-observer'
 
 export default function EditCourseV3Page(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params)
@@ -87,6 +88,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   
   // Step 2: Use regular hooks that will now read from prefetched cache (instant)
   const { course, error, updateCourse, isUpdating } = useCourseEdit(courseId)
+
   const { 
     chapters, 
     createChapter, 
@@ -96,26 +98,12 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   
   // REMOVED: Direct video upload hooks - all uploads now go through media library
   
-  // PROFESSIONAL FORM STATE PATTERN: Form state as source of truth for inputs
+  // ARCHITECTURE-COMPLIANT: Form state only tracks user input changes
   const formState = useFormState({
-    title: course?.title || '',
-    description: course?.description || '',
-    price: course?.price || null,
-    difficulty: course?.difficulty || 'beginner'
+    title: '',
+    description: '',
+    difficulty: 'beginner'
   })
-  
-  // Update form state when server data changes (after fetch or optimistic update)
-  // Use primitive values to avoid infinite loops
-  React.useEffect(() => {
-    if (course) {
-      formState.updateInitialValues({
-        title: course.title || '',
-        description: course.description || '',
-        price: course.price || null,
-        difficulty: course.difficulty || 'beginner'
-      })
-    }
-  }, [course?.title, course?.description, course?.price, course?.difficulty, course?.id])
   
   // Removed noisy TanStack debug logs
   
@@ -127,20 +115,47 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   // ARCHITECTURE-COMPLIANT: TanStack mutation for publish/unpublish (server action)
   const publishMutation = useMutation({
     mutationFn: async () => {
-      const action = course?.status === 'published' ? unpublishCourseAction : publishCourseAction
+      const action = course?.data?.status === 'published' ? unpublishCourseAction : publishCourseAction
       return action(courseId)
+    },
+    onMutate: async () => {
+      // Cancel outgoing queries
+      await queryClient.cancelQueries({ queryKey: courseKeys.detail(courseId) })
+
+      // Snapshot previous value
+      const previousCourse = queryClient.getQueryData(courseKeys.detail(courseId))
+
+      // Optimistic update - immediately change status for instant UI feedback
+      const newStatus = course?.data?.status === 'published' ? 'draft' : 'published'
+      queryClient.setQueryData(courseKeys.detail(courseId), (old: any) => ({
+        ...old,
+        data: {
+          ...old?.data,
+          status: newStatus,
+          updated_at: new Date().toISOString()
+        }
+      }))
+
+      return { previousCourse }
     },
     onSuccess: (result) => {
       if (result.success) {
-        // Invalidate course cache to update UI
-        queryClient.invalidateQueries({ queryKey: courseKeys.detail(courseId) })
-        toast.success(`Course ${course?.status === 'published' ? 'unpublished' : 'published'} successfully`)
+        // Update with server data to ensure consistency
+        queryClient.setQueryData(courseKeys.detail(courseId), (old: any) => ({
+          ...old,
+          data: result.data
+        }))
+        toast.success(`Course ${result.data.status === 'published' ? 'published' : 'unpublished'} successfully`)
       } else {
         toast.error(result.error || 'Failed to update course status')
       }
     },
-    onError: (error) => {
-      toast.error(`Failed to ${course?.status === 'published' ? 'unpublish' : 'publish'} course`)
+    onError: (error, variables, context) => {
+      // Rollback optimistic update
+      if (context?.previousCourse) {
+        queryClient.setQueryData(courseKeys.detail(courseId), context.previousCourse)
+      }
+      toast.error(`Failed to ${course?.data?.status === 'published' ? 'unpublish' : 'publish'} course`)
       console.error('Publish/unpublish error:', error)
     }
   })
@@ -218,9 +233,36 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
     const timeoutId = setTimeout(() => {
       setDebouncedHasChanges(hasChanges)
     }, 100)
-    
+
     return () => clearTimeout(timeoutId)
   }, [hasChanges])
+
+  // WebSocket listener for real-time course status changes
+  React.useEffect(() => {
+    const unsubscribe = courseEventObserver.subscribe(
+      COURSE_EVENTS.STATUS_CHANGED,
+      (event) => {
+        // Only update if this is our course
+        if (event.courseId === courseId) {
+          console.log('🔄 [WEBSOCKET] Course status changed via WebSocket, updating cache', {
+            courseId: event.courseId,
+            newStatus: event.data.status,
+            course: event.data.course
+          })
+
+          // Update the course cache with the new status
+          queryClient.setQueryData(courseKeys.detail(courseId), (old: any) => ({
+            ...old,
+            data: event.data.course
+          }))
+
+          toast.success(`Course ${event.data.status === 'published' ? 'published' : 'unpublished'} successfully`)
+        }
+      }
+    )
+
+    return unsubscribe
+  }, [courseId, queryClient])
   
   // ARCHITECTURE-COMPLIANT: No data copying or synchronization
   
@@ -697,10 +739,10 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
               </Button>
               <div>
                 <h1 className="text-xl font-semibold">
-                  {formState.values.title || course?.title || 'Course Editor'}
+                  {formState.values.title || course?.data?.title || 'Course Editor'}
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  {course?.status === 'published' ? 'Live Course' : 'Draft'}
+                  {course?.data?.status === 'published' ? 'Live Course' : 'Draft'}
                 </p>
               </div>
             </div>
@@ -715,7 +757,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
                 {publishMutation.isPending ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : null}
-                {course.status === 'published' ? 'Unpublish' : 'Publish'}
+                {course?.data?.status === 'published' ? 'Unpublish' : 'Publish'}
               </Button>
               
               <Button
@@ -752,24 +794,10 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
                 <Label htmlFor="title">Course Title</Label>
                 <Input
                   id="title"
-                  value={formState.values.title || ''}
+                  value={formState.values.title || course?.data?.title || ''}
                   onChange={(e) => handleInputChange('title', e.target.value)}
-                  placeholder="Enter course title"
+                  placeholder={course?.data?.title || "Enter course title"}
                   className="font-medium"
-                />
-              </div>
-              
-              {/* Price */}
-              <div>
-                <Label htmlFor="price">Price ($)</Label>
-                <Input
-                  id="price"
-                  type="number"
-                  value={formState.values.price ?? ''}
-                  onChange={(e) => handleInputChange('price', e.target.value ? Number(e.target.value) : null)}
-                  placeholder="0"
-                  min="0"
-                  step="0.01"
                 />
               </div>
 
@@ -778,18 +806,18 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
                 <Label htmlFor="description">Description</Label>
                 <Textarea
                   id="description"
-                  value={formState.values.description}
+                  value={formState.values.description || course?.data?.description || ''}
                   onChange={(e) => handleInputChange('description', e.target.value)}
-                  placeholder="Describe your course..."
+                  placeholder={course?.data?.description || "Describe your course..."}
                   rows={4}
                   className="resize-none"
                 />
               </div>
+
+              {/* Goal Visibility */}
+              <CourseTrackGoalSelector courseId={courseId} />
             </CardContent>
           </Card>
-
-          {/* Course Track/Goal Selector */}
-          <CourseTrackGoalSelector courseId={courseId} />
         </div>
 
         {/* Course Content - 67% Width */}

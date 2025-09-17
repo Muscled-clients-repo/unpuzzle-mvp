@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { backblazeService } from '@/services/video/backblaze-service'
 import { revalidatePath } from 'next/cache'
+import { broadcastWebSocketMessage } from '@/lib/websocket-operations'
 
 // Result types for better type safety
 export interface ActionResult<T = any> {
@@ -255,10 +256,20 @@ export async function publishCourseAction(courseId: string): Promise<ActionResul
       .single()
     
     if (error) throw error
-    
+
+    // Broadcast WebSocket message for real-time updates
+    await broadcastWebSocketMessage({
+      type: 'course-status-changed',
+      data: {
+        courseId,
+        status: 'published',
+        course: publishedCourse
+      }
+    })
+
     revalidatePath(`/instructor/course/${courseId}`)
     revalidatePath('/instructor/courses')
-    
+
     return { success: true, data: publishedCourse }
   } catch (error) {
     console.error('Publish course error:', error)
@@ -289,10 +300,20 @@ export async function unpublishCourseAction(courseId: string): Promise<ActionRes
       .single()
     
     if (error) throw error
-    
+
+    // Broadcast WebSocket message for real-time updates
+    await broadcastWebSocketMessage({
+      type: 'course-status-changed',
+      data: {
+        courseId,
+        status: 'draft',
+        course: course
+      }
+    })
+
     revalidatePath(`/instructor/course/${courseId}`)
     revalidatePath('/instructor/courses')
-    
+
     return { success: true, data: course }
   } catch (error) {
     console.error('Unpublish course error:', error)
