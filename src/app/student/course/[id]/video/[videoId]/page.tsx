@@ -75,6 +75,25 @@ export default function VideoPlayerPage() {
   const [lastSavedProgress, setLastSavedProgress] = useState<number>(0)
   const [saveRetryCount, setSaveRetryCount] = useState<number>(0)
 
+  // Get video data based on context - use store data for course videos
+  const course = !isStandaloneLesson ? currentCourse : null
+  const standaloneLesson = isStandaloneLesson ? lessons.find(l => l.id === videoId) : null
+
+  const currentVideo = isStandaloneLesson
+    ? standaloneLesson
+      ? {
+          id: standaloneLesson.id,
+          title: standaloneLesson.title,
+          description: standaloneLesson.description,
+          videoUrl: standaloneLesson.videoUrl,
+          thumbnailUrl: standaloneLesson.thumbnailUrl,
+          duration: standaloneLesson.duration,
+          transcript: [],
+          timestamps: []
+        }
+      : null
+    : storeVideoData || course?.videos?.find(v => v.id === videoId) // Use store video data or find in course videos
+
   // Single effect to handle all loading - ensures hooks are always called in same order
   useEffect(() => {
     const loadData = async () => {
@@ -152,25 +171,18 @@ export default function VideoPlayerPage() {
       syncOfflineProgress()
     }
   }, [courseId, videoId, isStandaloneLesson])
-  
-  // Get video data based on context - use store data for course videos
-  const course = !isStandaloneLesson ? currentCourse : null
-  const standaloneLesson = isStandaloneLesson ? lessons.find(l => l.id === videoId) : null
-  
-  const currentVideo = isStandaloneLesson 
-    ? standaloneLesson 
-      ? {
-          id: standaloneLesson.id,
-          title: standaloneLesson.title,
-          description: standaloneLesson.description,
-          videoUrl: standaloneLesson.videoUrl || standaloneLesson.youtubeUrl || '',
-          duration: standaloneLesson.duration || '10:00',
-          transcript: [],
-          timestamps: []
-        }
-      : null
-    : storeVideoData || course?.videos?.find(v => v.id === videoId) // Use store video data or find in course videos
-    
+
+  // Debug video URL - only log once when video loads - MOVED HERE FOR HOOK ORDER
+  useEffect(() => {
+    if (currentVideo) {
+      console.log('🎥 Video loaded:', {
+        videoId,
+        title: currentVideo.title,
+        hasVideoUrl: !!currentVideo.videoUrl
+      })
+    }
+  }, [currentVideo?.id, videoId])
+
   const currentVideoIndex = !isStandaloneLesson ? (course?.videos.findIndex(v => v.id === videoId) ?? -1) : 0
 
   // Show loading state while data is being fetched
@@ -204,13 +216,7 @@ export default function VideoPlayerPage() {
     )
   }
 
-  // Debug video URL
-  console.log('🎥 Video data:', {
-    videoId,
-    title: currentVideo.title,
-    videoUrl: currentVideo.videoUrl,
-    hasVideoUrl: !!currentVideo.videoUrl
-  })
+  // Debug logging moved to hooks section above to maintain proper hook order
 
   const nextVideo = !isStandaloneLesson && course && currentVideoIndex < course.videos.length - 1 
     ? course.videos[currentVideoIndex + 1] 
@@ -247,12 +253,22 @@ export default function VideoPlayerPage() {
         setSaveRetryCount(0)
         // Clear local storage backup on successful save
         localStorage.removeItem(progressKey)
-        console.log(`✅ Progress saved: ${Math.round(time)}s ${completed ? '(completed)' : ''}`)
+        // Only log on important milestones or completion
+        if (completed || Math.floor(time) % 60 === 0) {
+          console.log(`✅ Progress saved: ${Math.round(time)}s ${completed ? '(completed)' : ''}`)
+        }
       } else {
-        throw new Error('Progress save failed')
+        throw new Error('Progress save failed - server returned false')
       }
     } catch (error) {
-      console.error('Failed to update video progress:', error)
+      console.error('❌ Failed to update video progress:', {
+        error: error instanceof Error ? error.message : error,
+        courseId,
+        videoId,
+        time: Math.round(time),
+        completed,
+        retryCount
+      })
 
       // Retry logic with exponential backoff (max 3 retries)
       if (retryCount < 3) {
@@ -269,10 +285,10 @@ export default function VideoPlayerPage() {
   }
 
   const handleTimeUpdate = (time: number) => {
-    // Enhanced progress persistence - save every 5 seconds instead of 10
+    // Enhanced progress persistence - save every 10 seconds instead of 5 to reduce noise
     // Only save if time has progressed significantly (avoid duplicate saves)
     const timeDiff = Math.abs(time - lastSavedProgress)
-    const shouldSave = Math.floor(time) % 5 === 0 && timeDiff >= 5
+    const shouldSave = Math.floor(time) % 10 === 0 && timeDiff >= 10
 
     if (shouldSave && !isStandaloneLesson) {
       saveProgressWithRetry(time)

@@ -4,11 +4,12 @@ import { useState, useRef, useEffect } from "react"
 import { StudentVideoPlayer, StudentVideoPlayerRef } from "./StudentVideoPlayer"
 import { useAppStore } from "@/stores/app-store"
 import { useVideoAgentSystem } from "@/lib/video-agent-system"
+import { useSignedUrl } from "@/hooks/use-signed-url"
 import dynamic from "next/dynamic"
 import { LoadingSpinner } from "@/components/common/LoadingSpinner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { MessageSquare, Eye, Clock, Sparkles, Puzzle, X } from "lucide-react"
+import { MessageSquare, Eye, Clock, Sparkles, Puzzle, X, AlertCircle, RefreshCw } from "lucide-react"
 
 // Dynamically import the AIChatSidebarV2 component for enhanced features
 const AIChatSidebarV2 = dynamic(
@@ -40,14 +41,26 @@ interface StudentVideoPlayerV2Props {
 export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   // Video player ref for imperative control
   const videoPlayerRef = useRef<StudentVideoPlayerRef>(null)
-  
+
+  // Get signed URL for private video access
+  const signedUrl = useSignedUrl(props.videoUrl || null, 30)
+
   // State machine for agent system
   const { context, dispatch, setVideoRef } = useVideoAgentSystem()
-  
+
   // State for sidebar
   const currentTime = useAppStore((state) => state.currentTime)
   const showChatSidebar = useAppStore((state) => state.preferences.showChatSidebar)
   const sidebarWidth = useAppStore((state) => state.preferences.sidebarWidth)
+
+  // Only log signed URL state on changes, not every render
+  useEffect(() => {
+    if (signedUrl.url) {
+      console.log('[STUDENT VIDEO PLAYER V2] Signed URL ready for:', props.title || 'video')
+    } else if (signedUrl.error) {
+      console.error('[STUDENT VIDEO PLAYER V2] Signed URL error:', signedUrl.error)
+    }
+  }, [signedUrl.url, signedUrl.error])
   const updatePreferences = useAppStore((state) => state.updatePreferences)
   
   const [isResizing, setIsResizing] = useState(false)
@@ -248,15 +261,65 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
     })
   }
 
+  // Handle signed URL loading and errors
+  if (signedUrl.isLoading) {
+    return (
+      <div className="flex h-full w-full overflow-hidden">
+        <div className="flex-1 flex items-center justify-center bg-black">
+          <div className="text-center text-white">
+            <LoadingSpinner />
+            <p className="mt-4">Loading video...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (signedUrl.error) {
+    return (
+      <div className="flex h-full w-full overflow-hidden">
+        <div className="flex-1 flex items-center justify-center bg-black">
+          <div className="text-center text-white p-4">
+            <AlertCircle className="h-8 w-8 mb-2 mx-auto" />
+            <p className="mb-2">Failed to load video</p>
+            <p className="text-sm text-gray-300 mb-4">Error: {signedUrl.error}</p>
+            <p className="text-xs text-gray-400 mb-4">Original URL: {props.videoUrl}</p>
+            <Button
+              onClick={() => signedUrl.refresh()}
+              variant="outline"
+              className="text-black"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!signedUrl.url) {
+    return (
+      <div className="flex h-full w-full overflow-hidden">
+        <div className="flex-1 flex items-center justify-center bg-black">
+          <div className="text-center text-white">
+            <p>No video URL available</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-full w-full overflow-hidden">
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto">
         {/* Video Player Section */}
         <div className="flex-1 bg-black p-4">
-          <StudentVideoPlayer 
+          <StudentVideoPlayer
             ref={videoPlayerRef}
             {...props}
+            videoUrl={signedUrl.url} // Use signed URL instead of private URL
             onTimeUpdate={handleVideoTimeUpdate}  // V2 enhanced handler
             onPause={handleVideoPause}  // V2 enhanced pause handler
             onPlay={handleVideoPlay}  // V2 enhanced play handler

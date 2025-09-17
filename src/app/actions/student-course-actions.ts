@@ -74,22 +74,6 @@ export async function getEnrolledCourses(): Promise<Course[]> {
 
       console.log('[Server Action] Found videos for course:', { courseId: courseData.id, videoCount: videos?.length || 0 })
 
-      // Helper function to convert private URLs to public CDN URLs
-      const getPublicVideoUrl = (privateUrl: string): string => {
-        if (privateUrl.startsWith('http')) {
-          return privateUrl
-        }
-        if (privateUrl.startsWith('private:')) {
-          const parts = privateUrl.split(':')
-          if (parts.length >= 3) {
-            const fileName = parts.slice(2).join(':')
-            const cdnUrl = process.env.CLOUDFLARE_CDN_URL || 'https://cdn.unpuzzle.co'
-            return `${cdnUrl}/file/unpuzzle-mvp/${fileName}`
-          }
-        }
-        return privateUrl
-      }
-
       const transformedVideos = (videos || []).map((video: any, index: number) => ({
         id: video.id,
         courseId: courseData.id,
@@ -97,7 +81,7 @@ export async function getEnrolledCourses(): Promise<Course[]> {
         description: video.description || '',
         duration: video.duration_seconds || 600,
         order: index + 1,
-        videoUrl: getPublicVideoUrl(video.video_url),
+        videoUrl: video.video_url, // Keep private format for useSignedUrl hook
         thumbnailUrl: video.thumbnail_url,
         transcript: [],
         createdAt: new Date().toISOString(),
@@ -316,7 +300,7 @@ export async function updateVideoProgress(
     console.log('[Server Action] Updating video progress:', { courseId, videoId, watchedSeconds, completed })
 
     // Upsert video progress
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('video_progress')
       .upsert({
         student_id: user.id,
@@ -328,13 +312,19 @@ export async function updateVideoProgress(
       }, {
         onConflict: 'student_id,course_id,video_id'
       })
+      .select()
 
     if (error) {
-      console.error('[Server Action] Error updating video progress:', error)
+      console.error('[Server Action] Error updating video progress:', {
+        error: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      })
       return false
     }
 
-    console.log('[Server Action] Video progress updated successfully')
+    console.log('[Server Action] Video progress updated successfully:', data)
 
     // Real-time progress broadcasting following 001 patterns
     try {
@@ -499,36 +489,13 @@ export async function getStudentVideo(videoId: string): Promise<{
       .eq('video_id', videoId)
       .single()
 
-    // Convert private video URL to public CDN URL for video player
-    const getPublicVideoUrl = (privateUrl: string): string => {
-      // If already a public URL, return as-is
-      if (privateUrl.startsWith('http')) {
-        return privateUrl
-      }
-
-      // Parse private URL format: "private:fileId:fileName"
-      if (privateUrl.startsWith('private:')) {
-        const parts = privateUrl.split(':')
-        if (parts.length >= 3) {
-          const fileName = parts.slice(2).join(':') // Handle filenames with colons
-          const cdnUrl = process.env.CLOUDFLARE_CDN_URL || 'https://cdn.unpuzzle.co'
-          return `${cdnUrl}/file/unpuzzle-mvp/${fileName}`
-        }
-      }
-
-      // Fallback: return the original URL
-      console.warn('[Server Action] Could not parse video URL:', privateUrl)
-      return privateUrl
-    }
-
-    // For now, return basic video data with mock learning features
-    // TODO: Add real reflections and quizzes when those systems are implemented
+    // Return private URL as-is - components will use useSignedUrl hook for conversion
     const studentVideoData = {
       id: video.id,
       courseId: video.course_id,
       title: video.title,
       description: video.description || '',
-      videoUrl: getPublicVideoUrl(video.video_url),
+      videoUrl: video.video_url, // Keep private format for useSignedUrl hook
       thumbnailUrl: video.thumbnail_url || '',
       duration: video.duration_seconds || 600,
       order: video.order || 1,
@@ -618,22 +585,6 @@ export async function getCourseById(courseId: string): Promise<Course | null> {
 
     console.log('[Server Action] Found videos for course:', { courseId, videoCount: videos?.length || 0 })
 
-    // Helper function to convert private URLs to public CDN URLs
-    const getPublicVideoUrl = (privateUrl: string): string => {
-      if (privateUrl.startsWith('http')) {
-        return privateUrl
-      }
-      if (privateUrl.startsWith('private:')) {
-        const parts = privateUrl.split(':')
-        if (parts.length >= 3) {
-          const fileName = parts.slice(2).join(':')
-          const cdnUrl = process.env.CLOUDFLARE_CDN_URL || 'https://cdn.unpuzzle.co'
-          return `${cdnUrl}/file/unpuzzle-mvp/${fileName}`
-        }
-      }
-      return privateUrl
-    }
-
     const transformedVideos = (videos || []).map((video: any, index: number) => ({
       id: video.id,
       courseId: courseId,
@@ -641,7 +592,7 @@ export async function getCourseById(courseId: string): Promise<Course | null> {
       description: video.description || '',
       duration: video.duration_seconds || 600,
       order: index + 1,
-      videoUrl: getPublicVideoUrl(video.video_url),
+      videoUrl: video.video_url, // Keep private format for useSignedUrl hook
       thumbnailUrl: video.thumbnail_url,
       transcript: [],
       createdAt: new Date().toISOString(),

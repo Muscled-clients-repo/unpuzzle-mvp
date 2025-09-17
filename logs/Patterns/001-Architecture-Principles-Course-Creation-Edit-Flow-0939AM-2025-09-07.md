@@ -279,12 +279,94 @@ broadcastWebSocketMessage({
 })
 ```
 
+## Private Video URL and Signed URL Architecture
+
+### Security-First Video Access Pattern
+Videos are stored with private URLs and accessed through temporary signed URLs to maintain security while enabling seamless playback across the application.
+
+### Storage Format: Private URLs
+- **Database Storage**: Videos stored as `private:fileId:fileName` format
+- **No Direct Access**: Private URLs cannot be accessed directly by browsers
+- **Security Boundary**: File access requires server-side signature generation
+- **Provider Abstraction**: Works with any storage provider (Backblaze B2, AWS S3, etc.)
+
+### Component Usage: useSignedUrl Hook
+```javascript
+// Component automatically converts private URL to signed URL
+const { url, isLoading, error } = useSignedUrl(video.videoUrl, 30) // 30 min refresh
+
+<video src={url} controls />
+```
+
+### Architecture Layer Responsibilities
+- **Server Actions**: Store and return private URL format (never generate signed URLs)
+- **Components**: Use `useSignedUrl` hook for automatic URL conversion
+- **Hook System**: Handles caching, expiration, and auto-refresh
+- **Background Service**: Generates actual signed URLs when needed
+
+### Signed URL Generation Flow
+1. **Component receives private URL** → `useSignedUrl` hook processes
+2. **Hook calls server action** → `generateSignedUrlAction` with private URL
+3. **Server action validates** → Extracts fileId and fileName from private format
+4. **Backblaze service generates** → Temporary signed URL with expiration
+5. **Hook caches result** → Automatic refresh before expiration
+6. **Component renders** → Video player receives working signed URL
+
+### Caching and Performance
+- **Global URL cache**: Prevents duplicate signed URL generation
+- **Automatic refresh**: URLs refreshed 30 minutes before expiration
+- **Cross-component sharing**: Same private URL shares signed URL across components
+- **Error handling**: Graceful fallback and retry mechanisms
+
+### Security Benefits
+- **Temporary access**: Signed URLs expire after configured time (default: 2 hours)
+- **No credential exposure**: Components never see storage credentials
+- **Access control**: Server validates access before generating signed URLs
+- **Audit trail**: All signed URL generation logged server-side
+
+### Implementation Pattern
+```javascript
+// ✅ CORRECT: Server Action returns private URL
+export async function getStudentVideo(videoId: string) {
+  const video = await supabase.from('videos').select('*').eq('id', videoId).single()
+  return {
+    ...video,
+    videoUrl: video.video_url // Keep private format: "private:fileId:fileName"
+  }
+}
+
+// ✅ CORRECT: Component uses useSignedUrl hook
+function VideoPlayer({ video }) {
+  const { url, isLoading, error } = useSignedUrl(video.videoUrl)
+
+  if (isLoading) return <LoadingSpinner />
+  if (error) return <ErrorMessage error={error} />
+
+  return <video src={url} controls />
+}
+
+// ❌ WRONG: Server Action tries to convert to CDN URLs
+export async function getStudentVideo(videoId: string) {
+  const video = await supabase.from('videos').select('*').eq('id', videoId).single()
+  return {
+    ...video,
+    videoUrl: convertToCdnUrl(video.video_url) // Wrong layer for URL conversion
+  }
+}
+```
+
+### Media Preview Integration
+The signed URL pattern integrates seamlessly with existing media preview functionality:
+- **Media cards**: Use same `useSignedUrl` hook for preview
+- **Video players**: Consistent URL handling across student and instructor interfaces
+- **Upload system**: New uploads automatically work with signed URL system
+
 ## File Upload Architecture (Server Actions + WebSockets)
 
 ### Upload Flow: Production Implementation (Architecture-Compliant)
 1. **User selects files** → TanStack mutation calls Server Action
 2. **Server Action initiates upload** → HTTP POST to WebSocket server with operation ID
-3. **WebSocket server broadcasts** → Real-time progress to connected clients  
+3. **WebSocket server broadcasts** → Real-time progress to connected clients
 4. **Client WebSocket hook** → Maps messages to Observer events
 5. **Observer emits events** → Updates TanStack cache (dual cache strategy)
 6. **Components read progress** → Real-time UI updates from TanStack
