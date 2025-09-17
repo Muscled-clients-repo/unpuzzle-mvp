@@ -241,6 +241,36 @@ export interface GoalReassignmentEvent {
   userId: string // For filtering student-specific updates
 }
 
+// Student progress event interfaces
+export interface StudentProgressUpdatedEvent {
+  studentId: string
+  courseId: string
+  videoId: string
+  watchedSeconds: number
+  progressPercentage: number
+  completed: boolean
+  timestamp: string
+}
+
+export interface StudentVideoCompletedEvent {
+  studentId: string
+  courseId: string
+  videoId: string
+  videoTitle: string
+  completedAt: string
+  totalWatchTime: number
+}
+
+export interface StudentCourseProgressUpdatedEvent {
+  studentId: string
+  courseId: string
+  progressPercentage: number
+  completedLessons: number
+  totalLessons: number
+  estimatedTimeRemaining: string
+  lastAccessedAt: string
+}
+
 // Course goal assignment event interface
 export interface CourseGoalAssignmentEvent {
   courseId: string
@@ -287,9 +317,12 @@ export const CONVERSATION_EVENTS = {
   CONVERSATION_UPDATED: 'conversation-updated'
 } as const
 
-// Student goal events (real-time goal assignment changes)
+// Student learning events (real-time progress and learning activities)
 export const STUDENT_EVENTS = {
-  GOAL_REASSIGNMENT: 'goal-reassignment'
+  GOAL_REASSIGNMENT: 'goal-reassignment',
+  PROGRESS_UPDATED: 'student-progress-updated',
+  VIDEO_COMPLETED: 'student-video-completed',
+  COURSE_PROGRESS_UPDATED: 'student-course-progress-updated'
 } as const
 
 // Course goal events (real-time course-goal assignment changes)

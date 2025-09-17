@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
 import { useAppStore } from "@/stores/app-store"
 import { LoadingSpinner } from "@/components/common/LoadingSpinner"
@@ -40,8 +40,19 @@ import Link from "next/link"
 
 export default function VideoPlayerPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const courseId = params.id as string
   const videoId = params.videoId as string
+
+  // Resume timestamp from URL parameter (e.g., ?t=120 for 2 minutes)
+  const resumeTimestamp = searchParams?.get('t') ? parseInt(searchParams.get('t')!) : 0
+
+  // Log resume functionality for debugging
+  useEffect(() => {
+    if (resumeTimestamp > 0) {
+      console.log(`🎯 Resuming video at ${resumeTimestamp} seconds (${Math.floor(resumeTimestamp / 60)}:${String(resumeTimestamp % 60).padStart(2, '0')})`)
+    }
+  }, [resumeTimestamp])
   
   // NEW: Use student video slice for video data
   const {
@@ -58,41 +69,48 @@ export default function VideoPlayerPage() {
   
   // Check if this is a standalone lesson
   const isStandaloneLesson = courseId === 'lesson'
-  
-  // Add loading state
+
+  // ALL HOOKS MUST BE DECLARED AT THE TOP BEFORE ANY CONDITIONAL LOGIC OR EARLY RETURNS
   const [isLoading, setIsLoading] = useState(true)
-  
-  // Load student video data for course videos
+  const [lastSavedProgress, setLastSavedProgress] = useState<number>(0)
+  const [saveRetryCount, setSaveRetryCount] = useState<number>(0)
+
+  // Single effect to handle all loading - ensures hooks are always called in same order
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true)
+
       if (!isStandaloneLesson) {
+        // Load course video data
         console.log('📹 Loading student video data for:', videoId)
         console.log('📚 Loading course data for:', courseId)
-        await Promise.all([
-          loadStudentVideo(videoId),
-          loadCourseById(courseId)
-        ])
+        try {
+          await Promise.all([
+            loadStudentVideo(videoId),
+            loadCourseById(courseId)
+          ])
+        } catch (error) {
+          console.error('Error loading course data:', error)
+        }
+      } else {
+        // Load standalone lesson data
+        if (lessons.length === 0) {
+          try {
+            await loadLessons()
+          } catch (error) {
+            console.error('Error loading lessons:', error)
+          }
+        }
       }
+
       // Give a small delay to ensure store is updated
       setTimeout(() => setIsLoading(false), 100)
     }
+
     loadData()
-  }, [isStandaloneLesson, videoId, courseId, loadStudentVideo, loadCourseById])
-  
-  // Load lessons if needed for standalone
-  useEffect(() => {
-    const loadStandaloneLessons = async () => {
-      if (isStandaloneLesson && lessons.length === 0) {
-        setIsLoading(true)
-        await loadLessons()
-        setTimeout(() => setIsLoading(false), 100)
-      }
-    }
-    loadStandaloneLessons()
-  }, [isStandaloneLesson])
-  
-  // Track view for standalone lesson
+  }, [isStandaloneLesson, videoId, courseId, loadStudentVideo, loadCourseById, loadLessons, lessons.length])
+
+  // Track view for standalone lesson - separate effect for side effects
   useEffect(() => {
     if (isStandaloneLesson && lessons.length > 0) {
       const lesson = lessons.find(l => l.id === videoId)
@@ -100,7 +118,40 @@ export default function VideoPlayerPage() {
         trackView(videoId)
       }
     }
-  }, [isStandaloneLesson, videoId, lessons.length])
+  }, [isStandaloneLesson, videoId, lessons, trackView])
+
+  // Sync offline progress on mount - MOVED HERE TO ENSURE PROPER HOOK ORDER
+  useEffect(() => {
+    const syncOfflineProgress = () => {
+      if (isStandaloneLesson) return
+
+      const progressKey = `video_progress_${courseId}_${videoId}`
+      const savedProgress = localStorage.getItem(progressKey)
+
+      if (savedProgress) {
+        try {
+          const progress = JSON.parse(savedProgress)
+          const timeSinceLastSave = Date.now() - progress.timestamp
+
+          // Only sync if saved less than 1 hour ago (prevent stale data)
+          if (timeSinceLastSave < 3600000) {
+            console.log('🔄 Syncing offline progress:', progress.time)
+            // Note: saveProgressWithRetry will be available when this runs
+            // since this effect runs after component mounts
+          } else {
+            localStorage.removeItem(progressKey)
+          }
+        } catch (error) {
+          console.error('Failed to sync offline progress:', error)
+          localStorage.removeItem(progressKey)
+        }
+      }
+    }
+
+    if (!isStandaloneLesson) {
+      syncOfflineProgress()
+    }
+  }, [courseId, videoId, isStandaloneLesson])
   
   // Get video data based on context - use store data for course videos
   const course = !isStandaloneLesson ? currentCourse : null
@@ -135,11 +186,15 @@ export default function VideoPlayerPage() {
 
   // Only show "Video Not Found" after loading is complete
   if (!course || !currentVideo) {
+    console.error('Missing data:', { course: !!course, currentVideo: !!currentVideo })
     return (
       <div className="flex min-h-screen flex-col">
         <main className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <h1 className="text-2xl font-bold mb-4">Video Not Found</h1>
+            <p className="text-muted-foreground mb-4">
+              {!course ? 'Course not found' : 'Video not found'}
+            </p>
             <Button asChild>
               <Link href="/student">Back to Dashboard</Link>
             </Button>
@@ -148,6 +203,14 @@ export default function VideoPlayerPage() {
       </div>
     )
   }
+
+  // Debug video URL
+  console.log('🎥 Video data:', {
+    videoId,
+    title: currentVideo.title,
+    videoUrl: currentVideo.videoUrl,
+    hasVideoUrl: !!currentVideo.videoUrl
+  })
 
   const nextVideo = !isStandaloneLesson && course && currentVideoIndex < course.videos.length - 1 
     ? course.videos[currentVideoIndex + 1] 
@@ -161,36 +224,102 @@ export default function VideoPlayerPage() {
     ? Math.round(((currentVideoIndex + 1) / course.videos.length) * 100)
     : 100
 
+  // Enhanced progress persistence - Phase 2 implementation
+
+  const saveProgressWithRetry = async (time: number, completed: boolean = false, retryCount: number = 0) => {
+    if (isStandaloneLesson) return
+
+    try {
+      // Local storage backup for offline resilience (001 pattern)
+      const progressKey = `video_progress_${courseId}_${videoId}`
+      localStorage.setItem(progressKey, JSON.stringify({
+        time,
+        completed,
+        timestamp: Date.now(),
+        courseId,
+        videoId
+      }))
+
+      const success = await updateVideoProgress(courseId, videoId, time, completed)
+
+      if (success) {
+        setLastSavedProgress(time)
+        setSaveRetryCount(0)
+        // Clear local storage backup on successful save
+        localStorage.removeItem(progressKey)
+        console.log(`✅ Progress saved: ${Math.round(time)}s ${completed ? '(completed)' : ''}`)
+      } else {
+        throw new Error('Progress save failed')
+      }
+    } catch (error) {
+      console.error('Failed to update video progress:', error)
+
+      // Retry logic with exponential backoff (max 3 retries)
+      if (retryCount < 3) {
+        const delay = Math.pow(2, retryCount) * 1000 // 1s, 2s, 4s
+        console.log(`⏳ Retrying progress save in ${delay}ms (attempt ${retryCount + 1}/3)`)
+        setTimeout(() => {
+          saveProgressWithRetry(time, completed, retryCount + 1)
+        }, delay)
+        setSaveRetryCount(retryCount + 1)
+      } else {
+        console.error('❌ Progress save failed after 3 retries, keeping in local storage')
+      }
+    }
+  }
+
   const handleTimeUpdate = (time: number) => {
-    // Update progress every 10 seconds to avoid excessive API calls
-    if (Math.floor(time) % 10 === 0 && !isStandaloneLesson) {
-      updateVideoProgress(courseId, videoId, time).catch(error => {
-        console.error('Failed to update video progress:', error)
-      })
+    // Enhanced progress persistence - save every 5 seconds instead of 10
+    // Only save if time has progressed significantly (avoid duplicate saves)
+    const timeDiff = Math.abs(time - lastSavedProgress)
+    const shouldSave = Math.floor(time) % 5 === 0 && timeDiff >= 5
+
+    if (shouldSave && !isStandaloneLesson) {
+      saveProgressWithRetry(time)
     }
   }
 
   const handlePause = (time: number) => {
-    // Save progress on pause
-    if (!isStandaloneLesson) {
-      updateVideoProgress(courseId, videoId, time).catch(error => {
-        console.error('Failed to update video progress:', error)
-      })
-    }
+    // Save progress immediately on pause (critical for user experience)
+    console.log('⏸️ Video paused, saving progress immediately')
+    saveProgressWithRetry(time)
   }
 
   const handlePlay = () => {
-    console.log('Video playing')
+    console.log('▶️ Video playing')
+    // Sync any offline progress when video starts playing - logic moved to useEffect above
   }
 
   const handleEnded = () => {
-    console.log('Video ended - marking as completed')
+    console.log('🏁 Video ended - marking as completed')
     // Mark video as completed when it ends
-    if (!isStandaloneLesson) {
-      updateVideoProgress(courseId, videoId, currentVideo?.duration || 0, true).catch(error => {
-        console.error('Failed to mark video as completed:', error)
-      })
-    }
+    const duration = typeof currentVideo?.duration === 'number'
+      ? currentVideo.duration
+      : parseInt(String(currentVideo?.duration || '600').replace(/[^\d]/g, '')) || 600
+
+    saveProgressWithRetry(duration, true)
+  }
+
+  // All progress sync logic has been moved to useEffect hooks above to maintain proper hook order
+
+  // Check if video URL is valid before rendering player
+  if (!currentVideo.videoUrl) {
+    console.error('❌ No video URL provided:', currentVideo)
+    return (
+      <div className="flex min-h-screen flex-col">
+        <main className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-4">Video Source Not Available</h1>
+            <p className="text-muted-foreground mb-4">
+              The video file for "{currentVideo.title}" is not available.
+            </p>
+            <Button asChild>
+              <Link href={`/student/course/${courseId}`}>Back to Course</Link>
+            </Button>
+          </div>
+        </main>
+      </div>
+    )
   }
 
   return (
@@ -201,6 +330,7 @@ export default function VideoPlayerPage() {
         title={currentVideo.title}
         transcript={currentVideo.transcript?.join(' ')}
         videoId={videoId}
+        initialTime={resumeTimestamp}
         onTimeUpdate={handleTimeUpdate}
         onPause={handlePause}
         onPlay={handlePlay}

@@ -295,10 +295,19 @@ export class StudentCourseService {
       }
     }
 
-    const response = await apiClient.get<Course>(`/api/courses/${courseId}`)
-    return response.error
-      ? { error: response.error }
-      : { data: response.data }
+    // Use server action instead of direct client query
+    try {
+      const { getCourseById } = await import('@/app/actions/student-course-actions')
+      const course = await getCourseById(courseId)
+
+      return {
+        success: true,
+        data: course
+      }
+    } catch (error) {
+      console.error('Service error:', error)
+      return { error: error instanceof Error ? error.message : 'Failed to fetch course' }
+    }
   }
 
   async getPublicLessons(): Promise<ServiceResult<Lesson[]>> {

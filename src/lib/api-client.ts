@@ -13,7 +13,7 @@ class ApiClient {
   private baseUrl: string
   
   constructor() {
-    this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+    this.baseUrl = process.env.NEXT_PUBLIC_API_URL || '/api'
   }
   
   async get<T>(endpoint: string): Promise<ApiResponse<T>> {

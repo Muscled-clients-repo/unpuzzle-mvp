@@ -118,6 +118,10 @@ export function useWebSocketConnection(userId: string) {
             'conversation-updated': CONVERSATION_EVENTS.CONVERSATION_UPDATED,
             // Student goal events
             'goal-reassignment': STUDENT_EVENTS.GOAL_REASSIGNMENT,
+            // Student progress events
+            'student-progress-updated': STUDENT_EVENTS.PROGRESS_UPDATED,
+            'student-video-completed': STUDENT_EVENTS.VIDEO_COMPLETED,
+            'student-course-progress-updated': STUDENT_EVENTS.COURSE_PROGRESS_UPDATED,
             // Course goal events
             'course-goal-assignment-changed': 'course-goal-assignment-changed',
             // Course status events
@@ -132,18 +136,21 @@ export function useWebSocketConnection(userId: string) {
             const isBulkEvent = message.type.startsWith('bulk-')
             const isConversationEvent = message.type.startsWith('conversation-')
             const isGoalEvent = message.type === 'goal-reassignment'
+            const isStudentProgressEvent = message.type.startsWith('student-')
             const isCourseGoalEvent = message.type === 'course-goal-assignment-changed'
 
             const hasRequiredId = isCourseEvent ? message.courseId :
                                  (isMediaEvent || isBulkEvent) ? message.data?.userId :
                                  isConversationEvent ? message.data?.studentId :
                                  isGoalEvent ? message.data?.userId :
+                                 isStudentProgressEvent ? message.data?.studentId :
                                  isCourseGoalEvent ? message.data?.courseId :
                                  message.data?.courseId
             const eventId = isCourseEvent ? message.courseId :
                            (isMediaEvent || isBulkEvent) ? message.data?.userId :
                            isConversationEvent ? message.data?.studentId :
                            isGoalEvent ? message.data?.userId :
+                           isStudentProgressEvent ? message.data?.studentId :
                            isCourseGoalEvent ? message.data?.courseId :
                            message.data?.courseId
             
@@ -169,7 +176,8 @@ export function useWebSocketConnection(userId: string) {
                 expectedField: isCourseEvent ? 'courseId' :
                               (isMediaEvent || isBulkEvent) ? 'userId' :
                               isConversationEvent ? 'studentId' :
-                              isGoalEvent ? 'userId' : 'courseId',
+                              isGoalEvent ? 'userId' :
+                              isStudentProgressEvent ? 'studentId' : 'courseId',
                 data: message.data
               })
             }

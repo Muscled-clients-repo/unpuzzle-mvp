@@ -15,7 +15,7 @@ export class StudentVideoService {
   async getVideoWithStudentData(videoId: string): Promise<ServiceResult<StudentVideoData>> {
     if (useMockData) {
       // Return mock data with student features
-      return { 
+      return {
         data: {
           id: videoId,
           courseId: 'course-1',
@@ -73,10 +73,25 @@ export class StudentVideoService {
       }
     }
 
-    const response = await apiClient.get<StudentVideoData>(`/api/student/videos/${videoId}`)
-    return response.error 
-      ? { error: response.error }
-      : { data: response.data }
+    // Use server action instead of direct client query
+    try {
+      const { getStudentVideo } = await import('@/app/actions/student-course-actions')
+      const video = await getStudentVideo(videoId)
+
+      if (!video) {
+        return { error: 'Video not found or access denied' }
+      }
+
+      console.log('Student video data found via server action:', video.title)
+
+      return {
+        success: true,
+        data: video as StudentVideoData
+      }
+    } catch (error) {
+      console.error('Service error:', error)
+      return { error: error instanceof Error ? error.message : 'Failed to fetch video' }
+    }
   }
 
   async saveReflection(reflection: Partial<Reflection>): Promise<ServiceResult<Reflection>> {
