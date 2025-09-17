@@ -160,7 +160,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
         
         // Wait for all data to load concurrently (Promise.all coordination)
         await Promise.all(loadingPromises)
-        console.log('✅ Concurrent data loading completed - 4x faster than sequential')
+        // Concurrent data loading completed
       } catch (error) {
         console.error('❌ Concurrent loading failed:', error)
       } finally {

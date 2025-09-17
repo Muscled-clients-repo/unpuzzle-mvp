@@ -29,6 +29,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getUserCoursesAction } from '@/app/actions/course-actions'
 import { useWebSocketConnection } from '@/hooks/use-websocket-connection'
 import { courseEventObserver, STUDENT_EVENTS, COURSE_GOAL_EVENTS } from '@/lib/course-event-observer'
+import { CourseThumbnail } from '@/components/ui/course-thumbnail'
 
 export default function MyCoursesPage() {
   const { user, profile } = useAppStore()
@@ -173,10 +174,8 @@ export default function MyCoursesPage() {
                   return (
                     <Card key={course.id} className="overflow-hidden hover:shadow-lg transition-shadow">
                       {/* Course Thumbnail */}
-                      <div className="relative aspect-video bg-gradient-to-br from-primary/20 to-purple-500/20">
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <BookOpen className="h-12 w-12 text-primary/40" />
-                        </div>
+                      <div className="relative">
+                        <CourseThumbnail title={course.title} />
                         {/* Progress Overlay */}
                         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background/90 to-transparent p-4">
                           <Progress value={progress.progress} className="h-2" />
@@ -299,11 +298,9 @@ export default function MyCoursesPage() {
                   
                   return (
                     <Card key={course.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                      {/* Same card content as above */}
-                      <div className="relative aspect-video bg-gradient-to-br from-primary/20 to-purple-500/20">
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <BookOpen className="h-12 w-12 text-primary/40" />
-                        </div>
+                      {/* Course Thumbnail */}
+                      <div className="relative">
+                        <CourseThumbnail title={course.title} />
                         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background/90 to-transparent p-4">
                           <Progress value={progress.progress} className="h-2" />
                           <p className="text-xs text-white mt-1">{progress.progress}% Complete</p>

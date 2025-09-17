@@ -309,16 +309,9 @@ if (process.env.NODE_ENV === 'development') {
   // Expose observer to window for debugging
   ;(globalThis as any).courseEventObserver = courseEventObserver
   
-  // Log observer stats every 30 seconds in development
+  // Health check runs but doesn't log in production
   setInterval(() => {
     const metrics = courseEventObserver.getMetrics()
-    if (metrics.eventsEmitted > 0) {
-      console.log('📊 Observer Health Check:', {
-        ...metrics,
-        totalListeners: courseEventObserver.getListenerCount(),
-        eventTypes: courseEventObserver.getEventTypes(),
-        isHealthy: courseEventObserver.isHealthy()
-      })
-    }
+    // Health check running silently
   }, 30000)
 }

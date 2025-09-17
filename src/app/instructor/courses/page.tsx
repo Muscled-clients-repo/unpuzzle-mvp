@@ -41,6 +41,7 @@ import { StatsGrid } from "@/components/layout/stats-grid"
 import { StatsCardsSkeleton } from "@/components/common/universal-skeleton"
 import { FiltersSection } from "@/components/layout"
 import { SearchInput, FilterDropdown } from "@/components/ui/filters"
+import { CourseThumbnail } from "@/components/ui/course-thumbnail"
 
 export default function TeachCoursesPage() {
   const router = useRouter()
@@ -265,11 +266,8 @@ export default function TeachCoursesPage() {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {sortedCourses.map((course) => (
           <Card key={course.id} className="overflow-hidden">
-            <div className="aspect-video relative bg-muted">
-              {/* Thumbnail would go here */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Video className="h-12 w-12 text-muted-foreground" />
-              </div>
+            <div className="relative">
+              <CourseThumbnail title={course.title} />
               <Badge 
                 className="absolute top-2 right-2"
                 variant={

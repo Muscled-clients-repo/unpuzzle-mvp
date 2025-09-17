@@ -66,7 +66,6 @@ export function useWebSocketConnection(userId: string) {
       return
     }
     
-    console.log('🔄 Connecting to WebSocket...')
     setConnectionState(prev => ({ ...prev, isReconnecting: true, error: null }))
     
     try {
@@ -86,7 +85,7 @@ export function useWebSocketConnection(userId: string) {
       wsConnection.onmessage = (event) => {
         try {
           const message: WebSocketMessage = JSON.parse(event.data)
-          console.log('📨 [WEBSOCKET] Message received:', message.type, message)
+          // WebSocket message received
           
           // Special debugging for media messages
           if (message.type.startsWith('media-')) {
@@ -148,30 +147,11 @@ export function useWebSocketConnection(userId: string) {
                            isCourseGoalEvent ? message.data?.courseId :
                            message.data?.courseId
             
-            console.log(`🔍 [WEBSOCKET DEBUG] Checking message:`, {
-              type: message.type,
-              isCourseEvent,
-              isMediaEvent,
-              isBulkEvent,
-              isConversationEvent,
-              isGoalEvent,
-              isCourseGoalEvent,
-              hasRequiredId,
-              eventId,
-              userId: message.data?.userId,
-              studentId: message.data?.studentId,
-              courseId: message.courseId,
-              data: message.data
-            })
+            // Debug message validation
             
             if (hasRequiredId) {
               const finalOperationId = message.operationId || message.data.operationId
-              console.log(`📨 [WEBSOCKET] Emitting to Observer: ${observerEventType}`, message.data)
-              console.log(`🔍 [WEBSOCKET] Operation ID details:`, {
-                messageOperationId: message.operationId,
-                dataOperationId: message.data.operationId,
-                finalOperationId
-              })
+              // Emit to Observer
               courseEventObserver.emit(
                 observerEventType,
                 eventId,
