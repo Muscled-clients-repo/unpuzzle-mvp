@@ -25,6 +25,7 @@
 - Optimistic updates with automatic rollback
 - Cache management and background refetch
 - Network error handling and retry logic
+- **Background job results**: Transcription data, processing status
 
 ### Form State Responsibilities (Input Processing)
 - Input field values and change tracking
@@ -39,6 +40,7 @@
 - **editing**: Inline editing states (which field is being edited)
 - **preferences**: UI preferences (expanded chapters, view modes)
 - **pendingDeletes**: Items marked for deletion before batch operation
+- **backgroundJobs**: Processing indicators, queue status UI
 
 ### Component Responsibilities
 - Read server-related data from TanStack hooks
@@ -55,6 +57,7 @@
 - **Sensitive data**: API keys, secrets, server-only configurations
 - **Data validation**: Server-side validation and sanitization
 - **Permission checks**: Course ownership, user authorization
+- **Background job creation**: Queue transcription jobs, processing requests
 
 ### Server Action + TanStack Integration Pattern
 - **TanStack mutations call server actions**: Never direct API calls from client
@@ -153,6 +156,48 @@ courseEventObserver.emit(COURSE_EVENTS.UPLOAD_PROGRESS, courseId, progressData)
 - Enhanced components integrate with new architecture
 - Pass data and handlers from new system to old UI components
 - Example: EnhancedChapterManager wraps ChapterManager
+
+## Background Job Architecture Pattern
+
+### Queue-Based Processing Extensions
+- **PM2 worker processes**: Separate processes for CPU-intensive operations (transcription, video processing)
+- **Database-driven queues**: Job status tracking via `transcription_queue` table pattern
+- **WebSocket progress updates**: Real-time job progress via existing WebSocket infrastructure
+- **Server action coordination**: Jobs created via server actions, processed by background workers
+
+### Background Job Data Flow
+1. **Video uploaded** → Server action queues transcription job
+2. **PM2 worker** → Processes queue, updates job status via WebSocket
+3. **Client receives updates** → Observer pattern → TanStack cache invalidation
+4. **Job completion** → Transcript data available in video queries
+
+### Architecture Compliance for Background Jobs
+- **TanStack Query**: Owns job results (transcripts) and progress state
+- **Server Actions**: Create queue entries, handle job lifecycle
+- **Zustand**: UI state for progress indicators and queue status
+- **PM2 isolation**: Resource-intensive operations don't block main application
+- **WebSocket events**: Progress updates follow existing real-time pattern
+
+### Background Job Implementation Pattern
+```javascript
+// Server Action creates job
+await supabase.from('transcription_queue').insert({
+  video_id: videoId,
+  status: 'pending'
+})
+
+// PM2 Worker processes job
+const job = await getNextQueuedJob()
+const transcript = await processWithWhisper(job.file_path)
+await updateVideoWithTranscript(job.video_id, transcript)
+
+// WebSocket notifies completion
+broadcastWebSocketMessage({
+  type: 'transcription-complete',
+  videoId: job.video_id,
+  data: { transcript }
+})
+```
 
 ## File Upload Architecture (Server Actions + WebSockets)
 
