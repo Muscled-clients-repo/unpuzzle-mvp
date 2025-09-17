@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,7 @@ import { Slider } from '@/components/ui/slider'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ChevronLeft, ChevronRight, Target, Clock, Zap, BookOpen, Lightbulb, Palette, Code } from 'lucide-react'
-import { updateStudentPreferences, assignTrackToStudent } from '@/lib/actions/track-actions'
+import { updateStudentPreferences, assignTrackToStudent, submitQuestionnaire } from '@/lib/actions/track-actions'
 import { toast } from 'sonner'
 
 interface QuestionnaireData {
@@ -25,6 +25,7 @@ interface QuestionnaireData {
   designSkillLevel?: number
   codingSkillLevel?: number
   portfolioUrl?: string
+  noPortfolio?: boolean
   monthlyIncomeGoal: number
   timeCommitment: number
   approachPreference: 'direct' | 'patient'
@@ -33,8 +34,7 @@ interface QuestionnaireData {
 const questions = [
   {
     id: 'hasEarned1k',
-    title: 'Have you earned $1k+ from any design/dev services?',
-    subtitle: 'Don\'t worry if the answer is no - I started from civil engineering! This helps us understand your experience level',
+    title: 'Have you earned $1k+ from providing design/dev services?',
     type: 'radio',
     options: [
       { value: 'true', label: 'Yes', description: 'I have earned at least $1k from these services' },
@@ -43,8 +43,7 @@ const questions = [
   },
   {
     id: 'earningsAmount',
-    title: 'What\'s the most you\'ve made and do you have proof of this earning via bank statements or client invoices paid?',
-    subtitle: 'Enter the amount you\'ve earned',
+    title: 'What\'s the most you\'ve made in total revenue from providing design/dev services?',
     type: 'input',
     inputType: 'number',
     placeholder: 'Enter amount in USD',
@@ -93,7 +92,7 @@ const questions = [
   },
   {
     id: 'codingSkillLevel',
-    title: 'What do you rate your coding skills on a scale of 1-10?',
+    title: 'And your coding skills on a scale of 1-10?',
     subtitle: 'Be honest about your current abilities',
     type: 'slider',
     min: 1,
@@ -106,16 +105,17 @@ const questions = [
     subtitle: 'Google Doc with multiple pieces or Figma link - make sure it\'s publicly accessible',
     type: 'input',
     inputType: 'url',
-    placeholder: 'https://your-portfolio-link.com'
+    placeholder: 'https://your-portfolio-link.com',
+    hasNoPortfolioOption: true
   },
   {
     id: 'monthlyIncomeGoal',
     title: 'How much do you want to make per month?',
-    subtitle: 'I\'ve achieved $40k months multiple times and averaged $25k/mo before focusing on SaaS, so that\'s why the limit is at $40k',
+    subtitle: 'I\'ve achieved $40k-$50k months multiple times and averaged $19k/mo between 2023-2025, with 80% profit margins',
     type: 'slider',
     min: 1000,
-    max: 40000,
-    default: 5000,
+    max: 50000,
+    default: 10000,
     step: 500,
     formatValue: (value: number) => `$${value.toLocaleString()}`
   },
@@ -125,7 +125,7 @@ const questions = [
     subtitle: 'This helps us pace your learning journey',
     type: 'slider',
     min: 1,
-    max: 40,
+    max: 72,
     default: 10
   },
   {
@@ -142,14 +142,20 @@ const questions = [
 
 export default function QuestionnairePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const queryClient = useQueryClient()
   const [currentStep, setCurrentStep] = useState(0)
   const [responses, setResponses] = useState<Partial<QuestionnaireData>>({})
 
-  const updatePreferencesMutation = useMutation({
-    mutationFn: updateStudentPreferences,
+  // Get track type from URL params (default to 'agency' for backward compatibility)
+  const trackType = (searchParams.get('track') as 'agency' | 'saas') || 'agency'
+
+  const submitQuestionnaireMutation = useMutation({
+    mutationFn: ({ responses, trackType }: { responses: any, trackType: 'agency' | 'saas' }) =>
+      submitQuestionnaire(responses, trackType),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['student-preferences'] })
+      queryClient.invalidateQueries({ queryKey: ['goal-conversations'] })
     }
   })
 
@@ -197,8 +203,21 @@ export default function QuestionnairePage() {
   }
 
   const handleNext = () => {
+    const currentQuestion = questions[currentStep]
+
+    // For slider questions, ensure default value is set if user hasn't interacted
+    if (currentQuestion.type === 'slider') {
+      const currentResponse = responses[currentQuestion.id as keyof QuestionnaireData]
+      if (currentResponse === undefined && currentQuestion.default !== undefined) {
+        setResponses(prev => ({
+          ...prev,
+          [currentQuestion.id]: currentQuestion.default
+        }))
+      }
+    }
+
     const nextIndex = findNextQuestion(currentStep + 1)
-    
+
     // Check if we're skipping questions and show notification
     if (nextIndex > currentStep + 1) {
       const skippedCount = nextIndex - currentStep - 1
@@ -208,7 +227,7 @@ export default function QuestionnairePage() {
         })
       }
     }
-    
+
     if (nextIndex < questions.length) {
       setCurrentStep(nextIndex)
     } else {
@@ -224,34 +243,41 @@ export default function QuestionnairePage() {
   const canProceed = () => {
     const question = questions[currentStep]
     const response = responses[question.id as keyof QuestionnaireData]
-    
+
     if (question.type === 'checkbox') {
       return Array.isArray(response) && response.length > 0
     }
-    
+
+    if (question.type === 'slider') {
+      // For sliders, if no response is set but there's a default, use the default
+      return response !== undefined && response !== null || (question.default !== undefined)
+    }
+
+    // Special handling for portfolio URL - allow progression if either URL provided or "no portfolio" checked
+    if (question.id === 'portfolioUrl') {
+      return (response !== undefined && response !== null && response !== '') || responses.noPortfolio
+    }
+
     return response !== undefined && response !== null && response !== ''
   }
 
   const handleSubmit = async () => {
     try {
-      // Update student preferences
-      await updatePreferencesMutation.mutateAsync({
-        time_commitment_hours: responses.timeCommitment,
-        completed_questionnaire: true,
-        questionnaire_completed_at: new Date().toISOString(),
-        // Store all questionnaire responses in a metadata field
-        questionnaire_responses: responses
+      // Submit questionnaire and create conversation for instructor review
+      await submitQuestionnaireMutation.mutateAsync({
+        responses,
+        trackType
       })
 
-      toast.success('Questionnaire completed! Redirecting to track selection...')
-      
-      // Redirect to track selection with completed flag
+      toast.success('Questionnaire submitted! Awaiting instructor review for goal assignment.')
+
+      // Redirect to goals page where they'll see pending status
       setTimeout(() => {
-        router.push('/student/track-selection?completed=true')
-      }, 1500)
+        router.push('/student/goals')
+      }, 2000)
 
     } catch (error) {
-      toast.error('Failed to save questionnaire responses')
+      toast.error('Failed to submit questionnaire')
       console.error(error)
     }
   }
@@ -270,10 +296,10 @@ export default function QuestionnairePage() {
       {/* Header */}
       <div className="mb-8 text-center">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-          Learning Path Questionnaire
+          {trackType === 'agency' ? 'Agency Path' : 'SaaS Path'} Questionnaire
         </h1>
         <p className="text-gray-600 dark:text-gray-400">
-          Help us personalize your learning experience
+          Help us assign you the right goal based on your experience
         </p>
       </div>
 
@@ -298,10 +324,12 @@ export default function QuestionnairePage() {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          <QuestionInput 
+          <QuestionInput
             question={currentQuestion}
             value={responses[currentQuestion.id as keyof QuestionnaireData]}
             onChange={(value) => handleResponse(currentQuestion.id, value)}
+            responses={responses}
+            onResponseChange={handleResponse}
           />
         </CardContent>
       </Card>
@@ -319,10 +347,10 @@ export default function QuestionnairePage() {
 
         <Button
           onClick={handleNext}
-          disabled={!canProceed() || updatePreferencesMutation.isPending}
+          disabled={!canProceed() || submitQuestionnaireMutation.isPending}
         >
           {currentStep === questions.length - 1 ? (
-            updatePreferencesMutation.isPending ? 'Saving...' : 'Complete'
+            submitQuestionnaireMutation.isPending ? 'Submitting...' : 'Submit for Review'
           ) : (
             <>
               Next
@@ -339,9 +367,11 @@ interface QuestionInputProps {
   question: any
   value: any
   onChange: (value: any) => void
+  responses: any
+  onResponseChange: (questionId: string, value: any) => void
 }
 
-function QuestionInput({ question, value, onChange }: QuestionInputProps) {
+function QuestionInput({ question, value, onChange, responses, onResponseChange }: QuestionInputProps) {
   switch (question.type) {
     case 'radio':
       return (
@@ -386,7 +416,7 @@ function QuestionInput({ question, value, onChange }: QuestionInputProps) {
                       // Clear the other text if unchecking "other"
                       if (option.value === 'other') {
                         const otherFieldName = `${question.id}Other`
-                        handleResponse(otherFieldName, '')
+                        onResponseChange(otherFieldName, '')
                       }
                     }
                   }}
@@ -408,7 +438,7 @@ function QuestionInput({ question, value, onChange }: QuestionInputProps) {
                   <Input
                     placeholder="Please specify..."
                     value={responses[`${question.id}Other`] || ''}
-                    onChange={(e) => handleResponse(`${question.id}Other`, e.target.value)}
+                    onChange={(e) => onResponseChange(`${question.id}Other`, e.target.value)}
                     className="w-full"
                   />
                 </div>
@@ -452,13 +482,33 @@ function QuestionInput({ question, value, onChange }: QuestionInputProps) {
 
     case 'input':
       return (
-        <Input
-          type={question.inputType || 'text'}
-          placeholder={question.placeholder}
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full"
-        />
+        <div className="space-y-4">
+          <Input
+            type={question.inputType || 'text'}
+            placeholder={question.placeholder}
+            value={value || ''}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-full"
+            disabled={responses?.noPortfolio}
+          />
+          {question.hasNoPortfolioOption && (
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="noPortfolio"
+                checked={responses?.noPortfolio || false}
+                onCheckedChange={(checked) => {
+                  onResponseChange('noPortfolio', checked)
+                  if (checked) {
+                    onChange('') // Clear the URL if "no portfolio" is selected
+                  }
+                }}
+              />
+              <Label htmlFor="noPortfolio" className="text-sm text-gray-600 dark:text-gray-400">
+                I don't have a portfolio yet
+              </Label>
+            </div>
+          )}
+        </div>
       )
 
     case 'textarea':

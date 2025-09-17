@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
 export interface Track {
@@ -361,10 +361,67 @@ export async function getStudentPreferences(): Promise<StudentPreferences | null
 }
 
 // Update student preferences
+// Submit questionnaire and create conversation for instructor review
+export async function submitQuestionnaire(questionnaireResponses: any, trackType: 'agency' | 'saas') {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('User not authenticated')
+  }
+
+  // Create conversation with pending status
+  const { data: conversation, error: conversationError } = await supabase
+    .from('goal_conversations')
+    .insert({
+      student_id: user.id,
+      track_type: trackType,
+      status: 'pending_instructor_review'
+    })
+    .select()
+    .single()
+
+  if (conversationError) {
+    throw new Error('Failed to create conversation')
+  }
+
+  // Create questionnaire response message
+  const { data: message, error: messageError } = await supabase
+    .from('conversation_messages')
+    .insert({
+      conversation_id: conversation.id,
+      sender_id: user.id,
+      message_type: 'questionnaire_response',
+      content: 'Student completed onboarding questionnaire',
+      metadata: {
+        questionnaire_responses: questionnaireResponses,
+        track_type: trackType,
+        submitted_at: new Date().toISOString()
+      }
+    })
+    .select()
+    .single()
+
+  if (messageError) {
+    throw new Error('Failed to save questionnaire responses')
+  }
+
+  // Update student preferences to mark questionnaire as completed
+  await updateStudentPreferences({
+    time_commitment_hours: questionnaireResponses.timeCommitment,
+    completed_questionnaire: true,
+    questionnaire_completed_at: new Date().toISOString()
+  })
+
+  revalidatePath('/student/track-selection')
+  revalidatePath('/student/goals')
+  return { conversation, message }
+}
+
 export async function updateStudentPreferences(preferences: Partial<StudentPreferences>) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  
+
   if (!user) {
     throw new Error('User not authenticated')
   }
@@ -429,4 +486,180 @@ export async function getFilteredCourses() {
   }
 
   return data || []
+}
+
+// Get pending questionnaires for instructor review
+export async function getPendingStudentReviews() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('User not authenticated')
+  }
+
+  // Check if user is instructor
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'instructor') {
+    throw new Error('Access denied: Instructor role required')
+  }
+
+  // Get pending reviews using the view we created
+  const { data, error } = await supabase
+    .from('instructor_review_queue')
+    .select('*')
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    throw new Error('Failed to fetch pending reviews')
+  }
+
+  return data || []
+}
+
+// Assign goal to student and activate conversation
+export async function assignGoalToStudentConversation(params: {
+  conversationId: string
+  goalId: string
+  goalTitle: string
+  notes?: string
+}) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // Use service client for database operations that need elevated permissions
+  const serviceClient = createServiceClient()
+
+  if (!user) {
+    throw new Error('User not authenticated')
+  }
+
+  // Check if user is instructor
+  const { data: profile } = await serviceClient
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'instructor') {
+    throw new Error('Access denied: Instructor role required')
+  }
+
+  const { conversationId, goalId, goalTitle, notes } = params
+
+  console.log('[GOAL_ASSIGNMENT] Searching for conversation:', conversationId)
+
+  // First, get the conversation to find the student
+  const { data: conversation, error: conversationError } = await serviceClient
+    .from('goal_conversations')
+    .select('student_id, track_type')
+    .eq('id', conversationId)
+    .single()
+
+  console.log('[GOAL_ASSIGNMENT] Query result:', { conversation, conversationError })
+
+  if (conversationError || !conversation) {
+    console.error('[GOAL_ASSIGNMENT] Conversation not found:', { conversationId, conversationError })
+    throw new Error('Conversation not found')
+  }
+
+  // Find the predefined goal in track_goals table based on goalId
+  // Map the questionnaire goal IDs to predefined goal names
+  const goalMapping: Record<string, string> = {
+    'agency-1k': 'Build $10k/month Agency',
+    'agency-5k': 'Build $10k/month Agency',
+    'agency-10k': 'Build $10k/month Agency',
+    'agency-20k': 'Optimize for 80% Margins',
+    'agency-50k': 'Scale to $25k/month',
+    'agency-100k': 'Scale to $25k/month',
+    'agency-250k': 'Scale to $25k/month',
+    'agency-500k': 'Scale to $25k/month',
+    'saas-1k': 'Build First SaaS MVP',
+    'saas-3k': 'Build First SaaS MVP',
+    'saas-5k': 'Reach $5k MRR',
+    'saas-10k': 'Reach $5k MRR',
+    'saas-20k': 'Scale to $20k MRR'
+  }
+
+  const mappedGoalName = goalMapping[goalId]
+  const { data: predefinedGoal, error: goalError } = await serviceClient
+    .from('track_goals')
+    .select('id, track_id')
+    .eq('name', mappedGoalName)
+    .single()
+
+  console.log('[GOAL_ASSIGNMENT] Found predefined goal:', { predefinedGoal, goalError })
+
+  if (goalError || !predefinedGoal) {
+    console.warn('[GOAL_ASSIGNMENT] Could not find predefined goal, proceeding without goal assignment')
+  }
+
+  // Update student's profile with track and goal assignment
+  if (predefinedGoal) {
+    const { error: profileError } = await serviceClient
+      .from('profiles')
+      .update({
+        current_track_id: predefinedGoal.track_id,
+        current_goal_id: predefinedGoal.id,
+        goal_assigned_at: new Date().toISOString()
+      })
+      .eq('id', conversation.student_id)
+
+    console.log('[GOAL_ASSIGNMENT] Profile update result:', { profileError })
+  }
+
+  // Update conversation status to active and assign instructor
+  const { error: updateError } = await serviceClient
+    .from('goal_conversations')
+    .update({
+      status: 'active',
+      instructor_id: user.id,
+      goal_id: predefinedGoal?.id || null // Use the predefined goal's UUID
+    })
+    .eq('id', conversationId)
+
+  console.log('[GOAL_ASSIGNMENT] Conversation update result:', { updateError })
+
+  if (updateError) {
+    throw new Error('Failed to activate conversation')
+  }
+
+  // Create goal assignment message
+  const { error: messageError } = await serviceClient
+    .from('conversation_messages')
+    .insert({
+      conversation_id: conversationId,
+      sender_id: user.id,
+      message_type: 'instructor_response',
+      content: `Goal assigned: ${goalTitle}`,
+      metadata: {
+        goal_id: goalId,
+        goal_title: goalTitle,
+        assignment_notes: notes,
+        assigned_at: new Date().toISOString()
+      }
+    })
+
+  if (messageError) {
+    throw new Error('Failed to create goal assignment message')
+  }
+
+  revalidatePath('/instructor/student-review')
+  revalidatePath('/student/goals')
+
+  return { success: true, goalId: predefinedGoal?.id }
+}
+
+// Helper function to extract amount from goal ID
+function extractAmountFromGoalId(goalId: string): number {
+  const match = goalId.match(/(\d+)k?$/)
+  if (match) {
+    const num = parseInt(match[1])
+    return goalId.includes('k') ? num * 1000 : num
+  }
+  return 1000 // default
 }

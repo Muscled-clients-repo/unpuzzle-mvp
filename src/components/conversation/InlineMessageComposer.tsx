@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { DailyNoteImage } from '@/app/student/goals/components/DailyNoteImage'
 import { DailyNoteImageViewer } from '@/app/student/goals/components/DailyNoteImageViewer'
 import { UploadProgress } from '@/components/ui/UploadProgress'
+import { useUITransitionStore } from '@/stores/ui-transition-store'
 import type { ExistingAttachment } from '@/hooks/use-message-form'
 
 interface InlineMessageComposerProps {
@@ -63,6 +64,9 @@ export function InlineMessageComposer({
 }: InlineMessageComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // UI Transition Store for file-based image transitions (architecture compliant)
+  const { getTransitionByFile, setImageTransition } = useUITransitionStore()
+
   // Image viewer state
   const [imageViewer, setImageViewer] = useState<{
     isOpen: boolean
@@ -84,6 +88,22 @@ export function InlineMessageComposer({
 
   // Override isValid for edit mode - only valid if there are actual changes
   const isValidForSave = isEditMode ? (hasChanges && (messageText.trim() !== '' || existingAttachments.length > 0 || attachedFiles.length > 0)) : isValid
+
+  // UI orchestration helper for file display URLs (follows file-based transition pattern)
+  const getFileDisplayUrl = (file: File) => {
+    if (!file.type.startsWith('image/')) return null
+
+    // First check UI transition store using file-based mapping
+    const transition = getTransitionByFile(file.name, file.size)
+    if (transition) {
+      return transition.blobUrl
+    }
+
+    // Create and set up new transition mapping for this file
+    const blobUrl = URL.createObjectURL(file)
+    setImageTransition(file.name, file.size, blobUrl)
+    return blobUrl
+  }
 
   // Convert File objects and existing attachments to format expected by image viewer
   const createMockDailyEntry = () => {
@@ -109,7 +129,7 @@ export function InlineMessageComposer({
         original_filename: file.name,
         file_size: file.size,
         mime_type: file.type,
-        cdn_url: URL.createObjectURL(file),
+        cdn_url: getFileDisplayUrl(file) || URL.createObjectURL(file),
         storage_path: '',
         message_text: messageText || 'Preview before sending'
       }))
@@ -302,9 +322,9 @@ export function InlineMessageComposer({
               <div key={index} className="group relative">
                 {file.type.startsWith('image/') ? (
                   <div className="relative">
-                    {/* Show actual image preview (WhatsApp/Messenger style) */}
+                    {/* Show actual image preview (WhatsApp/Messenger style with UI orchestration) */}
                     <img
-                      src={URL.createObjectURL(file)}
+                      src={getFileDisplayUrl(file)}
                       alt={file.name}
                       className="w-full h-32 object-cover rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:opacity-90 transition-opacity"
                       onClick={() => !isLoading && openImageViewer(file.name + file.size)}

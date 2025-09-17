@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useMemo } from 'react'
-import { Target, Calendar, MessageCircle, Plus } from 'lucide-react'
+import { Target, Calendar, MessageCircle, Plus, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -18,6 +18,7 @@ import { DailyNoteImage } from '@/app/student/goals/components/DailyNoteImage'
 import { DailyNoteImageViewer } from '@/app/student/goals/components/DailyNoteImageViewer'
 import { useUITransitionStore } from '@/stores/ui-transition-store'
 import { formatDate } from '@/lib/utils'
+import { QuestionnaireReview } from '@/components/instructor/QuestionnaireReview'
 
 interface DailyGoalTrackerV2Props {
   studentId: string
@@ -81,6 +82,7 @@ export function DailyGoalTrackerV2({
     instructorId
   })
 
+
   // Form and UI state for message composer
   const messageForm = useMessageForm({
     messageType: isInstructorView ? 'instructor_response' : 'daily_note',
@@ -114,60 +116,74 @@ export function DailyGoalTrackerV2({
 
   // Transform conversation messages into daily entries
   const dailyEntries = useMemo(() => {
-    if (!conversationData?.messages) return []
-
-    console.log('🔍 DEBUG: Raw conversation data with', conversationData?.messages?.length || 0, 'messages')
-    if (conversationData?.messages?.length) {
-      console.log('🔍 DEBUG: First message:', conversationData.messages[0])
-      const messagesWithAttachments = conversationData.messages.filter(m => m.attachments && m.attachments.length > 0)
-      console.log('🔍 DEBUG: Messages with attachments:', messagesWithAttachments.length, messagesWithAttachments)
-    }
-
     const entriesMap = new Map<string, DailyEntry>()
     const startDate = new Date(currentGoal.startDate)
 
-    conversationData.messages.forEach(message => {
-      const date = message.target_date || message.created_at.split('T')[0]
-      const daysSinceStart = Math.floor((new Date(date).getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
-
-      if (!entriesMap.has(date)) {
-        entriesMap.set(date, {
-          day: daysSinceStart,
-          date,
-          studentNotes: [],
-          instructorResponses: [],
-          activities: []
-        })
+    // Process existing messages first (including optimistic messages)
+    if (conversationData?.messages && conversationData.messages.length > 0) {
+      console.log('🔍 DEBUG: Raw conversation data with', conversationData.messages.length, 'messages')
+      if (conversationData.messages.length > 0) {
+        console.log('🔍 DEBUG: First message:', conversationData.messages[0])
+        const messagesWithAttachments = conversationData.messages.filter(m => m.attachments && m.attachments.length > 0)
+        console.log('🔍 DEBUG: Messages with attachments:', messagesWithAttachments.length, messagesWithAttachments)
       }
 
-      const entry = entriesMap.get(date)!
+      conversationData.messages.forEach(message => {
+        const date = message.target_date || message.created_at.split('T')[0]
+        const daysSinceStart = Math.floor((new Date(date).getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
 
-      switch (message.message_type) {
-        case 'daily_note':
-          entry.studentNotes.push(message)
-          break
-        case 'instructor_response':
-          entry.instructorResponses.push(message)
-          break
-        case 'activity':
-          entry.activities.push(message)
-          break
-      }
-
-      // Collect attachments from all messages for this entry
-      if (message.attachments && message.attachments.length > 0) {
-        console.log(`🔍 DEBUG: Found ${message.attachments.length} attachments for message ${message.id}:`, message.attachments)
-        if (!entry.attachedFiles) entry.attachedFiles = []
-
-        message.attachments.forEach(attachment => {
-          entry.attachedFiles!.push({
-            ...attachment,
-            message_text: message.content
+        if (!entriesMap.has(date)) {
+          entriesMap.set(date, {
+            day: daysSinceStart,
+            date,
+            studentNotes: [],
+            instructorResponses: [],
+            activities: []
           })
-        })
-        console.log(`🔍 DEBUG: Entry ${date} now has ${entry.attachedFiles.length} total files`)
-      }
-    })
+        }
+
+        const entry = entriesMap.get(date)!
+
+        switch (message.message_type) {
+          case 'daily_note':
+            entry.studentNotes.push(message)
+            break
+          case 'instructor_response':
+            entry.instructorResponses.push(message)
+            break
+          case 'activity':
+            entry.activities.push(message)
+            break
+        }
+
+        // Collect attachments from all messages for this entry
+        if (message.attachments && message.attachments.length > 0) {
+          console.log(`🔍 DEBUG: Found ${message.attachments.length} attachments for message ${message.id}:`, message.attachments)
+          if (!entry.attachedFiles) entry.attachedFiles = []
+
+          message.attachments.forEach(attachment => {
+            entry.attachedFiles!.push({
+              ...attachment,
+              message_text: message.content
+            })
+          })
+          console.log(`🔍 DEBUG: Entry ${date} now has ${entry.attachedFiles.length} total files`)
+        }
+      })
+    }
+
+    // If no entries exist yet, create today's entry so new students can start
+    if (entriesMap.size === 0) {
+      const today = new Date().toISOString().split('T')[0]
+      const todaysSinceStart = Math.floor((new Date(today).getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
+      entriesMap.set(today, {
+        day: todaysSinceStart,
+        date: today,
+        studentNotes: [],
+        instructorResponses: [],
+        activities: []
+      })
+    }
 
     // Convert to array and sort by day descending
     return Array.from(entriesMap.values()).sort((a, b) => b.day - a.day)
@@ -276,6 +292,112 @@ export function DailyGoalTrackerV2({
         />
       </div>
     )
+  }
+
+  // Check if no conversation exists yet (student hasn't submitted questionnaire)
+  if (!conversationData?.conversation) {
+    if (isInstructorView) {
+      return (
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <Card className="border-gray-200 bg-gray-50 dark:bg-gray-800/50 dark:border-gray-700">
+            <CardContent className="p-8 text-center">
+              <div className="flex flex-col items-center gap-4">
+                <div className="h-16 w-16 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                  <Target className="h-8 w-8 text-gray-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                    No Questionnaire Submitted Yet
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400 text-sm max-w-md">
+                    This student hasn't completed their onboarding questionnaire yet.
+                    Once they submit it, you'll be able to review their responses and assign an appropriate starting goal.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )
+    } else {
+      return (
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <Card className="border-orange-200 bg-orange-50 dark:bg-orange-900/20 dark:border-orange-800">
+            <CardContent className="p-8 text-center">
+              <div className="flex flex-col items-center gap-4">
+                <div className="h-16 w-16 rounded-full bg-orange-100 dark:bg-orange-900 flex items-center justify-center">
+                  <Target className="h-8 w-8 text-orange-600 dark:text-orange-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-orange-900 dark:text-orange-100 mb-2">
+                    Complete Your Questionnaire
+                  </h3>
+                  <p className="text-orange-700 dark:text-orange-200 text-sm max-w-md mb-4">
+                    Please complete your track questionnaire to get started with your personalized goals.
+                  </p>
+                  <Button
+                    onClick={() => window.location.href = '/student/track-selection/questionnaire'}
+                    className="bg-orange-600 hover:bg-orange-700 text-white"
+                  >
+                    Complete Questionnaire
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )
+    }
+  }
+
+  // Check if conversation is pending instructor review
+  if (conversationData?.conversation?.status === 'pending_instructor_review') {
+    if (isInstructorView) {
+      // Show questionnaire review for instructor
+      const questionnaireMessage = conversationData.messages.find(msg => msg.message_type === 'questionnaire_response')
+
+      if (questionnaireMessage && questionnaireMessage.metadata?.questionnaire_responses) {
+        return (
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <QuestionnaireReview
+              conversationId={conversationData.conversation.id}
+              studentId={studentId}
+              studentName={conversationData.conversation.student_name || 'Student'}
+              trackType={conversationData.conversation.track_type || 'agency'}
+              questionnaireData={questionnaireMessage.metadata.questionnaire_responses}
+              submittedAt={questionnaireMessage.created_at}
+              onGoalAssigned={() => refetch()}
+            />
+          </div>
+        )
+      }
+    } else {
+      // Show pending message for student
+      return (
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <Card className="border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-800">
+            <CardContent className="p-8 text-center">
+              <div className="flex flex-col items-center gap-4">
+                <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-full">
+                  <Clock className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                    Questionnaire Submitted!
+                  </h3>
+                  <p className="text-blue-700 dark:text-blue-200 mb-4">
+                    Your instructor is reviewing your responses and will assign you a goal soon.
+                  </p>
+                  <p className="text-sm text-blue-600 dark:text-blue-300">
+                    You'll be able to start tracking your progress once your goal is assigned.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )
+    }
   }
 
   return (

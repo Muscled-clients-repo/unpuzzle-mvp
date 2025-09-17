@@ -72,6 +72,8 @@ async function requireAuth() {
 async function getOrCreateConversation(studentId: string, instructorId?: string) {
   const serviceClient = createServiceClient()
 
+  console.log('[DEBUG] Looking for conversations with student_id:', studentId)
+
   // Try to find existing conversation with proper null handling
   let query = (serviceClient as any)
     .from('goal_conversations')
@@ -139,10 +141,29 @@ export async function getConversationData(studentId: string, options: {
     .select('*')
     .eq('student_id', studentId)
 
-  // For now, get any conversation for this student (instructor can view any)
-  // TODO: Add proper instructor assignment logic later
-  // Just get the first conversation for this student
-  conversationQuery = conversationQuery.limit(1)
+  // For instructors viewing student goals, prioritize pending questionnaire reviews
+  // First try to find pending questionnaire review
+  const { data: pendingConversation } = await (serviceClient as any)
+    .from('goal_conversations')
+    .select('*')
+    .eq('student_id', studentId)
+    .eq('status', 'pending_instructor_review')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (pendingConversation) {
+    console.log('[CONVERSATION] Found pending questionnaire review:', pendingConversation.id)
+    conversationQuery = (serviceClient as any)
+      .from('goal_conversations')
+      .select('*')
+      .eq('id', pendingConversation.id)
+  } else {
+    // Fallback to most recent active conversation
+    conversationQuery = conversationQuery
+      .order('created_at', { ascending: false })
+      .limit(1)
+  }
 
   const { data: conversation, error: convError } = await conversationQuery.single()
 
@@ -156,11 +177,26 @@ export async function getConversationData(studentId: string, options: {
       const newConversation = await getOrCreateConversation(studentId, options.instructorId)
       return {
         conversation: newConversation,
-        messages: [],
-        totalCount: 0,
-        hasMore: false
+        messages: []
       }
     }
+
+    // Check if user is instructor - allow them to see that no conversation exists yet
+    const { data: profile } = await (serviceClient as any)
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (profile?.role === 'instructor') {
+      console.log('[CONVERSATION] Instructor viewing student with no conversation yet')
+      // Return empty state for instructor to see "no questionnaire submitted yet"
+      return {
+        conversation: null,
+        messages: []
+      }
+    }
+
     console.log('[CONVERSATION] Access denied - user is not the student or assigned instructor')
     throw new Error('Conversation not found or access denied')
   }
@@ -188,25 +224,85 @@ export async function getConversationData(studentId: string, options: {
     throw new Error('Conversation not found or access denied')
   }
 
-  // Single optimized query using the view
-  let query = (serviceClient as any)
-    .from('conversation_timeline')
-    .select('*')
-    .eq('conversation_id', conversation.id)
+  console.log('[CONVERSATION] Found conversation:', {
+    conversationId: conversation.id,
+    studentId: conversation.student_id,
+    instructorId: conversation.instructor_id,
+    status: conversation.status,
+    trackType: conversation.track_type
+  })
 
-  if (options.startDate) {
-    query = query.gte('target_date', options.startDate)
+  // For questionnaire conversations, query messages directly since conversation_timeline view may not include questionnaire_response
+  let messages: any[] = []
+  let error: any = null
+
+  if (conversation.status === 'pending_instructor_review') {
+    console.log('[CONVERSATION] Pending questionnaire - querying messages directly')
+    // Query conversation_messages directly for questionnaire data
+    const { data: directMessages, error: directError } = await (serviceClient as any)
+      .from('conversation_messages')
+      .select('*')
+      .eq('conversation_id', conversation.id)
+      .order('created_at', { ascending: true })
+
+    if (directError) {
+      console.error('[CONVERSATION] Direct message query error:', directError)
+      error = directError
+    } else {
+      // Get sender profiles separately
+      const senderIds = directMessages?.map(msg => msg.sender_id) || []
+      let profiles: any[] = []
+
+      if (senderIds.length > 0) {
+        const { data: profileData } = await (serviceClient as any)
+          .from('profiles')
+          .select('id, full_name, email, avatar_url')
+          .in('id', senderIds)
+
+        profiles = profileData || []
+      }
+
+      // Transform to match conversation_timeline format
+      messages = directMessages?.map((msg: any) => {
+        const profile = profiles.find(p => p.id === msg.sender_id)
+        return {
+          ...msg,
+          sender_name: profile?.full_name || 'Unknown',
+          sender_role: msg.message_type === 'instructor_response' ? 'instructor' : 'student',
+          sender_avatar: profile?.avatar_url,
+          attachments: [] // TODO: Add attachment support if needed
+        }
+      }) || []
+    }
+  } else {
+    // Use conversation_timeline view for regular conversations
+    let query = (serviceClient as any)
+      .from('conversation_timeline')
+      .select('*')
+      .eq('conversation_id', conversation.id)
+
+    console.log('[CONVERSATION] Querying conversation_timeline for conversation:', conversation.id)
+
+    if (options.startDate) {
+      query = query.gte('target_date', options.startDate)
+    }
+    if (options.endDate) {
+      query = query.lte('target_date', options.endDate)
+    }
+
+    query = query
+      .order('target_date', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: true })
+      .limit(options.limit || 50)
+
+    const { data: timelineMessages, error: timelineError } = await query
+
+    if (timelineError) {
+      error = timelineError
+    } else {
+      messages = timelineMessages || []
+    }
   }
-  if (options.endDate) {
-    query = query.lte('target_date', options.endDate)
-  }
-
-  query = query
-    .order('target_date', { ascending: false, nullsFirst: false })
-    .order('created_at', { ascending: true })
-    .limit(options.limit || 50)
-
-  const { data: messages, error } = await query
 
   if (error) {
     throw new Error(`Failed to get conversation data: ${error.message}`)

@@ -684,3 +684,39 @@ Educational analytics require insights across multiple student-instructor conver
 Conversation systems require evolution capabilities as educational needs change and platform features expand. The architecture supports schema evolution and feature migration through versioned message schemas and backward-compatible conversation APIs that enable feature development without conversation data migration.
 
 These communication architecture patterns extend the proven 3-layer SSOT distribution model to real-time communication scenarios while maintaining the performance, scalability, and maintainability characteristics that make the architecture suitable for professional educational platforms.
+
+## Critical: Mock Data vs Real Data Architecture
+
+### Student ID Data Flow (Important for Debugging)
+
+**WARNING**: The system uses different student ID sources depending on feature flags:
+
+#### Mock Data Flow (Default)
+- **Source**: `instructor-slice.ts` lines 238-271
+- **Student IDs**: `'1'`, `'2'`, `'3'` (hardcoded strings)
+- **Triggered when**: `FEATURES.USE_REAL_STUDENT_DATA = false` (default)
+- **Emails**: `sarah.chen@email.com`, `mike.johnson@email.com`, etc.
+
+#### Real Data Flow
+- **Source**: `getInstructorStudents()` server action via Supabase
+- **Student IDs**: Real UUIDs like `550e8400-e29b-41d4-a716-446655440000`
+- **Triggered when**: `FEATURES.USE_REAL_STUDENT_DATA = true`
+- **Emails**: Real user emails from database
+
+#### Common Debugging Pitfall
+When questionnaire data isn't appearing:
+1. **Mock ID `'1'` used in URL**: `/instructor/student-goals/1`
+2. **Real UUID in database**: Questionnaire submitted by user with UUID
+3. **No match found**: Conversation query fails because `student_id = '1'` doesn't exist
+4. **Result**: Shows "No questionnaire submitted" instead of actual questionnaire
+
+#### Solution Patterns
+1. **Enable real data**: Set `NEXT_PUBLIC_USE_REAL_STUDENT_DATA=true`
+2. **Use real UUIDs in URLs**: Navigate to `/instructor/student-goals/{real-uuid}`
+3. **Check feature flags first**: Always verify which data source is active
+
+#### Architecture Lesson
+- Mock data should match real data ID format (UUIDs)
+- Feature flags must be consistently applied across all related flows
+- URL parameters must match the active data source ID format
+- When debugging data issues, first check which data source is active
