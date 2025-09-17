@@ -22,11 +22,13 @@ import {
   Calendar,
   Target,
   Brain,
-  Sparkles
+  Sparkles,
+  Eye
 } from "lucide-react"
 import Link from "next/link"
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getUserCoursesAction } from '@/app/actions/course-actions'
+import { getNextVideoForCourse, getCourseProgress } from '@/app/actions/student-course-actions'
 import { useWebSocketConnection } from '@/hooks/use-websocket-connection'
 import { courseEventObserver, STUDENT_EVENTS, COURSE_GOAL_EVENTS } from '@/lib/course-event-observer'
 import { CourseThumbnail } from '@/components/ui/course-thumbnail'
@@ -81,43 +83,51 @@ export default function MyCoursesPage() {
 
   // Extract courses from server action result
   const courses = coursesResult?.success ? coursesResult.data : []
-  
-  // Mock progress data for now - will come from actual progress tracking later
-  const mockProgressData = {
-    "course-1": {
-      progress: 35,
-      lastAccessed: "2 hours ago",
-      completedLessons: 2,
-      totalLessons: 5,
-      currentLesson: "JavaScript Basics",
-      estimatedTimeLeft: "3.5 hours",
-      aiInteractionsUsed: 15,
-      strugglingTopics: ["CSS Grid", "Flexbox"],
-      nextMilestone: "Complete Module 2"
+
+  // Get real course progress and next videos for each course
+  const { data: coursesWithProgress } = useQuery({
+    queryKey: ['courses-with-progress', courses.map(c => c.id)],
+    queryFn: async () => {
+      if (!courses.length) return []
+
+      const coursesWithProgressData = await Promise.all(
+        courses.map(async (course) => {
+          const [progress, nextVideo] = await Promise.all([
+            getCourseProgress(course.id),
+            getNextVideoForCourse(course.id)
+          ])
+
+          return {
+            ...course,
+            progress: progress ? {
+              progress: progress.progressPercentage,
+              lastAccessed: new Date(progress.lastAccessedAt).toLocaleDateString(),
+              completedLessons: progress.completedLessons,
+              totalLessons: progress.totalLessons,
+              currentLesson: nextVideo?.title || "Not started",
+              estimatedTimeLeft: progress.estimatedTimeRemaining,
+              nextVideoId: nextVideo?.videoId
+            } : {
+              progress: 0,
+              lastAccessed: "Never",
+              completedLessons: 0,
+              totalLessons: course.videos?.length || 0,
+              currentLesson: "Not started",
+              estimatedTimeLeft: `${course.duration || 60} min`,
+              nextVideoId: course.videos?.[0]?.id
+            }
+          }
+        })
+      )
+
+      return coursesWithProgressData
     },
-    "course-2": {
-      progress: 15,
-      lastAccessed: "1 day ago", 
-      completedLessons: 1,
-      totalLessons: 5,
-      currentLesson: "Linear Regression",
-      estimatedTimeLeft: "6 hours",
-      aiInteractionsUsed: 8,
-      strugglingTopics: ["Gradient Descent"],
-      nextMilestone: "Complete first quiz"
-    },
-    "course-3": {
-      progress: 60,
-      lastAccessed: "3 days ago",
-      completedLessons: 3,
-      totalLessons: 5,
-      currentLesson: "Data Visualization",
-      estimatedTimeLeft: "2 hours",
-      aiInteractionsUsed: 22,
-      strugglingTopics: [],
-      nextMilestone: "Final project"
-    }
-  }
+    enabled: !!courses.length && !!userId,
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+  })
+
+  // Use courses with progress data, fallback to basic courses
+  const displayCourses = coursesWithProgress || courses
   
   if (isLoading) return <LoadingSpinner />
 
@@ -151,24 +161,22 @@ export default function MyCoursesPage() {
           {/* Course Tabs */}
           <Tabs defaultValue="all" className="mb-8">
             <TabsList>
-              <TabsTrigger value="all">All Courses ({courses.length})</TabsTrigger>
-              <TabsTrigger value="in-progress">In Progress (2)</TabsTrigger>
-              <TabsTrigger value="completed">Completed (0)</TabsTrigger>
+              <TabsTrigger value="all">All Courses ({displayCourses.length})</TabsTrigger>
+              <TabsTrigger value="in-progress">In Progress ({displayCourses.filter(c => c.progress?.progress > 0 && c.progress?.progress < 100).length})</TabsTrigger>
+              <TabsTrigger value="completed">Completed ({displayCourses.filter(c => c.progress?.progress === 100).length})</TabsTrigger>
             </TabsList>
 
             <TabsContent value="all" className="mt-6">
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {courses.map((course) => {
-                  const progress = mockProgressData[course.id as keyof typeof mockProgressData] || {
+                {displayCourses.map((course) => {
+                  const progress = course.progress || {
                     progress: 0,
                     lastAccessed: "Never",
                     completedLessons: 0,
-                    totalLessons: course.total_videos || 5,
+                    totalLessons: course.total_videos || 0,
                     currentLesson: "Not started",
                     estimatedTimeLeft: `${course.total_duration_minutes || 60} min`,
-                    aiInteractionsUsed: 0,
-                    strugglingTopics: [],
-                    nextMilestone: "Start course"
+                    nextVideoId: undefined
                   }
                   
                   return (
@@ -218,37 +226,34 @@ export default function MyCoursesPage() {
                         <div className="rounded-lg bg-primary/5 border border-primary/10 p-3 space-y-2">
                           <div className="flex items-center gap-2 text-sm font-medium">
                             <Sparkles className="h-4 w-4 text-primary" />
-                            AI Insights
+                            Learning Progress
                           </div>
-                          
+
                           <div className="space-y-1">
                             <div className="flex items-center justify-between text-xs">
-                              <span className="text-muted-foreground">AI interactions used</span>
-                              <span className="font-medium">{progress.aiInteractionsUsed}</span>
+                              <span className="text-muted-foreground">Progress</span>
+                              <span className="font-medium">{progress.progress}%</span>
                             </div>
-                            
-                            {progress.strugglingTopics.length > 0 && (
-                              <div className="flex items-start gap-2 text-xs">
-                                <AlertCircle className="h-3 w-3 text-orange-500 mt-0.5" />
-                                <div>
-                                  <span className="text-muted-foreground">Needs review: </span>
-                                  <span className="text-orange-600 dark:text-orange-400">
-                                    {progress.strugglingTopics.join(", ")}
-                                  </span>
-                                </div>
-                              </div>
-                            )}
-                            
+
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground">Completed</span>
+                              <span className="font-medium">{progress.completedLessons}/{progress.totalLessons}</span>
+                            </div>
+
                             <div className="flex items-center gap-2 text-xs">
                               <Target className="h-3 w-3 text-green-500" />
-                              <span className="text-muted-foreground">Next: {progress.nextMilestone}</span>
+                              <span className="text-muted-foreground">Current: {progress.currentLesson}</span>
                             </div>
                           </div>
                         </div>
 
                         {/* Action Button */}
                         <Button asChild className="w-full">
-                          <Link href={`/student/course/${course.id}`}>
+                          <Link href={
+                            progress.nextVideoId
+                              ? `/student/course/${course.id}/video/${progress.nextVideoId}`
+                              : `/student/course/${course.id}`
+                          }>
                             <Play className="mr-2 h-4 w-4" />
                             Continue Learning
                           </Link>
@@ -283,58 +288,106 @@ export default function MyCoursesPage() {
 
             <TabsContent value="in-progress" className="mt-6">
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {courses.slice(0, 2).map((course) => {
-                  const progress = mockProgressData[course.id as keyof typeof mockProgressData] || {
-                    progress: 0,
-                    lastAccessed: "Never",
-                    completedLessons: 0,
-                    totalLessons: course.total_videos || 5,
-                    currentLesson: "Not started",
-                    estimatedTimeLeft: `${course.total_duration_minutes || 60} min`,
-                    aiInteractionsUsed: 0,
-                    strugglingTopics: [],
-                    nextMilestone: "Start course"
-                  }
-                  
-                  return (
-                    <Card key={course.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                      {/* Course Thumbnail */}
-                      <div className="relative">
-                        <CourseThumbnail title={course.title} />
-                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background/90 to-transparent p-4">
-                          <Progress value={progress.progress} className="h-2" />
-                          <p className="text-xs text-white mt-1">{progress.progress}% Complete</p>
+                {displayCourses
+                  .filter(course => course.progress?.progress > 0 && course.progress?.progress < 100)
+                  .map((course) => {
+                    const progress = course.progress!
+
+                    return (
+                      <Card key={course.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                        {/* Course Thumbnail */}
+                        <div className="relative">
+                          <CourseThumbnail title={course.title} />
+                          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background/90 to-transparent p-4">
+                            <Progress value={progress.progress} className="h-2" />
+                            <p className="text-xs text-white mt-1">{progress.progress}% Complete</p>
+                          </div>
                         </div>
-                      </div>
-                      <CardHeader>
-                        <CardTitle className="text-lg">{course.title}</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <Button asChild className="w-full">
-                          <Link href={`/student/course/${course.id}`}>
-                            Continue Learning
-                          </Link>
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  )
-                })}
+                        <CardHeader>
+                          <CardTitle className="text-lg">{course.title}</CardTitle>
+                          <p className="text-sm text-muted-foreground">
+                            {progress.completedLessons}/{progress.totalLessons} lessons • {progress.estimatedTimeLeft} left
+                          </p>
+                        </CardHeader>
+                        <CardContent>
+                          <Button asChild className="w-full">
+                            <Link href={
+                              progress.nextVideoId
+                                ? `/student/course/${course.id}/video/${progress.nextVideoId}`
+                                : `/student/course/${course.id}`
+                            }>
+                              <Play className="mr-2 h-4 w-4" />
+                              Continue Learning
+                            </Link>
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
               </div>
+              {displayCourses.filter(c => c.progress?.progress > 0 && c.progress?.progress < 100).length === 0 && (
+                <div className="text-center py-12">
+                  <BookOpen className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No Courses in Progress</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Start learning by clicking "Continue Learning" on any course!
+                  </p>
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="completed" className="mt-6">
-              <div className="text-center py-12">
-                <CheckCircle2 className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No Completed Courses Yet</h3>
-                <p className="text-muted-foreground mb-4">
-                  Keep learning to complete your first course!
-                </p>
-                <Button asChild>
-                  <Link href="/student">
-                    Go to Dashboard
-                  </Link>
-                </Button>
-              </div>
+              {displayCourses.filter(c => c.progress?.progress === 100).length > 0 ? (
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                  {displayCourses
+                    .filter(course => course.progress?.progress === 100)
+                    .map((course) => {
+                      const progress = course.progress!
+
+                      return (
+                        <Card key={course.id} className="overflow-hidden hover:shadow-lg transition-shadow border-green-200 dark:border-green-800">
+                          {/* Course Thumbnail */}
+                          <div className="relative">
+                            <CourseThumbnail title={course.title} />
+                            <div className="absolute top-2 right-2">
+                              <Badge className="bg-green-600 hover:bg-green-700">
+                                <CheckCircle2 className="mr-1 h-3 w-3" />
+                                Completed
+                              </Badge>
+                            </div>
+                          </div>
+                          <CardHeader>
+                            <CardTitle className="text-lg">{course.title}</CardTitle>
+                            <p className="text-sm text-muted-foreground">
+                              {progress.totalLessons} lessons completed
+                            </p>
+                          </CardHeader>
+                          <CardContent>
+                            <Button asChild className="w-full" variant="outline">
+                              <Link href={`/student/course/${course.id}`}>
+                                <Eye className="mr-2 h-4 w-4" />
+                                Review Course
+                              </Link>
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <CheckCircle2 className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No Completed Courses Yet</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Keep learning to complete your first course!
+                  </p>
+                  <Button asChild>
+                    <Link href="/student">
+                      Go to Dashboard
+                    </Link>
+                  </Button>
+                </div>
+              )}
             </TabsContent>
           </Tabs>
 

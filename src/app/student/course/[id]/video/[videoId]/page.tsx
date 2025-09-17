@@ -5,6 +5,7 @@ import { useParams } from "next/navigation"
 import dynamic from "next/dynamic"
 import { useAppStore } from "@/stores/app-store"
 import { LoadingSpinner } from "@/components/common/LoadingSpinner"
+import { updateVideoProgress } from "@/app/actions/student-course-actions"
 
 // Dynamically import the V2 VideoPlayer component with loading fallback
 const StudentVideoPlayerV2 = dynamic(
@@ -161,20 +162,35 @@ export default function VideoPlayerPage() {
     : 100
 
   const handleTimeUpdate = (time: number) => {
-    // VideoEngine automatically updates store.currentTime - no action needed
-    // console.log('Time update:', time)
+    // Update progress every 10 seconds to avoid excessive API calls
+    if (Math.floor(time) % 10 === 0 && !isStandaloneLesson) {
+      updateVideoProgress(courseId, videoId, time).catch(error => {
+        console.error('Failed to update video progress:', error)
+      })
+    }
   }
 
   const handlePause = (time: number) => {
-    // console.log('Paused at', time)
+    // Save progress on pause
+    if (!isStandaloneLesson) {
+      updateVideoProgress(courseId, videoId, time).catch(error => {
+        console.error('Failed to update video progress:', error)
+      })
+    }
   }
 
   const handlePlay = () => {
-    console.log('Playing')
+    console.log('Video playing')
   }
 
   const handleEnded = () => {
-    console.log('Video ended')
+    console.log('Video ended - marking as completed')
+    // Mark video as completed when it ends
+    if (!isStandaloneLesson) {
+      updateVideoProgress(courseId, videoId, currentVideo?.duration || 0, true).catch(error => {
+        console.error('Failed to mark video as completed:', error)
+      })
+    }
   }
 
   return (
