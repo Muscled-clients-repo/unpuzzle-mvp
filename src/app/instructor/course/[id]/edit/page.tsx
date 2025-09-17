@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { 
+import {
   Save,
   ArrowLeft,
   AlertCircle,
@@ -42,6 +42,91 @@ import { getCourseAction, publishCourseAction, unpublishCourseAction } from '@/a
 import { getChaptersForCourseAction } from '@/app/actions/chapter-actions'
 import { CourseTrackGoalSelector } from '@/components/course/CourseTrackGoalSelector'
 import { courseEventObserver, COURSE_EVENTS } from '@/lib/course-event-observer'
+
+// Inline Editable Title Component
+function InlineEditableTitle({
+  value,
+  onChange,
+  placeholder,
+  className
+}: {
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+  className?: string
+}) {
+  const [isEditing, setIsEditing] = React.useState(false)
+  const [editValue, setEditValue] = React.useState(value)
+  const inputRef = React.useRef<HTMLInputElement>(null)
+
+  React.useEffect(() => {
+    setEditValue(value)
+  }, [value])
+
+  React.useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus()
+      inputRef.current.select()
+    }
+  }, [isEditing])
+
+  const handleStartEdit = () => {
+    setEditValue(value || '') // Ensure we have the current value when starting to edit
+    setIsEditing(true)
+  }
+
+  const handleSave = () => {
+    const trimmedValue = editValue.trim()
+    // Only call onChange if the value has actually changed
+    if (trimmedValue !== value) {
+      onChange(trimmedValue)
+    }
+    setIsEditing(false)
+  }
+
+  const handleCancel = () => {
+    setEditValue(value)
+    setIsEditing(false)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSave()
+    } else if (e.key === 'Escape') {
+      handleCancel()
+    }
+  }
+
+  if (isEditing) {
+    return (
+      <div className="flex items-center">
+        <Input
+          ref={inputRef}
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={handleSave}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          className={cn("text-xl font-semibold border-none shadow-none p-0 h-auto bg-transparent outline-none ring-0 focus:ring-0 focus:border-none", className)}
+          style={{ fontSize: 'inherit', lineHeight: 'inherit', fontWeight: 'inherit' }}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="group relative flex items-center">
+      <h1
+        className={cn("cursor-pointer hover:bg-gray-50 hover:dark:bg-gray-800 px-2 py-1 -mx-2 -my-1 rounded border-2 border-transparent hover:border-dashed hover:border-gray-300 dark:hover:border-gray-600 transition-all", className)}
+        onClick={handleStartEdit}
+      >
+        {value || (
+          <span className="text-gray-500 italic">{placeholder}</span>
+        )}
+      </h1>
+    </div>
+  )
+}
 
 export default function EditCourseV3Page(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params)
@@ -84,7 +169,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
     }
     
     loadDataConcurrently()
-  }, [courseId, queryClient])
+  }, [courseId])
   
   // Step 2: Use regular hooks that will now read from prefetched cache (instant)
   const { course, error, updateCourse, isUpdating } = useCourseEdit(courseId)
@@ -262,7 +347,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
     )
 
     return unsubscribe
-  }, [courseId, queryClient])
+  }, [courseId])
   
   // ARCHITECTURE-COMPLIANT: No data copying or synchronization
   
@@ -737,10 +822,13 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
-              <div>
-                <h1 className="text-xl font-semibold">
-                  {formState.values.title || course?.data?.title || 'Course Editor'}
-                </h1>
+              <div className="flex-1">
+                <InlineEditableTitle
+                  value={formState.values.title || course?.data?.title || ''}
+                  onChange={(value) => handleInputChange('title', value)}
+                  placeholder="Enter course title"
+                  className="text-xl font-semibold"
+                />
                 <p className="text-sm text-muted-foreground">
                   {course?.data?.status === 'published' ? 'Live Course' : 'Draft'}
                 </p>
@@ -789,18 +877,6 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
               </p>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Course Title */}
-              <div>
-                <Label htmlFor="title">Course Title</Label>
-                <Input
-                  id="title"
-                  value={formState.values.title || course?.data?.title || ''}
-                  onChange={(e) => handleInputChange('title', e.target.value)}
-                  placeholder={course?.data?.title || "Enter course title"}
-                  className="font-medium"
-                />
-              </div>
-
               {/* Description */}
               <div>
                 <Label htmlFor="description">Description</Label>
