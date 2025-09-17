@@ -231,6 +231,24 @@ export interface ConversationUpdatedEvent {
   updates: any
 }
 
+// Goal reassignment event interface
+export interface GoalReassignmentEvent {
+  studentId: string
+  goalId: string | null
+  goalName?: string
+  trackId?: string | null
+  action: 'assigned' | 'removed'
+  userId: string // For filtering student-specific updates
+}
+
+// Course goal assignment event interface
+export interface CourseGoalAssignmentEvent {
+  courseId: string
+  goalIds: string[]
+  goalNames: string[]
+  action: 'assigned' | 'unassigned'
+}
+
 // Event type constants
 export const COURSE_EVENTS = {
   CHAPTER_UPDATE_COMPLETE: 'chapter-update-complete',
@@ -261,10 +279,22 @@ export const CONVERSATION_EVENTS = {
   CONVERSATION_UPDATED: 'conversation-updated'
 } as const
 
+// Student goal events (real-time goal assignment changes)
+export const STUDENT_EVENTS = {
+  GOAL_REASSIGNMENT: 'goal-reassignment'
+} as const
+
+// Course goal events (real-time course-goal assignment changes)
+export const COURSE_GOAL_EVENTS = {
+  ASSIGNMENT_CHANGED: 'course-goal-assignment-changed'
+} as const
+
 export type CourseEventType = typeof COURSE_EVENTS[keyof typeof COURSE_EVENTS]
 export type MediaEventType = typeof MEDIA_EVENTS[keyof typeof MEDIA_EVENTS]
 export type ConversationEventType = typeof CONVERSATION_EVENTS[keyof typeof CONVERSATION_EVENTS]
-export type AllEventType = CourseEventType | MediaEventType | ConversationEventType
+export type StudentEventType = typeof STUDENT_EVENTS[keyof typeof STUDENT_EVENTS]
+export type CourseGoalEventType = typeof COURSE_GOAL_EVENTS[keyof typeof COURSE_GOAL_EVENTS]
+export type AllEventType = CourseEventType | MediaEventType | ConversationEventType | StudentEventType | CourseGoalEventType
 
 // Development utilities
 if (process.env.NODE_ENV === 'development') {

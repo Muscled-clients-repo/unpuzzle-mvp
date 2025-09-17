@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { courseEventObserver, COURSE_EVENTS, MEDIA_EVENTS, CONVERSATION_EVENTS } from '@/lib/course-event-observer'
+import { courseEventObserver, COURSE_EVENTS, MEDIA_EVENTS, CONVERSATION_EVENTS, STUDENT_EVENTS, COURSE_GOAL_EVENTS } from '@/lib/course-event-observer'
 
 interface WebSocketMessage {
   type: string
@@ -116,24 +116,34 @@ export function useWebSocketConnection(userId: string) {
             'conversation-message-created': CONVERSATION_EVENTS.MESSAGE_CREATED,
             'conversation-message-updated': CONVERSATION_EVENTS.MESSAGE_UPDATED,
             'conversation-message-deleted': CONVERSATION_EVENTS.MESSAGE_DELETED,
-            'conversation-updated': CONVERSATION_EVENTS.CONVERSATION_UPDATED
+            'conversation-updated': CONVERSATION_EVENTS.CONVERSATION_UPDATED,
+            // Student goal events
+            'goal-reassignment': STUDENT_EVENTS.GOAL_REASSIGNMENT,
+            // Course goal events
+            'course-goal-assignment-changed': 'course-goal-assignment-changed'
           }
           
           const observerEventType = eventTypeMapping[message.type]
           if (observerEventType) {
-            // Course events and media-linked need courseId, other media events need userId, conversation events need studentId
+            // Course events and media-linked need courseId, other media events need userId, conversation events need studentId, goal events need userId, course-goal events are global
             const isCourseEvent = message.type.startsWith('upload-') || message.type.startsWith('video-') || message.type.startsWith('chapter-') || message.type === 'media-linked'
             const isMediaEvent = message.type.startsWith('media-') && message.type !== 'media-linked'
             const isBulkEvent = message.type.startsWith('bulk-')
             const isConversationEvent = message.type.startsWith('conversation-')
+            const isGoalEvent = message.type === 'goal-reassignment'
+            const isCourseGoalEvent = message.type === 'course-goal-assignment-changed'
 
             const hasRequiredId = isCourseEvent ? message.courseId :
                                  (isMediaEvent || isBulkEvent) ? message.data?.userId :
                                  isConversationEvent ? message.data?.studentId :
+                                 isGoalEvent ? message.data?.userId :
+                                 isCourseGoalEvent ? message.data?.courseId :
                                  message.data?.courseId
             const eventId = isCourseEvent ? message.courseId :
                            (isMediaEvent || isBulkEvent) ? message.data?.userId :
                            isConversationEvent ? message.data?.studentId :
+                           isGoalEvent ? message.data?.userId :
+                           isCourseGoalEvent ? message.data?.courseId :
                            message.data?.courseId
             
             console.log(`🔍 [WEBSOCKET DEBUG] Checking message:`, {
@@ -142,6 +152,8 @@ export function useWebSocketConnection(userId: string) {
               isMediaEvent,
               isBulkEvent,
               isConversationEvent,
+              isGoalEvent,
+              isCourseGoalEvent,
               hasRequiredId,
               eventId,
               userId: message.data?.userId,
@@ -174,7 +186,8 @@ export function useWebSocketConnection(userId: string) {
                 hasRequiredId,
                 expectedField: isCourseEvent ? 'courseId' :
                               (isMediaEvent || isBulkEvent) ? 'userId' :
-                              isConversationEvent ? 'studentId' : 'courseId',
+                              isConversationEvent ? 'studentId' :
+                              isGoalEvent ? 'userId' : 'courseId',
                 data: message.data
               })
             }

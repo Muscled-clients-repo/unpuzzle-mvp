@@ -29,7 +29,7 @@ import { PageContainer } from "@/components/layout/page-container"
 import { PageHeaderSkeleton, Skeleton } from "@/components/common/universal-skeleton"
 
 // New architecture imports
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, useMutation } from '@tanstack/react-query'
 import { useCourseCreationUI } from '@/stores/course-creation-ui'
 import { useCourseEdit, courseKeys } from '@/hooks/use-course-queries'
 import { useChaptersEdit, chapterKeys } from '@/hooks/use-chapter-queries'
@@ -38,7 +38,7 @@ import { useFormState } from '@/hooks/use-form-state'
 import { ChapterManager } from '@/components/course/ChapterManager'
 import { SimpleVideoPreview } from "@/components/ui/SimpleVideoPreview"
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
-import { getCourseAction } from '@/app/actions/course-actions'
+import { getCourseAction, publishCourseAction, unpublishCourseAction } from '@/app/actions/course-actions'
 import { getChaptersForCourseAction } from '@/app/actions/chapter-actions'
 import { CourseTrackGoalSelector } from '@/components/course/CourseTrackGoalSelector'
 
@@ -123,7 +123,28 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   const { batchUpdateVideos, batchUpdateVideosMutation, isBatchUpdating, videoPendingChanges } = useVideoBatchOperations(courseId)
   const { updateChapter, updateChapterMutation, deleteChapter, deleteChapterMutation, isUpdating: isUpdatingChapters, isDeleting: isDeletingChapters } = useChaptersEdit(courseId)
   const { deleteVideo, isDeleting: isDeletingVideos, hasPendingDeletes: hasPendingVideoDeletes } = useVideoDelete(courseId)
-  
+
+  // ARCHITECTURE-COMPLIANT: TanStack mutation for publish/unpublish (server action)
+  const publishMutation = useMutation({
+    mutationFn: async () => {
+      const action = course?.status === 'published' ? unpublishCourseAction : publishCourseAction
+      return action(courseId)
+    },
+    onSuccess: (result) => {
+      if (result.success) {
+        // Invalidate course cache to update UI
+        queryClient.invalidateQueries({ queryKey: courseKeys.detail(courseId) })
+        toast.success(`Course ${course?.status === 'published' ? 'unpublished' : 'published'} successfully`)
+      } else {
+        toast.error(result.error || 'Failed to update course status')
+      }
+    },
+    onError: (error) => {
+      toast.error(`Failed to ${course?.status === 'published' ? 'unpublish' : 'publish'} course`)
+      console.error('Publish/unpublish error:', error)
+    }
+  })
+
   // Get unified content pending changes count (stable primitive)
   const contentPendingChangesCount = ui.getContentPendingChangesCount()
   const pendingDeletesCount = ui.pendingDeletes.size
@@ -688,7 +709,12 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() => publishMutation.mutate()}
+                disabled={publishMutation.isPending}
               >
+                {publishMutation.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
                 {course.status === 'published' ? 'Unpublish' : 'Publish'}
               </Button>
               
@@ -713,7 +739,7 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
         {/* Course Details - 33% Width */}
         <div className="lg:col-span-1">
-          <Card className="sticky top-24">
+          <Card className="sticky top-24 z-10">
             <CardHeader>
               <CardTitle className="text-lg">Course Details</CardTitle>
               <p className="text-sm text-muted-foreground">

@@ -2,7 +2,8 @@
 
 import React from 'react'
 import { ConversationIntegrationV2 } from '@/components/conversation/ConversationIntegrationV2'
-import { useQuery } from '@tanstack/react-query'
+import { GoalReassignmentPanel } from '@/components/instructor/GoalReassignmentPanel'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
 import { LoadingSpinner } from '@/components/common'
 
@@ -15,6 +16,7 @@ export function InstructorStudentGoalTracker({
   studentId,
   instructorId
 }: InstructorStudentGoalTrackerProps) {
+  const queryClient = useQueryClient()
   // Fetch the same real goal data that student view uses
   const { data: goalData, isLoading: goalLoading } = useQuery({
     queryKey: ['instructor-student-goal', studentId],
@@ -33,6 +35,9 @@ export function InstructorStudentGoalTracker({
             id,
             name,
             description,
+            target_amount,
+            currency,
+            goal_type,
             tracks (
               name
             )
@@ -49,26 +54,22 @@ export function InstructorStudentGoalTracker({
       const goal = profile.track_goals
       const startDate = profile.goal_assigned_at || new Date().toISOString()
 
-      // Extract target amount from goal name
-      const getTargetAmount = (goalName: string) => {
-        if (goalName.includes('1k')) return '$1,000'
-        if (goalName.includes('3k')) return '$3,000'
-        if (goalName.includes('5k')) return '$5,000'
-        if (goalName.includes('10k')) return '$10,000'
-        if (goalName.includes('20k')) return '$20,000'
-        if (goalName.includes('30k')) return '$30,000'
-        if (goalName.includes('50k')) return '$50,000'
-        if (goalName.includes('100k')) return '$100,000'
-        if (goalName.includes('250k')) return '$250,000'
-        if (goalName.includes('500k')) return '$500,000'
-        return '$1,000' // default
+      // Format target amount from structured data
+      const formatTargetAmount = (amount: number, currency: string = 'USD') => {
+        const formatter = new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: currency,
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        })
+        return formatter.format(amount)
       }
 
       return {
         id: goal.id,
-        title: goal.description, // Use the full description as title
+        title: goal.name || goal.description, // Use clean goal name
         currentAmount: '$0', // This should come from actual progress tracking
-        targetAmount: getTargetAmount(goal.name),
+        targetAmount: formatTargetAmount(goal.target_amount || 1000, goal.currency || 'USD'),
         progress: 0, // This should come from actual progress calculation
         targetDate: new Date(new Date(startDate).getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 90 days from start
         startDate: startDate.split('T')[0],
@@ -92,13 +93,36 @@ export function InstructorStudentGoalTracker({
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <ConversationIntegrationV2
-        studentId={studentId}
-        instructorId={instructorId}
-        isInstructorView={true}
-        enableUnifiedSystem={true}
-        goalProgress={goalData} // Now pass the real goal data
-      />
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Main conversation area */}
+        <div className="lg:col-span-3">
+          <ConversationIntegrationV2
+            studentId={studentId}
+            instructorId={instructorId}
+            isInstructorView={true}
+            enableUnifiedSystem={true}
+            goalProgress={goalData} // Now pass the real goal data
+          />
+        </div>
+
+        {/* Goal management sidebar */}
+        <div className="lg:col-span-1">
+          <GoalReassignmentPanel
+            studentId={studentId}
+            currentGoal={goalData ? {
+              id: goalData.id,
+              name: goalData.title,
+              description: goalData.description,
+              targetAmount: goalData.targetAmount,
+              trackName: goalData.trackName || 'Unknown Track'
+            } : undefined}
+            onGoalChanged={() => {
+              // Force refetch of goal data
+              queryClient.invalidateQueries({ queryKey: ['instructor-student-goal', studentId] })
+            }}
+          />
+        </div>
+      </div>
     </div>
   )
 }

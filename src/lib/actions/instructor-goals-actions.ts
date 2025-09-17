@@ -2,6 +2,7 @@
 
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { broadcastWebSocketMessage } from '@/lib/websocket-operations'
 
 export interface CreateInstructorResponseData {
   studentId: string
@@ -357,5 +358,178 @@ export async function getStudentDailyGoalData(studentId: string, {
   return {
     dailyNotes: notesWithFiles,
     userActions: userActionsResult.data || []
+  }
+}
+
+// Reassign goal for student (Architecture-compliant server action)
+export async function reassignStudentGoal(studentId: string, goalId: string | null) {
+  console.log('🚀 Reassign goal server action called for student:', studentId, 'goal:', goalId)
+
+  const supabase = await createClient()
+
+  // Get current user (should be instructor)
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    console.error('❌ Auth error:', authError)
+    return { success: false, error: 'Not authenticated' }
+  }
+
+  console.log('✅ User authenticated:', user.id, user.email)
+
+  const serviceClient = createServiceClient()
+
+  // Verify user is an instructor
+  const { data: profile, error: profileError } = await (serviceClient as any)
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (profileError || profile?.role !== 'instructor') {
+    console.error('❌ Role check failed:', profileError, profile?.role)
+    return { success: false, error: 'Only instructors can reassign goals' }
+  }
+
+  try {
+    if (goalId === null) {
+      // Remove goal assignment - put student back in pending review
+      console.log('🗑️ Removing goal assignment for student:', studentId)
+
+      const { error: updateError } = await (serviceClient as any)
+        .from('profiles')
+        .update({
+          current_goal_id: null,
+          current_track_id: null,
+          goal_assigned_at: null,
+          track_assigned_at: null
+        })
+        .eq('id', studentId)
+
+      if (updateError) {
+        console.error('Failed to remove goal assignment:', updateError)
+        return { success: false, error: 'Failed to remove goal assignment' }
+      }
+
+      // Update or create a goal conversation to pending status
+      const { data: existingConversation } = await (serviceClient as any)
+        .from('goal_conversations')
+        .select('id')
+        .eq('student_id', studentId)
+        .single()
+
+      if (existingConversation) {
+        // Update existing conversation to pending
+        await (serviceClient as any)
+          .from('goal_conversations')
+          .update({
+            status: 'pending_instructor_review',
+            instructor_id: user.id
+          })
+          .eq('id', existingConversation.id)
+      } else {
+        // Create new pending conversation
+        await (serviceClient as any)
+          .from('goal_conversations')
+          .insert({
+            student_id: studentId,
+            instructor_id: user.id,
+            status: 'pending_instructor_review'
+          })
+      }
+
+      // Revalidate relevant paths
+      revalidatePath(`/instructor/students/${studentId}`)
+      revalidatePath('/instructor/students')
+
+      // Broadcast WebSocket message for real-time updates
+      console.log('🔥 [WEBSOCKET] Broadcasting goal removal for student:', studentId)
+      await broadcastWebSocketMessage({
+        type: 'goal-reassignment',
+        data: {
+          studentId,
+          goalId: null,
+          action: 'removed',
+          userId: studentId // For student's course list updates
+        }
+      })
+      console.log('✅ [WEBSOCKET] Goal removal broadcast completed')
+
+      return { success: true, message: 'Goal removed successfully' }
+
+    } else {
+      // Reassign to new goal
+      console.log('🔄 Reassigning student', studentId, 'to goal', goalId)
+
+      // Get the track ID for this goal
+      const { data: goal, error: goalError } = await (serviceClient as any)
+        .from('track_goals')
+        .select('track_id, name, description')
+        .eq('id', goalId)
+        .single()
+
+      if (goalError || !goal) {
+        console.error('Goal query error:', goalError)
+        return { success: false, error: 'Goal not found' }
+      }
+
+      console.log('Found goal:', goal)
+
+      // Update student's goal assignment
+      const { data: updateResult, error: updateError } = await (serviceClient as any)
+        .from('profiles')
+        .update({
+          current_goal_id: goalId,
+          current_track_id: goal.track_id,
+          goal_assigned_at: new Date().toISOString(),
+          track_assigned_at: new Date().toISOString()
+        })
+        .eq('id', studentId)
+        .select('id, current_goal_id, current_track_id')
+
+      console.log('📊 Update result:', updateResult)
+      console.log('❌ Update error:', updateError)
+
+      if (updateError) {
+        console.error('Failed to reassign goal:', updateError)
+        return { success: false, error: `Failed to reassign goal: ${updateError.message}` }
+      }
+
+      if (!updateResult || updateResult.length === 0) {
+        console.error('❌ No rows were updated - student not found or no changes made')
+        return { success: false, error: 'Student profile not found or update failed' }
+      }
+
+      console.log('✅ Goal assignment successful, updated profile:', updateResult[0])
+
+      // Update conversation status to active if exists
+      await (serviceClient as any)
+        .from('goal_conversations')
+        .update({ status: 'active' })
+        .eq('student_id', studentId)
+
+      // Revalidate relevant paths
+      revalidatePath(`/instructor/students/${studentId}`)
+      revalidatePath('/instructor/students')
+
+      // Broadcast WebSocket message for real-time updates
+      console.log('🔥 [WEBSOCKET] Broadcasting goal assignment for student:', studentId, 'to goal:', goalId)
+      await broadcastWebSocketMessage({
+        type: 'goal-reassignment',
+        data: {
+          studentId,
+          goalId,
+          goalName: goal.name,
+          trackId: goal.track_id,
+          action: 'assigned',
+          userId: studentId // For student's course list updates
+        }
+      })
+      console.log('✅ [WEBSOCKET] Goal assignment broadcast completed')
+
+      return { success: true, message: 'Goal reassigned successfully' }
+    }
+  } catch (error) {
+    console.error('Goal reassignment error:', error)
+    return { success: false, error: 'Internal server error' }
   }
 }

@@ -247,7 +247,6 @@ export async function publishCourseAction(courseId: string): Promise<ActionResul
       .from('courses')
       .update({
         status: 'published',
-        published_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
       .eq('id', courseId)
@@ -591,6 +590,35 @@ export async function deleteCourse(courseId: string): Promise<DeleteCourseResult
     return {
       success: false,
       error: error instanceof Error ? error.message : 'An unexpected error occurred'
+    }
+  }
+}
+
+/**
+ * Get courses visible to user based on their goal assignments
+ * Uses the get_user_courses() database function
+ */
+export async function getUserCoursesAction(): Promise<ActionResult<any[]>> {
+  try {
+    const user = await requireAuth()
+    const supabase = await createClient()
+
+    // Call the database function that filters courses by user's goals
+    const { data: courses, error } = await supabase
+      .rpc('get_user_courses', { user_id: user.id })
+
+    if (error) throw error
+
+    return {
+      success: true,
+      data: courses || []
+    }
+  } catch (error) {
+    console.error('Get user courses error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch courses',
+      data: []
     }
   }
 }

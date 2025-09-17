@@ -228,8 +228,7 @@ export async function getConversationData(studentId: string, options: {
     conversationId: conversation.id,
     studentId: conversation.student_id,
     instructorId: conversation.instructor_id,
-    status: conversation.status,
-    trackType: conversation.track_type
+    status: conversation.status
   })
 
   // For questionnaire conversations, query messages directly since conversation_timeline view may not include questionnaire_response

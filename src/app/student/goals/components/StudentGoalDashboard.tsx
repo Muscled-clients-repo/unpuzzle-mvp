@@ -29,6 +29,9 @@ export function StudentGoalDashboard() {
             id,
             name,
             description,
+            target_amount,
+            currency,
+            goal_type,
             tracks (
               name
             )
@@ -55,26 +58,22 @@ export function StudentGoalDashboard() {
         goalDescription: goal?.description
       })
 
-      // Extract target amount from goal name
-      const getTargetAmount = (goalName: string) => {
-        if (goalName.includes('1k')) return '$1,000'
-        if (goalName.includes('3k')) return '$3,000'
-        if (goalName.includes('5k')) return '$5,000'
-        if (goalName.includes('10k')) return '$10,000'
-        if (goalName.includes('20k')) return '$20,000'
-        if (goalName.includes('30k')) return '$30,000'
-        if (goalName.includes('50k')) return '$50,000'
-        if (goalName.includes('100k')) return '$100,000'
-        if (goalName.includes('250k')) return '$250,000'
-        if (goalName.includes('500k')) return '$500,000'
-        return '$1,000' // default
+      // Format target amount from structured data
+      const formatTargetAmount = (amount: number, currency: string = 'USD') => {
+        const formatter = new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: currency,
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        })
+        return formatter.format(amount)
       }
 
       return {
         id: goal.id,
-        title: goal.description, // Use the full description as title
+        title: goal.name || goal.description, // Use clean goal name
         currentAmount: '$0', // This should come from actual progress tracking
-        targetAmount: getTargetAmount(goal.name),
+        targetAmount: formatTargetAmount(goal.target_amount || 1000, goal.currency || 'USD'),
         progress: 0, // This should come from actual progress calculation
         targetDate: new Date(new Date(startDate).getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 90 days from start
         startDate: startDate.split('T')[0],

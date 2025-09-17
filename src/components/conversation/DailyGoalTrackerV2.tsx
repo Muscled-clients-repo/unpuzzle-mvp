@@ -388,7 +388,7 @@ export function DailyGoalTrackerV2({
               conversationId={conversationData.conversation.id}
               studentId={studentId}
               studentName={conversationData.conversation.student_name || 'Student'}
-              trackType={conversationData.conversation.track_type || 'agency'}
+              trackType={goalProgress?.trackName?.toLowerCase().includes('saas') ? 'saas' : 'agency'}
               questionnaireData={questionnaireMessage.metadata.questionnaire_responses}
               submittedAt={questionnaireMessage.created_at}
               onGoalAssigned={() => refetch()}

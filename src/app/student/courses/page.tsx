@@ -10,10 +10,10 @@ import { Input } from "@/components/ui/input"
 import { useAppStore } from "@/stores/app-store"
 import { LoadingSpinner } from "@/components/common"
 import { ErrorFallback } from "@/components/common"
-import { 
-  BookOpen, 
-  Clock, 
-  TrendingUp, 
+import {
+  BookOpen,
+  Clock,
+  TrendingUp,
   AlertCircle,
   Play,
   CheckCircle2,
@@ -25,51 +25,69 @@ import {
   Sparkles
 } from "lucide-react"
 import Link from "next/link"
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { getUserCoursesAction } from '@/app/actions/course-actions'
+import { useWebSocketConnection } from '@/hooks/use-websocket-connection'
+import { courseEventObserver, STUDENT_EVENTS, COURSE_GOAL_EVENTS } from '@/lib/course-event-observer'
 
 export default function MyCoursesPage() {
-  const {
-    enrolledCourses,
-    courseProgress,
-    loading,
-    error,
-    loadEnrolledCourses,
-    loadCourseProgress,
-    user,
-    profile
-  } = useAppStore()
-  
+  const { user, profile } = useAppStore()
+  const queryClient = useQueryClient()
+
   // Get authenticated user ID
   const userId = user?.id || profile?.id
-  
-  // Track if initial load has completed
-  const [initialLoadComplete, setInitialLoadComplete] = useState(false)
-  
+
+  // WebSocket connection for real-time updates
+  useWebSocketConnection(userId || '')
+
+  // ARCHITECTURE-COMPLIANT: TanStack Query for server state
+  const { data: coursesResult, isLoading, error } = useQuery({
+    queryKey: ['user-courses', userId],
+    queryFn: getUserCoursesAction,
+    enabled: !!userId,
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+  })
+
+  // Listen for goal reassignment and course-goal assignment events and invalidate course data
   useEffect(() => {
-    if (userId) {
-      loadEnrolledCourses(userId).finally(() => {
-        setInitialLoadComplete(true)
-      })
+    if (!userId) return
+
+    const unsubscribeGoalReassignment = courseEventObserver.subscribe(
+      STUDENT_EVENTS.GOAL_REASSIGNMENT,
+      (event) => {
+        // Only invalidate if this event is for the current user
+        if (event.data.userId === userId) {
+          console.log('🔄 [WEBSOCKET] Goal reassignment detected, invalidating user courses cache')
+          queryClient.invalidateQueries({ queryKey: ['user-courses', userId] })
+        }
+      }
+    )
+
+    const unsubscribeCourseGoalAssignment = courseEventObserver.subscribe(
+      COURSE_GOAL_EVENTS.ASSIGNMENT_CHANGED,
+      (event) => {
+        // Invalidate for all students since course-goal assignments affect course visibility
+        console.log('🔄 [WEBSOCKET] Course-goal assignment changed, invalidating user courses cache')
+        queryClient.invalidateQueries({ queryKey: ['user-courses', userId] })
+      }
+    )
+
+    return () => {
+      unsubscribeGoalReassignment()
+      unsubscribeCourseGoalAssignment()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]) // Remove loadEnrolledCourses from deps - it's stable
+  }, [userId, queryClient])
+
+  // Extract courses from server action result
+  const courses = coursesResult?.success ? coursesResult.data : []
   
-  useEffect(() => {
-    // Load progress for each enrolled course
-    if (userId && enrolledCourses && enrolledCourses.length > 0) {
-      enrolledCourses.forEach(course => {
-        loadCourseProgress(userId, course.id)
-      })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enrolledCourses?.length, userId]) // Only re-run when course count changes
-  
-  // Mock progress data for now - will come from courseProgress once loaded
+  // Mock progress data for now - will come from actual progress tracking later
   const mockProgressData = {
     "course-1": {
-      progress: courseProgress?.percentComplete || 35,
-      lastAccessed: courseProgress?.lastAccessedAt ? "2 hours ago" : "2 hours ago",
-      completedLessons: courseProgress?.videosCompleted || 2,
-      totalLessons: courseProgress?.totalVideos || 5,
+      progress: 35,
+      lastAccessed: "2 hours ago",
+      completedLessons: 2,
+      totalLessons: 5,
       currentLesson: "JavaScript Basics",
       estimatedTimeLeft: "3.5 hours",
       aiInteractionsUsed: 15,
@@ -100,8 +118,8 @@ export default function MyCoursesPage() {
     }
   }
   
-  if (loading || !initialLoadComplete) return <LoadingSpinner />
-  
+  if (isLoading) return <LoadingSpinner />
+
   if (error) return <ErrorFallback error={error} />
 
   return (
@@ -132,21 +150,21 @@ export default function MyCoursesPage() {
           {/* Course Tabs */}
           <Tabs defaultValue="all" className="mb-8">
             <TabsList>
-              <TabsTrigger value="all">All Courses ({(enrolledCourses || []).length})</TabsTrigger>
+              <TabsTrigger value="all">All Courses ({courses.length})</TabsTrigger>
               <TabsTrigger value="in-progress">In Progress (2)</TabsTrigger>
               <TabsTrigger value="completed">Completed (0)</TabsTrigger>
             </TabsList>
 
             <TabsContent value="all" className="mt-6">
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {(enrolledCourses || []).map((course) => {
+                {courses.map((course) => {
                   const progress = mockProgressData[course.id as keyof typeof mockProgressData] || {
                     progress: 0,
                     lastAccessed: "Never",
                     completedLessons: 0,
-                    totalLessons: course.videos?.length || 5,
+                    totalLessons: course.total_videos || 5,
                     currentLesson: "Not started",
-                    estimatedTimeLeft: `${course.duration} hours`,
+                    estimatedTimeLeft: `${course.total_duration_minutes || 60} min`,
                     aiInteractionsUsed: 0,
                     strugglingTopics: [],
                     nextMilestone: "Start course"
@@ -231,7 +249,7 @@ export default function MyCoursesPage() {
 
                         {/* Action Button */}
                         <Button asChild className="w-full">
-                          <Link href={`/student/course/${course.id}/video/${course.videos?.[progress.completedLessons]?.id || course.videos?.[0]?.id || '1'}`}>
+                          <Link href={`/student/course/${course.id}`}>
                             <Play className="mr-2 h-4 w-4" />
                             Continue Learning
                           </Link>
@@ -266,14 +284,14 @@ export default function MyCoursesPage() {
 
             <TabsContent value="in-progress" className="mt-6">
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {(enrolledCourses || []).slice(0, 2).map((course) => {
+                {courses.slice(0, 2).map((course) => {
                   const progress = mockProgressData[course.id as keyof typeof mockProgressData] || {
                     progress: 0,
                     lastAccessed: "Never",
                     completedLessons: 0,
-                    totalLessons: course.videos?.length || 5,
+                    totalLessons: course.total_videos || 5,
                     currentLesson: "Not started",
-                    estimatedTimeLeft: `${course.duration} hours`,
+                    estimatedTimeLeft: `${course.total_duration_minutes || 60} min`,
                     aiInteractionsUsed: 0,
                     strugglingTopics: [],
                     nextMilestone: "Start course"
@@ -296,7 +314,7 @@ export default function MyCoursesPage() {
                       </CardHeader>
                       <CardContent>
                         <Button asChild className="w-full">
-                          <Link href={`/student/course/${course.id}/video/${course.videos?.[0]?.id || '1'}`}>
+                          <Link href={`/student/course/${course.id}`}>
                             Continue Learning
                           </Link>
                         </Button>
@@ -332,7 +350,7 @@ export default function MyCoursesPage() {
                     <BookOpen className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">{(enrolledCourses || []).length}</p>
+                    <p className="text-2xl font-bold">{courses.length}</p>
                     <p className="text-xs text-muted-foreground">Active Courses</p>
                   </div>
                 </div>

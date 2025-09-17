@@ -8,15 +8,13 @@ import { Badge } from '@/components/ui/badge'
 // Using plain div with conditional rendering instead of Collapsible
 import { ChevronDown, ChevronRight, Target, Users } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { 
-  getTracks, 
-  getTrackGoals, 
-  getCourseTrackAssignments, 
+import {
+  getTracks,
+  getTrackGoals,
   getCourseGoalAssignments,
-  assignCourseToTracks,
   assignCourseToGoals,
   Track,
-  TrackGoal 
+  TrackGoal
 } from '@/lib/actions/course-track-actions'
 import { toast } from 'sonner'
 
@@ -27,7 +25,6 @@ interface CourseTrackGoalSelectorProps {
 export function CourseTrackGoalSelector({ courseId }: CourseTrackGoalSelectorProps) {
   const queryClient = useQueryClient()
   const [expandedTracks, setExpandedTracks] = useState<Set<string>>(new Set())
-  const [selectedTracks, setSelectedTracks] = useState<Set<string>>(new Set())
   const [selectedGoals, setSelectedGoals] = useState<Set<string>>(new Set())
 
   // Get all tracks
@@ -47,29 +44,13 @@ export function CourseTrackGoalSelector({ courseId }: CourseTrackGoalSelectorPro
     enabled: tracks.length > 0
   })
 
-  // Get current assignments
-  const { data: trackAssignments = [] } = useQuery({
-    queryKey: ['course-track-assignments', courseId],
-    queryFn: () => getCourseTrackAssignments(courseId)
-  })
 
   const { data: goalAssignments = [] } = useQuery({
     queryKey: ['course-goal-assignments', courseId],
-    queryFn: () => getCourseGoalAssignments(courseId)
+    queryFn: () => getCourseGoalAssignments(courseId),
+    staleTime: 1000 * 60 * 5, // 5 minutes
   })
 
-  // Mutations for updating assignments
-  const trackMutation = useMutation({
-    mutationFn: (trackIds: string[]) => assignCourseToTracks(courseId, trackIds),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['course-track-assignments', courseId] })
-      toast.success('Track assignments updated')
-    },
-    onError: (error) => {
-      toast.error('Failed to update track assignments')
-      console.error(error)
-    }
-  })
 
   const goalMutation = useMutation({
     mutationFn: (goalIds: string[]) => assignCourseToGoals(courseId, goalIds),
@@ -83,43 +64,32 @@ export function CourseTrackGoalSelector({ courseId }: CourseTrackGoalSelectorPro
     }
   })
 
-  // Update local state when assignments change
-  useEffect(() => {
-    setSelectedTracks(new Set(trackAssignments.map(a => a.track_id)))
-  }, [trackAssignments])
 
   useEffect(() => {
     setSelectedGoals(new Set(goalAssignments.map(a => a.goal_id)))
-  }, [goalAssignments])
+  }, [goalAssignments.length]) // Only depend on length to avoid object reference issues
 
-  // Auto-expand tracks that have goals selected
+  // Auto-expand tracks that have goals selected - use stable dependency
   useEffect(() => {
-    const tracksWithSelectedGoals = new Set<string>()
-    selectedGoals.forEach(goalId => {
-      const goal = allGoals.find(g => g.id === goalId)
-      if (goal) {
-        tracksWithSelectedGoals.add(goal.track_id)
-      }
-    })
-    setExpandedTracks(prev => new Set([...prev, ...tracksWithSelectedGoals]))
-  }, [selectedGoals, allGoals])
+    if (selectedGoals.size > 0 && allGoals.length > 0) {
+      const tracksWithSelectedGoals = new Set<string>()
+      selectedGoals.forEach(goalId => {
+        const goal = allGoals.find(g => g.id === goalId)
+        if (goal) {
+          tracksWithSelectedGoals.add(goal.track_id)
+        }
+      })
 
-  const handleTrackToggle = (trackId: string, checked: boolean) => {
-    const newSelectedTracks = new Set(selectedTracks)
-    if (checked) {
-      newSelectedTracks.add(trackId)
-    } else {
-      newSelectedTracks.delete(trackId)
-      // Also remove all goals from this track
-      const trackGoalIds = allGoals.filter(g => g.track_id === trackId).map(g => g.id)
-      const newSelectedGoals = new Set(selectedGoals)
-      trackGoalIds.forEach(goalId => newSelectedGoals.delete(goalId))
-      setSelectedGoals(newSelectedGoals)
-      goalMutation.mutate(Array.from(newSelectedGoals))
+      // Only update if there are actually new tracks to expand
+      if (tracksWithSelectedGoals.size > 0) {
+        setExpandedTracks(prev => {
+          const newExpanded = new Set([...prev, ...tracksWithSelectedGoals])
+          return newExpanded.size !== prev.size ? newExpanded : prev
+        })
+      }
     }
-    setSelectedTracks(newSelectedTracks)
-    trackMutation.mutate(Array.from(newSelectedTracks))
-  }
+  }, [selectedGoals.size, allGoals.length]) // Use sizes instead of objects
+
 
   const handleGoalToggle = (goalId: string, checked: boolean) => {
     const newSelectedGoals = new Set(selectedGoals)
@@ -163,7 +133,7 @@ export function CourseTrackGoalSelector({ courseId }: CourseTrackGoalSelectorPro
   }
 
   return (
-    <Card>
+    <Card className="relative z-20">
       <CardHeader>
         <CardTitle className="text-sm font-medium flex items-center gap-2">
           <Target className="h-4 w-4" />
@@ -176,7 +146,6 @@ export function CourseTrackGoalSelector({ courseId }: CourseTrackGoalSelectorPro
       <CardContent className="space-y-4">
         {tracks.map(track => {
           const trackGoals = getGoalsForTrack(track.id)
-          const isTrackSelected = selectedTracks.has(track.id)
           const isExpanded = expandedTracks.has(track.id)
           const selectedGoalsInTrack = trackGoals.filter(g => selectedGoals.has(g.id))
 
@@ -185,19 +154,10 @@ export function CourseTrackGoalSelector({ courseId }: CourseTrackGoalSelectorPro
               {/* Track Header */}
               <div className="flex items-center justify-between p-2 rounded-lg border bg-gray-50 dark:bg-gray-800">
                 <div className="flex items-center space-x-3">
-                  <Checkbox
-                    id={`track-${track.id}`}
-                    checked={isTrackSelected}
-                    onCheckedChange={(checked) => handleTrackToggle(track.id, !!checked)}
-                    disabled={trackMutation.isPending}
-                  />
                   <div className="flex-1">
-                    <Label 
-                      htmlFor={`track-${track.id}`}
-                      className="text-sm font-medium cursor-pointer"
-                    >
+                    <div className="text-sm font-medium">
                       {track.name}
-                    </Label>
+                    </div>
                     {track.description && (
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {track.description}
@@ -237,23 +197,20 @@ export function CourseTrackGoalSelector({ courseId }: CourseTrackGoalSelectorPro
                         id={`goal-${goal.id}`}
                         checked={selectedGoals.has(goal.id)}
                         onCheckedChange={(checked) => handleGoalToggle(goal.id, !!checked)}
-                        disabled={goalMutation.isPending || !isTrackSelected}
+                        disabled={goalMutation.isPending}
                       />
                       <div className="flex-1">
-                        <Label 
-                          htmlFor={`goal-${goal.id}`}
-                          className={`text-sm cursor-pointer ${!isTrackSelected ? 'text-muted-foreground' : ''}`}
-                        >
-                          {goal.name}
-                        </Label>
-                        {goal.description && (
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {goal.description}
-                          </p>
-                        )}
+                        <div className="flex items-center justify-between">
+                          <Label
+                            htmlFor={`goal-${goal.id}`}
+                            className="text-sm cursor-pointer font-medium"
+                          >
+                            {goal.name || goal.description || 'Unknown Goal'}
+                          </Label>
+                        </div>
                         {goal.is_default && (
                           <Badge variant="outline" className="text-xs mt-1">
-                            Default
+                            Default Starting Goal
                           </Badge>
                         )}
                       </div>
@@ -274,11 +231,8 @@ export function CourseTrackGoalSelector({ courseId }: CourseTrackGoalSelectorPro
             </span>
           </div>
           <div className="mt-1 text-xs text-blue-700 dark:text-blue-300">
-            {selectedTracks.size === 0 && selectedGoals.size === 0 && (
+            {selectedGoals.size === 0 && (
               "Course visible to all students (no restrictions)"
-            )}
-            {selectedTracks.size > 0 && selectedGoals.size === 0 && (
-              `Visible to students in ${selectedTracks.size} track${selectedTracks.size !== 1 ? 's' : ''}`
             )}
             {selectedGoals.size > 0 && (
               `Visible to students with ${selectedGoals.size} specific goal${selectedGoals.size !== 1 ? 's' : ''}`

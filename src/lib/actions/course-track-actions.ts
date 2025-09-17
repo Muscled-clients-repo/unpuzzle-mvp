@@ -1,7 +1,8 @@
 'use server'
 
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { broadcastWebSocketMessage } from '@/lib/websocket-operations'
 
 export interface Track {
   id: string
@@ -20,12 +21,6 @@ export interface TrackGoal {
   is_active: boolean
 }
 
-export interface CourseTrackAssignment {
-  id: string
-  course_id: string
-  track_id: string
-  created_at: string
-}
 
 export interface CourseGoalAssignment {
   id: string
@@ -36,7 +31,7 @@ export interface CourseGoalAssignment {
 
 // Get all active tracks
 export async function getTracks(): Promise<Track[]> {
-  const supabase = await createServerSupabaseClient()
+  const supabase = await createClient()
   
   const { data, error } = await supabase
     .from('tracks')
@@ -53,7 +48,7 @@ export async function getTracks(): Promise<Track[]> {
 
 // Get goals for a specific track
 export async function getTrackGoals(trackId: string): Promise<TrackGoal[]> {
-  const supabase = await createServerSupabaseClient()
+  const supabase = await createClient()
   
   const { data, error } = await supabase
     .from('track_goals')
@@ -69,25 +64,10 @@ export async function getTrackGoals(trackId: string): Promise<TrackGoal[]> {
   return data || []
 }
 
-// Get course track assignments
-export async function getCourseTrackAssignments(courseId: string): Promise<CourseTrackAssignment[]> {
-  const supabase = await createServerSupabaseClient()
-  
-  const { data, error } = await supabase
-    .from('course_track_assignments')
-    .select('*')
-    .eq('course_id', courseId)
-
-  if (error) {
-    throw new Error('Failed to get course track assignments')
-  }
-
-  return data || []
-}
 
 // Get course goal assignments
 export async function getCourseGoalAssignments(courseId: string): Promise<CourseGoalAssignment[]> {
-  const supabase = await createServerSupabaseClient()
+  const supabase = await createClient()
   
   const { data, error } = await supabase
     .from('course_goal_assignments')
@@ -101,63 +81,10 @@ export async function getCourseGoalAssignments(courseId: string): Promise<Course
   return data || []
 }
 
-// Assign course to tracks
-export async function assignCourseToTracks(courseId: string, trackIds: string[]) {
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  
-  if (!user) {
-    throw new Error('User not authenticated')
-  }
-
-  // Verify user owns the course
-  const { data: course, error: courseError } = await supabase
-    .from('courses')
-    .select('instructor_id')
-    .eq('id', courseId)
-    .single()
-
-  if (courseError || !course) {
-    throw new Error('Course not found')
-  }
-
-  if (course.instructor_id !== user.id) {
-    throw new Error('Not authorized to modify this course')
-  }
-
-  // Remove existing assignments
-  const { error: deleteError } = await supabase
-    .from('course_track_assignments')
-    .delete()
-    .eq('course_id', courseId)
-
-  if (deleteError) {
-    throw new Error('Failed to remove existing track assignments')
-  }
-
-  // Add new assignments if any
-  if (trackIds.length > 0) {
-    const assignments = trackIds.map(trackId => ({
-      course_id: courseId,
-      track_id: trackId
-    }))
-
-    const { error: insertError } = await supabase
-      .from('course_track_assignments')
-      .insert(assignments)
-
-    if (insertError) {
-      throw new Error('Failed to create track assignments')
-    }
-  }
-
-  revalidatePath('/instructor/courses')
-  revalidatePath(`/instructor/course/${courseId}/edit`)
-}
 
 // Assign course to goals
 export async function assignCourseToGoals(courseId: string, goalIds: string[]) {
-  const supabase = await createServerSupabaseClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   
   if (!user) {
@@ -205,13 +132,39 @@ export async function assignCourseToGoals(courseId: string, goalIds: string[]) {
     }
   }
 
+  // Get goal names for broadcasting
+  const goalNames = []
+  if (goalIds.length > 0) {
+    const { data: goalDetails } = await supabase
+      .from('track_goals')
+      .select('id, name')
+      .in('id', goalIds)
+
+    goalDetails?.forEach(goal => goalNames.push(goal.name))
+  }
+
+  console.log('🔥 [WEBSOCKET] Broadcasting course-goal assignment change for course:', courseId, 'goals:', goalNames)
+
+  // Broadcast WebSocket message for real-time course visibility updates
+  await broadcastWebSocketMessage({
+    type: 'course-goal-assignment-changed',
+    data: {
+      courseId,
+      goalIds,
+      goalNames,
+      action: goalIds.length > 0 ? 'assigned' : 'unassigned'
+    }
+  })
+
+  console.log('✅ [WEBSOCKET] Course-goal assignment broadcast completed')
+
   revalidatePath('/instructor/courses')
   revalidatePath(`/instructor/course/${courseId}/edit`)
 }
 
 // Get course with track and goal assignments
 export async function getCourseWithAssignments(courseId: string) {
-  const supabase = await createServerSupabaseClient()
+  const supabase = await createClient()
   
   const { data, error } = await supabase
     .from('courses_with_assignments')
@@ -224,4 +177,28 @@ export async function getCourseWithAssignments(courseId: string) {
   }
 
   return data
+}
+
+// Get all courses for admin management
+export async function getAllCourses() {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('courses')
+    .select(`
+      id,
+      title,
+      description,
+      status,
+      difficulty,
+      total_videos,
+      total_duration_minutes
+    `)
+    .order('title')
+
+  if (error) {
+    throw new Error('Failed to get courses')
+  }
+
+  return data || []
 }

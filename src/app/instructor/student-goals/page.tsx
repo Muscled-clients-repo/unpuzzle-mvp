@@ -60,6 +60,9 @@ export default function InstructorStudentGoalsPage() {
             id,
             name,
             description,
+            target_amount,
+            currency,
+            goal_type,
             tracks (
               name
             )
@@ -80,19 +83,15 @@ export default function InstructorStudentGoalsPage() {
         const goal = student.track_goals
         const startDate = student.goal_assigned_at || new Date().toISOString()
 
-        // Extract target amount from goal name (same logic as other components)
-        const getTargetAmount = (goalName: string) => {
-          if (goalName.includes('1k')) return '$1,000'
-          if (goalName.includes('3k')) return '$3,000'
-          if (goalName.includes('5k')) return '$5,000'
-          if (goalName.includes('10k')) return '$10,000'
-          if (goalName.includes('20k')) return '$20,000'
-          if (goalName.includes('30k')) return '$30,000'
-          if (goalName.includes('50k')) return '$50,000'
-          if (goalName.includes('100k')) return '$100,000'
-          if (goalName.includes('250k')) return '$250,000'
-          if (goalName.includes('500k')) return '$500,000'
-          return '$1,000' // default
+        // Format target amount from structured data
+        const formatTargetAmount = (amount: number, currency: string = 'USD') => {
+          const formatter = new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: currency,
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+          })
+          return formatter.format(amount)
         }
 
         // Calculate days since goal assigned
@@ -104,7 +103,7 @@ export default function InstructorStudentGoalsPage() {
           studentEmail: student.email || 'No email',
           goalTitle: goal?.description || 'No goal assigned',
           currentAmount: '$0', // TODO: This should come from actual progress tracking
-          targetAmount: getTargetAmount(goal?.name || ''),
+          targetAmount: formatTargetAmount(goal?.target_amount || 1000, goal?.currency || 'USD'),
           progress: 0, // TODO: Calculate from actual progress data
           targetDate: new Date(new Date(startDate).getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 90 days from start
           startDate: startDate.split('T')[0],
