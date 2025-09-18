@@ -33,6 +33,12 @@ interface AIChatSidebarV2Props {
     isRecording: boolean
     isPaused: boolean
   }
+  aiState?: {
+    isGenerating: boolean
+    generatingType: 'hint' | 'quiz' | null
+    streamedContent: string
+    error: string | null
+  }
 }
 
 export function AIChatSidebarV2({
@@ -48,6 +54,7 @@ export function AIChatSidebarV2({
   segmentContext,
   onClearSegmentContext,
   dispatch,
+  aiState,
   recordingState
 }: AIChatSidebarV2Props) {
   const [inputValue, setInputValue] = useState("")
@@ -227,9 +234,19 @@ export function AIChatSidebarV2({
                     size="sm"
                     className={cn("text-white shadow-md", config.buttonColor)}
                     onClick={() => onAgentAccept(msg.id)}
+                    disabled={aiState?.isGenerating && aiState.generatingType === msg.agentType}
                   >
-                    <CheckCircle2 className="mr-1.5 h-4 w-4" />
-                    Let's go
+                    {aiState?.isGenerating && aiState.generatingType === msg.agentType ? (
+                      <>
+                        <Activity className="mr-1.5 h-4 w-4 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="mr-1.5 h-4 w-4" />
+                        Let's go
+                      </>
+                    )}
                   </Button>
                   <Button
                     size="sm"
@@ -801,7 +818,28 @@ export function AIChatSidebarV2({
         <div className="space-y-2">
           {/* Chat Messages */}
           {displayMessages.map(renderMessage)}
-          
+
+
+          {/* AI Generation Error Display */}
+          {aiState?.error && (
+            <div className="flex items-start gap-3 my-4">
+              <Avatar className="h-10 w-10 border-2 border-red-500/20 shadow-md">
+                <AvatarFallback className="bg-gradient-to-br from-red-500 to-red-600">
+                  <X className="h-5 w-5 text-white" />
+                </AvatarFallback>
+              </Avatar>
+              <div className="bg-gradient-to-br from-red-50 via-red-50 to-red-100 border border-red-200 rounded-lg p-4 shadow-sm flex-1 dark:from-red-950 dark:to-red-900 dark:border-red-800">
+                <div className="flex items-center gap-2 mb-2">
+                  <X className="h-4 w-4 text-red-600 dark:text-red-400" />
+                  <span className="font-bold text-sm text-red-600 dark:text-red-400">Error</span>
+                </div>
+                <div className="text-sm text-red-700 dark:text-red-300">
+                  {aiState.error}
+                </div>
+              </div>
+            </div>
+          )}
+
           {isTyping && (
             <div className="flex items-start gap-3">
               <Avatar className="h-10 w-10 border-2 border-primary/20 shadow-md">

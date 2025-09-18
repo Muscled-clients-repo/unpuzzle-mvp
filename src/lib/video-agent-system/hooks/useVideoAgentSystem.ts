@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { VideoAgentStateMachine } from '../core/StateMachine'
 import { SystemContext, SystemState, Action } from '../types/states'
-import { VideoRef } from '../core/VideoController'
+import { VideoRef, VideoRefLike } from '../core/VideoController'
 import { discoveryLogger } from '@/utils/discovery-logger'
 import { isFeatureEnabled } from '@/utils/feature-flags'
 import { getGlobalCompatibilityInstance, StateMachineManager } from '../core/ManagedStateMachine'
@@ -42,7 +42,8 @@ export function useVideoAgentSystem() {
     globalStateMachine?.dispatch(action)
   }, [])
   
-  const setVideoRef = useCallback((ref: VideoRef) => {
+  const setVideoRef = useCallback((ref: VideoRefLike) => {
+    console.log('[useVideoAgentSystem] setVideoRef called with:', ref)
     globalStateMachine?.setVideoRef(ref)
   }, [])
 
@@ -55,6 +56,7 @@ export function useVideoAgentSystem() {
       state: SystemState.VIDEO_PAUSED,
       videoState: { isPlaying: false, currentTime: 0, duration: 0 },
       agentState: { currentUnactivatedId: null, currentSystemMessageId: null, activeType: null },
+      aiState: { isGenerating: false, generatingType: null, streamedContent: '', error: null },
       segmentState: { inPoint: null, outPoint: null, isComplete: false, sentToChat: false },
       recordingState: { isRecording: false, isPaused: false },
       messages: [],

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { StudentVideoPlayer, StudentVideoPlayerRef } from "./StudentVideoPlayer"
 import { useAppStore } from "@/stores/app-store"
 import { useVideoAgentSystem } from "@/lib/video-agent-system"
@@ -71,12 +71,48 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   // V2-specific state for enhanced interactions
   const [highlightedSegment, setHighlightedSegment] = useState<number | null>(null)
   
-  // Connect video ref to state machine
+  // Connect video ref to state machine with retry logic
   useEffect(() => {
-    if (videoPlayerRef.current) {
-      setVideoRef(videoPlayerRef.current)
+    const connectVideoRef = () => {
+      if (videoPlayerRef.current) {
+        console.log('[V2] Setting video ref to state machine:', videoPlayerRef.current)
+        console.log('[V2] Video ref methods:', {
+          pause: typeof videoPlayerRef.current.pause,
+          play: typeof videoPlayerRef.current.play,
+          isPaused: typeof videoPlayerRef.current.isPaused,
+          getCurrentTime: typeof videoPlayerRef.current.getCurrentTime
+        })
+        setVideoRef(videoPlayerRef.current)
+        return true
+      } else {
+        console.log('[V2] Video ref not available yet, will retry...')
+        return false
+      }
     }
-  }, [])
+
+    // Try immediately
+    if (connectVideoRef()) {
+      return
+    }
+
+    // If not available, retry with small delay
+    const retryInterval = setInterval(() => {
+      if (connectVideoRef()) {
+        clearInterval(retryInterval)
+      }
+    }, 100)
+
+    // Clean up after 5 seconds
+    const timeout = setTimeout(() => {
+      clearInterval(retryInterval)
+      console.warn('[V2] Failed to connect video ref after 5 seconds')
+    }, 5000)
+
+    return () => {
+      clearInterval(retryInterval)
+      clearTimeout(timeout)
+    }
+  }, [setVideoRef])
 
   // Set video ID for AI agent context
   useEffect(() => {
@@ -146,13 +182,7 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
     }
   }
   
-  // V2-specific: Sidebar can request video actions
-  const handleSidebarVideoRequest = (action: "play" | "pause" | "seek", time?: number) => {
-    setVideoAction(action)
-    if (action === "seek" && time !== undefined) {
-      console.log(`V2: Sidebar requested seek to ${time}s`)
-    }
-  }
+  // V2-specific: Sidebar can request video actions (removed - not used)
   
   // REMOVED formatTimestamp - handled by state machine
   
@@ -160,14 +190,49 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   const handleVideoPause = (time: number) => {
     // Call original handler if provided
     props.onPause?.(time)
-    
+
     // Dispatch manual pause to state machine
     dispatch({
       type: 'VIDEO_MANUALLY_PAUSED',
       payload: { time }
     })
   }
-  
+
+  // Handle spacebar and other keyboard shortcuts via state machine
+  const handleVideoPlayerKeydown = useCallback((e: KeyboardEvent) => {
+    // Check if in input field
+    const isInInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)
+    if (isInInput) return
+
+    switch (e.key) {
+      case ' ':
+        e.preventDefault()
+        console.log('[V2] Spacebar pressed - routing through state machine')
+        // Instead of calling handlePlayPause directly, use state machine
+        if (context.videoState?.isPlaying) {
+          dispatch({
+            type: 'VIDEO_MANUALLY_PAUSED',
+            payload: { time: currentTime }
+          })
+        } else {
+          dispatch({
+            type: 'VIDEO_PLAYED',
+            payload: {}
+          })
+        }
+        break
+      // Let other keys fall through to the original handler
+    }
+  }, [context.videoState?.isPlaying, currentTime, dispatch])
+
+  // Add keyboard event listener for spacebar routing through state machine
+  useEffect(() => {
+    document.addEventListener('keydown', handleVideoPlayerKeydown)
+    return () => {
+      document.removeEventListener('keydown', handleVideoPlayerKeydown)
+    }
+  }, [handleVideoPlayerKeydown])
+
   // Handle video play
   const handleVideoPlay = () => {
     // Call original handler if provided
@@ -457,6 +522,7 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
             <AIChatSidebarV2
               messages={context.messages}
               isVideoPlaying={context.videoState?.isPlaying || false}
+              aiState={context.aiState}
               onAgentRequest={handleAgentRequest}
               onAgentAccept={(id) => dispatch({ type: 'ACCEPT_AGENT', payload: id })}
               onAgentReject={(id) => dispatch({ type: 'REJECT_AGENT', payload: id })}

@@ -1,7 +1,7 @@
 import { SystemContext, SystemState, MessageState, Message, Action, QuizQuestion, QuizState } from '../types/states'
 import { Command, CommandType } from '../types/commands'
 import { CommandQueue } from './CommandQueue'
-import { VideoController, VideoRef } from './VideoController'
+import { VideoController, VideoRef, VideoRefLike } from './VideoController'
 import { MessageManager } from './MessageManager'
 import { videoStateCoordinator } from '@/lib/video-state/VideoStateCoordinator'
 import { isFeatureEnabled } from '@/utils/feature-flags'
@@ -27,6 +27,12 @@ export class VideoAgentStateMachine {
         currentUnactivatedId: null,
         currentSystemMessageId: null,
         activeType: null
+      },
+      aiState: {
+        isGenerating: false,
+        generatingType: null,
+        streamedContent: '',
+        error: null
       },
       segmentState: {
         inPoint: null,
@@ -99,7 +105,7 @@ export class VideoAgentStateMachine {
     return Object.freeze(JSON.parse(JSON.stringify(this.context)))
   }
   
-  public setVideoRef(ref: VideoRef) {
+  public setVideoRef(ref: VideoRefLike) {
     this.videoController.setVideoRef(ref)
   }
 
@@ -733,7 +739,11 @@ export class VideoAgentStateMachine {
   private async generateAIResponse(agentType: string | null, videoId?: string, timestamp?: number): Promise<string> {
     switch (agentType) {
       case 'hint':
-        return await this.generateAIHint(videoId, timestamp)
+        try {
+          return await this.generateAIHint(videoId, timestamp)
+        } catch (error) {
+          throw new Error(`Hint generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        }
       case 'quiz':
         return 'Starting your quiz now! Answer each question to the best of your ability.'
       case 'reflect':
@@ -747,10 +757,21 @@ export class VideoAgentStateMachine {
 
   private async generateAIHint(videoId?: string, timestamp?: number): Promise<string> {
     if (!videoId || timestamp === undefined) {
-      return this.getMockHint()
+      throw new Error('Video ID and timestamp required for hint generation')
     }
 
     try {
+      // Set loading state
+      this.updateContext({
+        ...this.context,
+        aiState: {
+          isGenerating: true,
+          generatingType: 'hint',
+          streamedContent: '',
+          error: null
+        }
+      })
+
       const transcriptSegment = await getTranscriptContextForAI(videoId, timestamp)
 
       const response = await fetch('/api/ai/hint', {
@@ -763,16 +784,82 @@ export class VideoAgentStateMachine {
         })
       })
 
-      const data = await response.json()
-
-      if (data.success) {
-        return `${data.hint}\n\n💡 Context: ${data.context}\n\n🔗 Related: ${data.relatedConcepts.join(', ')}`
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
       }
 
-      return this.getMockHint()
+      const reader = response.body?.getReader()
+      if (!reader) {
+        throw new Error('No reader available')
+      }
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let streamedContent = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+
+              if (data.type === 'chunk') {
+                streamedContent += data.content
+                this.updateContext({
+                  ...this.context,
+                  aiState: {
+                    ...this.context.aiState,
+                    streamedContent
+                  }
+                })
+              } else if (data.type === 'complete') {
+                // Clear loading state and return result
+                this.updateContext({
+                  ...this.context,
+                  aiState: {
+                    isGenerating: false,
+                    generatingType: null,
+                    streamedContent: '',
+                    error: null
+                  }
+                })
+
+                if (data.hint) {
+                  return `${data.hint}\n\n💡 Context: ${data.context}\n\n🔗 Related: ${data.relatedConcepts?.join(', ') || 'N/A'}`
+                }
+              } else if (data.type === 'error') {
+                throw new Error(data.error)
+              }
+            } catch (e) {
+              console.warn('Failed to parse SSE data:', line)
+            }
+          }
+        }
+      }
+
+      throw new Error('No hint data received')
     } catch (error) {
       console.error('AI hint generation failed:', error)
-      return this.getMockHint()
+
+      // Clear loading state and set error
+      this.updateContext({
+        ...this.context,
+        aiState: {
+          isGenerating: false,
+          generatingType: null,
+          streamedContent: '',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }
+      })
+
+      throw error // Don't return mock data, let it fail
     }
   }
 
@@ -783,10 +870,21 @@ export class VideoAgentStateMachine {
 
   private async generateQuizQuestions(videoId?: string, timestamp?: number): Promise<QuizQuestion[]> {
     if (!videoId || timestamp === undefined) {
-      return this.getMockQuizQuestions()
+      throw new Error('Video ID and timestamp required for quiz generation')
     }
 
     try {
+      // Set loading state
+      this.updateContext({
+        ...this.context,
+        aiState: {
+          isGenerating: true,
+          generatingType: 'quiz',
+          streamedContent: '',
+          error: null
+        }
+      })
+
       const transcriptSegment = await getTranscriptContextForAI(videoId, timestamp)
 
       const response = await fetch('/api/ai/quiz', {
@@ -799,16 +897,82 @@ export class VideoAgentStateMachine {
         })
       })
 
-      const data = await response.json()
-
-      if (data.success && data.quiz) {
-        return [data.quiz] // Return single question as array
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
       }
 
-      return this.getMockQuizQuestions()
+      const reader = response.body?.getReader()
+      if (!reader) {
+        throw new Error('No reader available')
+      }
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let streamedContent = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+
+              if (data.type === 'chunk') {
+                streamedContent += data.content
+                this.updateContext({
+                  ...this.context,
+                  aiState: {
+                    ...this.context.aiState,
+                    streamedContent
+                  }
+                })
+              } else if (data.type === 'complete') {
+                // Clear loading state and return result
+                this.updateContext({
+                  ...this.context,
+                  aiState: {
+                    isGenerating: false,
+                    generatingType: null,
+                    streamedContent: '',
+                    error: null
+                  }
+                })
+
+                if (data.quiz) {
+                  return [data.quiz]
+                }
+              } else if (data.type === 'error') {
+                throw new Error(data.error)
+              }
+            } catch (e) {
+              console.warn('Failed to parse SSE data:', line)
+            }
+          }
+        }
+      }
+
+      throw new Error('No quiz data received')
     } catch (error) {
       console.error('AI quiz generation failed:', error)
-      return this.getMockQuizQuestions()
+
+      // Clear loading state and set error
+      this.updateContext({
+        ...this.context,
+        aiState: {
+          isGenerating: false,
+          generatingType: null,
+          streamedContent: '',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }
+      })
+
+      throw error // Don't return mock data, let it fail
     }
   }
 
@@ -856,16 +1020,17 @@ export class VideoAgentStateMachine {
   private async startQuiz(updatedMessages: Message[]) {
     console.log('[SM] Starting quiz')
 
-    const currentTime = this.videoController.getCurrentTime()
-    const videoId = this.getVideoId()
-    const questions = await this.generateQuizQuestions(videoId, currentTime)
-    const quizState: QuizState = {
-      questions,
-      currentQuestionIndex: 0,
-      userAnswers: new Array(questions.length).fill(null),
-      score: 0,
-      isComplete: false
-    }
+    try {
+      const currentTime = this.videoController.getCurrentTime()
+      const videoId = this.getVideoId()
+      const questions = await this.generateQuizQuestions(videoId, currentTime)
+      const quizState: QuizState = {
+        questions,
+        currentQuestionIndex: 0,
+        userAnswers: new Array(questions.length).fill(null),
+        score: 0,
+        isComplete: false
+      }
 
     // Add AI intro message
     const aiIntro: Message = {
@@ -897,6 +1062,28 @@ export class VideoAgentStateMachine {
         activeType: 'quiz'  // Keep quiz as active agent
       }
     })
+    } catch (error) {
+      console.error('[SM] Quiz generation failed:', error)
+      // Add error message instead of quiz
+      const errorMessage: Message = {
+        id: `error-${Date.now()}`,
+        type: 'ai' as const,
+        state: MessageState.PERMANENT,
+        message: `Failed to generate quiz: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        timestamp: Date.now()
+      }
+
+      this.updateContext({
+        ...this.context,
+        state: SystemState.AGENT_ACTIVATED,
+        messages: [...updatedMessages, errorMessage],
+        agentState: {
+          ...this.context.agentState,
+          currentUnactivatedId: null,
+          activeType: null  // Clear active type on error
+        }
+      })
+    }
   }
 
   private startVideoCountdown(countdownMessageId: string) {
@@ -1479,6 +1666,7 @@ export class VideoAgentStateMachine {
       state: SystemState.VIDEO_PAUSED,
       videoState: { isPlaying: false, currentTime: 0, duration: 0 },
       agentState: { currentUnactivatedId: null, currentSystemMessageId: null, activeType: null },
+      aiState: { isGenerating: false, generatingType: null, streamedContent: '', error: null },
       segmentState: { inPoint: null, outPoint: null, isComplete: false, sentToChat: false },
       recordingState: { isRecording: false, isPaused: false },
       messages: [],

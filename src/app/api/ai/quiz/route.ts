@@ -37,21 +37,82 @@ Requirements:
       model: "llama-3.3-70b-versatile",
       temperature: 0.8,
       max_tokens: 400,
+      stream: true,
     })
 
-    const result = JSON.parse(completion.choices[0]?.message?.content || '{}')
+    // Create a readable stream
+    const encoder = new TextEncoder()
 
-    return NextResponse.json({
-      success: true,
-      quiz: {
-        id: `quiz_${Date.now()}`,
-        question: result.question,
-        options: result.options,
-        correctAnswer: result.correctAnswer,
-        explanation: result.explanation
+    const stream = new ReadableStream({
+      async start(controller) {
+        let fullContent = ''
+
+        try {
+          for await (const chunk of completion) {
+            const content = chunk.choices[0]?.delta?.content || ''
+            fullContent += content
+
+            // Send each chunk as it arrives
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({
+                type: 'chunk',
+                content,
+                fullContent
+              })}\n\n`)
+            )
+          }
+
+          // Process the complete response
+          // Extract JSON from potential markdown code blocks
+          let rawContent = fullContent
+
+          // Remove markdown code blocks if present
+          const jsonMatch = rawContent.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/)
+          if (jsonMatch) {
+            rawContent = jsonMatch[1]
+          }
+
+          // Clean up any extra whitespace and newlines
+          rawContent = rawContent.trim()
+
+          const result = JSON.parse(rawContent)
+
+          // Send the final parsed result
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({
+              type: 'complete',
+              quiz: {
+                id: `quiz_${Date.now()}`,
+                question: result.question,
+                options: result.options,
+                correctAnswer: result.correctAnswer,
+                explanation: result.explanation
+              },
+              timestamp,
+              videoId
+            })}\n\n`)
+          )
+
+          controller.close()
+        } catch (error) {
+          console.error('Quiz streaming error:', error)
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({
+              type: 'error',
+              error: 'Failed to generate quiz'
+            })}\n\n`)
+          )
+          controller.close()
+        }
+      }
+    })
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/plain',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
       },
-      timestamp,
-      videoId
     })
 
   } catch (error) {

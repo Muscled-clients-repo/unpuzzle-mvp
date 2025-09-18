@@ -95,6 +95,12 @@ export interface SystemContext {
     currentSystemMessageId: string | null
     activeType: 'hint' | 'quiz' | 'reflect' | 'path' | null
   }
+  aiState: {
+    isGenerating: boolean
+    generatingType: 'hint' | 'quiz' | null
+    streamedContent: string
+    error: string | null
+  }
   segmentState: {
     inPoint: number | null
     outPoint: number | null
@@ -110,6 +116,6 @@ export interface SystemContext {
 }
 
 export interface Action {
-  type: 'AGENT_BUTTON_CLICKED' | 'VIDEO_MANUALLY_PAUSED' | 'VIDEO_PLAYED' | 'ACCEPT_AGENT' | 'REJECT_AGENT' | 'QUIZ_ANSWER_SELECTED' | 'REFLECTION_SUBMITTED' | 'REFLECTION_TYPE_CHOSEN' | 'REFLECTION_CANCELLED' | 'SET_IN_POINT' | 'SET_OUT_POINT' | 'CLEAR_SEGMENT' | 'SEND_SEGMENT_TO_CHAT' | 'RECORDING_STARTED' | 'RECORDING_PAUSED' | 'RECORDING_RESUMED' | 'RECORDING_STOPPED'
+  type: 'AGENT_BUTTON_CLICKED' | 'VIDEO_MANUALLY_PAUSED' | 'VIDEO_PLAYED' | 'ACCEPT_AGENT' | 'REJECT_AGENT' | 'QUIZ_ANSWER_SELECTED' | 'REFLECTION_SUBMITTED' | 'REFLECTION_TYPE_CHOSEN' | 'REFLECTION_CANCELLED' | 'SET_IN_POINT' | 'SET_OUT_POINT' | 'CLEAR_SEGMENT' | 'SEND_SEGMENT_TO_CHAT' | 'RECORDING_STARTED' | 'RECORDING_PAUSED' | 'RECORDING_RESUMED' | 'RECORDING_STOPPED' | 'AI_GENERATION_STARTED' | 'AI_GENERATION_CHUNK' | 'AI_GENERATION_COMPLETE' | 'AI_GENERATION_ERROR'
   payload: any
 }

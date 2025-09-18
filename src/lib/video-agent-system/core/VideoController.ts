@@ -12,15 +12,39 @@ export interface VideoRef {
   getCurrentTime: () => number
 }
 
+// Also accept StudentVideoPlayerRef which has the same interface
+export type VideoRefLike = VideoRef | {
+  pause: () => void
+  play: () => void
+  isPaused: () => boolean
+  getCurrentTime: () => number
+}
+
 export class VideoController {
-  private videoRef: VideoRef | null = null
+  private videoRef: VideoRefLike | null = null
   private verificationAttempts = 0
   private readonly MAX_VERIFY_ATTEMPTS = 10
   private readonly VERIFY_DELAY_MS = 50
-  
-  setVideoRef(ref: VideoRef) {
+
+  setVideoRef(ref: VideoRefLike) {
     discoveryLogger.logRefChain('VideoController.setVideoRef', ref)
+    console.log('[VideoController] Setting video ref:', ref)
+    console.log('[VideoController] Previous ref was:', this.videoRef)
+    console.log('[VideoController] New ref methods:', {
+      pause: typeof ref.pause,
+      play: typeof ref.play,
+      isPaused: typeof ref.isPaused,
+      getCurrentTime: typeof ref.getCurrentTime
+    })
     this.videoRef = ref
+    console.log('[VideoController] Video ref successfully set, testing methods...')
+    try {
+      const currentTime = ref.getCurrentTime()
+      const isPaused = ref.isPaused()
+      console.log('[VideoController] Test successful - currentTime:', currentTime, 'isPaused:', isPaused)
+    } catch (error) {
+      console.error('[VideoController] Test failed:', error)
+    }
   }
   
   getCurrentTime(): number {
@@ -63,7 +87,9 @@ export class VideoController {
   }
   
   async pauseVideo(): Promise<boolean> {
+    console.log('[VideoController] pauseVideo called, videoRef:', this.videoRef)
     if (!this.videoRef) {
+      console.error('[VideoController] No video ref available when trying to pause')
       throw new Error('No video ref available')
     }
     
