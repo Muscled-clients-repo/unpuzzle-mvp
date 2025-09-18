@@ -21,3 +21,5 @@ Don't put default claude message in commit messages when committing work.
 some things to know:
 10w ans = Me asking claude code to give me max 10 word answer
 20w ans = Me asking claude code to give me max 20 word answer
+
+Don't give timeline when making implementation plans such as "week 1" or Week 2 or how many days etc because we're using claude code which makes the work get done within minutes or hours at most.
