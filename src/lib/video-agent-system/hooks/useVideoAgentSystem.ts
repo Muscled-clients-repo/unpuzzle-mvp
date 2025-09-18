@@ -45,7 +45,11 @@ export function useVideoAgentSystem() {
   const setVideoRef = useCallback((ref: VideoRef) => {
     globalStateMachine?.setVideoRef(ref)
   }, [])
-  
+
+  const setVideoId = useCallback((videoId: string | null) => {
+    globalStateMachine?.setVideoId(videoId)
+  }, [])
+
   return {
     context: context || {
       state: SystemState.VIDEO_PAUSED,
@@ -57,6 +61,7 @@ export function useVideoAgentSystem() {
       errors: []
     },
     dispatch,
-    setVideoRef
+    setVideoRef,
+    setVideoId
   }
 }

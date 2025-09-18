@@ -137,6 +137,9 @@ export const StudentVideoPlayer = forwardRef<
   // Load student-specific video data when component mounts
   // Removed the video sync effect since it was causing issues
 
+  // Simple debounce for spacebar to prevent rapid play/pause
+  const lastSpacebarTime = useRef(0)
+
   // Keyboard shortcuts with tracked listener
   const handleKeyDown = (e: KeyboardEvent) => {
     const isInInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)
@@ -145,7 +148,11 @@ export const StudentVideoPlayer = forwardRef<
     switch (e.key) {
       case ' ':
         e.preventDefault()
-        handlePlayPause()
+        const now = Date.now()
+        if (now - lastSpacebarTime.current > 300) { // 300ms debounce
+          lastSpacebarTime.current = now
+          handlePlayPause()
+        }
         break
       case 'ArrowLeft':
         e.preventDefault()

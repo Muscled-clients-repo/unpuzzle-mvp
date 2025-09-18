@@ -117,3 +117,71 @@ export function findActiveSegment(
 
   return activeIndex >= 0 ? activeIndex : null
 }
+
+/**
+ * Helper to extract transcript segments from API response
+ * Handles both direct and nested segment structures
+ */
+export function extractTranscriptSegments(data: TranscriptResponse): TranscriptSegment[] {
+  if (!data.success || !data.hasTranscript || !data.transcript?.segments) {
+    return []
+  }
+
+  // Direct segments structure
+  if (Array.isArray(data.transcript.segments)) {
+    return data.transcript.segments
+  }
+
+  // Nested segments structure
+  if (data.transcript.segments.segments && Array.isArray(data.transcript.segments.segments)) {
+    return data.transcript.segments.segments
+  }
+
+  return []
+}
+
+/**
+ * Helper to get transcript text for AI context at specific timestamp
+ * Used by AI agents to get relevant transcript content
+ */
+export async function getTranscriptContextForAI(videoId: string, timestamp: number): Promise<string> {
+  try {
+    const response = await fetch(`/api/transcription/${videoId}`)
+
+    if (!response.ok) {
+      if (response.status === 404) return "No transcript available"
+      if (response.status === 403) return "Transcript unavailable"
+      throw new Error(`Failed to fetch transcript: ${response.status}`)
+    }
+
+    const data: TranscriptResponse = await response.json()
+    const segments = extractTranscriptSegments(data)
+
+    if (segments.length === 0) {
+      return "No transcript available"
+    }
+
+    // Find exact segment at timestamp
+    const exactSegment = segments.find(s =>
+      timestamp >= s.start && timestamp <= s.end
+    )
+
+    if (exactSegment) {
+      return exactSegment.text
+    }
+
+    // Get surrounding context (±10 seconds)
+    const contextSegments = segments.filter(s =>
+      s.start >= timestamp - 10 && s.start <= timestamp + 10
+    )
+
+    if (contextSegments.length > 0) {
+      return contextSegments.map(s => s.text).join(' ')
+    }
+
+    return "No transcript available"
+  } catch (error) {
+    console.error('Failed to fetch transcript context for AI:', error)
+    return "Transcript unavailable"
+  }
+}

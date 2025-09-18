@@ -48,7 +48,7 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   const signedUrl = useSignedUrl(props.videoUrl || null, 30)
 
   // State machine for agent system
-  const { context, dispatch, setVideoRef } = useVideoAgentSystem()
+  const { context, dispatch, setVideoRef, setVideoId } = useVideoAgentSystem()
 
   // State for sidebar
   const currentTime = useAppStore((state) => state.currentTime)
@@ -77,6 +77,11 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
       setVideoRef(videoPlayerRef.current)
     }
   }, [])
+
+  // Set video ID for AI agent context
+  useEffect(() => {
+    setVideoId(props.videoId || null)
+  }, [props.videoId, setVideoId])
   
   // Handle resize
   const handleMouseMove = (e: MouseEvent) => {

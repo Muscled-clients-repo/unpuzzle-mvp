@@ -5,6 +5,7 @@ import { VideoController, VideoRef } from './VideoController'
 import { MessageManager } from './MessageManager'
 import { videoStateCoordinator } from '@/lib/video-state/VideoStateCoordinator'
 import { isFeatureEnabled } from '@/utils/feature-flags'
+import { getTranscriptContextForAI } from '@/hooks/use-transcript-queries'
 
 export class VideoAgentStateMachine {
   private context: SystemContext
@@ -12,7 +13,8 @@ export class VideoAgentStateMachine {
   private videoController: VideoController
   private messageManager: MessageManager
   private subscribers: Set<(context: SystemContext) => void> = new Set()
-  
+  private videoId: string | null = null
+
   constructor() {
     this.context = {
       state: SystemState.VIDEO_PAUSED,
@@ -99,6 +101,14 @@ export class VideoAgentStateMachine {
   
   public setVideoRef(ref: VideoRef) {
     this.videoController.setVideoRef(ref)
+  }
+
+  public setVideoId(videoId: string | null) {
+    this.videoId = videoId
+  }
+
+  private getVideoId(): string | null {
+    return this.videoId
   }
   
   private createCommand(action: Action): Command {
@@ -626,14 +636,17 @@ export class VideoAgentStateMachine {
     }
     
     // Generate AI response for other agents
+    const videoId = this.getVideoId()
+    const aiMessage = await this.generateAIResponse(agentType, videoId, currentTime)
+
     const aiResponse: Message = {
       id: `ai-${Date.now()}`,
       type: 'ai' as const,
       state: MessageState.PERMANENT,
-      message: this.generateAIResponse(agentType),
+      message: aiMessage,
       timestamp: Date.now()
     }
-    
+
     this.updateContext({
       ...this.context,
       state: SystemState.AGENT_ACTIVATED,
@@ -717,10 +730,10 @@ export class VideoAgentStateMachine {
     }
   }
   
-  private generateAIResponse(agentType: string | null): string {
+  private async generateAIResponse(agentType: string | null, videoId?: string, timestamp?: number): Promise<string> {
     switch (agentType) {
       case 'hint':
-        return 'Here\'s a hint: Pay attention to how the state is being managed in this section. The pattern used here will be important for the upcoming exercises.'
+        return await this.generateAIHint(videoId, timestamp)
       case 'quiz':
         return 'Starting your quiz now! Answer each question to the best of your ability.'
       case 'reflect':
@@ -732,7 +745,74 @@ export class VideoAgentStateMachine {
     }
   }
 
-  private generateQuizQuestions(): QuizQuestion[] {
+  private async generateAIHint(videoId?: string, timestamp?: number): Promise<string> {
+    if (!videoId || timestamp === undefined) {
+      return this.getMockHint()
+    }
+
+    try {
+      const transcriptSegment = await getTranscriptContextForAI(videoId, timestamp)
+
+      const response = await fetch('/api/ai/hint', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoId,
+          timestamp,
+          transcriptSegment
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        return `${data.hint}\n\n💡 Context: ${data.context}\n\n🔗 Related: ${data.relatedConcepts.join(', ')}`
+      }
+
+      return this.getMockHint()
+    } catch (error) {
+      console.error('AI hint generation failed:', error)
+      return this.getMockHint()
+    }
+  }
+
+
+  private getMockHint(): string {
+    return 'Here\'s a hint: Pay attention to how the state is being managed in this section. The pattern used here will be important for the upcoming exercises.'
+  }
+
+  private async generateQuizQuestions(videoId?: string, timestamp?: number): Promise<QuizQuestion[]> {
+    if (!videoId || timestamp === undefined) {
+      return this.getMockQuizQuestions()
+    }
+
+    try {
+      const transcriptSegment = await getTranscriptContextForAI(videoId, timestamp)
+
+      const response = await fetch('/api/ai/quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoId,
+          timestamp,
+          transcriptSegment
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.quiz) {
+        return [data.quiz] // Return single question as array
+      }
+
+      return this.getMockQuizQuestions()
+    } catch (error) {
+      console.error('AI quiz generation failed:', error)
+      return this.getMockQuizQuestions()
+    }
+  }
+
+  private getMockQuizQuestions(): QuizQuestion[] {
     return [
       {
         id: 'q1',
@@ -751,7 +831,7 @@ export class VideoAgentStateMachine {
         question: 'When does the useEffect hook run by default?',
         options: [
           'Only when the component mounts',
-          'Only when the component unmounts', 
+          'Only when the component unmounts',
           'After every render',
           'Only when props change'
         ],
@@ -775,8 +855,10 @@ export class VideoAgentStateMachine {
 
   private async startQuiz(updatedMessages: Message[]) {
     console.log('[SM] Starting quiz')
-    
-    const questions = this.generateQuizQuestions()
+
+    const currentTime = this.videoController.getCurrentTime()
+    const videoId = this.getVideoId()
+    const questions = await this.generateQuizQuestions(videoId, currentTime)
     const quizState: QuizState = {
       questions,
       currentQuestionIndex: 0,
