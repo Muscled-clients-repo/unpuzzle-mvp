@@ -15,6 +15,7 @@ import { StudentLearningSlice, createStudentLearningSlice } from './slices/stude
 import { InstructorCourseSlice, createInstructorCourseSlice } from './slices/instructor-course-slice'
 import { StudentVideoSlice, createStudentVideoSlice } from './slices/student-video-slice'
 import { InstructorVideoSlice, createInstructorVideoSlice } from './slices/instructor-video-slice'
+import { UISlice, createUISlice } from './slices/ui-slice'
 import { isDevelopment } from '@/config/env'
 
 // Clean architecture with role-specific stores
@@ -31,7 +32,8 @@ export interface AppStore extends
   // StudentLearningSlice,  // NEW - enhanced with database analytics - DISABLED to avoid conflicts
   // InstructorCourseSlice, // NEW - role-specific - temporarily disabled
   StudentVideoSlice,     // NEW - role-specific
-  InstructorVideoSlice   // NEW - role-specific
+  InstructorVideoSlice,  // NEW - role-specific
+  UISlice                // NEW - pure UI state following 3-layer pattern
 {}
 
 export const useAppStore = create<AppStore>()(
@@ -53,6 +55,7 @@ export const useAppStore = create<AppStore>()(
         // ...createInstructorCourseSlice(...args), // Temporarily disabled to avoid publishCourse conflict
         ...createStudentVideoSlice(...args),
         ...createInstructorVideoSlice(...args),
+        ...createUISlice(...args),
       })
     ),
     {

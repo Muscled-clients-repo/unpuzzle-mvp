@@ -7,17 +7,19 @@ import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import { UploadProgress } from "@/components/ui/UploadProgress"
 import { Badge } from "@/components/ui/badge"
-import { 
-  GripVertical, 
-  Edit2, 
-  Trash2, 
-  Eye, 
-  FileVideo, 
+import {
+  GripVertical,
+  Edit2,
+  Trash2,
+  Eye,
+  FileVideo,
   Loader2,
   X,
   CheckCircle,
   AlertCircle,
-  Save
+  Save,
+  FileText,
+  Upload
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Video } from "@/types/course"
@@ -34,6 +36,8 @@ interface VideoListProps {
   batchRenameMutation?: any // TanStack Query mutation
   onPendingChangesUpdate?: (hasChanges: boolean, changeCount: number, saveFunction: () => void, isSaving?: boolean) => void
   onTabNavigation?: (currentId: string, currentType: 'video' | 'chapter', direction: 'next' | 'previous') => void
+  onTranscriptUpload?: (videoId: string, file: File) => void
+  transcriptionStatuses?: Map<string, { hasTranscript: boolean; isUploading: boolean }>
   isDraggable?: boolean
   className?: string
 }
@@ -49,6 +53,8 @@ export function VideoList({
   batchRenameMutation,
   onPendingChangesUpdate,
   onTabNavigation,
+  onTranscriptUpload,
+  transcriptionStatuses,
   isDraggable = true,
   className
 }: VideoListProps) {
@@ -564,6 +570,54 @@ export function VideoList({
 
           {/* Actions */}
           <div className="flex items-center gap-1">
+            {/* Transcript Upload Button */}
+            {onTranscriptUpload && video.status !== 'uploading' && (
+              <>
+                <input
+                  type="file"
+                  accept=".txt,.srt,.vtt,.json"
+                  style={{ display: 'none' }}
+                  id={`transcript-upload-${video.id}`}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      onTranscriptUpload(video.id, file)
+                    }
+                  }}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    "h-7 w-7",
+                    transcriptionStatuses?.get(video.id)?.hasTranscript
+                      ? "text-green-600 hover:text-green-700"
+                      : "text-muted-foreground hover:text-primary"
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    document.getElementById(`transcript-upload-${video.id}`)?.click()
+                  }}
+                  disabled={transcriptionStatuses?.get(video.id)?.isUploading}
+                  title={
+                    transcriptionStatuses?.get(video.id)?.isUploading
+                      ? "Uploading transcript..."
+                      : transcriptionStatuses?.get(video.id)?.hasTranscript
+                      ? "Transcript uploaded"
+                      : "Upload transcript"
+                  }
+                >
+                  {transcriptionStatuses?.get(video.id)?.isUploading ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : transcriptionStatuses?.get(video.id)?.hasTranscript ? (
+                    <FileText className="h-3 w-3" />
+                  ) : (
+                    <Upload className="h-3 w-3" />
+                  )}
+                </Button>
+              </>
+            )}
+
             {/* Preview Button */}
             {onVideoPreview && (video.backblaze_url || video.video_url || video.url) && video.status !== 'uploading' && (
               <Button

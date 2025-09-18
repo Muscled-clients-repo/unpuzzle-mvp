@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Send, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/stores/app-store"
+import { useTranscriptQuery, findActiveSegment } from "@/hooks/use-transcript-queries"
 
 interface TranscriptSegment {
   start: number
@@ -15,62 +16,72 @@ interface TranscriptSegment {
 
 interface TranscriptPanelProps {
   currentTime: number
-  videoUrl: string
+  videoId: string
   onClose: () => void
   onSeek: (time: number) => void
 }
 
-export function TranscriptPanel({ currentTime, videoUrl, onClose, onSeek }: TranscriptPanelProps) {
+export function TranscriptPanel({ currentTime, videoId, onClose, onSeek }: TranscriptPanelProps) {
   const transcriptRef = useRef<HTMLDivElement>(null)
-  
-  // console.log('📺 TranscriptPanel rendering!', { currentTime, videoUrl })
-  
-  // Use selectors for reading state
+
+  // TanStack Query for server data (Layer 1: Server State)
+  const { data: transcriptData, isLoading, error } = useTranscriptQuery(videoId)
+
+
+  // Zustand UI state (Layer 3: UI State)
+  const highlightedSegmentIndex = useAppStore((state) => state.highlightedSegmentIndex)
+  const autoScrollTranscript = useAppStore((state) => state.autoScrollTranscript)
+  const setHighlightedSegmentIndex = useAppStore((state) => state.setHighlightedSegmentIndex)
+
+  // Legacy state for backwards compatibility
   const selectedTranscriptText = useAppStore((state) => state.selectedTranscriptText)
   const selectedStartTime = useAppStore((state) => state.selectedStartTime)
   const selectedEndTime = useAppStore((state) => state.selectedEndTime)
-  const transcript = useAppStore((state) => state.transcript)
-  const isLoadingTranscript = useAppStore((state) => state.isLoadingTranscript)
-  const transcriptError = useAppStore((state) => state.transcriptError)
-  
-  // Debug log
-  console.log('📜 TranscriptPanel state:', {
-    transcriptLength: transcript.length,
-    isLoading: isLoadingTranscript,
-    error: transcriptError
-  })
 
-  // Use YouTube transcript if available, otherwise use mock data
-  const transcriptSegments: TranscriptSegment[] = transcript.length > 0 
-    ? transcript.map(item => ({
-        start: item.start,
-        end: item.end || item.start + item.duration,
-        timestamp: `${Math.floor(item.start / 60)}:${(item.start % 60).toFixed(0).padStart(2, '0')}`,
-        text: item.text
+  // Process transcript data from TanStack Query
+  const transcriptSegments: TranscriptSegment[] = transcriptData?.hasTranscript && transcriptData.transcript?.segments && Array.isArray(transcriptData.transcript.segments)
+    ? transcriptData.transcript.segments.map(segment => ({
+        start: segment.start,
+        end: segment.end,
+        timestamp: `${Math.floor(segment.start / 60)}:${(segment.start % 60).toFixed(0).padStart(2, '0')}`,
+        text: segment.text
       }))
-    : [
-    { start: 0, end: 5, timestamp: "0:00", text: "Welcome to this comprehensive introduction to web development." },
-    { start: 5, end: 10, timestamp: "0:05", text: "In this course, we're going to explore the fundamental technologies that power the modern web." },
-    { start: 10, end: 15, timestamp: "0:10", text: "We'll start with HTML, which stands for HyperText Markup Language." },
-    { start: 15, end: 20, timestamp: "0:15", text: "HTML is the backbone of every webpage and provides the structure and content." },
-    { start: 20, end: 25, timestamp: "0:20", text: "That browsers can understand and display to users." },
-    { start: 25, end: 30, timestamp: "0:25", text: "Next, we'll dive into CSS, or Cascading Style Sheets." },
-    { start: 30, end: 35, timestamp: "0:30", text: "CSS is what makes websites look beautiful and engaging." },
-    { start: 35, end: 40, timestamp: "0:35", text: "It controls colors, fonts, layouts, animations, and responsive design." },
-    { start: 40, end: 45, timestamp: "0:40", text: "Across different devices and screen sizes." },
-    { start: 45, end: 50, timestamp: "0:45", text: "Finally, we'll explore JavaScript, the programming language." },
-    { start: 50, end: 55, timestamp: "0:50", text: "That brings interactivity to web pages." },
-    { start: 55, end: 60, timestamp: "0:55", text: "JavaScript allows us to create dynamic user experiences." },
-    { start: 60, end: 65, timestamp: "1:00", text: "Handle user input, and communicate with servers." },
-    { start: 65, end: 70, timestamp: "1:05", text: "Throughout this course, you'll build several projects." },
-    { start: 70, end: 75, timestamp: "1:10", text: "That demonstrate these concepts in action." },
-    { start: 75, end: 80, timestamp: "1:15", text: "By the end, you'll have the skills needed to create your own websites." },
-    { start: 80, end: 85, timestamp: "1:20", text: "From scratch using modern web development practices." },
-    { start: 85, end: 90, timestamp: "1:25", text: "Let's begin our journey into web development." },
-    { start: 90, end: 95, timestamp: "1:30", text: "Remember, the key to mastering these technologies is practice." },
-    { start: 95, end: 100, timestamp: "1:35", text: "And patience. Don't be afraid to experiment and make mistakes." },
-    { start: 100, end: 105, timestamp: "1:40", text: "That's how we learn and grow as developers!" }
-  ]
+    : transcriptData?.hasTranscript && transcriptData.transcript?.segments?.segments && Array.isArray(transcriptData.transcript.segments.segments)
+    ? transcriptData.transcript.segments.segments.map(segment => ({
+        start: segment.start,
+        end: segment.end,
+        timestamp: `${Math.floor(segment.start / 60)}:${(segment.start % 60).toFixed(0).padStart(2, '0')}`,
+        text: segment.text
+      }))
+    : transcriptData?.hasTranscript && transcriptData.transcript?.text
+    ? [{
+        start: 0,
+        end: 9999,
+        timestamp: "0:00",
+        text: transcriptData.transcript.text
+      }]
+    : []
+
+  // Find active segment for highlighting
+  const activeSegmentIndex = findActiveSegment(transcriptSegments, currentTime)
+
+
+  // Auto-scroll to active segment
+  useEffect(() => {
+    if (autoScrollTranscript && activeSegmentIndex !== null && transcriptRef.current) {
+      const activeElement = transcriptRef.current.children[activeSegmentIndex] as HTMLElement
+      if (activeElement) {
+        activeElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }
+  }, [activeSegmentIndex, autoScrollTranscript])
+
+  // Update highlighted segment in UI state
+  useEffect(() => {
+    if (activeSegmentIndex !== highlightedSegmentIndex) {
+      setHighlightedSegmentIndex(activeSegmentIndex)
+    }
+  }, [activeSegmentIndex, highlightedSegmentIndex, setHighlightedSegmentIndex])
 
   const handleTranscriptSelection = () => {
     console.log('🎯 handleTranscriptSelection called!')
@@ -215,18 +226,18 @@ export function TranscriptPanel({ currentTime, videoUrl, onClose, onSeek }: Tran
           }}
           onMouseDown={() => console.log('🖱️ Mouse down event fired!')}
         >
-          {isLoadingTranscript ? (
+          {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <div className="text-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
                 <p className="text-sm text-muted-foreground">Loading transcript...</p>
               </div>
             </div>
-          ) : transcriptError ? (
+          ) : error ? (
             <div className="flex items-center justify-center py-8">
               <div className="text-center">
                 <p className="text-sm text-muted-foreground mb-2">Unable to load transcript</p>
-                <p className="text-xs text-muted-foreground/70">{transcriptError}</p>
+                <p className="text-xs text-muted-foreground/70">{error.message}</p>
               </div>
             </div>
           ) : transcriptSegments.length === 0 ? (
@@ -235,11 +246,11 @@ export function TranscriptPanel({ currentTime, videoUrl, onClose, onSeek }: Tran
             </div>
           ) : (
             transcriptSegments.map((segment, index) => {
-            const isCurrentSegment = currentTime >= segment.start && currentTime < segment.end
+            const isCurrentSegment = activeSegmentIndex === index
             const isPastSegment = currentTime > segment.end
-            
+
             return (
-              <div 
+              <div
                 key={index}
                 className={cn(
                   "p-2 rounded-md transition-all duration-300 cursor-pointer hover:bg-white/10",

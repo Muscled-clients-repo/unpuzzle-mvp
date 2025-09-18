@@ -12,26 +12,26 @@
 export const FEATURE_FLAGS = {
   // State Management Refactoring
   USE_NEW_VIDEO_SLICE: process.env.NEXT_PUBLIC_USE_NEW_VIDEO_SLICE === 'true',
-  USE_VIDEO_STATE_ADAPTER: process.env.NEXT_PUBLIC_USE_VIDEO_STATE_ADAPTER === 'true',
+  USE_VIDEO_STATE_ADAPTER: false, // Disabled to reduce console noise
   
   // Dependency Injection
-  USE_DEPENDENCY_INJECTION: process.env.NEXT_PUBLIC_USE_DEPENDENCY_INJECTION === 'true',
-  USE_SERVICE_CONTAINER: process.env.NEXT_PUBLIC_USE_SERVICE_CONTAINER === 'true',
-  
+  USE_DEPENDENCY_INJECTION: false, // Disabled to reduce console noise
+  USE_SERVICE_CONTAINER: false, // Disabled to reduce console noise
+
   // Singleton Management
-  USE_INSTANCE_STATE_MACHINE: process.env.NEXT_PUBLIC_USE_INSTANCE_STATE_MACHINE === 'true',
-  USE_MANAGED_SINGLETONS: process.env.NEXT_PUBLIC_USE_MANAGED_SINGLETONS === 'true',
-  
+  USE_INSTANCE_STATE_MACHINE: false, // Disabled to reduce console noise
+  USE_MANAGED_SINGLETONS: false, // Disabled to reduce console noise
+
   // Event System
-  USE_EVENT_LISTENER_MANAGER: process.env.NEXT_PUBLIC_USE_EVENT_LISTENER_MANAGER === 'true',
-  USE_CLEANUP_TRACKING: process.env.NEXT_PUBLIC_USE_CLEANUP_TRACKING === 'true',
-  
+  USE_EVENT_LISTENER_MANAGER: false, // Disabled to reduce console noise
+  USE_CLEANUP_TRACKING: false, // Disabled to reduce console noise
+
   // State Synchronization
-  USE_STATE_COORDINATOR: process.env.NEXT_PUBLIC_USE_STATE_COORDINATOR === 'true',
-  USE_SINGLE_SOURCE_TRUTH: process.env.NEXT_PUBLIC_USE_SINGLE_SOURCE_TRUTH === 'true',
-  
+  USE_STATE_COORDINATOR: false, // Disabled to reduce console noise
+  USE_SINGLE_SOURCE_TRUTH: false, // Disabled to reduce console noise
+
   // DOM Abstraction
-  USE_DOM_SERVICE: process.env.NEXT_PUBLIC_USE_DOM_SERVICE === 'true',
+  USE_DOM_SERVICE: false, // Disabled to reduce console noise
   USE_ABSTRACT_DOM_ACCESS: process.env.NEXT_PUBLIC_USE_ABSTRACT_DOM_ACCESS === 'true',
   
   // Performance Optimizations
@@ -43,7 +43,7 @@ export const FEATURE_FLAGS = {
   USE_FALLBACK_UI: process.env.NEXT_PUBLIC_USE_FALLBACK_UI === 'true',
   
   // Debug Mode
-  SHOW_REFACTOR_DEBUG: process.env.NEXT_PUBLIC_SHOW_REFACTOR_DEBUG === 'true',
+  SHOW_REFACTOR_DEBUG: false, // Disabled to reduce console noise
   LOG_STATE_CHANGES: process.env.NEXT_PUBLIC_LOG_STATE_CHANGES === 'true'
 } as const
 

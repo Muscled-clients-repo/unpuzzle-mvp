@@ -41,6 +41,8 @@ interface ChapterManagerProps {
   onReorderVideosInChapter?: (chapterId: string, videos: VideoUpload[]) => void
   onPendingChangesUpdate?: (hasChanges: boolean, changeCount: number, saveFunction: () => void, isSaving?: boolean) => void
   onTabNavigation?: (currentId: string, currentType: 'chapter' | 'video', direction: 'next' | 'previous') => void
+  onTranscriptUpload?: (videoId: string, file: File) => void
+  transcriptionStatuses?: Map<string, { hasTranscript: boolean; isUploading: boolean }>
   className?: string
 }
 
@@ -61,6 +63,8 @@ export function ChapterManager({
   onReorderVideosInChapter,
   onPendingChangesUpdate,
   onTabNavigation,
+  onTranscriptUpload,
+  transcriptionStatuses,
   className
 }: ChapterManagerProps) {
   // Safety check for undefined chapters
@@ -463,6 +467,8 @@ export function ChapterManager({
                       }}
                       onPendingChangesUpdate={onPendingChangesUpdate}
                       onTabNavigation={onTabNavigation}
+                      onTranscriptUpload={onTranscriptUpload}
+                      transcriptionStatuses={transcriptionStatuses}
                     />
                   )}
                 </CardContent>

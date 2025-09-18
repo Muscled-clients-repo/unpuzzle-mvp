@@ -29,7 +29,13 @@ export interface UIState {
   sidebarCollapsed: boolean
   videoPlayerVolume: number
   videoPlayerSpeed: number
-  
+
+  // Transcript Panel UI State
+  transcriptPanelOpen: boolean
+  transcriptPanelWidth: number
+  highlightedSegmentIndex: number | null
+  autoScrollTranscript: boolean
+
   // Temporary UI State
   selectedVideoIds: string[]
   draggedVideoId: string | null
@@ -88,7 +94,13 @@ export interface UIActions {
   // Loading States
   setWizardTransitioning: (transitioning: boolean) => void
   setSidebarLoading: (loading: boolean) => void
-  
+
+  // Transcript Panel Actions
+  setTranscriptPanelOpen: (open: boolean) => void
+  setTranscriptPanelWidth: (width: number) => void
+  setHighlightedSegmentIndex: (index: number | null) => void
+  setAutoScrollTranscript: (autoScroll: boolean) => void
+
   // Reset Everything
   resetUI: () => void
 }
@@ -289,10 +301,27 @@ export const createUISlice: StateCreator<UISlice> = (set, get) => ({
     isWizardTransitioning: transitioning 
   }),
   
-  setSidebarLoading: (loading) => set({ 
-    isSidebarLoading: loading 
+  setSidebarLoading: (loading) => set({
+    isSidebarLoading: loading
   }),
-  
+
+  // Transcript Panel Actions
+  setTranscriptPanelOpen: (open) => set({
+    transcriptPanelOpen: open
+  }),
+
+  setTranscriptPanelWidth: (width) => set({
+    transcriptPanelWidth: width
+  }),
+
+  setHighlightedSegmentIndex: (index) => set({
+    highlightedSegmentIndex: index
+  }),
+
+  setAutoScrollTranscript: (autoScroll) => set({
+    autoScrollTranscript: autoScroll
+  }),
+
   // Reset Everything
   resetUI: () => set(initialUIState),
 })

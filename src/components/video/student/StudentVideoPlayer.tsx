@@ -477,7 +477,7 @@ export const StudentVideoPlayer = forwardRef<
       {showLiveTranscript && (
         <TranscriptPanel
           currentTime={currentTime}
-          videoUrl={videoUrl}
+          videoId={videoId || 'unknown'}
           onClose={() => setShowLiveTranscript(false)}
           onSeek={handleSeek}
         />

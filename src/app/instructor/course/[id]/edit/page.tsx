@@ -42,6 +42,7 @@ import { getCourseAction, publishCourseAction, unpublishCourseAction } from '@/a
 import { getChaptersForCourseAction } from '@/app/actions/chapter-actions'
 import { CourseTrackGoalSelector } from '@/components/course/CourseTrackGoalSelector'
 import { courseEventObserver, COURSE_EVENTS } from '@/lib/course-event-observer'
+import { useTranscriptStatus } from '@/hooks/use-transcript-status'
 
 // Inline Editable Title Component
 function InlineEditableTitle({
@@ -174,12 +175,19 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
   // Step 2: Use regular hooks that will now read from prefetched cache (instant)
   const { course, error, updateCourse, isUpdating } = useCourseEdit(courseId)
 
-  const { 
-    chapters, 
-    createChapter, 
+  const {
+    chapters,
+    createChapter,
     reorderChapters,
-    error: chaptersError 
+    error: chaptersError
   } = useChaptersEdit(courseId)
+
+  // Transcript status hook
+  const {
+    transcriptStatuses,
+    setVideoUploading,
+    refreshStatus
+  } = useTranscriptStatus(courseId)
   
   // REMOVED: Direct video upload hooks - all uploads now go through media library
   
@@ -909,27 +917,61 @@ export default function EditCourseV3Page(props: { params: Promise<{ id: string }
               <div className="px-6 pb-6">
 
                 <ChapterManager
-                  chapters={chapters || []}
-                  courseId={courseId}
-                  onCreateChapter={handleCreateChapter}
-                  onUpdateChapter={handleUpdateChapter}
-                  onDeleteChapter={handleDeleteChapter}
-                  isDeletingChapter={isDeletingChapters}
-                  deletingChapterIds={deletingChapterIds}
-                  onReorderChapters={handleReorderChapters}
-                  onVideoRename={handleVideoRename}
-                  batchRenameMutation={{
-                    mutate: (updates: Array<{ id: string, title?: string }>) => 
-                      batchUpdateVideos({ courseId, updates }),
-                    isPending: isBatchUpdating
-                  }}
-                  onVideoDelete={handleVideoDelete}
-                  onVideoPreview={handleVideoPreview}
-                  onMoveVideo={handleMoveVideo}
-                  onPendingChangesUpdate={handlePendingChangesUpdate}
-                  onTabNavigation={handleTabNavigation}
-                  className="space-y-4"
-                />
+                    chapters={chapters || []}
+                    courseId={courseId}
+                    onCreateChapter={handleCreateChapter}
+                    onUpdateChapter={handleUpdateChapter}
+                    onDeleteChapter={handleDeleteChapter}
+                    isDeletingChapter={isDeletingChapters}
+                    deletingChapterIds={deletingChapterIds}
+                    onReorderChapters={handleReorderChapters}
+                    onVideoRename={handleVideoRename}
+                    batchRenameMutation={{
+                      mutate: (updates: Array<{ id: string, title?: string }>) =>
+                        batchUpdateVideos({ courseId, updates }),
+                      isPending: isBatchUpdating
+                    }}
+                    onVideoDelete={handleVideoDelete}
+                    onVideoPreview={handleVideoPreview}
+                    onMoveVideo={handleMoveVideo}
+                    onPendingChangesUpdate={handlePendingChangesUpdate}
+                    onTabNavigation={handleTabNavigation}
+                    onTranscriptUpload={async (videoId, file) => {
+                      console.log('Upload transcript for video:', videoId, 'File:', file.name)
+
+                      // Set uploading state
+                      setVideoUploading(videoId, true)
+
+                      const formData = new FormData()
+                      formData.append('videoId', videoId)
+                      formData.append('file', file)
+
+                      try {
+                        const response = await fetch('/api/transcription/upload', {
+                          method: 'POST',
+                          body: formData
+                        })
+
+                        const result = await response.json()
+
+                        if (result.success) {
+                          toast.success(`Transcript uploaded: ${file.name}`)
+                          // Refresh transcript status to show green icon
+                          refreshStatus()
+                        } else {
+                          toast.error(result.error || 'Failed to upload transcript')
+                        }
+                      } catch (error) {
+                        console.error('Upload error:', error)
+                        toast.error('Failed to upload transcript')
+                      } finally {
+                        // Clear uploading state
+                        setVideoUploading(videoId, false)
+                      }
+                    }}
+                    transcriptionStatuses={transcriptStatuses}
+                    className="space-y-4"
+                  />
               </div>
             </CardContent>
           </Card>
