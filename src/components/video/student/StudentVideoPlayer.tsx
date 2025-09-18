@@ -24,6 +24,8 @@ interface StudentVideoPlayerProps {
   title?: string
   transcript?: string
   videoId?: string // Optional: for loading student-specific data
+  initialTime?: number // Starting time in seconds for resume functionality
+  autoplay?: boolean // Auto-play video when loaded
   onTimeUpdate?: (time: number) => void
   onPause?: (time: number) => void
   onPlay?: () => void
@@ -45,6 +47,8 @@ export const StudentVideoPlayer = forwardRef<
   title,
   transcript,
   videoId,
+  initialTime = 0,
+  autoplay = true,
   onTimeUpdate,
   onPause,
   onPlay,
@@ -107,6 +111,15 @@ export const StudentVideoPlayer = forwardRef<
       loadStudentVideo(videoId)
     }
   }, [videoId, loadStudentVideo])
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current)
+      }
+    }
+  }, [])
 
   // Effect to manage controls visibility based on play state
   useEffect(() => {
@@ -357,6 +370,28 @@ export const StudentVideoPlayer = forwardRef<
   const handleLoadedMetadata = (duration: number) => {
     setDuration(duration)
     setVideoDuration(duration)
+
+    // Seek to initial time if specified (for resume functionality)
+    if (initialTime > 0 && videoEngineRef.current) {
+      console.log(`🎯 Video loaded, seeking to initial time: ${initialTime}s`)
+      videoEngineRef.current.seek(initialTime)
+    }
+
+    // Try autoplay with sound - will only work after user interaction
+    if (autoplay && videoEngineRef.current) {
+      console.log(`▶️ Starting autoplay with sound`)
+      // Small delay to ensure seek completes before playing
+      setTimeout(() => {
+        videoEngineRef.current?.play()
+          .then(() => {
+            console.log('✅ Autoplay successful - video is playing with sound')
+          })
+          .catch(() => {
+            console.log('ℹ️ Autoplay blocked by browser - user interaction required')
+            // This is expected behavior, user will need to click play
+          })
+      }, initialTime > 0 ? 500 : 100) // Longer delay if we're seeking
+    }
   }
 
   return (
@@ -384,9 +419,10 @@ export const StudentVideoPlayer = forwardRef<
         onPause={() => setIsPlaying(false)}
       />
 
+
       {/* Click area for play/pause - covers the video area except controls */}
-      <div 
-        className="absolute inset-x-0 top-0 bottom-20 z-20 cursor-default" 
+      <div
+        className="absolute inset-x-0 top-0 bottom-20 z-20 cursor-default"
         onClick={handlePlayPause}
         aria-hidden="true"
       />

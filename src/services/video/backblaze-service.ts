@@ -290,11 +290,33 @@ export class BackblazeService {
       const { authorizationToken } = authResponse.data
       
       // Construct signed download URL through Cloudflare CDN (fallback to direct B2)
-      const cdnUrl = process.env.CLOUDFLARE_CDN_URL || 'https://f005.backblazeb2.com'
-      const downloadUrl = `${cdnUrl}/file/${process.env.BACKBLAZE_BUCKET_NAME}/${fileName}?Authorization=${authorizationToken}`
+      // Based on official Backblaze guide: CDN Transform Rule handles /file/bucket path
+      let downloadUrl: string
+
+      console.log(`[BACKBLAZE] DEBUG: CLOUDFLARE_CDN_URL = "${process.env.CLOUDFLARE_CDN_URL}"`)
+
+      if (process.env.CLOUDFLARE_CDN_URL) {
+        // CDN URL - Transform Rule will add /file/bucket prefix
+        downloadUrl = `${process.env.CLOUDFLARE_CDN_URL}/${fileName}?Authorization=${authorizationToken}`
+        console.log(`[BACKBLAZE] DEBUG: Using CDN URL: ${downloadUrl}`)
+      } else {
+        // Direct B2 URL - include full path
+        downloadUrl = `https://f005.backblazeb2.com/file/${process.env.BACKBLAZE_BUCKET_NAME}/${fileName}?Authorization=${authorizationToken}`
+        console.log(`[BACKBLAZE] DEBUG: Using direct B2 URL: ${downloadUrl}`)
+      }
+
+      if (process.env.CLOUDFLARE_CDN_URL) {
+        console.log(`[BACKBLAZE] Using Cloudflare CDN: ${process.env.CLOUDFLARE_CDN_URL}`)
+      } else {
+        console.log(`[BACKBLAZE] Using direct B2 URL (no CDN configured)`)
+        console.log(`[BACKBLAZE] WARNING: This will hit bandwidth caps - configure CLOUDFLARE_CDN_URL`)
+      }
       
-      console.log(`[BACKBLAZE] Signed URL generated for ${fileName}, expires: ${new Date(expiresAt).toISOString()}`)
-      
+      console.log(`[BACKBLAZE] Signed URL generated for ${fileName}:`)
+      console.log(`[BACKBLAZE] Final URL: ${downloadUrl}`)
+      console.log(`[BACKBLAZE] Expires: ${new Date(expiresAt).toISOString()}`)
+      console.log(`[BACKBLAZE] Using CDN: ${process.env.CLOUDFLARE_CDN_URL ? 'YES' : 'NO'}`)
+
       return {
         url: downloadUrl,
         expiresAt

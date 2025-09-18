@@ -297,20 +297,35 @@ export async function updateVideoProgress(
       throw new Error('Not authenticated')
     }
 
-    console.log('[Server Action] Updating video progress:', { courseId, videoId, watchedSeconds, completed })
+    console.log('[Server Action] Updating video progress:', { courseId, videoId, watchedSeconds, completed, userId: user.id })
 
-    // Upsert video progress
+    // First check if the table exists and what columns it has
+    console.log('[Server Action] Checking video_progress table schema...')
+
+    // Test if we can read from the table
+    const { data: testRead, error: readError } = await supabase
+      .from('video_progress')
+      .select('*')
+      .limit(1)
+
+    console.log('[Server Action] Table read test:', { testRead, readError })
+
+    const progressData = {
+      user_id: user.id,
+      course_id: courseId,
+      video_id: videoId,
+      last_position_seconds: Math.round(watchedSeconds),
+      completed_at: completed ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString()
+    }
+
+    console.log('[Server Action] Attempting to insert/update:', progressData)
+
+    // Upsert video progress - match actual table schema
     const { data, error } = await supabase
       .from('video_progress')
-      .upsert({
-        student_id: user.id,
-        course_id: courseId,
-        video_id: videoId,
-        watched_seconds: watchedSeconds,
-        completed_at: completed ? new Date().toISOString() : null,
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'student_id,course_id,video_id'
+      .upsert(progressData, {
+        onConflict: 'user_id,video_id'
       })
       .select()
 
@@ -325,6 +340,7 @@ export async function updateVideoProgress(
     }
 
     console.log('[Server Action] Video progress updated successfully:', data)
+    console.log('[Server Action] Progress saved - Position:', Math.round(watchedSeconds), 'seconds')
 
     // Real-time progress broadcasting following 001 patterns
     try {
@@ -482,12 +498,21 @@ export async function getStudentVideo(videoId: string): Promise<{
     }
 
     // Get video progress
-    const { data: progress } = await supabase
+    const { data: progress, error: progressError } = await supabase
       .from('video_progress')
       .select('*')
-      .eq('student_id', user.id)
+      .eq('user_id', user.id)
       .eq('video_id', videoId)
       .single()
+
+    console.log('[Server Action] Video progress query result:', {
+      progress: progress ? {
+        last_position_seconds: progress.last_position_seconds,
+        progress_percent: progress.progress_percent,
+        updated_at: progress.updated_at
+      } : null,
+      progressError
+    })
 
     // Return private URL as-is - components will use useSignedUrl hook for conversion
     const studentVideoData = {
@@ -503,9 +528,9 @@ export async function getStudentVideo(videoId: string): Promise<{
       progress: progress ? {
         userId: user.id,
         videoId: videoId,
-        watchedSeconds: progress.watched_seconds || 0,
+        watchedSeconds: progress.last_position_seconds || 0,
         totalSeconds: video.duration_seconds || 600,
-        percentComplete: Math.round(((progress.watched_seconds || 0) / (video.duration_seconds || 600)) * 100),
+        percentComplete: Math.round(((progress.last_position_seconds || 0) / (video.duration_seconds || 600)) * 100),
         lastWatchedAt: progress.updated_at || new Date().toISOString(),
         reflectionCount: 0
       } : undefined,

@@ -32,6 +32,8 @@ interface StudentVideoPlayerV2Props {
   title?: string
   transcript?: string
   videoId?: string
+  initialTime?: number
+  autoplay?: boolean
   onTimeUpdate?: (time: number) => void
   onPause?: (time: number) => void
   onPlay?: () => void

@@ -44,15 +44,8 @@ export default function VideoPlayerPage() {
   const courseId = params.id as string
   const videoId = params.videoId as string
 
-  // Resume timestamp from URL parameter (e.g., ?t=120 for 2 minutes)
-  const resumeTimestamp = searchParams?.get('t') ? parseInt(searchParams.get('t')!) : 0
-
-  // Log resume functionality for debugging
-  useEffect(() => {
-    if (resumeTimestamp > 0) {
-      console.log(`🎯 Resuming video at ${resumeTimestamp} seconds (${Math.floor(resumeTimestamp / 60)}:${String(resumeTimestamp % 60).padStart(2, '0')})`)
-    }
-  }, [resumeTimestamp])
+  // Calculate resume timestamp from URL params OR database progress
+  const urlTimestamp = searchParams?.get('t') ? parseInt(searchParams.get('t')!) : 0
   
   // NEW: Use student video slice for video data
   const {
@@ -93,6 +86,24 @@ export default function VideoPlayerPage() {
         }
       : null
     : storeVideoData || course?.videos?.find(v => v.id === videoId) // Use store video data or find in course videos
+
+  // Calculate resume timestamp - prioritize URL param, fallback to database progress
+  const resumeTimestamp = urlTimestamp > 0
+    ? urlTimestamp
+    : (currentVideo?.progress?.watchedSeconds || 0)
+
+  // Log resume functionality for debugging
+  useEffect(() => {
+    if (resumeTimestamp > 0) {
+      const source = urlTimestamp > 0 ? 'URL parameter' : 'database progress'
+      console.log(`🎯 Resuming video at ${resumeTimestamp} seconds from ${source} (${Math.floor(resumeTimestamp / 60)}:${String(resumeTimestamp % 60).padStart(2, '0')})`)
+      console.log('📊 Progress data:', {
+        urlTimestamp,
+        dbProgress: currentVideo?.progress?.watchedSeconds || 0,
+        finalResume: resumeTimestamp
+      })
+    }
+  }, [resumeTimestamp, urlTimestamp, currentVideo?.progress?.watchedSeconds])
 
   // Single effect to handle all loading - ensures hooks are always called in same order
   useEffect(() => {
@@ -285,10 +296,10 @@ export default function VideoPlayerPage() {
   }
 
   const handleTimeUpdate = (time: number) => {
-    // Enhanced progress persistence - save every 10 seconds instead of 5 to reduce noise
+    // Enhanced progress persistence - save every 30 seconds while debugging
     // Only save if time has progressed significantly (avoid duplicate saves)
     const timeDiff = Math.abs(time - lastSavedProgress)
-    const shouldSave = Math.floor(time) % 10 === 0 && timeDiff >= 10
+    const shouldSave = Math.floor(time) % 30 === 0 && timeDiff >= 30
 
     if (shouldSave && !isStandaloneLesson) {
       saveProgressWithRetry(time)
@@ -347,6 +358,7 @@ export default function VideoPlayerPage() {
         transcript={currentVideo.transcript?.join(' ')}
         videoId={videoId}
         initialTime={resumeTimestamp}
+        autoplay={true}
         onTimeUpdate={handleTimeUpdate}
         onPause={handlePause}
         onPlay={handlePlay}

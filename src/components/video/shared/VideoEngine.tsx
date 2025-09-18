@@ -14,10 +14,11 @@ declare global {
 }
 
 export interface VideoEngineRef {
-  play: () => void
+  play: () => Promise<void>
   pause: () => void
   seek: (time: number) => void
   setVolume: (volume: number) => void
+  setMuted: (muted: boolean) => void
   setPlaybackRate: (rate: number) => void
   getVideoElement: () => HTMLVideoElement | null
 }
@@ -220,12 +221,15 @@ export const VideoEngine = forwardRef<VideoEngineRef, VideoEngineProps>(
         if (isYouTube && youtubePlayerRef.current) {
           youtubePlayerRef.current.playVideo()
           onPlay?.()
+          return Promise.resolve()
         } else {
           const video = videoRef.current
           if (video) {
-            video.play()
+            const playPromise = video.play()
             onPlay?.()
+            return playPromise
           }
+          return Promise.resolve()
         }
       },
       pause: () => {
@@ -257,6 +261,20 @@ export const VideoEngine = forwardRef<VideoEngineRef, VideoEngineProps>(
           const video = videoRef.current
           if (video) {
             video.volume = Math.max(0, Math.min(1, volume))
+          }
+        }
+      },
+      setMuted: (muted: boolean) => {
+        if (isYouTube && youtubePlayerRef.current) {
+          if (muted) {
+            youtubePlayerRef.current.mute()
+          } else {
+            youtubePlayerRef.current.unMute()
+          }
+        } else {
+          const video = videoRef.current
+          if (video) {
+            video.muted = muted
           }
         }
       },
