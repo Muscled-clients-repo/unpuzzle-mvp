@@ -4,6 +4,9 @@ import { useState, useRef, useEffect, useCallback } from "react"
 import { StudentVideoPlayer, StudentVideoPlayerRef } from "./StudentVideoPlayer"
 import { useAppStore } from "@/stores/app-store"
 import { useVideoAgentSystem } from "@/lib/video-agent-system"
+import { useReflectionMutation } from "@/hooks/use-reflection-mutation"
+import { useReflectionsQuery } from "@/hooks/use-reflections-query"
+import { deleteAllVoiceMemosAction } from "@/app/actions/reflection-actions"
 import { useSignedUrl } from "@/hooks/use-signed-url"
 import dynamic from "next/dynamic"
 import { LoadingSpinner } from "@/components/common/LoadingSpinner"
@@ -32,6 +35,7 @@ interface StudentVideoPlayerV2Props {
   title?: string
   transcript?: string
   videoId?: string
+  courseId?: string
   initialTime?: number
   autoplay?: boolean
   onTimeUpdate?: (time: number) => void
@@ -47,8 +51,16 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   // Get signed URL for private video access
   const signedUrl = useSignedUrl(props.videoUrl || null, 30)
 
-  // State machine for agent system
-  const { context, dispatch, setVideoRef, setVideoId } = useVideoAgentSystem()
+  // TanStack mutation for reflection submission
+  const reflectionMutation = useReflectionMutation()
+
+  // Query to fetch existing reflections for this video
+  const reflectionsQuery = useReflectionsQuery(props.videoId || '', props.courseId || '')
+
+  // State machine for agent system with reflection mutation
+  const { context, dispatch, setVideoRef, setVideoId, loadInitialMessages, clearAudioMessages } = useVideoAgentSystem({
+    reflectionMutation: reflectionMutation.mutateAsync
+  })
 
   // State for sidebar
   const currentTime = useAppStore((state) => state.currentTime)
@@ -118,7 +130,101 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   useEffect(() => {
     setVideoId(props.videoId || null)
   }, [props.videoId, setVideoId])
-  
+
+  // Load existing reflections and convert them to audio messages for persistence
+  useEffect(() => {
+    if (reflectionsQuery.data?.success && reflectionsQuery.data.data) {
+      const reflections = reflectionsQuery.data.data
+      console.log('[V2] Loading existing reflections:', reflections)
+
+      // Convert voice reflections to audio messages
+      const audioMessages = reflections
+        .filter(reflection => reflection.reflection_type === 'voice')
+        .map(reflection => {
+          // Extract file URL from reflection_text
+          const fileUrlMatch = reflection.reflection_text.match(/File URL: (.+?)(?:\n|$)/)
+          const durationMatch = reflection.reflection_text.match(/Duration: (\d+(?:\.\d+)?)s/)
+          const timestampMatch = reflection.reflection_text.match(/captured at (\d+(?:\.\d+)?)s/)
+
+          if (fileUrlMatch) {
+            const fileUrl = fileUrlMatch[1]
+            const duration = durationMatch ? parseFloat(durationMatch[1]) : 0
+            const videoTimestamp = timestampMatch ? parseFloat(timestampMatch[1]) : 0
+
+            return {
+              id: `audio-${reflection.id}`,
+              type: 'audio' as const,
+              state: 'permanent' as const,
+              message: `Voice memo • ${Math.floor(videoTimestamp / 60)}:${Math.floor(videoTimestamp % 60).toString().padStart(2, '0')}`,
+              timestamp: new Date(reflection.created_at).getTime(),
+              audioData: {
+                fileUrl,
+                duration,
+                videoTimestamp,
+                reflectionId: reflection.id
+              }
+            }
+          }
+          return null
+        })
+        .filter(Boolean)
+
+      if (audioMessages.length > 0) {
+        console.log('[V2] Loading audio messages:', audioMessages)
+        loadInitialMessages(audioMessages)
+      }
+    }
+  }, [reflectionsQuery.data, loadInitialMessages])
+
+  // Cleanup function to delete all voice memos
+  const handleDeleteAllVoiceMemos = async () => {
+    if (confirm('Are you sure you want to delete ALL voice memos? This cannot be undone.')) {
+      try {
+        console.log('[CLEANUP] Starting voice memo cleanup...')
+
+        // 1. Clear from frontend (remove audio messages from chat)
+        clearAudioMessages()
+
+        // 2. Delete from server (database + files)
+        const result = await deleteAllVoiceMemosAction()
+
+        if (result.success) {
+          console.log('[CLEANUP] Success:', result.message)
+          alert(result.message)
+
+          // 3. Refetch reflections to update UI
+          reflectionsQuery.refetch()
+        } else {
+          console.error('[CLEANUP] Failed:', result.error)
+          alert('Failed to delete voice memos: ' + result.error)
+        }
+      } catch (error) {
+        console.error('[CLEANUP] Error:', error)
+        alert('Error deleting voice memos: ' + error)
+      }
+    }
+  }
+
+  // Add keyboard shortcut for cleanup (Ctrl+Shift+Delete) and expose to console
+  useEffect(() => {
+    const handleKeydown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'Delete') {
+        e.preventDefault()
+        handleDeleteAllVoiceMemos()
+      }
+    }
+
+    // Expose cleanup function to window for console access
+    ;(window as any).deleteAllVoiceMemos = handleDeleteAllVoiceMemos
+    console.log('[CLEANUP] Use window.deleteAllVoiceMemos() to clear all voice memos')
+
+    document.addEventListener('keydown', handleKeydown)
+    return () => {
+      document.removeEventListener('keydown', handleKeydown)
+      delete (window as any).deleteAllVoiceMemos
+    }
+  }, [])
+
   // Handle resize
   const handleMouseMove = (e: MouseEvent) => {
     if (!isResizing) return
@@ -273,10 +379,16 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   // Handle reflection submission
   const handleReflectionSubmit = (type: string, data: any) => {
     console.log('[V2] Reflection submitted:', { type, data })
-    
+
+    // Add courseId to the data
+    const enhancedData = {
+      ...data,
+      courseId: props.courseId
+    }
+
     dispatch({
       type: 'REFLECTION_SUBMITTED',
-      payload: { type, data }
+      payload: { type, data: enhancedData }
     })
   }
 

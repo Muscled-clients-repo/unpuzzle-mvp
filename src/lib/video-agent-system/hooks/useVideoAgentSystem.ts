@@ -8,7 +8,11 @@ import { getGlobalCompatibilityInstance, StateMachineManager } from '../core/Man
 
 let globalStateMachine: VideoAgentStateMachine | null = null
 
-export function useVideoAgentSystem() {
+interface UseVideoAgentSystemOptions {
+  reflectionMutation?: (data: any) => Promise<any>
+}
+
+export function useVideoAgentSystem(options?: UseVideoAgentSystemOptions) {
   const [context, setContext] = useState<SystemContext | null>(null)
   
   useEffect(() => {
@@ -24,6 +28,11 @@ export function useVideoAgentSystem() {
         globalStateMachine = new VideoAgentStateMachine()
         discoveryLogger.logSingletonAccess('VideoAgentStateMachine-Created', globalStateMachine)
       }
+    }
+
+    // Set reflection mutation if provided
+    if (options?.reflectionMutation) {
+      globalStateMachine.setReflectionMutation(options.reflectionMutation)
     }
     
     // Subscribe to updates
@@ -51,6 +60,14 @@ export function useVideoAgentSystem() {
     globalStateMachine?.setVideoId(videoId)
   }, [])
 
+  const loadInitialMessages = useCallback((messages: any[]) => {
+    globalStateMachine?.loadInitialMessages(messages)
+  }, [])
+
+  const clearAudioMessages = useCallback(() => {
+    globalStateMachine?.clearAudioMessages()
+  }, [])
+
   return {
     context: context || {
       state: SystemState.VIDEO_PAUSED,
@@ -64,6 +81,8 @@ export function useVideoAgentSystem() {
     },
     dispatch,
     setVideoRef,
-    setVideoId
+    setVideoId,
+    loadInitialMessages,
+    clearAudioMessages
   }
 }

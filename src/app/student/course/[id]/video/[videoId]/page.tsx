@@ -357,6 +357,7 @@ export default function VideoPlayerPage() {
         title={currentVideo.title}
         transcript={currentVideo.transcript?.join(' ')}
         videoId={videoId}
+        courseId={courseId}
         initialTime={resumeTimestamp}
         autoplay={true}
         onTimeUpdate={handleTimeUpdate}

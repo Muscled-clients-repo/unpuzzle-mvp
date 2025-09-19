@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react"
 import { Message, MessageState, ReflectionData } from "@/lib/video-agent-system"
+import { SimpleVoiceMemoPlayer } from '@/components/reflection/SimpleVoiceMemoPlayer'
+import { MessengerAudioPlayer } from '@/components/reflection/MessengerAudioPlayer'
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +16,8 @@ import { QuizResultBox } from "./QuizResultBox"
 interface AIChatSidebarV2Props {
   messages: Message[]
   isVideoPlaying?: boolean
+  videoId?: string
+  courseId?: string
   onAgentRequest: (type: string) => void
   onAgentAccept: (id: string) => void
   onAgentReject: (id: string) => void
@@ -66,6 +70,8 @@ export function AIChatSidebarV2({
   const [isPlaying, setIsPlaying] = useState(false)
   const [playbackTime, setPlaybackTime] = useState(0)
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null)
+  const [audioChunks, setAudioChunks] = useState<Blob[]>([])
   const [loomUrl, setLoomUrl] = useState('')
   const [showActivityLog, setShowActivityLog] = useState(false)
   
@@ -182,6 +188,14 @@ export function AIChatSidebarV2({
           <div key={msg.id} className="flex justify-start my-3">
             <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground bg-secondary/60 px-4 py-2 rounded-full border border-border/50">
               <span>{msg.message.replace('📍', '•')}</span>
+              {/* Add playback button for voice memos */}
+              {(msg as any).reflectionData?.type === 'voice' && (msg as any).reflectionData?.fileUrl && (
+                <SimpleVoiceMemoPlayer
+                  messageId={msg.id}
+                  fileUrl={(msg as any).reflectionData.fileUrl}
+                  duration={(msg as any).reflectionData.duration}
+                />
+              )}
             </div>
           </div>
         )
@@ -412,25 +426,70 @@ export function AIChatSidebarV2({
     // Reflection options messages
     if (msg.type === 'reflection-options') {
       // Voice recording handlers
-      const startRecording = () => {
-        // Notify that voice memo was chosen
-        onReflectionTypeChosen?.('voice')
-        
-        setIsRecording(true)
-        setIsPaused(false)
-        setRecordingTime(0)
-        setHasRecording(false)
-        
-        // Dispatch recording started action
-        dispatch?.({ type: 'RECORDING_STARTED', payload: {} })
-        
-        // Start recording timer
-        recordingIntervalRef.current = setInterval(() => {
-          setRecordingTime(prev => prev + 1)
-        }, 1000)
+      const startRecording = async () => {
+        try {
+          // Notify that voice memo was chosen
+          onReflectionTypeChosen?.('voice')
+
+          // Get user media
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              sampleRate: 44100
+            }
+          })
+
+          // Create MediaRecorder with better audio format support
+          const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+            ? 'audio/webm;codecs=opus'
+            : MediaRecorder.isTypeSupported('audio/webm')
+            ? 'audio/webm'
+            : MediaRecorder.isTypeSupported('audio/mp4')
+            ? 'audio/mp4'
+            : 'audio/webm' // fallback
+
+          console.log('[Recording] Using MIME type:', mimeType)
+
+          const recorder = new MediaRecorder(stream, { mimeType })
+          setMediaRecorder(recorder)
+          setAudioChunks([])
+
+          recorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+              setAudioChunks(prev => [...prev, event.data])
+            }
+          }
+
+          recorder.onstop = () => {
+            stream.getTracks().forEach(track => track.stop())
+          }
+
+          recorder.start(100) // Collect data every 100ms
+
+          setIsRecording(true)
+          setIsPaused(false)
+          setRecordingTime(0)
+          setHasRecording(false)
+
+          // Dispatch recording started action
+          dispatch?.({ type: 'RECORDING_STARTED', payload: {} })
+
+          // Start recording timer
+          recordingIntervalRef.current = setInterval(() => {
+            setRecordingTime(prev => prev + 1)
+          }, 1000)
+
+        } catch (error) {
+          console.error('Failed to start recording:', error)
+          alert('Failed to access microphone. Please ensure you have granted microphone permissions.')
+        }
       }
 
       const pauseRecording = () => {
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+          mediaRecorder.pause()
+        }
         setIsPaused(true)
         if (recordingIntervalRef.current) {
           clearInterval(recordingIntervalRef.current)
@@ -440,6 +499,9 @@ export function AIChatSidebarV2({
       }
 
       const resumeRecording = () => {
+        if (mediaRecorder && mediaRecorder.state === 'paused') {
+          mediaRecorder.resume()
+        }
         setIsPaused(false)
         recordingIntervalRef.current = setInterval(() => {
           setRecordingTime(prev => prev + 1)
@@ -449,20 +511,31 @@ export function AIChatSidebarV2({
       }
 
       const stopRecording = () => {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop()
+
+          // Create blob from chunks when recording stops
+          mediaRecorder.onstop = () => {
+            const mimeType = mediaRecorder.mimeType
+            const finalBlob = new Blob(audioChunks, { type: mimeType })
+            console.log('[Recording] Created audio blob:', {
+              size: finalBlob.size,
+              type: finalBlob.type
+            })
+            setAudioBlob(finalBlob)
+          }
+        }
+
         setIsRecording(false)
         setIsPaused(false)
         setHasRecording(true)
-        
+
         if (recordingIntervalRef.current) {
           clearInterval(recordingIntervalRef.current)
         }
-        
+
         // Dispatch recording stopped action
         dispatch?.({ type: 'RECORDING_STOPPED', payload: {} })
-        
-        // Simulate creating audio blob
-        const mockBlob = new Blob(['mock-audio-data'], { type: 'audio/wav' })
-        setAudioBlob(mockBlob)
       }
 
       const deleteRecording = () => {
@@ -496,9 +569,9 @@ export function AIChatSidebarV2({
       const submitRecording = () => {
         if (audioBlob) {
           // Create reflection data
-          const reflectionData: ReflectionData = {
+          const reflectionData = {
             type: 'voice',
-            content: URL.createObjectURL(audioBlob),
+            audioBlob: audioBlob,  // Pass the actual blob instead of URL
             duration: recordingTime,
             videoTimestamp: 0 // You might want to get this from video state
           }
@@ -752,6 +825,21 @@ export function AIChatSidebarV2({
             </div>
           </div>
         </Card>
+      )
+    }
+
+    // Audio messages - Messenger-style audio player
+    if (msg.type === 'audio' && msg.audioData) {
+      return (
+        <div key={msg.id} className="flex justify-end my-3">
+          <MessengerAudioPlayer
+            reflectionId={msg.audioData.reflectionId}
+            fileUrl={msg.audioData.fileUrl}
+            duration={msg.audioData.duration}
+            timestamp={msg.audioData.videoTimestamp}
+            isOwn={true}
+          />
+        </div>
       )
     }
 

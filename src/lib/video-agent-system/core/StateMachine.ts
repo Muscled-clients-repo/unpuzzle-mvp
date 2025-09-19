@@ -14,6 +14,7 @@ export class VideoAgentStateMachine {
   private messageManager: MessageManager
   private subscribers: Set<(context: SystemContext) => void> = new Set()
   private videoId: string | null = null
+  private reflectionMutation: ((data: any) => Promise<any>) | null = null
 
   constructor() {
     this.context = {
@@ -111,6 +112,25 @@ export class VideoAgentStateMachine {
 
   public setVideoId(videoId: string | null) {
     this.videoId = videoId
+  }
+
+  public loadInitialMessages(messages: Message[]) {
+    this.updateContext({
+      ...this.context,
+      messages: [...this.context.messages, ...messages]
+    })
+  }
+
+  public clearAudioMessages() {
+    const filteredMessages = this.context.messages.filter(msg => msg.type !== 'audio')
+    this.updateContext({
+      ...this.context,
+      messages: filteredMessages
+    })
+  }
+
+  public setReflectionMutation(mutation: (data: any) => Promise<any>) {
+    this.reflectionMutation = mutation
   }
 
   private getVideoId(): string | null {
@@ -747,7 +767,7 @@ export class VideoAgentStateMachine {
       case 'quiz':
         return 'Starting your quiz now! Answer each question to the best of your ability.'
       case 'reflect':
-        return 'Let\'s reflect on what you\'ve learned:\n\n• What was the most important concept?\n• How does this connect to what you already know?\n• Where could you apply this knowledge?\n\nTake a moment to think about these questions.'
+        return 'Choose how you\'d like to reflect on this moment in the video. You can record a voice memo, take a screenshot, or create a Loom video to capture your thoughts.'
       case 'path':
         return 'Based on your progress, here\'s your personalized learning path:\n\n✅ Completed: Introduction to React\n📍 Current: React Hooks\n🔜 Next: State Management\n\nRecommended next steps:\n1. Practice with useState (15 min)\n2. Learn useEffect (20 min)\n3. Build a mini project (30 min)'
       default:
@@ -973,6 +993,75 @@ export class VideoAgentStateMachine {
       })
 
       throw error // Don't return mock data, let it fail
+    }
+  }
+
+  private async saveReflectionToDatabase(type: string, data: any, videoTimestamp: number): Promise<void> {
+    const videoId = this.getVideoId()
+
+    if (!videoId) {
+      throw new Error('Video ID required for reflection storage')
+    }
+
+    if (!this.reflectionMutation) {
+      throw new Error('Reflection mutation not available - ensure TanStack mutation is properly set')
+    }
+
+    try {
+      // Prepare data for TanStack mutation (which calls server action)
+      const reflectionData: any = {
+        type,
+        videoId,
+        courseId: data.courseId || '',
+        videoTimestamp,
+      }
+
+      // Handle different reflection types
+      console.log('[SM] Processing reflection type:', type)
+      console.log('[SM] Input data:', data)
+
+      if (type === 'voice' && data.audioBlob) {
+        console.log('[SM] Converting audioBlob to File')
+        console.log('[SM] AudioBlob type:', data.audioBlob.type)
+        console.log('[SM] AudioBlob size:', data.audioBlob.size)
+
+        // Convert blob to File for FormData compatibility
+        const audioFile = new File([data.audioBlob], 'voice-memo.webm', {
+          type: data.audioBlob.type || 'audio/webm'
+        })
+        console.log('[SM] Created audioFile:', audioFile)
+        console.log('[SM] AudioFile type:', audioFile.type)
+        console.log('[SM] AudioFile size:', audioFile.size)
+
+        reflectionData.file = audioFile
+        if (data.duration) {
+          reflectionData.duration = data.duration
+        }
+      } else if (type === 'screenshot' && data.imageBlob) {
+        console.log('[SM] Converting imageBlob to File')
+        // Convert blob to File for FormData compatibility
+        const imageFile = new File([data.imageBlob], 'screenshot.png', {
+          type: data.imageBlob.type || 'image/png'
+        })
+        reflectionData.file = imageFile
+      } else if (type === 'loom' && data.loomUrl) {
+        reflectionData.loomUrl = data.loomUrl
+      } else {
+        console.error('[SM] No matching reflection type or missing data:', { type, hasAudioBlob: !!data.audioBlob, hasImageBlob: !!data.imageBlob, hasLoomUrl: !!data.loomUrl })
+      }
+
+      console.log('[SM] Final reflectionData before mutation:', reflectionData)
+
+      // Use TanStack mutation (which calls server action)
+      const result = await this.reflectionMutation(reflectionData)
+      console.log('[SM] Reflection saved successfully via TanStack:', result)
+
+      // Return the result so we can use the file URL in the message
+      return result
+
+    } catch (error) {
+      console.error('[SM] Failed to save reflection via TanStack:', error)
+      throw error
     }
   }
 
@@ -1509,10 +1598,19 @@ export class VideoAgentStateMachine {
 
   private async handleReflectionSubmit(payload: { type: string, data: any }) {
     console.log('[SM] Reflection submitted:', payload)
-    
+
     // Get current video timestamp
     const currentVideoTime = this.videoController.getCurrentTime()
     const formattedTime = this.formatTime(currentVideoTime)
+
+    // Save reflection to database via API
+    let reflectionResult: any = null
+    try {
+      reflectionResult = await this.saveReflectionToDatabase(payload.type, payload.data, currentVideoTime)
+    } catch (error) {
+      console.error('[SM] Failed to save reflection to database:', error)
+      // Still show success message to user but log the error
+    }
     
     // Now that reflection is submitted, clean up messages
     const filteredMessages = this.context.messages.map(msg => {
@@ -1569,8 +1667,30 @@ export class VideoAgentStateMachine {
       type: 'system' as const,
       state: MessageState.PERMANENT,
       message: systemMessage,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      // Add reflection metadata for playback functionality
+      reflectionData: reflectionResult ? {
+        type: payload.type,
+        fileUrl: reflectionResult.fileUrl,
+        duration: payload.data.duration,
+        videoTimestamp: currentVideoTime
+      } : undefined
     }
+
+    // Audio message for voice memos (like WhatsApp/Messenger)
+    const audioMessage: Message | null = payload.type === 'voice' && reflectionResult ? {
+      id: `audio-${Date.now()}`,
+      type: 'audio' as const,
+      state: MessageState.PERMANENT,
+      message: `Voice memo • ${formattedTime}`,
+      timestamp: Date.now(),
+      audioData: {
+        fileUrl: reflectionResult.fileUrl,
+        duration: payload.data.duration,
+        videoTimestamp: currentVideoTime,
+        reflectionId: reflectionResult.id
+      }
+    } : null
 
     // AI message with reflection data
     const aiResponse: Message = {
@@ -1592,7 +1712,14 @@ export class VideoAgentStateMachine {
       timestamp: Date.now()
     }
     
-    const newMessages = [...filteredMessages, timestampMessage, aiResponse, countdownMessage]
+    // Build messages array conditionally
+    const newMessages = [
+      ...filteredMessages,
+      timestampMessage,
+      ...(audioMessage ? [audioMessage] : []), // Add audio message if it exists
+      aiResponse,
+      countdownMessage
+    ]
     
     this.updateContext({
       ...this.context,

@@ -178,10 +178,26 @@ export class VideoController {
     }
     
     try {
-      this.videoRef.play()
+      await this.videoRef.play()
       return true
     } catch (e) {
       console.warn('Play failed:', e)
+
+      // Handle AbortError (common after laptop sleep)
+      if (e instanceof Error && e.name === 'AbortError') {
+        console.log('AbortError detected, attempting recovery...')
+
+        // Wait a bit and try again
+        await this.sleep(100)
+        try {
+          await this.videoRef.play()
+          return true
+        } catch (retryError) {
+          console.error('Retry play failed:', retryError)
+          return false
+        }
+      }
+
       return false
     }
   }

@@ -65,9 +65,16 @@ export interface QuizResultData {
   }[]
 }
 
+export interface AudioData {
+  fileUrl: string
+  duration: number
+  videoTimestamp: number
+  reflectionId: string
+}
+
 export interface Message {
   id: string
-  type: 'system' | 'agent-prompt' | 'ai' | 'user' | 'quiz-question' | 'quiz-result' | 'reflection-options' | 'reflection-complete'
+  type: 'system' | 'agent-prompt' | 'ai' | 'user' | 'quiz-question' | 'quiz-result' | 'reflection-options' | 'reflection-complete' | 'audio'
   agentType?: 'hint' | 'quiz' | 'reflect' | 'path'
   state: MessageState
   message: string
@@ -77,6 +84,7 @@ export interface Message {
   quizState?: QuizState
   reflectionData?: ReflectionData
   quizResult?: QuizResultData  // For quiz completion messages
+  audioData?: AudioData  // For audio messages
   actions?: {
     onAccept?: () => void
     onReject?: () => void
