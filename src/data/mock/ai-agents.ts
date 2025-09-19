@@ -1,6 +1,6 @@
 export interface AIInteraction {
   id: string
-  type: "hint" | "check" | "reflect" | "path"
+  type: "check" | "reflect" | "path"
   userId: string
   courseId: string
   videoId: string
@@ -9,12 +9,6 @@ export interface AIInteraction {
   request?: string
   response: string
   createdAt: Date
-}
-
-export interface PuzzleHint {
-  context: string
-  hint: string
-  relatedConcepts?: string[]
 }
 
 export interface PuzzleCheck {
@@ -41,24 +35,6 @@ export interface PuzzlePath {
 }
 
 export const mockAIResponses = {
-  hints: [
-    {
-      context: "User paused at HTML forms section",
-      hint: "Forms are used to collect user input. Each input element needs a 'name' attribute to be submitted with the form data.",
-      relatedConcepts: ["input types", "form validation", "form submission"],
-    },
-    {
-      context: "User rewound CSS flexbox explanation",
-      hint: "Flexbox works on two axes: main axis (flex-direction) and cross axis. Items flow along the main axis by default.",
-      relatedConcepts: ["justify-content", "align-items", "flex-wrap"],
-    },
-    {
-      context: "User paused at JavaScript functions",
-      hint: "Functions are reusable blocks of code. They can take parameters (inputs) and return values (outputs).",
-      relatedConcepts: ["parameters vs arguments", "return statement", "function scope"],
-    },
-  ],
-  
   checks: [
     {
       question: "What is the purpose of semantic HTML?",
@@ -144,17 +120,6 @@ export const mockAIResponses = {
 }
 
 export const mockAIInteractions: AIInteraction[] = [
-  {
-    id: "ai-1",
-    type: "hint",
-    userId: "learner-1",
-    courseId: "course-1",
-    videoId: "video-1-2",
-    timestamp: 1200,
-    trigger: "pause",
-    response: "Remember: Semantic HTML elements like <header>, <nav>, and <main> describe their content's purpose, not just its appearance.",
-    createdAt: new Date("2024-02-01T10:30:00"),
-  },
   {
     id: "ai-2",
     type: "check",

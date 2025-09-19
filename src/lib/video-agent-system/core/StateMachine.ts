@@ -420,13 +420,13 @@ export class VideoAgentStateMachine {
     const agentMessage: Message = {
       id: `agent-${Date.now()}`,
       type: 'agent-prompt' as const,
-      agentType: agentType as 'hint' | 'quiz' | 'reflect' | 'path',
+      agentType: agentType as 'quiz' | 'reflect' | 'path',
       state: MessageState.UNACTIVATED,
-      message: this.getAgentPrompt(agentType),
+      message: this.getAgentPrompt(agentType, currentVideoTime),
       timestamp: Date.now(),
       linkedMessageId: systemMessage.id
     }
-    
+
     // 5. Update context atomically - ensure video state is paused
     this.updateContext({
       ...this.context,
@@ -446,6 +446,17 @@ export class VideoAgentStateMachine {
         agentMessage
       ]
     })
+
+    // 6. For quiz agents, contextual enhancement is disabled for now
+    // if (agentType === 'quiz') {
+    //   try {
+    //     const videoId = this.getVideoId()
+    //     const contextualPrompt = await this.getContextualAgentPrompt(agentType, videoId, currentVideoTime)
+    //     this.updateAgentMessage(agentMessage.id, contextualPrompt)
+    //   } catch (error) {
+    //     console.error('Failed to load contextual prompt:', error)
+    //   }
+    // }
   }
   
   private async handleManualPause(time: number) {
@@ -453,59 +464,15 @@ export class VideoAgentStateMachine {
     console.log('[SM] Current agent state:', JSON.stringify(this.context.agentState))
     console.log('[SM] Current system state:', this.context.state)
     console.log('[SM] Active agent type:', this.context.agentState.activeType)
-    
-    // NUCLEAR PRINCIPLE: Use agent state as single source of truth
-    // If there's an active agent, don't show hint
-    if (this.context.agentState.activeType) {
-      console.log(`[SM] Agent ${this.context.agentState.activeType} is active - not showing hint`)
-      this.updateContext({
-        ...this.context,
-        state: SystemState.VIDEO_PAUSED,
-        videoState: {
-          ...this.context.videoState,
-          isPlaying: false
-        }
-      })
-      return
-    }
-    
-    // NUCLEAR PRINCIPLE: Simple, deterministic behavior
-    // No agent active? Show hint. That's it.
-    const currentMessages = this.context.messages.filter(msg => {
-      // Remove any unactivated messages from before
-      if (msg.state === MessageState.UNACTIVATED) return false
-      // Remove transient UI
-      if (msg.type === 'reflection-options') return false
-      return true
-    })
-    
-    const systemMessage: Message = {
-      id: `sys-${Date.now()}`,
-      type: 'system' as const,
-      state: MessageState.UNACTIVATED,
-      message: this.context.recordingState.isRecording ? `Recording paused at ${this.formatTime(time)}` : `Paused at ${this.formatTime(time)}`,
-      timestamp: Date.now()
-    }
-    
-    const hintMessage: Message = {
-      id: `agent-${Date.now()}`,
-      type: 'agent-prompt' as const,
-      agentType: 'hint' as const,
-      state: MessageState.UNACTIVATED,
-      message: 'Do you want a hint about what\'s happening at this timestamp?',
-      timestamp: Date.now(),
-      linkedMessageId: systemMessage.id
-    }
-    
+
+    // Simply pause the video
     this.updateContext({
       ...this.context,
-      state: SystemState.AGENT_SHOWING_UNACTIVATED,
-      agentState: {
-        currentUnactivatedId: hintMessage.id,
-        currentSystemMessageId: systemMessage.id,
-        activeType: null  // Don't set active until hint is accepted
-      },
-      messages: [...currentMessages, systemMessage, hintMessage]  // Use filtered messages
+      state: SystemState.VIDEO_PAUSED,
+      videoState: {
+        ...this.context.videoState,
+        isPlaying: false
+      }
     })
   }
   
@@ -626,7 +593,6 @@ export class VideoAgentStateMachine {
     // Add system message for agent activation
     const getAgentLabel = (type: string | null) => {
       switch (type) {
-        case 'hint': return 'PuzzleHint'
         case 'quiz': return 'PuzzleCheck'
         case 'reflect': return 'PuzzleReflect'
         case 'path': return 'PuzzlePath'
@@ -680,43 +646,53 @@ export class VideoAgentStateMachine {
       agentState: {
         ...this.context.agentState,
         currentUnactivatedId: null, // No longer unactivated
-        activeType: null // Clear active type for hint/path agents
+        activeType: null // Clear active type
       }
     })
   }
   
   private async handleRejectAgent(agentId: string) {
     console.log(`[SM] Agent rejected: ${agentId}`)
-    
+
     // Check if this agent has already been processed (no longer UNACTIVATED)
     const agentMessage = this.context.messages.find(msg => msg.id === agentId)
     if (!agentMessage || agentMessage.state !== MessageState.UNACTIVATED) {
       console.log(`[SM] Agent ${agentId} already processed, ignoring duplicate reject`)
       return
     }
-    
-    // Flow 7: Agent Rejection
-    const updatedMessages = this.context.messages.map(msg => {
-      if (msg.id === agentId) {
-        // Change state to rejected, remove buttons
-        return { ...msg, state: MessageState.REJECTED, actions: undefined }
-      }
-      // Also mark the linked system message as permanent
-      if (msg.id === this.context.agentState.currentSystemMessageId) {
-        return { ...msg, state: MessageState.PERMANENT }
-      }
-      return msg
+
+    // Remove the agent and system message immediately
+    const updatedMessages = this.context.messages.filter(msg => {
+      // Remove the rejected agent message
+      if (msg.id === agentId) return false
+      // Remove the linked system message
+      if (msg.id === this.context.agentState.currentSystemMessageId) return false
+      return true
     })
-    
+
+    // Update context to clear agent state and resume video
     this.updateContext({
       ...this.context,
-      state: SystemState.AGENT_REJECTED,
+      state: SystemState.VIDEO_PLAYING,
+      videoState: {
+        ...this.context.videoState,
+        isPlaying: true
+      },
       messages: updatedMessages,
       agentState: {
-        ...this.context.agentState,
-        currentUnactivatedId: null // No longer unactivated
+        currentUnactivatedId: null,
+        currentSystemMessageId: null,
+        activeType: null
       }
     })
+
+    // Resume video playback immediately
+    console.log('[SM] Resuming video after agent rejection')
+    try {
+      await this.videoController.playVideo()
+    } catch (error) {
+      console.error('[SM] Failed to resume video:', error)
+    }
   }
   
   // REMOVED: clearUnactivatedMessages and clearReflectionOptions
@@ -746,24 +722,77 @@ export class VideoAgentStateMachine {
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
   
-  private getAgentPrompt(type: string): string {
+  private getAgentPrompt(type: string, currentTime?: number): string {
     switch (type) {
-      case 'hint': return 'Do you want a hint about what\'s happening at this timestamp?'
-      case 'quiz': return 'Do you want to be quizzed about what you\'ve learned?'
+      case 'quiz':
+        const timeFormatted = currentTime ? this.formatTime(currentTime) : '0:00'
+        return `Want to take a quiz at ${timeFormatted}?`
       case 'reflect': return 'Would you like to reflect on what you\'ve learned?'
       case 'path': return 'Want a personalized learning path based on your progress?'
       default: return 'How can I help you?'
     }
   }
+
+  private async getContextualAgentPrompt(type: string, videoId?: string, timestamp?: number): Promise<string> {
+    if (type === 'quiz' && videoId && timestamp !== undefined) {
+      try {
+        // Get transcript context
+        const transcriptSegment = await getTranscriptContextForAI(videoId, timestamp)
+
+        // Get topic summary from Groq
+        const response = await fetch('/api/ai/topic-summary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transcriptSegment,
+            timestamp
+          })
+        })
+
+        if (response.ok) {
+          const { topicSummary } = await response.json()
+          const timeFormatted = this.formatTime(timestamp)
+          return `Want to quiz yourself at ${timeFormatted} on ${topicSummary}?`
+        }
+      } catch (error) {
+        console.error('Failed to get contextual prompt:', error)
+      }
+
+      // Fallback
+      const timeFormatted = this.formatTime(timestamp)
+      return `Want to quiz yourself at ${timeFormatted}?`
+    }
+
+    return this.getAgentPrompt(type)
+  }
+
+  private getVideoId(): string | undefined {
+    return this.videoId || undefined
+  }
+
+  private updateAgentMessage(messageId: string, newMessage: string) {
+    const updatedMessages = this.context.messages.map(msg => {
+      if (msg.id === messageId && msg.type === 'agent-prompt') {
+        return {
+          ...msg,
+          message: newMessage,
+          actions: {
+            onAccept: () => this.enqueueCommand({ type: 'ACCEPT_AGENT', payload: { messageId } }),
+            onReject: () => this.enqueueCommand({ type: 'REJECT_AGENT', payload: { messageId } })
+          }
+        }
+      }
+      return msg
+    })
+
+    this.updateContext({
+      ...this.context,
+      messages: updatedMessages
+    })
+  }
   
   private async generateAIResponse(agentType: string | null, videoId?: string, timestamp?: number): Promise<string> {
     switch (agentType) {
-      case 'hint':
-        try {
-          return await this.generateAIHint(videoId, timestamp)
-        } catch (error) {
-          throw new Error(`Hint generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
-        }
       case 'quiz':
         return 'Starting your quiz now! Answer each question to the best of your ability.'
       case 'reflect':
@@ -775,118 +804,6 @@ export class VideoAgentStateMachine {
     }
   }
 
-  private async generateAIHint(videoId?: string, timestamp?: number): Promise<string> {
-    if (!videoId || timestamp === undefined) {
-      throw new Error('Video ID and timestamp required for hint generation')
-    }
-
-    try {
-      // Set loading state
-      this.updateContext({
-        ...this.context,
-        aiState: {
-          isGenerating: true,
-          generatingType: 'hint',
-          streamedContent: '',
-          error: null
-        }
-      })
-
-      const transcriptSegment = await getTranscriptContextForAI(videoId, timestamp)
-
-      const response = await fetch('/api/ai/hint', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          videoId,
-          timestamp,
-          transcriptSegment
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-
-      const reader = response.body?.getReader()
-      if (!reader) {
-        throw new Error('No reader available')
-      }
-
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let streamedContent = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6))
-
-              if (data.type === 'chunk') {
-                streamedContent += data.content
-                this.updateContext({
-                  ...this.context,
-                  aiState: {
-                    ...this.context.aiState,
-                    streamedContent
-                  }
-                })
-              } else if (data.type === 'complete') {
-                // Clear loading state and return result
-                this.updateContext({
-                  ...this.context,
-                  aiState: {
-                    isGenerating: false,
-                    generatingType: null,
-                    streamedContent: '',
-                    error: null
-                  }
-                })
-
-                if (data.hint) {
-                  return `${data.hint}\n\n💡 Context: ${data.context}\n\n🔗 Related: ${data.relatedConcepts?.join(', ') || 'N/A'}`
-                }
-              } else if (data.type === 'error') {
-                throw new Error(data.error)
-              }
-            } catch (e) {
-              console.warn('Failed to parse SSE data:', line)
-            }
-          }
-        }
-      }
-
-      throw new Error('No hint data received')
-    } catch (error) {
-      console.error('AI hint generation failed:', error)
-
-      // Clear loading state and set error
-      this.updateContext({
-        ...this.context,
-        aiState: {
-          isGenerating: false,
-          generatingType: null,
-          streamedContent: '',
-          error: error instanceof Error ? error.message : 'Unknown error'
-        }
-      })
-
-      throw error // Don't return mock data, let it fail
-    }
-  }
-
-
-  private getMockHint(): string {
-    return 'Here\'s a hint: Pay attention to how the state is being managed in this section. The pattern used here will be important for the upcoming exercises.'
-  }
 
   private async generateQuizQuestions(videoId?: string, timestamp?: number): Promise<QuizQuestion[]> {
     if (!videoId || timestamp === undefined) {
@@ -1204,7 +1121,7 @@ export class VideoAgentStateMachine {
         // First clear the countdown message
         const updatedMessages = this.context.messages.filter(msg => msg.id !== countdownMessageId)
         
-        // CRITICAL: Must clear activeType for manual pause to show hint
+        // Clear activeType for manual pause
         this.updateContext({
           ...this.context,
           state: SystemState.VIDEO_PLAYING,

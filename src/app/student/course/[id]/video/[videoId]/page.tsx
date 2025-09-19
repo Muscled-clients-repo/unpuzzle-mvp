@@ -5,7 +5,6 @@ import { useParams, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
 import { useAppStore } from "@/stores/app-store"
 import { LoadingSpinner } from "@/components/common/LoadingSpinner"
-import { updateVideoProgress } from "@/app/actions/student-course-actions"
 
 // Dynamically import the V2 VideoPlayer component with loading fallback
 const StudentVideoPlayerV2 = dynamic(
@@ -65,8 +64,6 @@ export default function VideoPlayerPage() {
 
   // ALL HOOKS MUST BE DECLARED AT THE TOP BEFORE ANY CONDITIONAL LOGIC OR EARLY RETURNS
   const [isLoading, setIsLoading] = useState(true)
-  const [lastSavedProgress, setLastSavedProgress] = useState<number>(0)
-  const [saveRetryCount, setSaveRetryCount] = useState<number>(0)
 
   // Get video data based on context - use store data for course videos
   const course = !isStandaloneLesson ? currentCourse : null
@@ -87,23 +84,15 @@ export default function VideoPlayerPage() {
       : null
     : storeVideoData || course?.videos?.find(v => v.id === videoId) // Use store video data or find in course videos
 
-  // Calculate resume timestamp - prioritize URL param, fallback to database progress
-  const resumeTimestamp = urlTimestamp > 0
-    ? urlTimestamp
-    : (currentVideo?.progress?.watchedSeconds || 0)
+  // Only use URL timestamp for resume, no database progress loading
+  const resumeTimestamp = urlTimestamp
 
   // Log resume functionality for debugging
   useEffect(() => {
     if (resumeTimestamp > 0) {
-      const source = urlTimestamp > 0 ? 'URL parameter' : 'database progress'
-      console.log(`🎯 Resuming video at ${resumeTimestamp} seconds from ${source} (${Math.floor(resumeTimestamp / 60)}:${String(resumeTimestamp % 60).padStart(2, '0')})`)
-      console.log('📊 Progress data:', {
-        urlTimestamp,
-        dbProgress: currentVideo?.progress?.watchedSeconds || 0,
-        finalResume: resumeTimestamp
-      })
+      console.log(`🎯 Resuming video at ${resumeTimestamp} seconds from URL parameter (${Math.floor(resumeTimestamp / 60)}:${String(resumeTimestamp % 60).padStart(2, '0')})`)
     }
-  }, [resumeTimestamp, urlTimestamp, currentVideo?.progress?.watchedSeconds])
+  }, [resumeTimestamp])
 
   // Single effect to handle all loading - ensures hooks are always called in same order
   useEffect(() => {
@@ -150,38 +139,6 @@ export default function VideoPlayerPage() {
     }
   }, [isStandaloneLesson, videoId, lessons, trackView])
 
-  // Sync offline progress on mount - MOVED HERE TO ENSURE PROPER HOOK ORDER
-  useEffect(() => {
-    const syncOfflineProgress = () => {
-      if (isStandaloneLesson) return
-
-      const progressKey = `video_progress_${courseId}_${videoId}`
-      const savedProgress = localStorage.getItem(progressKey)
-
-      if (savedProgress) {
-        try {
-          const progress = JSON.parse(savedProgress)
-          const timeSinceLastSave = Date.now() - progress.timestamp
-
-          // Only sync if saved less than 1 hour ago (prevent stale data)
-          if (timeSinceLastSave < 3600000) {
-            console.log('🔄 Syncing offline progress:', progress.time)
-            // Note: saveProgressWithRetry will be available when this runs
-            // since this effect runs after component mounts
-          } else {
-            localStorage.removeItem(progressKey)
-          }
-        } catch (error) {
-          console.error('Failed to sync offline progress:', error)
-          localStorage.removeItem(progressKey)
-        }
-      }
-    }
-
-    if (!isStandaloneLesson) {
-      syncOfflineProgress()
-    }
-  }, [courseId, videoId, isStandaloneLesson])
 
   // Debug video URL - only log once when video loads - MOVED HERE FOR HOOK ORDER
   useEffect(() => {
@@ -241,93 +198,22 @@ export default function VideoPlayerPage() {
     ? Math.round(((currentVideoIndex + 1) / course.videos.length) * 100)
     : 100
 
-  // Enhanced progress persistence - Phase 2 implementation
-
-  const saveProgressWithRetry = async (time: number, completed: boolean = false, retryCount: number = 0) => {
-    if (isStandaloneLesson) return
-
-    try {
-      // Local storage backup for offline resilience (001 pattern)
-      const progressKey = `video_progress_${courseId}_${videoId}`
-      localStorage.setItem(progressKey, JSON.stringify({
-        time,
-        completed,
-        timestamp: Date.now(),
-        courseId,
-        videoId
-      }))
-
-      const success = await updateVideoProgress(courseId, videoId, time, completed)
-
-      if (success) {
-        setLastSavedProgress(time)
-        setSaveRetryCount(0)
-        // Clear local storage backup on successful save
-        localStorage.removeItem(progressKey)
-        // Only log on important milestones or completion
-        if (completed || Math.floor(time) % 60 === 0) {
-          console.log(`✅ Progress saved: ${Math.round(time)}s ${completed ? '(completed)' : ''}`)
-        }
-      } else {
-        throw new Error('Progress save failed - server returned false')
-      }
-    } catch (error) {
-      console.error('❌ Failed to update video progress:', {
-        error: error instanceof Error ? error.message : error,
-        courseId,
-        videoId,
-        time: Math.round(time),
-        completed,
-        retryCount
-      })
-
-      // Retry logic with exponential backoff (max 3 retries)
-      if (retryCount < 3) {
-        const delay = Math.pow(2, retryCount) * 1000 // 1s, 2s, 4s
-        console.log(`⏳ Retrying progress save in ${delay}ms (attempt ${retryCount + 1}/3)`)
-        setTimeout(() => {
-          saveProgressWithRetry(time, completed, retryCount + 1)
-        }, delay)
-        setSaveRetryCount(retryCount + 1)
-      } else {
-        console.error('❌ Progress save failed after 3 retries, keeping in local storage')
-      }
-    }
-  }
-
   const handleTimeUpdate = (time: number) => {
-    // Enhanced progress persistence - save every 30 seconds while debugging
-    // Only save if time has progressed significantly (avoid duplicate saves)
-    const timeDiff = Math.abs(time - lastSavedProgress)
-    const shouldSave = Math.floor(time) % 30 === 0 && timeDiff >= 30
-
-    if (shouldSave && !isStandaloneLesson) {
-      saveProgressWithRetry(time)
-    }
+    // Time update handling without progress saving
   }
 
   const handlePause = (time: number) => {
-    // Save progress immediately on pause (critical for user experience)
-    console.log('⏸️ Video paused, saving progress immediately')
-    saveProgressWithRetry(time)
+    console.log('⏸️ Video paused')
   }
 
   const handlePlay = () => {
     console.log('▶️ Video playing')
-    // Sync any offline progress when video starts playing - logic moved to useEffect above
   }
 
   const handleEnded = () => {
-    console.log('🏁 Video ended - marking as completed')
-    // Mark video as completed when it ends
-    const duration = typeof currentVideo?.duration === 'number'
-      ? currentVideo.duration
-      : parseInt(String(currentVideo?.duration || '600').replace(/[^\d]/g, '')) || 600
-
-    saveProgressWithRetry(duration, true)
+    console.log('🏁 Video ended')
   }
 
-  // All progress sync logic has been moved to useEffect hooks above to maintain proper hook order
 
   // Check if video URL is valid before rendering player
   if (!currentVideo.videoUrl) {
@@ -358,8 +244,8 @@ export default function VideoPlayerPage() {
         transcript={currentVideo.transcript?.join(' ')}
         videoId={videoId}
         courseId={courseId}
-        initialTime={resumeTimestamp}
-        autoplay={true}
+        initialTime={resumeTimestamp || 0}
+        autoplay={false}
         onTimeUpdate={handleTimeUpdate}
         onPause={handlePause}
         onPlay={handlePlay}

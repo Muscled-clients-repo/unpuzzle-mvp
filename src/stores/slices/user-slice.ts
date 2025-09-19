@@ -233,7 +233,7 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
         ],
         achievements: [
           { id: 1, title: "First Steps", description: "Completed your first lesson", icon: "🎯", earned: true },
-          { id: 2, title: "AI Explorer", description: "Used AI hints 10 times", icon: "🤖", earned: true },
+          { id: 2, title: "AI Explorer", description: "Used AI features 10 times", icon: "🤖", earned: true },
           { id: 3, title: "Consistent Learner", description: "7-day learning streak", icon: "🔥", earned: false },
           { id: 4, title: "Reflection Master", description: "Submitted 5 reflections", icon: "💭", earned: false }
         ],
@@ -274,7 +274,7 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
             id: "2",
             type: "achievement",
             title: "Earned 'AI Explorer' Badge",
-            description: "Used AI hints 10 times",
+            description: "Used AI features 10 times",
             timestamp: "5 hours ago",
             icon: "🏆"
           },

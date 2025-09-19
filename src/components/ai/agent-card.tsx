@@ -5,7 +5,7 @@ import { Lightbulb, CheckCircle2, MessageSquare, Route, Sparkles } from "lucide-
 import { cn } from "@/lib/utils"
 
 interface AgentCardProps {
-  type: "hint" | "check" | "reflect" | "path"
+  type: "check" | "reflect" | "path"
   title: string
   description: string
   content?: string
@@ -16,12 +16,6 @@ interface AgentCardProps {
 }
 
 const agentConfig = {
-  hint: {
-    icon: Lightbulb,
-    color: "text-yellow-500",
-    bgColor: "bg-yellow-500/10",
-    borderColor: "border-yellow-500/20",
-  },
   check: {
     icon: CheckCircle2,
     color: "text-green-500",

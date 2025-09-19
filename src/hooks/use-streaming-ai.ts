@@ -17,10 +17,6 @@ export interface AIStreamResult {
     correctAnswer: number
     explanation: string
   }
-  // For hint
-  hint?: string
-  context?: string
-  relatedConcepts?: string[]
   // Common
   timestamp?: number
   videoId?: string
@@ -140,18 +136,6 @@ export function useStreamingAI() {
     }, onProgress)
   }, [streamRequest])
 
-  const streamHint = useCallback((
-    videoId: string,
-    timestamp: number,
-    transcriptSegment: string,
-    onProgress?: (content: string) => void
-  ) => {
-    return streamRequest('/api/ai/hint', {
-      videoId,
-      timestamp,
-      transcriptSegment
-    }, onProgress)
-  }, [streamRequest])
 
   const reset = useCallback(() => {
     setState({
@@ -168,7 +152,6 @@ export function useStreamingAI() {
     ...state,
     result,
     streamQuiz,
-    streamHint,
     reset
   }
 }

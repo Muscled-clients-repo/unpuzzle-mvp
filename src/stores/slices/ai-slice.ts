@@ -12,7 +12,6 @@ interface AIState {
   error: string | null
   metrics: {
     totalInteractions: number
-    hintsGenerated: number
     quizzesCompleted: number
     reflectionsSubmitted: number
   }
@@ -41,7 +40,6 @@ const initialAIState: AIState = {
   error: null,
   metrics: {
     totalInteractions: 0,
-    hintsGenerated: 0,
     quizzesCompleted: 0,
     reflectionsSubmitted: 0,
   },

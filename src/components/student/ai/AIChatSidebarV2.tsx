@@ -39,7 +39,7 @@ interface AIChatSidebarV2Props {
   }
   aiState?: {
     isGenerating: boolean
-    generatingType: 'hint' | 'quiz' | null
+    generatingType: 'quiz' | null
     streamedContent: string
     error: string | null
   }
@@ -74,7 +74,8 @@ export function AIChatSidebarV2({
   const [audioChunks, setAudioChunks] = useState<Blob[]>([])
   const [loomUrl, setLoomUrl] = useState('')
   const [showActivityLog, setShowActivityLog] = useState(false)
-  
+  const [showReflectionOptions, setShowReflectionOptions] = useState<string | null>(null) // Track which message is showing reflection options
+
   // Track which agent is currently active based on messages
   const activeAgent = messages.find(msg => 
     msg.type === 'agent-prompt' && 
@@ -119,15 +120,6 @@ export function AIChatSidebarV2({
   
   const getAgentConfig = (type?: string) => {
     switch (type) {
-      case 'hint':
-        return {
-          icon: Lightbulb,
-          title: 'PuzzleHint',
-          color: 'from-blue-500/20 to-cyan-500/20',
-          borderColor: 'border-blue-500',
-          buttonColor: 'bg-blue-500 hover:bg-blue-600',
-          iconBg: 'bg-gradient-to-br from-blue-500 to-cyan-500'
-        }
       case 'quiz':
         return {
           icon: Brain,
@@ -218,98 +210,166 @@ export function AIChatSidebarV2({
       }
     }
 
-    // Agent prompt messages (unactivated with actions - not yet accepted/rejected) - Enhanced card design
+    // Agent prompt messages (unactivated with actions) - Minimalist chat design
     if (msg.type === 'agent-prompt' && msg.state === MessageState.UNACTIVATED && !(msg as any).accepted) {
-      const config = getAgentConfig(msg.agentType)
       return (
-        <Card 
-          key={msg.id}
-          className={cn(
-            "my-4 overflow-hidden shadow-lg",
-            `bg-gradient-to-br ${config.color}`,
-            `border-2 ${config.borderColor}`
-          )}
-        >
-          <div className="p-4">
-            <div className="flex items-start gap-3">
-              <Avatar className="h-10 w-10 border-2 border-white/20 shadow-md">
-                <AvatarFallback className={config.iconBg}>
-                  <config.icon className="h-5 w-5 text-white" />
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="font-bold text-sm">{config.title}</span>
-                  <span className="text-xs text-muted-foreground">AI Assistant</span>
-                </div>
-                <p className="text-sm mb-4">{msg.message}</p>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    className={cn("text-white shadow-md", config.buttonColor)}
-                    onClick={() => onAgentAccept(msg.id)}
+        <div key={msg.id} className="flex items-start gap-3 my-3">
+          <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+            <span className="text-xs">AI</span>
+          </div>
+          <div className="flex-1 max-w-[80%]">
+            <div className="bg-muted rounded-2xl px-3 py-2">
+              <p className="text-sm">{msg.message}</p>
+            </div>
+            <div className="flex gap-4 mt-2 text-sm">
+              {msg.agentType === 'reflect' && showReflectionOptions === msg.id ? (
+                /* Show 3 reflection options after Yes is clicked */
+                <>
+                  <button
+                    onClick={async () => {
+                      onReflectionTypeChosen?.('voice')
+                      console.log('Voice reflection chosen')
+
+                      // Trigger voice recording functionality
+                      try {
+                        const stream = await navigator.mediaDevices.getUserMedia({
+                          audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            sampleRate: 44100
+                          }
+                        })
+
+                        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                          ? 'audio/webm;codecs=opus'
+                          : MediaRecorder.isTypeSupported('audio/webm')
+                          ? 'audio/webm'
+                          : MediaRecorder.isTypeSupported('audio/mp4')
+                          ? 'audio/mp4'
+                          : 'audio/webm'
+
+                        const recorder = new MediaRecorder(stream, { mimeType })
+                        setMediaRecorder(recorder)
+                        setIsRecording(true)
+                        setRecordingTime(0)
+                        setHasRecording(false)
+
+                        const audioChunks: BlobPart[] = []
+                        recorder.ondataavailable = (event) => {
+                          if (event.data.size > 0) {
+                            audioChunks.push(event.data)
+                          }
+                        }
+
+                        recorder.onstop = () => {
+                          const audioBlob = new Blob(audioChunks, { type: mimeType })
+                          setAudioBlob(audioBlob)
+                          setHasRecording(true)
+                          setIsRecording(false)
+                          stream.getTracks().forEach(track => track.stop())
+                        }
+
+                        recorder.start()
+
+                        recordingIntervalRef.current = setInterval(() => {
+                          setRecordingTime(prev => prev + 1)
+                        }, 1000)
+
+                      } catch (error) {
+                        console.error('Error starting recording:', error)
+                      }
+                    }}
+                    className="text-blue-600 hover:underline"
+                  >
+                    🎤 Voice
+                  </button>
+                  <button
+                    onClick={() => {
+                      onReflectionTypeChosen?.('screenshot')
+                      console.log('Screenshot reflection chosen')
+                    }}
+                    className="text-blue-600 hover:underline"
+                  >
+                    📷 Screenshot
+                  </button>
+                  <button
+                    onClick={() => {
+                      onReflectionTypeChosen?.('loom')
+                      console.log('Loom reflection chosen')
+                    }}
+                    className="text-blue-600 hover:underline"
+                  >
+                    🎥 Video
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Cancel back to Yes/No options
+                      setShowReflectionOptions(null)
+                    }}
+                    className="text-muted-foreground hover:text-foreground ml-1"
+                    title="Cancel"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </>
+              ) : (
+                /* Show Yes/No options initially for all agent types */
+                <>
+                  <button
+                    className="text-blue-600 hover:underline"
+                    onClick={() => {
+                      if (msg.agentType === 'reflect') {
+                        // For reflect, show the 3 reflection options
+                        setShowReflectionOptions(msg.id)
+                      } else {
+                        // For other agents, use normal accept flow
+                        onAgentAccept(msg.id)
+                      }
+                    }}
                     disabled={aiState?.isGenerating && aiState.generatingType === msg.agentType}
                   >
-                    {aiState?.isGenerating && aiState.generatingType === msg.agentType ? (
-                      <>
-                        <Activity className="mr-1.5 h-4 w-4 animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="mr-1.5 h-4 w-4" />
-                        Let's go
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="hover:bg-white/20"
-                    onClick={() => onAgentReject(msg.id)}
+                    {aiState?.isGenerating && aiState.generatingType === msg.agentType ? 'Loading...' :
+                      msg.agentType === 'quiz' ? 'Yes, quiz me' :
+                      msg.agentType === 'reflect' ? 'Yes, let\'s reflect' :
+                      'Yes, let\'s do it'}
+                  </button>
+                  <button
+                    className="text-muted-foreground hover:underline"
+                    onClick={() => {
+                      // Reset reflection options state when rejecting
+                      setShowReflectionOptions(null)
+                      // Let StateMachine handle video resumption via REJECT_AGENT command
+                      onAgentReject(msg.id)
+                    }}
                   >
-                    Not now
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Card>
-      )
-    }
-    
-    // Activated/Rejected agent prompts (show without buttons) - Minimalist design
-    if (msg.type === 'agent-prompt' && (msg.state === MessageState.ACTIVATED || msg.state === MessageState.REJECTED || (msg as any).accepted)) {
-      const config = getAgentConfig(msg.agentType)
-      const isRejected = msg.state === MessageState.REJECTED
-      
-      return (
-        <div key={msg.id} className="flex items-start gap-3 my-4">
-          <Avatar className={cn(
-            "h-10 w-10 border-2 shadow-md",
-            isRejected ? "opacity-50 border-gray-300" : "border-primary/20"
-          )}>
-            <AvatarFallback className={cn(
-              isRejected ? "bg-gray-400" : config.iconBg
-            )}>
-              <config.icon className="h-5 w-5 text-white" />
-            </AvatarFallback>
-          </Avatar>
-          <div className={cn(
-            "flex-1 bg-secondary/30 rounded-lg px-4 py-3 border",
-            isRejected ? "opacity-60 border-gray-300" : "border-border/50"
-          )}>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="font-semibold text-sm">{config.title}</span>
-              {isRejected && (
-                <span className="text-xs text-muted-foreground">(Skipped)</span>
+                    No, continue video
+                  </button>
+                </>
               )}
             </div>
-            <p className="text-sm">{msg.message}</p>
           </div>
         </div>
       )
     }
+    
+    // Activated agent prompts (show without buttons) - Minimalist design
+    // Note: Rejected prompts are hidden completely (not shown)
+    if (msg.type === 'agent-prompt' && (msg.state === MessageState.ACTIVATED || (msg as any).accepted)) {
+      return (
+        <div key={msg.id} className="flex items-start gap-3 my-3">
+          <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+            <span className="text-xs">AI</span>
+          </div>
+          <div className="flex-1 max-w-[80%]">
+            <div className="bg-muted rounded-2xl px-3 py-2">
+              <p className="text-sm">{msg.message}</p>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    // Rejected agent prompts are completely hidden (no rendering)
     
     // AI messages (responses) - Enhanced styling with better visual hierarchy
     if (msg.type === 'ai') {
@@ -423,410 +483,8 @@ export function AIChatSidebarV2({
       )
     }
 
-    // Reflection options messages
-    if (msg.type === 'reflection-options') {
-      // Voice recording handlers
-      const startRecording = async () => {
-        try {
-          // Notify that voice memo was chosen
-          onReflectionTypeChosen?.('voice')
-
-          // Get user media
-          const stream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              sampleRate: 44100
-            }
-          })
-
-          // Create MediaRecorder with better audio format support
-          const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-            ? 'audio/webm;codecs=opus'
-            : MediaRecorder.isTypeSupported('audio/webm')
-            ? 'audio/webm'
-            : MediaRecorder.isTypeSupported('audio/mp4')
-            ? 'audio/mp4'
-            : 'audio/webm' // fallback
-
-          console.log('[Recording] Using MIME type:', mimeType)
-
-          const recorder = new MediaRecorder(stream, { mimeType })
-          setMediaRecorder(recorder)
-          setAudioChunks([])
-
-          recorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-              setAudioChunks(prev => [...prev, event.data])
-            }
-          }
-
-          recorder.onstop = () => {
-            stream.getTracks().forEach(track => track.stop())
-          }
-
-          recorder.start(100) // Collect data every 100ms
-
-          setIsRecording(true)
-          setIsPaused(false)
-          setRecordingTime(0)
-          setHasRecording(false)
-
-          // Dispatch recording started action
-          dispatch?.({ type: 'RECORDING_STARTED', payload: {} })
-
-          // Start recording timer
-          recordingIntervalRef.current = setInterval(() => {
-            setRecordingTime(prev => prev + 1)
-          }, 1000)
-
-        } catch (error) {
-          console.error('Failed to start recording:', error)
-          alert('Failed to access microphone. Please ensure you have granted microphone permissions.')
-        }
-      }
-
-      const pauseRecording = () => {
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
-          mediaRecorder.pause()
-        }
-        setIsPaused(true)
-        if (recordingIntervalRef.current) {
-          clearInterval(recordingIntervalRef.current)
-        }
-        // Dispatch recording paused action
-        dispatch?.({ type: 'RECORDING_PAUSED', payload: {} })
-      }
-
-      const resumeRecording = () => {
-        if (mediaRecorder && mediaRecorder.state === 'paused') {
-          mediaRecorder.resume()
-        }
-        setIsPaused(false)
-        recordingIntervalRef.current = setInterval(() => {
-          setRecordingTime(prev => prev + 1)
-        }, 1000)
-        // Dispatch recording resumed action
-        dispatch?.({ type: 'RECORDING_RESUMED', payload: {} })
-      }
-
-      const stopRecording = () => {
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-          mediaRecorder.stop()
-
-          // Create blob from chunks when recording stops
-          mediaRecorder.onstop = () => {
-            const mimeType = mediaRecorder.mimeType
-            const finalBlob = new Blob(audioChunks, { type: mimeType })
-            console.log('[Recording] Created audio blob:', {
-              size: finalBlob.size,
-              type: finalBlob.type
-            })
-            setAudioBlob(finalBlob)
-          }
-        }
-
-        setIsRecording(false)
-        setIsPaused(false)
-        setHasRecording(true)
-
-        if (recordingIntervalRef.current) {
-          clearInterval(recordingIntervalRef.current)
-        }
-
-        // Dispatch recording stopped action
-        dispatch?.({ type: 'RECORDING_STOPPED', payload: {} })
-      }
-
-      const deleteRecording = () => {
-        setHasRecording(false)
-        setRecordingTime(0)
-        setAudioBlob(null)
-      }
-
-      const startPlayback = () => {
-        setIsPlaying(true)
-        setPlaybackTime(0)
-        
-        playbackIntervalRef.current = setInterval(() => {
-          setPlaybackTime(prev => {
-            if (prev >= recordingTime) {
-              stopPlayback()
-              return recordingTime
-            }
-            return prev + 1
-          })
-        }, 1000)
-      }
-
-      const stopPlayback = () => {
-        setIsPlaying(false)
-        if (playbackIntervalRef.current) {
-          clearInterval(playbackIntervalRef.current)
-        }
-      }
-
-      const submitRecording = () => {
-        if (audioBlob) {
-          // Create reflection data
-          const reflectionData = {
-            type: 'voice',
-            audioBlob: audioBlob,  // Pass the actual blob instead of URL
-            duration: recordingTime,
-            videoTimestamp: 0 // You might want to get this from video state
-          }
-          
-          onReflectionSubmit?.('voice', reflectionData)
-          
-          // Reset all states
-          setIsRecording(false)
-          setHasRecording(false)
-          setRecordingTime(0)
-          setAudioBlob(null)
-        }
-      }
-
-      return (
-        <Card key={msg.id} className="my-4 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-2 border-purple-500/50">
-          <div className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Zap className="h-5 w-5 text-purple-600" />
-              <span className="font-bold text-sm">Choose Your Reflection Method</span>
-            </div>
-            
-            <div className="space-y-3">
-              {/* Voice Memo Option */}
-              <div className="space-y-2">
-                {!isRecording && !hasRecording ? (
-                  <button
-                    onClick={startRecording}
-                    className="w-full flex items-center gap-3 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg p-2 transition-colors"
-                  >
-                    <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-950/30">
-                      <Mic className="h-5 w-5 text-blue-600" />
-                    </div>
-                    <div className="text-left flex-1">
-                      <p className="font-medium text-sm">Voice Memo</p>
-                      <p className="text-xs text-muted-foreground">Tap to record audio reflection</p>
-                    </div>
-                  </button>
-                ) : isRecording ? (
-                  // Recording state - minimalist
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2 flex-1">
-                        <div className="relative p-2 rounded-lg bg-red-100 dark:bg-red-950/30">
-                          <Mic className={cn(
-                            "h-5 w-5",
-                            isPaused ? "text-red-400" : "text-red-600"
-                          )} />
-                          {!isPaused && (
-                            <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full animate-ping"></div>
-                          )}
-                          {!isPaused && (
-                            <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-600 rounded-full"></div>
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            {!isPaused && (
-                              <div className="relative">
-                                <div className="w-2 h-2 bg-red-500 rounded-full animate-ping"></div>
-                                <div className="absolute top-0 left-0 w-2 h-2 bg-red-600 rounded-full"></div>
-                              </div>
-                            )}
-                            <span className={cn(
-                              "text-sm font-medium",
-                              isPaused ? "text-red-400" : "text-red-600"
-                            )}>
-                              {isPaused ? 'Recording paused' : 'Recording'}
-                            </span>
-                            <span className="text-sm font-mono text-muted-foreground">{formatRecordingTime(recordingTime)}</span>
-                            {isPaused && isVideoPlaying && (
-                              <span className="text-xs text-amber-600 dark:text-amber-500">(Video playing)</span>
-                            )}
-                          </div>
-                          {/* Minimalist waveform */}
-                          <div className="flex items-center gap-0.5 h-4 mt-1">
-                            {[...Array(20)].map((_, i) => (
-                              <div
-                                key={i}
-                                className="w-0.5 bg-muted-foreground/30 rounded-full"
-                                style={{
-                                  height: `${20 + Math.random() * 60}%`,
-                                  animationDelay: `${i * 50}ms`,
-                                  animation: isPaused ? 'none' : 'pulse 1.5s ease-in-out infinite'
-                                }}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Recording controls - minimalist */}
-                    <div className="flex gap-2">
-                      {!isPaused ? (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={pauseRecording}
-                          className="flex-1"
-                        >
-                          <Pause className="h-4 w-4" />
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={resumeRecording}
-                          className="flex-1"
-                        >
-                          <Play className="h-4 w-4" />
-                        </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        onClick={stopRecording}
-                        className="flex-1 bg-red-500 hover:bg-red-600 text-white"
-                      >
-                        <Square className="h-4 w-4 mr-1" />
-                        Stop
-                      </Button>
-                    </div>
-                  </div>
-                ) : hasRecording ? (
-                  // Playback state - minimalist
-                  <div className="space-y-3">
-                    <div className="bg-secondary/50 rounded-lg p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-950/30">
-                          {isPlaying ? (
-                            <MicOff className="h-5 w-5 text-blue-600 animate-pulse" />
-                          ) : (
-                            <Mic className="h-5 w-5 text-blue-600" />
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium">Voice Memo Ready</p>
-                          <p className="text-xs text-muted-foreground">
-                            {isPlaying 
-                              ? `Playing ${formatRecordingTime(playbackTime)} / ${formatRecordingTime(recordingTime)}`
-                              : `Duration: ${formatRecordingTime(recordingTime)}`
-                            }
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Playback controls */}
-                    <div className="flex gap-2">
-                      {!isPlaying ? (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={startPlayback}
-                          className="flex-1"
-                        >
-                          <Play className="h-4 w-4 mr-1" />
-                          Play
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={stopPlayback}
-                          className="flex-1"
-                        >
-                          <Square className="h-4 w-4 mr-1" />
-                          Stop
-                        </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={deleteRecording}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={submitRecording}
-                        className="flex-1 bg-purple-500 hover:bg-purple-600 text-white"
-                      >
-                        <Send className="h-3 w-3 mr-1" />
-                        Submit
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-
-              {/* Screenshot Option */}
-              {!isRecording && !hasRecording && (
-                <>
-                  <button
-                    onClick={() => {
-                      onReflectionTypeChosen?.('screenshot')
-                      console.log('Screenshot reflection chosen')
-                    }}
-                    className="w-full flex items-center gap-3 hover:bg-green-50 dark:hover:bg-green-950/30 rounded-lg p-2 transition-colors"
-                  >
-                    <div className="p-2 rounded-lg bg-green-100 dark:bg-green-950/30">
-                      <Camera className="h-5 w-5 text-green-600" />
-                    </div>
-                    <div className="text-left flex-1">
-                      <p className="font-medium text-sm">Screenshot</p>
-                      <p className="text-xs text-muted-foreground">Capture screen with annotations</p>
-                    </div>
-                  </button>
-
-                  {/* Loom Option */}
-                  <button
-                    onClick={() => {
-                      onReflectionTypeChosen?.('loom')
-                      console.log('Loom reflection chosen')
-                    }}
-                    className="w-full flex items-center gap-3 hover:bg-purple-50 dark:hover:bg-purple-950/30 rounded-lg p-2 transition-colors"
-                  >
-                    <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-950/30">
-                      <Video className="h-5 w-5 text-purple-600" />
-                    </div>
-                    <div className="text-left flex-1">
-                      <p className="font-medium text-sm">Loom Video</p>
-                      <p className="text-xs text-muted-foreground">Record screen & camera</p>
-                    </div>
-                  </button>
-                </>
-              )}
-
-              {/* Cancel button - always visible */}
-              {(isRecording || hasRecording) && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    // Reset all states
-                    setIsRecording(false)
-                    setHasRecording(false)
-                    setRecordingTime(0)
-                    setAudioBlob(null)
-                    setLoomUrl('')
-                    setIsPaused(false)
-                    if (recordingIntervalRef.current) {
-                      clearInterval(recordingIntervalRef.current)
-                    }
-                    // Call cancel handler
-                    onReflectionCancel?.()
-                  }}
-                  className="w-full hover:bg-destructive/10 hover:text-destructive"
-                >
-                  Cancel Reflection
-                </Button>
-              )}
-            </div>
-          </div>
-        </Card>
-      )
-    }
+    // Reflection options messages - REMOVED (now handled in agent prompt directly)
+    // if (msg.type === 'reflection-options') { ... }
 
     // Audio messages - Messenger-style audio player
     if (msg.type === 'audio' && msg.audioData) {
@@ -875,11 +533,10 @@ export function AIChatSidebarV2({
             <Activity className="h-4 w-4" />
           </Button>
         </div>
-        
+
         {/* Agent Buttons - Single row optimized */}
-        <div className="flex gap-1 w-full">
+        <div className="flex gap-2">
           {[
-            { type: 'hint', icon: Puzzle, label: 'Hint', color: 'hover:bg-gradient-to-r hover:from-blue-500/10 hover:to-cyan-500/10 hover:border-blue-500/50', activeColor: 'bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border-blue-500' },
             { type: 'quiz', icon: Brain, label: 'Quiz', color: 'hover:bg-gradient-to-r hover:from-emerald-500/10 hover:to-green-500/10 hover:border-emerald-500/50', activeColor: 'bg-gradient-to-r from-emerald-500/20 to-green-500/20 border-emerald-500' },
             { type: 'reflect', icon: Zap, label: 'Reflect', color: 'hover:bg-gradient-to-r hover:from-purple-500/10 hover:to-pink-500/10 hover:border-purple-500/50', activeColor: 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 border-purple-500' },
             { type: 'path', icon: Target, label: 'Path', color: 'hover:bg-gradient-to-r hover:from-orange-500/10 hover:to-amber-500/10 hover:border-orange-500/50', activeColor: 'bg-gradient-to-r from-orange-500/20 to-amber-500/20 border-orange-500' }
@@ -907,16 +564,15 @@ export function AIChatSidebarV2({
           {/* Chat Messages */}
           {displayMessages.map(renderMessage)}
 
-
-          {/* AI Generation Error Display */}
+          {/* AI State Error */}
           {aiState?.error && (
-            <div className="flex items-start gap-3 my-4">
+            <div className="flex items-start gap-3">
               <Avatar className="h-10 w-10 border-2 border-red-500/20 shadow-md">
-                <AvatarFallback className="bg-gradient-to-br from-red-500 to-red-600">
-                  <X className="h-5 w-5 text-white" />
+                <AvatarFallback className="bg-red-100 dark:bg-red-950">
+                  <Bot className="h-5 w-5 text-red-600 dark:text-red-400" />
                 </AvatarFallback>
               </Avatar>
-              <div className="bg-gradient-to-br from-red-50 via-red-50 to-red-100 border border-red-200 rounded-lg p-4 shadow-sm flex-1 dark:from-red-950 dark:to-red-900 dark:border-red-800">
+              <div className="flex-1 bg-red-50 dark:bg-red-950/30 rounded-2xl px-3 py-2 border border-red-200 dark:border-red-800">
                 <div className="flex items-center gap-2 mb-2">
                   <X className="h-4 w-4 text-red-600 dark:text-red-400" />
                   <span className="font-bold text-sm text-red-600 dark:text-red-400">Error</span>
@@ -935,16 +591,16 @@ export function AIChatSidebarV2({
                   <Bot className="h-5 w-5 text-primary-foreground" />
                 </AvatarFallback>
               </Avatar>
-              <div className="bg-secondary/30 rounded-lg px-4 py-3 border border-border/50">
-                <div className="flex gap-1">
-                  <span className="inline-block w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></span>
+              <div className="bg-muted rounded-2xl px-3 py-2">
+                <div className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 bg-primary rounded-full animate-bounce"></span>
                   <span className="inline-block w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></span>
                   <span className="inline-block w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></span>
                 </div>
               </div>
             </div>
           )}
-          
+
           <div ref={scrollRef} />
         </div>
       </div>
@@ -973,7 +629,7 @@ export function AIChatSidebarV2({
             </div>
           </div>
         )}
-        
+
         <div className="flex gap-2 mb-2">
           <Input
             placeholder={segmentContext?.sentToChat ? "Ask about this video segment..." : "Ask about the video content..."}
@@ -982,25 +638,15 @@ export function AIChatSidebarV2({
             onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
             className="flex-1 border-2 focus:border-primary/50 transition-colors"
           />
-          <Button
-            size="icon"
-            onClick={handleSendMessage}
-            disabled={!inputValue.trim()}
-            className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-md"
-          >
+          <Button onClick={handleSendMessage} size="sm" className="px-3">
             <Send className="h-4 w-4" />
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground flex items-center gap-1">
-          <Sparkles className="h-3 w-3" />
-          Use agent buttons above for guided learning experiences
-        </p>
       </div>
-      
-      {/* Activity Log Overlay - Renders outside the main flow */}
+
       {showActivityLog && (
-        <AIActivityLog 
-          messages={messages} 
+        <AIActivityLog
+          messages={messages}
           isOpen={true}
           onToggle={() => setShowActivityLog(false)}
         />
@@ -1008,3 +654,4 @@ export function AIChatSidebarV2({
     </div>
   )
 }
+

@@ -216,12 +216,11 @@ export interface AIMessage {
   content: string
   timestamp: string
   videoContext?: VideoSegment
-  intent?: 'conceptual' | 'quiz' | 'hint' | 'confusion' | 'reflection'
+  intent?: 'conceptual' | 'quiz' | 'confusion' | 'reflection'
 }
 // Intent types:
 // 'conceptual' = Student asking for concept explanation
 // 'quiz' = Student wants to be tested on material
-// 'hint' = Student wants a clue, not full answer
 // 'confusion' = Student is stuck and needs clarification
 // 'reflection' = Student submitting their understanding for AI feedback
 
