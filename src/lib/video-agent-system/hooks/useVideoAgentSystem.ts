@@ -10,6 +10,7 @@ let globalStateMachine: VideoAgentStateMachine | null = null
 
 interface UseVideoAgentSystemOptions {
   reflectionMutation?: (data: any) => Promise<any>
+  quizAttemptMutation?: (data: any) => Promise<any>
 }
 
 export function useVideoAgentSystem(options?: UseVideoAgentSystemOptions) {
@@ -30,9 +31,12 @@ export function useVideoAgentSystem(options?: UseVideoAgentSystemOptions) {
       }
     }
 
-    // Set reflection mutation if provided
+    // Set mutations if provided
     if (options?.reflectionMutation) {
       globalStateMachine.setReflectionMutation(options.reflectionMutation)
+    }
+    if (options?.quizAttemptMutation) {
+      globalStateMachine.setQuizAttemptMutation(options.quizAttemptMutation)
     }
     
     // Subscribe to updates
@@ -60,6 +64,10 @@ export function useVideoAgentSystem(options?: UseVideoAgentSystemOptions) {
     globalStateMachine?.setVideoId(videoId)
   }, [])
 
+  const setCourseId = useCallback((courseId: string | null) => {
+    globalStateMachine?.setCourseId(courseId)
+  }, [])
+
   const loadInitialMessages = useCallback((messages: any[]) => {
     globalStateMachine?.loadInitialMessages(messages)
   }, [])
@@ -82,6 +90,7 @@ export function useVideoAgentSystem(options?: UseVideoAgentSystemOptions) {
     dispatch,
     setVideoRef,
     setVideoId,
+    setCourseId,
     loadInitialMessages,
     clearAudioMessages
   }

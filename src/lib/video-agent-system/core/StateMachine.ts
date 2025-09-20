@@ -14,7 +14,9 @@ export class VideoAgentStateMachine {
   private messageManager: MessageManager
   private subscribers: Set<(context: SystemContext) => void> = new Set()
   private videoId: string | null = null
+  private courseId: string | null = null
   private reflectionMutation: ((data: any) => Promise<any>) | null = null
+  private quizAttemptMutation: ((data: any) => Promise<any>) | null = null
 
   constructor() {
     this.context = {
@@ -114,6 +116,10 @@ export class VideoAgentStateMachine {
     this.videoId = videoId
   }
 
+  public setCourseId(courseId: string | null) {
+    this.courseId = courseId
+  }
+
   public loadInitialMessages(messages: Message[]) {
     this.updateContext({
       ...this.context,
@@ -131,6 +137,10 @@ export class VideoAgentStateMachine {
 
   public setReflectionMutation(mutation: (data: any) => Promise<any>) {
     this.reflectionMutation = mutation
+  }
+
+  public setQuizAttemptMutation(mutation: (data: any) => Promise<any>) {
+    this.quizAttemptMutation = mutation
   }
 
   private getVideoId(): string | null {
@@ -1265,7 +1275,33 @@ export class VideoAgentStateMachine {
         timestamp: Date.now()
       }
       newMessages.push(countdownMessage)
-      
+
+      // Save quiz attempt to database
+      if (this.quizAttemptMutation && this.videoId && this.courseId) {
+        try {
+          const quizAttemptData = {
+            videoId: this.videoId,
+            courseId: this.courseId,
+            videoTimestamp: currentTime,
+            questions: quizState.questions,
+            userAnswers: newUserAnswers,
+            score: newScore,
+            totalQuestions: quizState.questions.length,
+            percentage: percentage,
+            quizDurationSeconds: null // TODO: Add duration tracking if needed
+          }
+
+          console.log('[SM] Saving quiz attempt to database:', quizAttemptData)
+          await this.quizAttemptMutation(quizAttemptData)
+          console.log('[SM] Quiz attempt saved successfully')
+        } catch (error) {
+          console.error('[SM] Failed to save quiz attempt:', error)
+          // Don't block the UI flow if database save fails
+        }
+      } else {
+        console.warn('[SM] Quiz mutation or IDs not available for database save')
+      }
+
       // Update context first with quiz still active
       this.updateContext({
         ...this.context,

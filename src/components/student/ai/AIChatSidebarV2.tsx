@@ -10,7 +10,63 @@ import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Puzzle, Send, Sparkles, Bot, User, Pause, Lightbulb, CheckCircle2, MessageSquare, Route, Clock, Brain, Zap, Target, Mic, Camera, Video, Upload, Square, Play, Trash2, MicOff, Activity, X, Trophy } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { QuizResultBox } from "./QuizResultBox"
+import { useQuizAttemptsQuery } from "@/hooks/use-quiz-attempts-query"
+
+// Utility functions for messenger-style date grouping
+function formatDateHeader(date: Date): string {
+  const today = new Date()
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+
+  if (date.toDateString() === today.toDateString()) {
+    return "Today"
+  } else if (date.toDateString() === yesterday.toDateString()) {
+    return "Yesterday"
+  } else {
+    return date.toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined
+    })
+  }
+}
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  })
+}
+
+function groupActivitiesByDate(activities: any[]) {
+  const groups: { [key: string]: any[] } = {}
+
+  activities.forEach(activity => {
+    const date = new Date(activity.timestamp)
+    const dateKey = date.toDateString()
+
+    if (!groups[dateKey]) {
+      groups[dateKey] = []
+    }
+    groups[dateKey].push({
+      ...activity,
+      formattedTime: formatTime(date),
+      dateHeader: formatDateHeader(date)
+    })
+  })
+
+  // Sort groups by date (newest first)
+  const sortedGroups = Object.keys(groups)
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
+    .map(dateKey => ({
+      dateKey,
+      dateHeader: groups[dateKey][0].dateHeader,
+      activities: groups[dateKey].sort((a, b) => b.timestamp - a.timestamp) // Newest first within day
+    }))
+
+  return sortedGroups
+}
 
 interface AIChatSidebarV2Props {
   messages: Message[]
@@ -48,6 +104,8 @@ interface AIChatSidebarV2Props {
 export function AIChatSidebarV2({
   messages,
   isVideoPlaying = false,
+  videoId,
+  courseId,
   currentVideoTime = 0,
   onAgentRequest,
   onAgentAccept,
@@ -77,6 +135,9 @@ export function AIChatSidebarV2({
   const [expandedActivity, setExpandedActivity] = useState<string | null>(null)
   const [showReflectionOptions, setShowReflectionOptions] = useState<string | null>(null) // Track which message is showing reflection options
   const [activeTab, setActiveTab] = useState<'chat' | 'agents'>('chat')
+
+  // Query for quiz attempts from database
+  const quizAttemptsQuery = useQuizAttemptsQuery(videoId || '', courseId || '')
 
   // Track which agent is currently active based on messages
   const activeAgent = messages.find(msg =>
@@ -206,6 +267,12 @@ export function AIChatSidebarV2({
       // Exclude quiz start messages
       if (msg.message.includes('Starting your quiz now') ||
           msg.message.includes('Answer each question to the best of your ability')) {
+        return false
+      }
+      // Exclude countdown messages that appear after quiz completion
+      if (msg.message.includes('video continues in') ||
+          msg.message.includes('Video will resume') ||
+          msg.message.match(/\d+\s*\.\.\.\s*\d+\s*\.\.\.\s*\d+/)) {
         return false
       }
     }
@@ -547,34 +614,78 @@ export function AIChatSidebarV2({
     return null
   }
 
-  // Extract activity entries from messages (same logic as AIActivityLog)
-  const activities = messages.filter(msg => {
+  // Extract activity entries from messages and database
+  const messageActivities = messages.filter(msg => {
     // Include system messages with timestamps (📍)
     if (msg.type === 'system' && msg.message.includes('📍')) {
       return true
     }
-    // Include quiz questions (when quiz agent is activated)
+    // EXCLUDE quiz-question messages (they're for active quiz taking, not timeline)
+    // Only include quiz in activities AFTER it's completed (when quiz-result exists)
     if (msg.type === 'quiz-question') {
-      return true
+      return false
     }
     // Include reflection options (when reflect agent is activated)
     if (msg.type === 'reflection-options') {
       return true
     }
-    // Include agent prompt activations
+    // Include agent prompt activations ONLY if they're not quiz prompts
+    // Quiz prompts shouldn't appear in timeline until completed
     if (msg.type === 'agent-prompt' && msg.state === MessageState.ACTIVATED) {
+      if (msg.agentType === 'quiz') {
+        return false // Don't show quiz prompts in timeline
+      }
+      return true
+    }
+    // Include completed quiz results in timeline
+    if (msg.type === 'quiz-result') {
       return true
     }
     return false
   })
 
+  // Convert database quiz attempts to activity format
+  const databaseQuizActivities = (quizAttemptsQuery.data?.success && quizAttemptsQuery.data.data)
+    ? quizAttemptsQuery.data.data.map(attempt => ({
+        id: `db-quiz-${attempt.id}`,
+        type: 'system' as const,
+        state: MessageState.PERMANENT,
+        message: `📍 PuzzleCheck • Quiz at ${Math.floor(attempt.video_timestamp / 60)}:${String(Math.floor(attempt.video_timestamp % 60)).padStart(2, '0')}`,
+        timestamp: new Date(attempt.created_at).getTime(),
+        quizResult: {
+          score: attempt.score,
+          total: attempt.total_questions,
+          percentage: attempt.percentage,
+          questions: attempt.questions.map((q: any, idx: number) => ({
+            questionId: q.id || `q-${idx}`,
+            question: q.question,
+            userAnswer: attempt.user_answers[idx],
+            correctAnswer: q.correctAnswer,
+            isCorrect: attempt.user_answers[idx] === q.correctAnswer,
+            explanation: q.explanation,
+            options: q.options
+          })),
+          completedAt: attempt.video_timestamp
+        },
+        dbQuizAttempt: attempt // Store the original database record
+      }))
+    : []
+
+  // Combine and sort all activities by timestamp
+  const activities = [...messageActivities, ...databaseQuizActivities].sort((a, b) => a.timestamp - b.timestamp)
+
   // Parse activity type and details from message - handle both system messages and direct activity types
   const parseActivity = (msg: Message) => {
     const message = msg.message
 
-    // Handle quiz questions directly
+    // Handle quiz questions directly (shouldn't appear in activities now, but keep for safety)
     if (msg.type === 'quiz-question') {
       return { type: 'quiz', icon: Brain, color: 'text-green-600' }
+    }
+
+    // Handle quiz results (completed quizzes)
+    if (msg.type === 'quiz-result') {
+      return { type: 'quiz-complete', icon: Trophy, color: 'text-green-600' }
     }
 
     // Handle reflection options directly
@@ -649,39 +760,44 @@ export function AIChatSidebarV2({
       )
     }
 
-    return (
-      <div className="space-y-2 mb-4">
-        <div className="text-xs text-muted-foreground mb-3 px-2">
-          Learning Activities
-        </div>
-        {activities.map((activity, index) => {
-          const parsed = parseActivity(activity)
-          const timestamp = extractTimestamp(activity)
-          const additionalInfo = extractAdditionalInfo(activity.message)
-          const Icon = parsed.icon
-          const isExpanded = expandedActivity === activity.id
+    // Group activities by date for messenger-style display
+    const groupedActivities = groupActivitiesByDate(activities)
 
-          return (
-            <div key={activity.id}>
-              {/* Activity Item */}
-              <div
-                className={cn(
-                  "flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer border",
-                  isExpanded
-                    ? "bg-primary/10 border-primary/20 rounded-b-none"
-                    : "bg-secondary/20 border-border/30 hover:bg-secondary/40"
-                )}
-                onClick={() => setExpandedActivity(isExpanded ? null : activity.id)}
-              >
-                <div className={cn("p-1.5 rounded-md", isExpanded ? "bg-primary/20" : "bg-secondary")}>
-                  <Icon className={cn("h-3 w-3", parsed.color)} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium">
-                      {timestamp}
-                    </span>
-                    <span className="text-xs text-foreground">
+    return (
+      <div className="space-y-3 mb-4">
+        {groupedActivities.map((group, groupIndex) => (
+          <div key={group.dateKey}>
+            {/* Date Header */}
+            <div className="text-xs font-medium text-muted-foreground mb-3 px-2 sticky top-0 bg-background/95 backdrop-blur-sm py-1">
+              {group.dateHeader}
+            </div>
+
+            {/* Activities for this date */}
+            <div className="space-y-2">
+              {group.activities.map((activity, index) => {
+                const parsed = parseActivity(activity)
+                const additionalInfo = extractAdditionalInfo(activity.message)
+                const Icon = parsed.icon
+                const isExpanded = expandedActivity === activity.id
+
+                return (
+                  <div key={activity.id}>
+                    {/* Activity Item */}
+                    <div
+                      className={cn(
+                        "flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer border",
+                        isExpanded
+                          ? "bg-primary/10 border-primary/20 rounded-b-none"
+                          : "bg-secondary/20 border-border/30 hover:bg-secondary/40"
+                      )}
+                      onClick={() => setExpandedActivity(isExpanded ? null : activity.id)}
+                    >
+                      <div className={cn("p-1.5 rounded-md", isExpanded ? "bg-primary/20" : "bg-secondary")}>
+                        <Icon className={cn("h-3 w-3", parsed.color)} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-foreground">
                       {(() => {
                         // Display proper names for different activity types
                         if (parsed.type === 'quiz' || parsed.type === 'quiz-complete') {
@@ -698,12 +814,21 @@ export function AIChatSidebarV2({
                       })()}
                       {/* Show quiz progress for quiz activities */}
                       {(parsed.type === 'quiz' || parsed.type === 'quiz-complete') && (() => {
-                        // Find related quiz result to show progress
+                        // Check if this is a database quiz activity first
+                        if ((activity as any).dbQuizAttempt) {
+                          const result = (activity as any).quizResult
+                          return ` • ${result.score}/${result.total}`
+                        }
+
+                        // Find related quiz result to show progress using explicit relationships
                         const quizResult = agentMessages.find(msg => {
                           const hasQuizResult = msg.type === 'quiz-result' ||
                                               (msg.type === 'ai' && (msg as any).quizResult)
-                          const isNearTimestamp = Math.abs(msg.timestamp - activity.timestamp) < 60000
-                          return hasQuizResult && isNearTimestamp
+                          // Use explicit relationships instead of timestamp proximity
+                          const isRelatedToActivity = msg.id === activity.id ||
+                                                    msg.linkedMessageId === activity.id ||
+                                                    activity.linkedMessageId === msg.id
+                          return hasQuizResult && isRelatedToActivity
                         })
                         if (quizResult?.quizResult) {
                           return ` • ${quizResult.quizResult.score}/${quizResult.quizResult.total}`
@@ -714,6 +839,10 @@ export function AIChatSidebarV2({
                         }
                         return ' • 0/1' // Default for incomplete
                       })()}
+                    </span>
+                    {/* Individual timestamp on the right side */}
+                    <span className="text-xs text-muted-foreground ml-2">
+                      {activity.formattedTime || formatTime(new Date(activity.timestamp))}
                     </span>
                   </div>
                   {/* Additional info now shown inline with activity name */}
@@ -739,23 +868,73 @@ export function AIChatSidebarV2({
                       let relatedContent = null
 
                       if (parsed.type === 'quiz' || parsed.type === 'quiz-complete') {
-                        // Find all related messages for this activity naturally
-                        relatedContent = agentMessages.filter(msg =>
-                          Math.abs(msg.timestamp - activity.timestamp) < 60000
-                        )
+                        // Check if this is a database quiz activity
+                        if ((activity as any).dbQuizAttempt) {
+                          // Database quiz - show its data directly without nested dropdown
+                          const result = (activity as any).quizResult
+                          return (
+                            <div className="space-y-3">
+                              {result.questions.map((q: any, idx: number) => (
+                                <div key={q.questionId} className="space-y-1">
+                                  <div className="flex items-start gap-2">
+                                    <span className="text-xs text-muted-foreground mt-0.5">
+                                      Q{idx + 1}.
+                                    </span>
+                                    <div className="flex-1 space-y-1">
+                                      <p className="text-sm">{q.question}</p>
+
+                                      <div className="flex items-center gap-2">
+                                        {q.isCorrect ? (
+                                          <CheckCircle2 className="h-3 w-3 text-green-600" />
+                                        ) : (
+                                          <X className="h-3 w-3 text-red-600" />
+                                        )}
+                                        <span className={cn(
+                                          "text-xs",
+                                          q.isCorrect ? "text-green-600" : "text-red-600"
+                                        )}>
+                                          Your answer: {q.options[q.userAnswer]}
+                                        </span>
+                                      </div>
+
+                                      {!q.isCorrect && (
+                                        <div className="text-xs text-muted-foreground">
+                                          Correct: {q.options[q.correctAnswer]}
+                                        </div>
+                                      )}
+
+                                      {!q.isCorrect && q.explanation && (
+                                        <div className="text-xs text-muted-foreground mt-1 pl-2 border-l-2 border-border/50">
+                                          {q.explanation}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )
+                        } else {
+                          // Find messages explicitly linked to this specific activity (not timestamp proximity)
+                          relatedContent = agentMessages.filter(msg =>
+                            msg.id === activity.id ||
+                            msg.linkedMessageId === activity.id ||
+                            activity.linkedMessageId === msg.id
+                          )
+                        }
                       } else if (parsed.type === 'reflect' || parsed.type === 'reflect-complete') {
                         // Find reflection content - show reflection options for activation, audio player for completion
                         if (parsed.type === 'reflect-complete') {
                           // For completed reflections, show the audio player or result
                           relatedContent = agentMessages.filter(msg =>
                             msg.type === 'audio' &&
-                            Math.abs(msg.timestamp - activity.timestamp) < 30000
+                            (msg.id === activity.id || msg.linkedMessageId === activity.id || activity.linkedMessageId === msg.id)
                           )
                         } else {
                           // For reflect activation, show reflection options
                           relatedContent = agentMessages.filter(msg =>
                             msg.type === 'reflection-options' &&
-                            Math.abs(msg.timestamp - activity.timestamp) < 30000
+                            (msg.id === activity.id || msg.linkedMessageId === activity.id || activity.linkedMessageId === msg.id)
                           )
                         }
                       }
@@ -817,26 +996,21 @@ export function AIChatSidebarV2({
                         return relatedContent.map(renderMessage)
                       }
 
-                      // Debug: Show what messages we have for this activity
-                      const debugInfo = agentMessages.filter(msg =>
-                        Math.abs(msg.timestamp - activity.timestamp) < 60000
-                      )
-                      const allMessages = messages.filter(msg =>
-                        Math.abs(msg.timestamp - activity.timestamp) < 60000
-                      )
-                      console.log('Activity:', activity.message)
+                      // Debug: Show activity info (removed timestamp proximity debug to avoid confusion)
+                      console.log('Activity:', activity.message, 'ID:', activity.id)
                       console.log('Parsed activity type:', parsed.type)
-                      console.log('Agent messages nearby:', debugInfo)
-                      console.log('ALL messages nearby:', allMessages)
 
                       // If no content found, try to find quiz state or completed quiz data
                       if (parsed.type === 'quiz' || parsed.type === 'quiz-complete') {
-                        // Look for quiz results in multiple message formats
+                        // Look for quiz results using explicit message relationships (not timestamp proximity)
                         const quizResult = agentMessages.find(msg => {
                           const hasQuizResult = msg.type === 'quiz-result' ||
                                               (msg.type === 'ai' && (msg as any).quizResult)
-                          const isNearTimestamp = Math.abs(msg.timestamp - activity.timestamp) < 60000
-                          return hasQuizResult && isNearTimestamp
+                          // Use explicit relationships: either this message IS the activity, or it's linked to it
+                          const isRelatedToActivity = msg.id === activity.id ||
+                                                    msg.linkedMessageId === activity.id ||
+                                                    activity.linkedMessageId === msg.id
+                          return hasQuizResult && isRelatedToActivity
                         })
 
                         console.log('Found quizResult:', quizResult)
@@ -918,6 +1092,9 @@ export function AIChatSidebarV2({
             </div>
           )
         })}
+            </div>
+          </div>
+        ))}
       </div>
     )
   }

@@ -6,6 +6,7 @@ import { useAppStore } from "@/stores/app-store"
 import { useVideoAgentSystem } from "@/lib/video-agent-system"
 import { useReflectionMutation } from "@/hooks/use-reflection-mutation"
 import { useReflectionsQuery } from "@/hooks/use-reflections-query"
+import { useQuizAttemptMutation } from "@/hooks/use-quiz-attempt-mutation"
 import { deleteAllVoiceMemosAction } from "@/app/actions/reflection-actions"
 import { useSignedUrl } from "@/hooks/use-signed-url"
 import dynamic from "next/dynamic"
@@ -51,15 +52,17 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   // Get signed URL for private video access
   const signedUrl = useSignedUrl(props.videoUrl || null, 30)
 
-  // TanStack mutation for reflection submission
+  // TanStack mutations for reflection and quiz submission
   const reflectionMutation = useReflectionMutation()
+  const quizAttemptMutation = useQuizAttemptMutation()
 
   // Query to fetch existing reflections for this video
   const reflectionsQuery = useReflectionsQuery(props.videoId || '', props.courseId || '')
 
-  // State machine for agent system with reflection mutation
-  const { context, dispatch, setVideoRef, setVideoId, loadInitialMessages, clearAudioMessages } = useVideoAgentSystem({
-    reflectionMutation: reflectionMutation.mutateAsync
+  // State machine for agent system with mutations
+  const { context, dispatch, setVideoRef, setVideoId, setCourseId, loadInitialMessages, clearAudioMessages } = useVideoAgentSystem({
+    reflectionMutation: reflectionMutation.mutateAsync,
+    quizAttemptMutation: quizAttemptMutation.mutateAsync
   })
 
   // State for sidebar
@@ -126,10 +129,14 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
     }
   }, [setVideoRef])
 
-  // Set video ID for AI agent context
+  // Set video ID and course ID for AI agent context
   useEffect(() => {
     setVideoId(props.videoId || null)
   }, [props.videoId, setVideoId])
+
+  useEffect(() => {
+    setCourseId(props.courseId || null)
+  }, [props.courseId, setCourseId])
 
   // Load existing reflections and convert them to audio messages for persistence
   useEffect(() => {
@@ -634,6 +641,8 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
             <AIChatSidebarV2
               messages={context.messages}
               isVideoPlaying={context.videoState?.isPlaying || false}
+              videoId={props.videoId}
+              courseId={props.courseId}
               currentVideoTime={currentTime}
               aiState={context.aiState}
               onAgentRequest={handleAgentRequest}
