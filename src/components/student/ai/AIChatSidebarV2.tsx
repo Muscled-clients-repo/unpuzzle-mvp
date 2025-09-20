@@ -180,8 +180,9 @@ export function AIChatSidebarV2({
   })
 
   const agentMessages = messages.filter(msg => {
-    // Exclude messages that are already shown in activity dropdowns
-    if (['quiz-question', 'reflection-options'].includes(msg.type)) {
+    // Exclude reflection options (shown in activity dropdowns)
+    // But KEEP quiz-question messages so they appear in the main flow when taking quiz
+    if (msg.type === 'reflection-options') {
       return false
     }
 
@@ -202,9 +203,14 @@ export function AIChatSidebarV2({
           msg.message.includes('Your understanding of the material is excellent')) {
         return false
       }
+      // Exclude quiz start messages
+      if (msg.message.includes('Starting your quiz now') ||
+          msg.message.includes('Answer each question to the best of your ability')) {
+        return false
+      }
     }
 
-    return ['system', 'agent-prompt', 'ai', 'quiz-result', 'reflection-complete'].includes(msg.type)
+    return ['system', 'agent-prompt', 'ai', 'quiz-question', 'quiz-result', 'reflection-complete'].includes(msg.type)
   })
   
   const renderMessage = (msg: Message) => {
