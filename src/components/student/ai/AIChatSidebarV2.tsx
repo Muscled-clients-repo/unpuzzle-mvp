@@ -8,9 +8,8 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Puzzle, Send, Sparkles, Bot, User, Pause, Lightbulb, CheckCircle2, MessageSquare, Route, Clock, Brain, Zap, Target, Mic, Camera, Video, Upload, Square, Play, Trash2, MicOff, Activity, X } from "lucide-react"
+import { Puzzle, Send, Sparkles, Bot, User, Pause, Lightbulb, CheckCircle2, MessageSquare, Route, Clock, Brain, Zap, Target, Mic, Camera, Video, Upload, Square, Play, Trash2, MicOff, Activity, X, Trophy } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { AIActivityLog } from "./AIActivityLog"
 import { QuizResultBox } from "./QuizResultBox"
 
 interface AIChatSidebarV2Props {
@@ -75,15 +74,23 @@ export function AIChatSidebarV2({
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null)
   const [audioChunks, setAudioChunks] = useState<Blob[]>([])
   const [loomUrl, setLoomUrl] = useState('')
-  const [showActivityLog, setShowActivityLog] = useState(false)
+  const [expandedActivity, setExpandedActivity] = useState<string | null>(null)
   const [showReflectionOptions, setShowReflectionOptions] = useState<string | null>(null) // Track which message is showing reflection options
+  const [activeTab, setActiveTab] = useState<'chat' | 'agents'>('chat')
 
   // Track which agent is currently active based on messages
-  const activeAgent = messages.find(msg => 
-    msg.type === 'agent-prompt' && 
+  const activeAgent = messages.find(msg =>
+    msg.type === 'agent-prompt' &&
     msg.state === MessageState.UNACTIVATED &&
     !((msg as any).accepted)
   )?.agentType || null
+
+  // Auto-switch to agents tab when agent becomes active
+  useEffect(() => {
+    if (activeAgent && activeTab === 'chat') {
+      setActiveTab('agents')
+    }
+  }, [activeAgent, activeTab])
   
   const scrollRef = useRef<HTMLDivElement>(null)
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -166,8 +173,39 @@ export function AIChatSidebarV2({
       : `Discuss this moment (${formattedTime})...`
   }
   
-  // Filter messages for display (no filtering here, done in state machine)
-  const displayMessages = messages
+  // Separate messages into chat and agent categories
+  const chatMessages = messages.filter(msg => {
+    // Only include audio messages (voice memos) in chat
+    return msg.type === 'audio'
+  })
+
+  const agentMessages = messages.filter(msg => {
+    // Exclude messages that are already shown in activity dropdowns
+    if (['quiz-question', 'reflection-options'].includes(msg.type)) {
+      return false
+    }
+
+    // Exclude agent prompts that are shown as activities
+    if (msg.type === 'agent-prompt' && msg.state === MessageState.ACTIVATED) {
+      return false
+    }
+
+    // Exclude system messages that are activities (with 📍)
+    if (msg.type === 'system' && msg.message.includes('📍')) {
+      return false
+    }
+
+    if (msg.type === 'ai') {
+      // Exclude congratulatory messages about quiz completion
+      if (msg.message.includes('Great job completing the quiz') ||
+          msg.message.includes('You scored') ||
+          msg.message.includes('Your understanding of the material is excellent')) {
+        return false
+      }
+    }
+
+    return ['system', 'agent-prompt', 'ai', 'quiz-result', 'reflection-complete'].includes(msg.type)
+  })
   
   const renderMessage = (msg: Message) => {
     // System messages (like "Paused at X:XX") - More subtle styling
@@ -388,11 +426,6 @@ export function AIChatSidebarV2({
             <div className="prose prose-sm dark:prose-invert max-w-none">
               <div className="text-sm whitespace-pre-wrap">{msg.message}</div>
             </div>
-            {quizResult && (
-              <div className="mt-3">
-                <QuizResultBox quizResult={quizResult} />
-              </div>
-            )}
           </div>
         </div>
       )
@@ -508,6 +541,382 @@ export function AIChatSidebarV2({
     return null
   }
 
+  // Extract activity entries from messages (same logic as AIActivityLog)
+  const activities = messages.filter(msg => {
+    // Include system messages with timestamps (📍)
+    if (msg.type === 'system' && msg.message.includes('📍')) {
+      return true
+    }
+    // Include quiz questions (when quiz agent is activated)
+    if (msg.type === 'quiz-question') {
+      return true
+    }
+    // Include reflection options (when reflect agent is activated)
+    if (msg.type === 'reflection-options') {
+      return true
+    }
+    // Include agent prompt activations
+    if (msg.type === 'agent-prompt' && msg.state === MessageState.ACTIVATED) {
+      return true
+    }
+    return false
+  })
+
+  // Parse activity type and details from message - handle both system messages and direct activity types
+  const parseActivity = (msg: Message) => {
+    const message = msg.message
+
+    // Handle quiz questions directly
+    if (msg.type === 'quiz-question') {
+      return { type: 'quiz', icon: Brain, color: 'text-green-600' }
+    }
+
+    // Handle reflection options directly
+    if (msg.type === 'reflection-options') {
+      return { type: 'reflect', icon: Target, color: 'text-blue-600' }
+    }
+
+    // Handle agent prompts
+    if (msg.type === 'agent-prompt' && msg.agentType === 'quiz') {
+      return { type: 'quiz', icon: Brain, color: 'text-green-600' }
+    }
+    if (msg.type === 'agent-prompt' && msg.agentType === 'reflect') {
+      return { type: 'reflect', icon: Target, color: 'text-blue-600' }
+    }
+
+    // Handle system messages with timestamps
+    if (message.includes('PuzzleHint activated')) {
+      return { type: 'hint', icon: Puzzle, color: 'text-purple-600' }
+    }
+    // Handle both "PuzzleCheck activated" and "PuzzleCheck • Quiz" patterns
+    if (message.includes('PuzzleCheck activated') || message.includes('PuzzleCheck • Quiz')) {
+      return { type: 'quiz', icon: Brain, color: 'text-green-600' }
+    }
+    if (message.includes('Quiz completed')) {
+      return { type: 'quiz-complete', icon: CheckCircle2, color: 'text-green-600' }
+    }
+    if (message.includes('PuzzleReflect activated')) {
+      return { type: 'reflect', icon: Target, color: 'text-blue-600' }
+    }
+    if (message.includes('Reflection completed') || message.includes('Voice Memo') || message.includes('reflection saved')) {
+      return { type: 'reflect-complete', icon: CheckCircle2, color: 'text-blue-600' }
+    }
+    if (message.includes('Screenshot')) {
+      return { type: 'screenshot', icon: Camera, color: 'text-green-600' }
+    }
+    if (message.includes('Loom Video')) {
+      return { type: 'loom', icon: Video, color: 'text-purple-600' }
+    }
+    return { type: 'unknown', icon: Activity, color: 'text-gray-600' }
+  }
+
+  // Extract timestamp from message - handle both system messages with timestamps and regular messages
+  const extractTimestamp = (msg: Message) => {
+    // For system messages, try to extract from message text first
+    const match = msg.message.match(/at (\d+:\d+)/)
+    if (match) return match[1]
+
+    // For other messages, format the timestamp from the message object
+    const date = new Date(msg.timestamp)
+    const hours = date.getHours()
+    const minutes = date.getMinutes().toString().padStart(2, '0')
+    const ampm = hours >= 12 ? 'PM' : 'AM'
+    const displayHours = hours % 12 || 12
+    return `${displayHours}:${minutes} ${ampm}`
+  }
+
+  // Extract additional info (like quiz score)
+  const extractAdditionalInfo = (message: string) => {
+    const scoreMatch = message.match(/Score: (\d+\/\d+ \(\d+%\))/)
+    if (scoreMatch) return scoreMatch[1]
+    return null
+  }
+
+  const renderActivityList = () => {
+    if (activities.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <div className="text-muted-foreground text-sm">
+            No activities yet. Use the buttons below to start learning.
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-2 mb-4">
+        <div className="text-xs text-muted-foreground mb-3 px-2">
+          Learning Activities
+        </div>
+        {activities.map((activity, index) => {
+          const parsed = parseActivity(activity)
+          const timestamp = extractTimestamp(activity)
+          const additionalInfo = extractAdditionalInfo(activity.message)
+          const Icon = parsed.icon
+          const isExpanded = expandedActivity === activity.id
+
+          return (
+            <div key={activity.id}>
+              {/* Activity Item */}
+              <div
+                className={cn(
+                  "flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer border",
+                  isExpanded
+                    ? "bg-primary/10 border-primary/20 rounded-b-none"
+                    : "bg-secondary/20 border-border/30 hover:bg-secondary/40"
+                )}
+                onClick={() => setExpandedActivity(isExpanded ? null : activity.id)}
+              >
+                <div className={cn("p-1.5 rounded-md", isExpanded ? "bg-primary/20" : "bg-secondary")}>
+                  <Icon className={cn("h-3 w-3", parsed.color)} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium">
+                      {timestamp}
+                    </span>
+                    <span className="text-xs text-foreground">
+                      {(() => {
+                        // Display proper names for different activity types
+                        if (parsed.type === 'quiz' || parsed.type === 'quiz-complete') {
+                          return 'PuzzleCheck • Quiz'
+                        }
+                        if (parsed.type === 'reflect' || parsed.type === 'reflect-complete') {
+                          return 'PuzzleReflect • Reflection'
+                        }
+                        if (parsed.type === 'hint') {
+                          return 'PuzzleHint • Hint'
+                        }
+                        // For system messages, clean them up
+                        return activity.message.replace(/📍\s*/, '').replace(/at \d+:\d+/, '').trim()
+                      })()}
+                      {/* Show quiz progress for quiz activities */}
+                      {(parsed.type === 'quiz' || parsed.type === 'quiz-complete') && (() => {
+                        // Find related quiz result to show progress
+                        const quizResult = agentMessages.find(msg => {
+                          const hasQuizResult = msg.type === 'quiz-result' ||
+                                              (msg.type === 'ai' && (msg as any).quizResult)
+                          const isNearTimestamp = Math.abs(msg.timestamp - activity.timestamp) < 60000
+                          return hasQuizResult && isNearTimestamp
+                        })
+                        if (quizResult?.quizResult) {
+                          return ` • ${quizResult.quizResult.score}/${quizResult.quizResult.total}`
+                        }
+                        // Extract score from additionalInfo if available
+                        if (additionalInfo && additionalInfo.includes('/')) {
+                          return ` • ${additionalInfo}`
+                        }
+                        return ' • 0/1' // Default for incomplete
+                      })()}
+                    </span>
+                  </div>
+                  {/* Additional info now shown inline with activity name */}
+                </div>
+                <div className={cn(
+                  "text-xs transition-transform",
+                  isExpanded ? "rotate-180" : ""
+                )}>
+                  ▼
+                </div>
+              </div>
+
+              {/* Expanded Content - Shows directly below */}
+              {isExpanded && (
+                <div className="bg-background/50 border border-primary/20 border-t-0 rounded-b-lg p-4">
+                  <div className="text-sm font-medium mb-3 text-muted-foreground">
+                    {parsed.type === 'quiz' || parsed.type === 'quiz-complete' ? 'Quiz' :
+                     parsed.type === 'reflect' || parsed.type === 'reflect-complete' ? 'Reflection' : 'Activity Details'}
+                  </div>
+                  <div className="space-y-3">
+                    {(() => {
+                      // Find related content based on activity type
+                      let relatedContent = null
+
+                      if (parsed.type === 'quiz' || parsed.type === 'quiz-complete') {
+                        // Find all related messages for this activity naturally
+                        relatedContent = agentMessages.filter(msg =>
+                          Math.abs(msg.timestamp - activity.timestamp) < 60000
+                        )
+                      } else if (parsed.type === 'reflect' || parsed.type === 'reflect-complete') {
+                        // Find reflection content - show reflection options for activation, audio player for completion
+                        if (parsed.type === 'reflect-complete') {
+                          // For completed reflections, show the audio player or result
+                          relatedContent = agentMessages.filter(msg =>
+                            msg.type === 'audio' &&
+                            Math.abs(msg.timestamp - activity.timestamp) < 30000
+                          )
+                        } else {
+                          // For reflect activation, show reflection options
+                          relatedContent = agentMessages.filter(msg =>
+                            msg.type === 'reflection-options' &&
+                            Math.abs(msg.timestamp - activity.timestamp) < 30000
+                          )
+                        }
+                      }
+
+                      if (relatedContent && relatedContent.length > 0) {
+                        // For quiz activities, show clean quiz review instead of AI messages
+                        if (parsed.type === 'quiz' || parsed.type === 'quiz-complete') {
+                          const aiMessageWithQuiz = relatedContent.find(msg => msg.type === 'ai' && (msg as any).quizResult)
+                          if (aiMessageWithQuiz && (aiMessageWithQuiz as any).quizResult) {
+                            const result = (aiMessageWithQuiz as any).quizResult
+                            return (
+                              <div className="space-y-3">
+                                <div className="text-sm font-medium text-primary">
+                                  Score: {result.score}/{result.total} ({result.percentage}%)
+                                </div>
+                                {result.questions.map((q: any, index: number) => (
+                                  <div key={index} className="p-3 bg-secondary/30 rounded-lg">
+                                    <div className="text-sm font-medium mb-2">{q.question}</div>
+                                    <div className="space-y-1 text-xs">
+                                      {q.options.map((option: string, optIndex: number) => (
+                                        <div
+                                          key={optIndex}
+                                          className={cn(
+                                            "p-2 rounded",
+                                            optIndex === q.userAnswer
+                                              ? q.isCorrect
+                                                ? "bg-green-100 dark:bg-green-950 text-green-800 dark:text-green-200"
+                                                : "bg-red-100 dark:bg-red-950 text-red-800 dark:text-red-200"
+                                              : optIndex === q.correctAnswer
+                                              ? "bg-green-100 dark:bg-green-950 text-green-800 dark:text-green-200"
+                                              : "bg-gray-100 dark:bg-gray-800"
+                                          )}
+                                        >
+                                          {option}
+                                          {optIndex === q.userAnswer && (
+                                            <span className="ml-2">
+                                              {q.isCorrect ? "✓ Your answer" : "✗ Your answer"}
+                                            </span>
+                                          )}
+                                          {optIndex === q.correctAnswer && optIndex !== q.userAnswer && (
+                                            <span className="ml-2 text-green-600">✓ Correct</span>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                    {q.explanation && (
+                                      <div className="mt-2 text-xs text-muted-foreground italic">
+                                        {q.explanation}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )
+                          }
+                        }
+
+                        // For other activities, show messages normally
+                        return relatedContent.map(renderMessage)
+                      }
+
+                      // Debug: Show what messages we have for this activity
+                      const debugInfo = agentMessages.filter(msg =>
+                        Math.abs(msg.timestamp - activity.timestamp) < 60000
+                      )
+                      const allMessages = messages.filter(msg =>
+                        Math.abs(msg.timestamp - activity.timestamp) < 60000
+                      )
+                      console.log('Activity:', activity.message)
+                      console.log('Parsed activity type:', parsed.type)
+                      console.log('Agent messages nearby:', debugInfo)
+                      console.log('ALL messages nearby:', allMessages)
+
+                      // If no content found, try to find quiz state or completed quiz data
+                      if (parsed.type === 'quiz' || parsed.type === 'quiz-complete') {
+                        // Look for quiz results in multiple message formats
+                        const quizResult = agentMessages.find(msg => {
+                          const hasQuizResult = msg.type === 'quiz-result' ||
+                                              (msg.type === 'ai' && (msg as any).quizResult)
+                          const isNearTimestamp = Math.abs(msg.timestamp - activity.timestamp) < 60000
+                          return hasQuizResult && isNearTimestamp
+                        })
+
+                        console.log('Found quizResult:', quizResult)
+
+                        // Extract quiz result data from either message type
+                        let result = null
+                        if (quizResult?.type === 'quiz-result' && (quizResult as any).quizResult) {
+                          result = (quizResult as any).quizResult
+                        } else if (quizResult?.type === 'ai' && (quizResult as any).quizResult) {
+                          result = (quizResult as any).quizResult
+                        }
+
+                        console.log('Extracted result:', result)
+
+                        if (result) {
+                          return (
+                            <div className="space-y-3">
+                              <div className="text-sm font-medium text-primary">
+                                Score: {result.score}/{result.total} ({result.percentage}%)
+                              </div>
+                              {result.questions.map((q, index) => (
+                                <div key={index} className="p-3 bg-secondary/30 rounded-lg">
+                                  <div className="text-sm font-medium mb-2">{q.question}</div>
+                                  <div className="space-y-1 text-xs">
+                                    {q.options.map((option, optIndex) => (
+                                      <div
+                                        key={optIndex}
+                                        className={cn(
+                                          "p-2 rounded",
+                                          optIndex === q.userAnswer
+                                            ? q.isCorrect
+                                              ? "bg-green-100 dark:bg-green-950 text-green-800 dark:text-green-200"
+                                              : "bg-red-100 dark:bg-red-950 text-red-800 dark:text-red-200"
+                                            : optIndex === q.correctAnswer
+                                            ? "bg-green-100 dark:bg-green-950 text-green-800 dark:text-green-200"
+                                            : "bg-gray-100 dark:bg-gray-800"
+                                        )}
+                                      >
+                                        {option}
+                                        {optIndex === q.userAnswer && (
+                                          <span className="ml-2">
+                                            {q.isCorrect ? "✓ Your answer" : "✗ Your answer"}
+                                          </span>
+                                        )}
+                                        {optIndex === q.correctAnswer && optIndex !== q.userAnswer && (
+                                          <span className="ml-2 text-green-600">✓ Correct</span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {q.explanation && (
+                                    <div className="mt-2 text-xs text-muted-foreground italic">
+                                      {q.explanation}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )
+                        }
+
+                        return (
+                          <div className="text-xs text-muted-foreground italic">
+                            Quiz content will appear here when activated.
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <div className="text-xs text-muted-foreground italic">
+                          {parsed.type === 'reflect' ? 'Reflection options will appear here when activated.' :
+                           'No additional content available for this activity.'}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+
   return (
     <div className="relative flex flex-col h-full bg-gradient-to-b from-background to-secondary/5">
       {/* Header - Minimalist */}
@@ -519,18 +928,33 @@ export function AIChatSidebarV2({
             </div>
             <h3 className="font-medium text-sm">AI Assistant</h3>
           </div>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setShowActivityLog(!showActivityLog)}
-            className={cn(
-              "h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors",
-              showActivityLog && "text-foreground bg-muted"
-            )}
-            title="View Activity Log"
-          >
-            <Activity className="h-3.5 w-3.5" />
-          </Button>
+        </div>
+
+
+        {/* Tab Navigation */}
+        <div className="flex border-b bg-background/50 backdrop-blur-sm">
+          {[
+            { key: 'chat', label: 'Chat', icon: MessageSquare },
+            { key: 'agents', label: 'Agents', icon: Brain }
+          ].map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key as 'chat' | 'agents')}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors relative",
+                activeTab === key
+                  ? "text-primary bg-background border-b-2 border-primary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              <span>{label}</span>
+              {/* Badge for active agents on Agents tab */}
+              {key === 'agents' && activeAgent && (
+                <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+              )}
+            </button>
+          ))}
         </div>
 
       </div>
@@ -538,8 +962,19 @@ export function AIChatSidebarV2({
       {/* Messages - Scrollable area */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-2">
-          {/* Chat Messages */}
-          {displayMessages.map(renderMessage)}
+          {activeTab === 'chat' ? (
+            /* Chat Tab: Show only chat messages */
+            chatMessages.map(renderMessage)
+          ) : (
+            /* Agents Tab: Show activity list + current agent messages + expanded content */
+            <>
+              {/* Activity List */}
+              {renderActivityList()}
+
+              {/* Current Agent Messages - Show all agent messages naturally */}
+              {agentMessages.map(renderMessage)}
+            </>
+          )}
 
           {/* AI State Error */}
           {aiState?.error && (
@@ -582,74 +1017,99 @@ export function AIChatSidebarV2({
         </div>
       </div>
 
-      {/* Input - Fixed at bottom */}
+      {/* Input/Actions - Fixed at bottom */}
       <div className="border-t bg-background/95 backdrop-blur-sm p-4 flex-shrink-0">
-        {/* Segment Context Display */}
-        {segmentContext?.sentToChat && segmentContext.inPoint !== null && segmentContext.outPoint !== null && (
-          <div className="mb-3 p-2 bg-secondary/50 rounded-lg border border-primary/20">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-1 h-4 bg-gradient-to-b from-green-500 to-red-500 rounded-full" />
-                <span className="text-xs text-muted-foreground">Context:</span>
-                <span className="text-xs font-medium">
-                  Video clip from {formatRecordingTime(segmentContext.inPoint)} to {formatRecordingTime(segmentContext.outPoint)}
-                </span>
+        {activeTab === 'chat' ? (
+          /* Chat Tab: Show input field and agent buttons */
+          <>
+            {/* Segment Context Display */}
+            {segmentContext?.sentToChat && segmentContext.inPoint !== null && segmentContext.outPoint !== null && (
+              <div className="mb-3 p-2 bg-secondary/50 rounded-lg border border-primary/20">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1 h-4 bg-gradient-to-b from-green-500 to-red-500 rounded-full" />
+                    <span className="text-xs text-muted-foreground">Context:</span>
+                    <span className="text-xs font-medium">
+                      Video clip from {formatRecordingTime(segmentContext.inPoint)} to {formatRecordingTime(segmentContext.outPoint)}
+                    </span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={onClearSegmentContext}
+                    className="h-6 w-6 p-0 hover:bg-secondary"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
               </div>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={onClearSegmentContext}
-                className="h-6 w-6 p-0 hover:bg-secondary"
-              >
-                <X className="h-3 w-3" />
+            )}
+
+            <div className="flex gap-2 mb-2">
+              <Input
+                placeholder={getPlaceholderText()}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                className="flex-1 border-2 focus:border-primary/50 transition-colors"
+              />
+              <Button onClick={handleSendMessage} size="sm" className="px-3">
+                <Send className="h-4 w-4" />
               </Button>
+            </div>
+
+            {/* Agent buttons below input - Minimalist icons only */}
+            <div className="flex gap-1 px-1">
+              {[
+                { type: 'quiz', icon: Brain, tooltip: 'Take a quiz on video content' },
+                { type: 'reflect', icon: Zap, tooltip: 'Reflect on what you learned' }
+              ].map(({ type, icon: Icon, tooltip }) => (
+                <Button
+                  key={type}
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onAgentRequest(type)}
+                  className={cn(
+                    "h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors",
+                    activeAgent === type && "text-foreground bg-muted"
+                  )}
+                  title={tooltip}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                </Button>
+              ))}
+            </div>
+          </>
+        ) : (
+          /* Agents Tab: Show agent activation buttons only */
+          <div className="space-y-3">
+            <div className="text-center text-sm text-muted-foreground mb-3">
+              Activate learning agents
+            </div>
+            <div className="flex gap-2">
+              {[
+                { type: 'quiz', icon: Brain, label: 'Quiz', tooltip: 'Take a quiz on video content' },
+                { type: 'reflect', icon: Zap, label: 'Reflect', tooltip: 'Reflect on what you learned' }
+              ].map(({ type, icon: Icon, label, tooltip }) => (
+                <Button
+                  key={type}
+                  variant="outline"
+                  onClick={() => onAgentRequest(type)}
+                  className={cn(
+                    "flex-1 flex items-center gap-2 h-12 transition-colors",
+                    activeAgent === type && "border-primary bg-primary/10 text-primary"
+                  )}
+                  title={tooltip}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span className="font-medium">{label}</span>
+                </Button>
+              ))}
             </div>
           </div>
         )}
-
-        <div className="flex gap-2 mb-2">
-          <Input
-            placeholder={getPlaceholderText()}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-            className="flex-1 border-2 focus:border-primary/50 transition-colors"
-          />
-          <Button onClick={handleSendMessage} size="sm" className="px-3">
-            <Send className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Agent buttons below input - Minimalist icons only */}
-        <div className="flex gap-1 px-1">
-          {[
-            { type: 'quiz', icon: Brain, tooltip: 'Take a quiz on video content' },
-            { type: 'reflect', icon: Zap, tooltip: 'Reflect on what you learned' }
-          ].map(({ type, icon: Icon, tooltip }) => (
-            <Button
-              key={type}
-              size="sm"
-              variant="ghost"
-              onClick={() => onAgentRequest(type)}
-              className={cn(
-                "h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors",
-                activeAgent === type && "text-foreground bg-muted"
-              )}
-              title={tooltip}
-            >
-              <Icon className="h-3.5 w-3.5" />
-            </Button>
-          ))}
-        </div>
       </div>
 
-      {showActivityLog && (
-        <AIActivityLog
-          messages={messages}
-          isOpen={true}
-          onToggle={() => setShowActivityLog(false)}
-        />
-      )}
     </div>
   )
 }
