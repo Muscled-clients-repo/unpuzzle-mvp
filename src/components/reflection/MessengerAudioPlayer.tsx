@@ -109,13 +109,38 @@ export function MessengerAudioPlayer({
     setCurrentTime(newTime)
   }
 
+  // High-frequency animation frame for smooth progress
+  useEffect(() => {
+    let animationFrame: number
+
+    const updateProgress = () => {
+      if (audioRef.current && isThisPlaying) {
+        setCurrentTime(audioRef.current.currentTime)
+        animationFrame = requestAnimationFrame(updateProgress)
+      }
+    }
+
+    if (isThisPlaying) {
+      animationFrame = requestAnimationFrame(updateProgress)
+    }
+
+    return () => {
+      if (animationFrame) {
+        cancelAnimationFrame(animationFrame)
+      }
+    }
+  }, [isThisPlaying])
+
   // Audio event handlers
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) return
 
     const handleTimeUpdate = () => {
-      setCurrentTime(audio.currentTime)
+      // Fallback for when requestAnimationFrame isn't running
+      if (!isThisPlaying) {
+        setCurrentTime(audio.currentTime)
+      }
     }
 
     const handleLoadedMetadata = () => {
@@ -147,7 +172,7 @@ export function MessengerAudioPlayer({
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata)
       audio.removeEventListener('ended', handleEnded)
     }
-  }, [stopPlayback])
+  }, [stopPlayback, isThisPlaying])
 
   // Stop playback when component unmounts
   useEffect(() => {
@@ -162,11 +187,22 @@ export function MessengerAudioPlayer({
 
   const progress = audioDuration > 0 ? (currentTime / audioDuration) * 100 : 0
 
+  // Static waveform heights based on typical voice patterns (louder at start/middle, quieter at end)
+  const getWaveformHeights = () => {
+    const heights = [
+      8, 12, 6, 14, 18, 10, 16, 22, 12, 8,
+      20, 16, 24, 18, 14, 10, 8, 12, 16, 14,
+      18, 22, 16, 12, 8, 14, 18, 20, 16, 12,
+      10, 8, 6, 10, 12, 8, 6, 4, 6, 8
+    ]
+    return heights
+  }
+
   return (
     <div className={cn(
-      "flex items-center gap-3 p-3 rounded-2xl max-w-xs",
+      "flex items-center gap-3 p-2 rounded-lg max-w-sm w-full",
       isOwn
-        ? "bg-blue-500 text-white ml-auto"
+        ? "bg-blue-500/10 border border-blue-500/20 ml-auto"
         : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
     )}>
       {/* Play/Pause Button */}
@@ -174,80 +210,76 @@ export function MessengerAudioPlayer({
         variant="ghost"
         size="sm"
         className={cn(
-          "h-8 w-8 p-0 rounded-full",
+          "h-7 w-7 p-0 rounded-full flex-shrink-0",
           isOwn
-            ? "hover:bg-blue-600 text-white"
+            ? "hover:bg-blue-500/20 text-blue-600"
             : "hover:bg-gray-200 dark:hover:bg-gray-700"
         )}
         onClick={handlePlayPause}
         disabled={signedUrl.isLoading || !signedUrl.url}
       >
         {signedUrl.isLoading ? (
-          <div className="h-4 w-4 animate-spin rounded-full border border-current border-t-transparent" />
+          <div className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
         ) : isThisPlaying ? (
-          <Pause className="h-4 w-4" />
+          <Pause className="h-3 w-3" />
         ) : (
-          <Play className="h-4 w-4 ml-0.5" />
+          <Play className="h-3 w-3 ml-0.5" />
         )}
       </Button>
 
-      {/* Audio Controls */}
-      <div className="flex-1 min-w-0">
-        {/* Waveform/Progress Bar */}
+      {/* Waveform and Time Display */}
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        {/* Static waveform visualization */}
         <div
-          className="relative h-6 cursor-pointer mb-1"
+          className="relative h-8 cursor-pointer flex-1"
           onClick={handleSeek}
         >
-          {/* Background track */}
-          <div className={cn(
-            "absolute top-1/2 left-0 right-0 h-1 rounded-full -translate-y-1/2",
-            isOwn ? "bg-blue-300" : "bg-gray-300 dark:bg-gray-600"
-          )} />
+          {/* Waveform bars */}
+          <div className="absolute inset-0 flex items-center justify-between px-1">
+            {getWaveformHeights().map((height, i) => {
+              const totalBars = getWaveformHeights().length
+              const barStartPercent = (i / totalBars) * 100
+              const barEndPercent = ((i + 1) / totalBars) * 100
 
-          {/* Progress track */}
-          <div
-            className={cn(
-              "absolute top-1/2 left-0 h-1 rounded-full -translate-y-1/2 transition-all",
-              isOwn ? "bg-white" : "bg-blue-500"
-            )}
-            style={{ width: `${progress}%` }}
-          />
+              // Calculate how much of this bar should be colored
+              let fillPercent = 0
+              if (progress >= barEndPercent) {
+                // Bar is fully played
+                fillPercent = 100
+              } else if (progress > barStartPercent) {
+                // Bar is partially played - smooth transition
+                fillPercent = ((progress - barStartPercent) / (barEndPercent - barStartPercent)) * 100
+              }
+              // else fillPercent stays 0 (not played)
 
-          {/* Playhead */}
-          {isThisPlaying && (
-            <div
-              className={cn(
-                "absolute top-1/2 w-3 h-3 rounded-full -translate-y-1/2 -translate-x-1/2",
-                isOwn ? "bg-white" : "bg-blue-500"
-              )}
-              style={{ left: `${progress}%` }}
-            />
-          )}
+              const playedColor = isOwn ? "rgb(37 99 235)" : "rgb(59 130 246)" // blue-600 : blue-500
+              const unplayedColor = isOwn ? "rgba(59 130 246, 0.3)" : "rgba(156 163 175, 0.5)" // blue-500/30 : gray-400/50
 
-          {/* Simplified waveform visualization */}
-          <div className="absolute inset-0 flex items-center justify-around px-1">
-            {Array.from({ length: 20 }, (_, i) => (
-              <div
-                key={i}
-                className={cn(
-                  "w-0.5 rounded-full opacity-40",
-                  isOwn ? "bg-white" : "bg-gray-500"
-                )}
-                style={{
-                  height: `${Math.random() * 16 + 4}px`
-                }}
-              />
-            ))}
+              return (
+                <div
+                  key={i}
+                  className="w-0.5 rounded-full transition-all duration-75"
+                  style={{
+                    height: `${height}px`,
+                    background: fillPercent > 0
+                      ? fillPercent >= 100
+                        ? playedColor
+                        : `linear-gradient(to bottom, ${playedColor} ${fillPercent}%, ${unplayedColor} ${fillPercent}%)`
+                      : unplayedColor
+                  }}
+                />
+              )
+            })}
           </div>
         </div>
 
         {/* Time Display */}
-        <div className="flex items-center justify-between text-xs">
-          <Volume2 className="h-3 w-3" />
-          <span className="font-mono">
-            {formatTime(currentTime)} / {formatTime(audioDuration)}
-          </span>
-        </div>
+        <span className={cn(
+          "text-xs font-mono flex-shrink-0",
+          isOwn ? "text-blue-600" : "text-gray-600 dark:text-gray-400"
+        )}>
+          {formatTime(currentTime)}/{formatTime(audioDuration)}
+        </span>
       </div>
 
       <audio ref={audioRef} className="hidden" />

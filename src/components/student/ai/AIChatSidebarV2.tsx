@@ -18,6 +18,7 @@ interface AIChatSidebarV2Props {
   isVideoPlaying?: boolean
   videoId?: string
   courseId?: string
+  currentVideoTime?: number
   onAgentRequest: (type: string) => void
   onAgentAccept: (id: string) => void
   onAgentReject: (id: string) => void
@@ -48,6 +49,7 @@ interface AIChatSidebarV2Props {
 export function AIChatSidebarV2({
   messages,
   isVideoPlaying = false,
+  currentVideoTime = 0,
   onAgentRequest,
   onAgentAccept,
   onAgentReject,
@@ -138,15 +140,6 @@ export function AIChatSidebarV2({
           buttonColor: 'bg-purple-500 hover:bg-purple-600',
           iconBg: 'bg-gradient-to-br from-purple-500 to-pink-500'
         }
-      case 'path':
-        return {
-          icon: Target,
-          title: 'PuzzlePath',
-          color: 'from-orange-500/20 to-amber-500/20',
-          borderColor: 'border-orange-500',
-          buttonColor: 'bg-orange-500 hover:bg-orange-600',
-          iconBg: 'bg-gradient-to-br from-orange-500 to-amber-500'
-        }
       default:
         return {
           icon: Puzzle,
@@ -163,6 +156,14 @@ export function AIChatSidebarV2({
     const mins = Math.floor(seconds / 60)
     const secs = Math.floor(seconds % 60)
     return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
+  // Dynamic placeholder text based on current video time
+  const getPlaceholderText = (): string => {
+    const formattedTime = formatRecordingTime(currentVideoTime)
+    return segmentContext?.sentToChat
+      ? `Ask about this video segment...`
+      : `Discuss this moment (${formattedTime})...`
   }
   
   // Filter messages for display (no filtering here, done in state machine)
@@ -509,53 +510,29 @@ export function AIChatSidebarV2({
 
   return (
     <div className="relative flex flex-col h-full bg-gradient-to-b from-background to-secondary/5">
-      {/* Header - Fixed at top */}
-      <div className="border-b bg-background/95 backdrop-blur-sm p-4 flex-shrink-0">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-gradient-to-br from-primary to-primary/70 shadow-md">
-              <Bot className="h-5 w-5 text-primary-foreground" />
+      {/* Header - Minimalist */}
+      <div className="border-b bg-background/95 backdrop-blur-sm p-3 flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-md bg-gradient-to-br from-primary to-primary/70">
+              <Bot className="h-4 w-4 text-primary-foreground" />
             </div>
-            <div>
-              <h3 className="font-bold text-lg">AI Learning Assistant</h3>
-              <p className="text-xs text-muted-foreground">Powered by 4 specialized agents</p>
-            </div>
+            <h3 className="font-medium text-sm">AI Assistant</h3>
           </div>
           <Button
             size="sm"
             variant="ghost"
             onClick={() => setShowActivityLog(!showActivityLog)}
             className={cn(
-              "p-2 hover:bg-secondary",
-              showActivityLog && "bg-secondary"
+              "h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors",
+              showActivityLog && "text-foreground bg-muted"
             )}
+            title="View Activity Log"
           >
-            <Activity className="h-4 w-4" />
+            <Activity className="h-3.5 w-3.5" />
           </Button>
         </div>
 
-        {/* Agent Buttons - Single row optimized */}
-        <div className="flex gap-2">
-          {[
-            { type: 'quiz', icon: Brain, label: 'Quiz', color: 'hover:bg-gradient-to-r hover:from-emerald-500/10 hover:to-green-500/10 hover:border-emerald-500/50', activeColor: 'bg-gradient-to-r from-emerald-500/20 to-green-500/20 border-emerald-500' },
-            { type: 'reflect', icon: Zap, label: 'Reflect', color: 'hover:bg-gradient-to-r hover:from-purple-500/10 hover:to-pink-500/10 hover:border-purple-500/50', activeColor: 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 border-purple-500' },
-            { type: 'path', icon: Target, label: 'Path', color: 'hover:bg-gradient-to-r hover:from-orange-500/10 hover:to-amber-500/10 hover:border-orange-500/50', activeColor: 'bg-gradient-to-r from-orange-500/20 to-amber-500/20 border-orange-500' }
-          ].map(({ type, icon: Icon, label, color, activeColor }) => (
-            <Button
-              key={type}
-              size="sm"
-              variant="outline"
-              onClick={() => onAgentRequest(type)}
-              className={cn(
-                "flex-1 h-9 px-2 transition-all duration-200 border-2",
-                activeAgent === type ? activeColor : color
-              )}
-            >
-              <Icon className="h-3.5 w-3.5 mr-1" />
-              <span className="text-xs font-medium">{label}</span>
-            </Button>
-          ))}
-        </div>
       </div>
 
       {/* Messages - Scrollable area */}
@@ -632,7 +609,7 @@ export function AIChatSidebarV2({
 
         <div className="flex gap-2 mb-2">
           <Input
-            placeholder={segmentContext?.sentToChat ? "Ask about this video segment..." : "Ask about the video content..."}
+            placeholder={getPlaceholderText()}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
@@ -641,6 +618,28 @@ export function AIChatSidebarV2({
           <Button onClick={handleSendMessage} size="sm" className="px-3">
             <Send className="h-4 w-4" />
           </Button>
+        </div>
+
+        {/* Agent buttons below input - Minimalist icons only */}
+        <div className="flex gap-1 px-1">
+          {[
+            { type: 'quiz', icon: Brain, tooltip: 'Take a quiz on video content' },
+            { type: 'reflect', icon: Zap, tooltip: 'Reflect on what you learned' }
+          ].map(({ type, icon: Icon, tooltip }) => (
+            <Button
+              key={type}
+              size="sm"
+              variant="ghost"
+              onClick={() => onAgentRequest(type)}
+              className={cn(
+                "h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors",
+                activeAgent === type && "text-foreground bg-muted"
+              )}
+              title={tooltip}
+            >
+              <Icon className="h-3.5 w-3.5" />
+            </Button>
+          ))}
         </div>
       </div>
 

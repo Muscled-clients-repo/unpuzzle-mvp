@@ -634,6 +634,7 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
             <AIChatSidebarV2
               messages={context.messages}
               isVideoPlaying={context.videoState?.isPlaying || false}
+              currentVideoTime={currentTime}
               aiState={context.aiState}
               onAgentRequest={handleAgentRequest}
               onAgentAccept={(id) => dispatch({ type: 'ACCEPT_AGENT', payload: id })}

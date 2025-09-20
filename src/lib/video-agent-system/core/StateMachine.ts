@@ -420,7 +420,7 @@ export class VideoAgentStateMachine {
     const agentMessage: Message = {
       id: `agent-${Date.now()}`,
       type: 'agent-prompt' as const,
-      agentType: agentType as 'quiz' | 'reflect' | 'path',
+      agentType: agentType as 'quiz' | 'reflect',
       state: MessageState.UNACTIVATED,
       message: this.getAgentPrompt(agentType, currentVideoTime),
       timestamp: Date.now(),
@@ -595,7 +595,6 @@ export class VideoAgentStateMachine {
       switch (type) {
         case 'quiz': return 'PuzzleCheck'
         case 'reflect': return 'PuzzleReflect'
-        case 'path': return 'PuzzlePath'
         default: return 'Agent'
       }
     }
@@ -686,13 +685,15 @@ export class VideoAgentStateMachine {
       }
     })
 
-    // Resume video playback immediately
+    // Resume video playback with small delay to prevent race condition
     console.log('[SM] Resuming video after agent rejection')
-    try {
-      await this.videoController.playVideo()
-    } catch (error) {
-      console.error('[SM] Failed to resume video:', error)
-    }
+    setTimeout(async () => {
+      try {
+        await this.videoController.playVideo()
+      } catch (error) {
+        console.error('[SM] Failed to resume video:', error)
+      }
+    }, 50) // Small delay to ensure state is fully updated
   }
   
   // REMOVED: clearUnactivatedMessages and clearReflectionOptions
@@ -728,7 +729,6 @@ export class VideoAgentStateMachine {
         const timeFormatted = currentTime ? this.formatTime(currentTime) : '0:00'
         return `Want to take a quiz at ${timeFormatted}?`
       case 'reflect': return 'Would you like to reflect on what you\'ve learned?'
-      case 'path': return 'Want a personalized learning path based on your progress?'
       default: return 'How can I help you?'
     }
   }
@@ -797,8 +797,6 @@ export class VideoAgentStateMachine {
         return 'Starting your quiz now! Answer each question to the best of your ability.'
       case 'reflect':
         return 'Choose how you\'d like to reflect on this moment in the video. You can record a voice memo, take a screenshot, or create a Loom video to capture your thoughts.'
-      case 'path':
-        return 'Based on your progress, here\'s your personalized learning path:\n\n✅ Completed: Introduction to React\n📍 Current: React Hooks\n🔜 Next: State Management\n\nRecommended next steps:\n1. Practice with useState (15 min)\n2. Learn useEffect (20 min)\n3. Build a mini project (30 min)'
       default:
         return 'I\'m here to help you learn. Feel free to ask any questions!'
     }

@@ -75,7 +75,7 @@ export interface AudioData {
 export interface Message {
   id: string
   type: 'system' | 'agent-prompt' | 'ai' | 'user' | 'quiz-question' | 'quiz-result' | 'reflection-options' | 'reflection-complete' | 'audio'
-  agentType?: 'quiz' | 'reflect' | 'path'
+  agentType?: 'quiz' | 'reflect'
   state: MessageState
   message: string
   timestamp: number
@@ -101,7 +101,7 @@ export interface SystemContext {
   agentState: {
     currentUnactivatedId: string | null
     currentSystemMessageId: string | null
-    activeType: 'quiz' | 'reflect' | 'path' | null
+    activeType: 'quiz' | 'reflect' | null
   }
   aiState: {
     isGenerating: boolean

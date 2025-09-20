@@ -59,9 +59,6 @@ export function AIActivityLog({ messages, isOpen = false, onToggle }: AIActivity
     if (message.includes('Loom Video')) {
       return { type: 'loom', icon: Video, color: 'text-purple-600' }
     }
-    if (message.includes('PuzzlePath activated')) {
-      return { type: 'path', icon: Route, color: 'text-indigo-600' }
-    }
     return { type: 'unknown', icon: Activity, color: 'text-gray-600' }
   }
   

@@ -161,11 +161,11 @@ export class VideoController {
     if (!this.videoRef) {
       throw new Error('No video ref available')
     }
-    
-    const store = isFeatureEnabled('USE_VIDEO_STATE_ADAPTER') 
+
+    const store = isFeatureEnabled('USE_VIDEO_STATE_ADAPTER')
       ? videoStateAdapter.getState('VideoController.play')
       : useAppStore.getState()
-    
+
     // Check for duplicate update
     if (isFeatureEnabled('USE_SINGLE_SOURCE_TRUTH')) {
       // For now, just use direct import to avoid circular dependency
@@ -176,12 +176,25 @@ export class VideoController {
     } else {
       store.setIsPlaying(true)
     }
-    
+
     try {
-      await this.videoRef.play()
+      // Call play method - it might return void or Promise
+      const playResult = this.videoRef.play()
+
+      // If it returns a promise, handle it properly
+      if (playResult && typeof playResult.then === 'function') {
+        await playResult
+      }
+
       return true
     } catch (e) {
       console.warn('Play failed:', e)
+
+      // Handle the specific "interrupted by pause" error
+      if (e instanceof Error && e.message.includes('interrupted by a call to pause')) {
+        console.log('Play was interrupted by pause, this is expected behavior')
+        return false
+      }
 
       // Handle AbortError (common after laptop sleep)
       if (e instanceof Error && e.name === 'AbortError') {
@@ -190,7 +203,10 @@ export class VideoController {
         // Wait a bit and try again
         await this.sleep(100)
         try {
-          await this.videoRef.play()
+          const retryResult = this.videoRef.play()
+          if (retryResult && typeof retryResult.then === 'function') {
+            await retryResult
+          }
           return true
         } catch (retryError) {
           console.error('Retry play failed:', retryError)
