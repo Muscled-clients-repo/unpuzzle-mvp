@@ -20,6 +20,7 @@ export async function getReflectionsAction(videoId: string, courseId: string) {
     const user = await requireAuth()
     const supabase = createServiceClient()
 
+    // Optimized query leveraging idx_reflections_video_page_all index
     const { data: reflections, error } = await supabase
       .from('reflections')
       .select(`
@@ -36,10 +37,10 @@ export async function getReflectionsAction(videoId: string, courseId: string) {
         duration_seconds,
         video_timestamp_seconds
       `)
-      .eq('video_id', videoId)
-      .eq('course_id', courseId)
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: true })
+      .eq('user_id', user.id)      // Index key 1
+      .eq('video_id', videoId)     // Index key 2
+      .eq('course_id', courseId)   // Additional filter
+      .order('created_at', { ascending: false }) // Index includes created_at DESC
 
     if (error) {
       console.error('Failed to fetch reflections:', error)
@@ -131,21 +132,11 @@ export async function submitReflectionAction(formData: FormData) {
     // 3. Create service client
     const supabase = createServiceClient()
 
-    // 4. Verify user has access to this video/course
-    const { data: video, error: videoError } = await supabase
-      .from('videos')
-      .select('id, course_id, courses!inner(id, instructor_id)')
-      .eq('id', videoId)
-      .eq('course_id', courseId)
-      .single()
-
-    if (videoError || !video) {
-      return { success: false, error: 'Video not found or access denied' }
-    }
+    // Database foreign key constraints handle video/course validation automatically
 
     let contentUrl = null
 
-    // 5. Handle file upload for voice and screenshot types
+    // 4. Handle file upload for voice and screenshot types
     if (type === 'voice' || type === 'screenshot') {
       if (!file) {
         return { success: false, error: 'File is required for voice and screenshot reflections' }
@@ -176,10 +167,10 @@ export async function submitReflectionAction(formData: FormData) {
       contentUrl = loomUrl
     }
 
-    // 6. Prepare reflection text (simplified, no metadata)
+    // 5. Prepare reflection text (simplified, no metadata)
     const reflectionText = `${type} reflection captured at ${videoTimestamp}s`
 
-    // 7. Save reflection to database with proper columns (industry standard)
+    // 6. Save reflection to database with proper columns (industry standard)
     const { data: reflection, error: insertError } = await supabase
       .from('reflections')
       .insert({

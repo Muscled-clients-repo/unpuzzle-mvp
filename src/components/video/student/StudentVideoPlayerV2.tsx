@@ -138,15 +138,12 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
       const audioMessages = reflections
         .filter(reflection => reflection.reflection_type === 'voice')
         .map(reflection => {
-          // Extract file URL from reflection_text
-          const fileUrlMatch = reflection.reflection_text.match(/File URL: (.+?)(?:\n|$)/)
-          const durationMatch = reflection.reflection_text.match(/Duration: (\d+(?:\.\d+)?)s/)
-          const timestampMatch = reflection.reflection_text.match(/captured at (\d+(?:\.\d+)?)s/)
+          // Use structured database columns (database optimization aligned)
+          const fileUrl = reflection.file_url
+          const duration = reflection.duration_seconds || 0
+          const videoTimestamp = reflection.video_timestamp_seconds || 0
 
-          if (fileUrlMatch) {
-            const fileUrl = fileUrlMatch[1]
-            const duration = durationMatch ? parseFloat(durationMatch[1]) : 0
-            const videoTimestamp = timestampMatch ? parseFloat(timestampMatch[1]) : 0
+          if (fileUrl) {
 
             return {
               id: `audio-${reflection.id}`,

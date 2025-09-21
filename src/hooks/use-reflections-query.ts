@@ -19,7 +19,7 @@ export interface Reflection {
 
 export function useReflectionsQuery(videoId: string, courseId: string) {
   return useQuery({
-    queryKey: ['reflections', videoId, courseId],
+    queryKey: reflectionKeys.list(videoId, courseId), // Use consistent query key factory
     queryFn: () => getReflectionsAction(videoId, courseId),
     enabled: !!videoId && !!courseId,
     staleTime: 30 * 1000, // 30 seconds

@@ -629,9 +629,8 @@ export function AIChatSidebarV2({
   const messageActivities = messages.filter(msg => {
     // ONLY include system messages with timestamps (📍) - these are user action markers
     if (msg.type === 'system' && msg.message.includes('📍')) {
-      // Exclude reflection system messages that don't have audioData - these are duplicates
-      // Keep only quiz messages and other system messages
-      if (msg.message.includes('PuzzleReflect') && !(msg as any).audioData) {
+      // Exclude ALL PuzzleReflect system messages - database handles these now
+      if (msg.message.includes('PuzzleReflect')) {
         return false
       }
       return true
