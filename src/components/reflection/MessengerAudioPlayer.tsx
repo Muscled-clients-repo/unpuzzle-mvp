@@ -58,7 +58,7 @@ export function MessengerAudioPlayer({
 
       return () => clearTimeout(fallbackTimer)
     }
-  }, [signedUrl.url, propDuration])
+  }, [signedUrl.url, propDuration, audioDuration])
 
   // Format time display
   const formatTime = (seconds: number) => {
@@ -172,6 +172,7 @@ export function MessengerAudioPlayer({
       audio.removeEventListener('ended', handleEnded)
     }
   }, [stopPlayback, isThisPlaying])
+
 
   // Stop playback when component unmounts
   useEffect(() => {

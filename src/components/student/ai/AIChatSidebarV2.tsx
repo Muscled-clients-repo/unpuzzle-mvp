@@ -734,7 +734,6 @@ export function AIChatSidebarV2({
 
   const activities = filteredActivities
 
-
   // Auto-expand the latest quiz activity only (not reflections)
   useEffect(() => {
     if (activities.length > 0) {
@@ -827,6 +826,14 @@ export function AIChatSidebarV2({
     return null
   }
 
+  // Find the latest reflection activity for special styling (after parseActivity is defined)
+  const latestReflectionActivity = activities
+    .filter(activity => {
+      const parsed = parseActivity(activity)
+      return parsed.type === 'reflect' || parsed.type === 'reflect-complete'
+    })
+    .slice(-1)[0] // Get the last (most recent) reflection
+
   const renderActivityList = () => {
     if (activities.length === 0) {
       return (
@@ -859,115 +866,142 @@ export function AIChatSidebarV2({
                 const isQuizActivity = parsed.type === 'quiz' || parsed.type === 'quiz-complete'
                 const isReflectionActivity = parsed.type === 'reflect' || parsed.type === 'reflect-complete'
                 const isExpanded = expandedActivity === activity.id
+                const isLatestReflection = latestReflectionActivity && activity.id === latestReflectionActivity.id
 
                 // State-based filtering has already handled message visibility
                 // No need for complex conditional checks here
 
                 return (
                   <div key={activity.id}>
-                    {/* Activity Item */}
-                    <div
-                      className={cn(
-                        "flex items-center gap-3 p-3 rounded-lg transition-colors border",
-                        isQuizActivity && "cursor-pointer", // Only quizzes are clickable
-                        // Only quiz activities can be expanded - reflections always use normal styling
-                        isExpanded && isQuizActivity
-                          ? "bg-primary/10 border-primary/20 rounded-b-none"
-                          : "bg-secondary/20 border-border/30",
-                        isQuizActivity && !isExpanded && "hover:bg-secondary/40" // Only hover on clickable quizzes
-                      )}
-                      onClick={isQuizActivity ? () => setExpandedActivity(isExpanded ? null : activity.id) : undefined}
-                    >
-                      <div className={cn("p-1.5 rounded-md", (isExpanded && isQuizActivity) ? "bg-primary/20" : "bg-secondary")}>
-                        <Icon className={cn("h-3 w-3", parsed.color)} />
+                    {isReflectionActivity ? (
+                      /* Voice memo gets unified background wrapper */
+                      <div className={cn(
+                        "bg-secondary/100 border border-border/30 rounded-lg p-3",
+                        isLatestReflection && "border-l-4 border-l-blue-500"
+                      )}>
+                        {/* Activity Item - no background for reflections */}
+                        <div className="flex items-center gap-3">
+                          <div className="p-1.5 rounded-md bg-secondary">
+                            <Icon className={cn("h-3 w-3", parsed.color)} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-foreground">
+                                {(() => {
+                                  // Display proper names for different activity types
+                                  if (parsed.type === 'reflect' || parsed.type === 'reflect-complete') {
+                                    // Twitter-style compact format: "🎙️ Voice memo (duration) at timestamp"
+                                    if ((activity as any).audioData) {
+                                      const duration = (activity as any).audioData.duration || 0
+                                      const timestamp = (activity as any).audioData.videoTimestamp || 0
+                                      const durationText = duration > 0 ? `${duration.toFixed(1)}s` : '0:00'
+                                      return `🎙️ Voice memo (${durationText}) at ${timestamp.toFixed(0)}s`
+                                    }
+                                    return '🎙️ Voice memo'
+                                  }
+                                  return activity.message.replace(/📍\s*/, '').replace(/at \d+:\d+/, '').trim()
+                                })()}
+                              </span>
+                              {/* Individual timestamp on the right side */}
+                              <span className="text-xs text-muted-foreground ml-2">
+                                {activity.formattedTime || formatTime(new Date(activity.timestamp))}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        {/* Show compact MessengerAudioPlayer for reflection activities */}
+                        {(activity as any).dbReflection &&
+                         (activity as any).audioData &&
+                         (activity as any).audioData.fileUrl && (
+                          <div className="mt-2">
+                            <MessengerAudioPlayer
+                              reflectionId={(activity as any).audioData.reflectionId}
+                              fileUrl={(activity as any).audioData.fileUrl}
+                              duration={(activity as any).audioData.duration}
+                              timestamp={(activity as any).audioData.videoTimestamp}
+                              isOwn={true}
+                            />
+                          </div>
+                        )}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-foreground">
-                      {(() => {
-                        // Display proper names for different activity types
-                        if (parsed.type === 'quiz' || parsed.type === 'quiz-complete') {
-                          return 'PuzzleCheck • Quiz'
-                        }
-                        if (parsed.type === 'reflect' || parsed.type === 'reflect-complete') {
-                          // Twitter-style compact format: "🎙️ Voice memo (duration) at timestamp"
-                          if ((activity as any).audioData) {
-                            const duration = (activity as any).audioData.duration || 0
-                            const timestamp = (activity as any).audioData.videoTimestamp || 0
-                            const durationText = duration > 0 ? `${duration.toFixed(1)}s` : '0:00'
-                            return `🎙️ Voice memo (${durationText}) at ${timestamp.toFixed(0)}s`
-                          }
-                          return '🎙️ Voice memo'
-                        }
-                        if (parsed.type === 'hint') {
-                          return 'PuzzleHint • Hint'
-                        }
-                        // For system messages, clean them up
-                        return activity.message.replace(/📍\s*/, '').replace(/at \d+:\d+/, '').trim()
-                      })()}
-                      {/* Show quiz progress for quiz activities */}
-                      {(parsed.type === 'quiz' || parsed.type === 'quiz-complete') && (() => {
-                        // Check if this is a database quiz activity first
-                        if ((activity as any).dbQuizAttempt) {
-                          const result = (activity as any).quizResult
-                          return ` • ${result.score}/${result.total}`
-                        }
+                    ) : (
+                      /* Quiz activities keep original styling */
+                      <div
+                        className={cn(
+                          "flex items-center gap-3 p-3 rounded-lg transition-colors border",
+                          isQuizActivity && "cursor-pointer", // Only quizzes are clickable
+                          // Only quiz activities can be expanded
+                          isExpanded && isQuizActivity
+                            ? "bg-primary/10 border-primary/20 rounded-b-none"
+                            : "bg-secondary/20 border-border/30",
+                          isQuizActivity && !isExpanded && "hover:bg-secondary/40" // Only hover on clickable quizzes
+                        )}
+                        onClick={isQuizActivity ? () => setExpandedActivity(isExpanded ? null : activity.id) : undefined}
+                      >
+                        <div className={cn("p-1.5 rounded-md", (isExpanded && isQuizActivity) ? "bg-primary/20" : "bg-secondary")}>
+                          <Icon className={cn("h-3 w-3", parsed.color)} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-foreground">
+                              {(() => {
+                                // Display proper names for different activity types (quiz section only)
+                                if (parsed.type === 'quiz' || parsed.type === 'quiz-complete') {
+                                  return 'PuzzleCheck • Quiz'
+                                }
+                                if (parsed.type === 'hint') {
+                                  return 'PuzzleHint • Hint'
+                                }
+                                // For system messages, clean them up
+                                return activity.message.replace(/📍\s*/, '').replace(/at \d+:\d+/, '').trim()
+                              })()}
+                              {/* Show quiz progress for quiz activities */}
+                              {(parsed.type === 'quiz' || parsed.type === 'quiz-complete') && (() => {
+                                // Check if this is a database quiz activity first
+                                if ((activity as any).dbQuizAttempt) {
+                                  const result = (activity as any).quizResult
+                                  return ` • ${result.score}/${result.total}`
+                                }
 
-                        // Find related quiz result to show progress using explicit relationships
-                        const quizResult = agentMessages.find(msg => {
-                          const hasQuizResult = msg.type === 'quiz-result' ||
-                                              (msg.type === 'ai' && (msg as any).quizResult)
-                          // Use explicit relationships instead of timestamp proximity
-                          const isRelatedToActivity = msg.id === activity.id ||
-                                                    msg.linkedMessageId === activity.id ||
-                                                    activity.linkedMessageId === msg.id
-                          return hasQuizResult && isRelatedToActivity
-                        })
-                        if (quizResult?.quizResult) {
-                          return ` • ${quizResult.quizResult.score}/${quizResult.quizResult.total}`
-                        }
-                        // Extract score from additionalInfo if available
-                        if (additionalInfo && additionalInfo.includes('/')) {
-                          return ` • ${additionalInfo}`
-                        }
-                        return ' • 0/1' // Default for incomplete
-                      })()}
-                    </span>
-                    {/* Individual timestamp on the right side */}
-                    <span className="text-xs text-muted-foreground ml-2">
-                      {activity.formattedTime || formatTime(new Date(activity.timestamp))}
-                    </span>
-                  </div>
-                  {/* Additional info now shown inline with activity name */}
-                </div>
-                {/* Only show dropdown arrow for quiz activities */}
-                {isQuizActivity && (
-                  <div className={cn(
-                    "text-xs transition-transform",
-                    isExpanded ? "rotate-180" : ""
-                  )}>
-                    ▼
-                  </div>
-                )}
-              </div>
+                                // Find related quiz result to show progress using explicit relationships
+                                const quizResult = agentMessages.find(msg => {
+                                  const hasQuizResult = msg.type === 'quiz-result' ||
+                                                      (msg.type === 'ai' && (msg as any).quizResult)
+                                  // Use explicit relationships instead of timestamp proximity
+                                  const isRelatedToActivity = msg.id === activity.id ||
+                                                            msg.linkedMessageId === activity.id ||
+                                                            activity.linkedMessageId === msg.id
+                                  return hasQuizResult && isRelatedToActivity
+                                })
+                                if (quizResult?.quizResult) {
+                                  return ` • ${quizResult.quizResult.score}/${quizResult.quizResult.total}`
+                                }
+                                // Extract score from additionalInfo if available
+                                if (additionalInfo && additionalInfo.includes('/')) {
+                                  return ` • ${additionalInfo}`
+                                }
+                                return ' • 0/1' // Default for incomplete
+                              })()}
+                            </span>
+                            {/* Individual timestamp on the right side */}
+                            <span className="text-xs text-muted-foreground ml-2">
+                              {activity.formattedTime || formatTime(new Date(activity.timestamp))}
+                            </span>
+                          </div>
+                        </div>
+                        {/* Only show dropdown arrow for quiz activities */}
+                        {isQuizActivity && (
+                          <div className={cn(
+                            "text-xs transition-transform",
+                            isExpanded ? "rotate-180" : ""
+                          )}>
+                            ▼
+                          </div>
+                        )}
+                      </div>
+                    )}
 
-              {/* Show compact MessengerAudioPlayer for reflection activities */}
-              {(parsed.type === 'reflect' || parsed.type === 'reflect-complete') &&
-               (activity as any).dbReflection &&
-               (activity as any).audioData &&
-               (activity as any).audioData.fileUrl && (
-                <div className="mt-2 px-3 pb-3">
-                  <MessengerAudioPlayer
-                    reflectionId={(activity as any).audioData.reflectionId}
-                    fileUrl={(activity as any).audioData.fileUrl}
-                    duration={(activity as any).audioData.duration}
-                    timestamp={(activity as any).audioData.videoTimestamp}
-                    isOwn={true}
-                  />
-                </div>
-              )}
-
-              {/* Expanded Content - Shows directly below (only for quiz activities) */}
+                    {/* Expanded Content - Shows directly below (only for quiz activities) */}
               {isExpanded && isQuizActivity && (
                 <div className="bg-background/50 border border-primary/20 border-t-0 rounded-b-lg p-4">
                   <div className="text-sm font-medium mb-3 text-muted-foreground">
@@ -1182,7 +1216,7 @@ export function AIChatSidebarV2({
                   </div>
                 </div>
               )}
-            </div>
+                  </div>
           )
         })}
             </div>

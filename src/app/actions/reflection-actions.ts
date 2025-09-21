@@ -120,7 +120,7 @@ export async function submitReflectionAction(formData: FormData) {
     }
 
     const videoTimestamp = parseFloat(videoTimestampStr)
-    const duration = durationStr ? parseFloat(durationStr) : undefined
+    const duration = durationStr ? parseFloat(durationStr) : (type === 'voice' ? 2.0 : undefined) // Default 2 seconds for voice memos
 
     if (isNaN(videoTimestamp)) {
       return {
