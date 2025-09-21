@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { Message, MessageState, ReflectionData } from "@/lib/video-agent-system"
 import { SimpleVoiceMemoPlayer } from '@/components/reflection/SimpleVoiceMemoPlayer'
 import { MessengerAudioPlayer } from '@/components/reflection/MessengerAudioPlayer'
+import { LoomVideoCard } from '@/components/reflection/LoomVideoCard'
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,6 +13,7 @@ import { Puzzle, Send, Sparkles, Bot, User, Pause, Lightbulb, CheckCircle2, Mess
 import { cn } from "@/lib/utils"
 import { useQuizAttemptsQuery } from "@/hooks/use-quiz-attempts-query"
 import { useReflectionsQuery } from "@/hooks/use-reflections-query"
+import { useReflectionMutation } from "@/hooks/use-reflection-mutation"
 
 // Utility functions for messenger-style date grouping
 function formatDateHeader(date: Date): string {
@@ -133,6 +135,7 @@ export function AIChatSidebarV2({
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null)
   const [audioChunks, setAudioChunks] = useState<Blob[]>([])
   const [loomUrl, setLoomUrl] = useState('')
+  const [showLoomUrlInput, setShowLoomUrlInput] = useState<string | null>(null) // Track which message is showing Loom URL input
   const [expandedActivity, setExpandedActivity] = useState<string | null>(null)
   const [showReflectionOptions, setShowReflectionOptions] = useState<string | null>(null) // Track which message is showing reflection options
   const [activeTab, setActiveTab] = useState<'chat' | 'agents'>('chat')
@@ -140,6 +143,9 @@ export function AIChatSidebarV2({
   // Query for quiz attempts and reflections from database
   const quizAttemptsQuery = useQuizAttemptsQuery(videoId || '', courseId || '')
   const reflectionsQuery = useReflectionsQuery(videoId || '', courseId || '')
+
+  // Reflection mutation for submitting reflections (TanStack Query - Server State)
+  const reflectionMutation = useReflectionMutation()
 
 
   // Track which agent is currently active based on messages
@@ -149,12 +155,7 @@ export function AIChatSidebarV2({
     !((msg as any).accepted)
   )?.agentType || null
 
-  // Auto-switch to agents tab when agent becomes active
-  useEffect(() => {
-    if (activeAgent && activeTab === 'chat') {
-      setActiveTab('agents')
-    }
-  }, [activeAgent, activeTab])
+  // Removed auto-switch - let users control tab switching manually
   
   const scrollRef = useRef<HTMLDivElement>(null)
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -254,7 +255,7 @@ export function AIChatSidebarV2({
       return false
     }
 
-    // Exclude agent prompts that are shown as activities
+    // Exclude agent prompts that are shown as activities, but keep UNACTIVATED ones for interaction
     if (msg.type === 'agent-prompt' && msg.state === MessageState.ACTIVATED) {
       return false
     }
@@ -410,24 +411,22 @@ export function AIChatSidebarV2({
                   </button>
                   <button
                     onClick={() => {
-                      onReflectionTypeChosen?.('screenshot')
-                    }}
-                    className="text-blue-600 hover:underline"
-                  >
-                    📷 Screenshot
-                  </button>
-                  <button
-                    onClick={() => {
+                      // Activate the agent prompt (like voice button does)
                       onReflectionTypeChosen?.('loom')
+                      // Show Loom URL input
+                      setShowReflectionOptions(null) // Clear reflection options first
+                      setShowLoomUrlInput(msg.id)
                     }}
                     className="text-blue-600 hover:underline"
                   >
-                    🎥 Video
+                    🎬 Loom Video
                   </button>
                   <button
                     onClick={() => {
                       // Cancel back to Yes/No options
                       setShowReflectionOptions(null)
+                      setShowLoomUrlInput(null)
+                      setLoomUrl('')
                     }}
                     className="text-muted-foreground hover:text-foreground ml-1"
                     title="Cancel"
@@ -435,6 +434,64 @@ export function AIChatSidebarV2({
                     <X className="h-3 w-3" />
                   </button>
                 </>
+              ) : showLoomUrlInput === msg.id ? (
+                /* Show Loom URL input form */
+                <div className="flex flex-col gap-2 mt-2">
+                  <Input
+                    type="url"
+                    placeholder="Enter Loom video URL (e.g., https://www.loom.com/share/...)"
+                    value={loomUrl}
+                    onChange={(e) => setLoomUrl(e.target.value)}
+                    className="text-sm w-full min-w-[280px]"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        if (!loomUrl.trim()) return
+
+                        // Validate Loom URL
+                        if (!loomUrl.includes('loom.com')) {
+                          alert('Please enter a valid Loom URL')
+                          return
+                        }
+
+                        // Submit Loom reflection using proper 3-Layer SSOT pattern
+                        try {
+                          await reflectionMutation.mutateAsync({
+                            type: 'loom',
+                            videoId: videoId || '',
+                            courseId: courseId || '',
+                            videoTimestamp: currentTime,
+                            loomUrl: loomUrl
+                          })
+
+                          // Reset states (Form State - Layer 2)
+                          setShowLoomUrlInput(null)
+                          setShowReflectionOptions(null)
+                          setLoomUrl('')
+                        } catch (error) {
+                          console.error('Failed to submit Loom reflection:', error)
+                          alert('Failed to submit Loom reflection. Please try again.')
+                        }
+                      }}
+                      disabled={!loomUrl.trim() || reflectionMutation.isPending}
+                    >
+                      {reflectionMutation.isPending ? 'Submitting...' : 'Submit'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setShowLoomUrlInput(null)
+                        setShowReflectionOptions(msg.id)
+                        setLoomUrl('')
+                      }}
+                    >
+                      Back
+                    </Button>
+                  </div>
+                </div>
               ) : (
                 /* Show Yes/No options initially for all agent types */
                 <>
@@ -683,11 +740,13 @@ export function AIChatSidebarV2({
   const databaseReflectionActivities = (reflectionsQuery.data?.success && reflectionsQuery.data.data)
     ? reflectionsQuery.data.data
         .filter(reflection => {
-          // Only include voice reflections that have valid file URLs and duration
-          return reflection.reflection_type === 'voice' &&
+          // Include voice and loom reflections that have valid file URLs
+          return (reflection.reflection_type === 'voice' || reflection.reflection_type === 'loom') &&
                  reflection.file_url &&
                  reflection.file_url.trim() !== '' &&
-                 (reflection.duration_seconds > 0 || reflection.duration_seconds === null) // Allow null duration but not 0
+                 // For voice: check duration, for loom: no duration needed
+                 (reflection.reflection_type === 'loom' ||
+                  (reflection.duration_seconds > 0 || reflection.duration_seconds === null))
         })
         .map(reflection => {
           // Industry standard: Read from proper database columns
@@ -702,13 +761,17 @@ export function AIChatSidebarV2({
             reflectionId: reflection.id
           }
 
+          // Create appropriate message based on reflection type
+          const reflectionTypeLabel = reflection.reflection_type === 'loom' ? 'Loom Video' : 'Voice Memo'
+
           return {
             id: `db-reflection-${reflection.id}`,
             type: 'system' as const,
             state: MessageState.PERMANENT,
-            message: `📍 PuzzleReflect • Voice Memo at ${Math.floor(videoTimestamp / 60)}:${String(Math.floor(videoTimestamp % 60)).padStart(2, '0')}`,
+            message: `📍 PuzzleReflect • ${reflectionTypeLabel} at ${Math.floor(videoTimestamp / 60)}:${String(Math.floor(videoTimestamp % 60)).padStart(2, '0')}`,
             timestamp: new Date(reflection.created_at).getTime(),
-            audioData,
+            audioData: reflection.reflection_type === 'voice' ? audioData : undefined, // Only voice has audio
+            loomData: reflection.reflection_type === 'loom' ? { url: fileUrl, videoTimestamp } : undefined, // Loom has URL
             dbReflection: reflection // Store the original database record
           }
         })
@@ -894,12 +957,17 @@ export function AIChatSidebarV2({
                                 {(() => {
                                   // Display proper names for different activity types
                                   if (parsed.type === 'reflect' || parsed.type === 'reflect-complete') {
-                                    // Twitter-style compact format: "🎙️ Voice memo (duration) at timestamp"
+                                    // Handle different reflection types
                                     if ((activity as any).audioData) {
+                                      // Voice memo
                                       const duration = (activity as any).audioData.duration || 0
                                       const timestamp = (activity as any).audioData.videoTimestamp || 0
                                       const durationText = duration > 0 ? `${duration.toFixed(1)}s` : '0:00'
                                       return `🎙️ Voice memo (${durationText}) at ${timestamp.toFixed(0)}s`
+                                    } else if ((activity as any).loomData) {
+                                      // Loom video
+                                      const timestamp = (activity as any).loomData.videoTimestamp || 0
+                                      return `🎬 Loom video at ${timestamp.toFixed(0)}s`
                                     }
                                     return '🎙️ Voice memo'
                                   }
@@ -913,18 +981,27 @@ export function AIChatSidebarV2({
                             </div>
                           </div>
                         </div>
-                        {/* Show compact MessengerAudioPlayer for reflection activities */}
-                        {(activity as any).dbReflection &&
-                         (activity as any).audioData &&
-                         (activity as any).audioData.fileUrl && (
+                        {/* Show appropriate component for reflection type */}
+                        {(activity as any).dbReflection && (
                           <div className="mt-2">
-                            <MessengerAudioPlayer
-                              reflectionId={(activity as any).audioData.reflectionId}
-                              fileUrl={(activity as any).audioData.fileUrl}
-                              duration={(activity as any).audioData.duration}
-                              timestamp={(activity as any).audioData.videoTimestamp}
-                              isOwn={true}
-                            />
+                            {/* Voice memo - show audio player */}
+                            {(activity as any).audioData && (activity as any).audioData.fileUrl && (
+                              <MessengerAudioPlayer
+                                reflectionId={(activity as any).audioData.reflectionId}
+                                fileUrl={(activity as any).audioData.fileUrl}
+                                duration={(activity as any).audioData.duration}
+                                timestamp={(activity as any).audioData.videoTimestamp}
+                                isOwn={true}
+                              />
+                            )}
+                            {/* Loom video - show video card */}
+                            {(activity as any).loomData && (activity as any).loomData.url && (
+                              <LoomVideoCard
+                                url={(activity as any).loomData.url}
+                                timestamp={(activity as any).loomData.videoTimestamp}
+                                isOwn={true}
+                              />
+                            )}
                           </div>
                         )}
                       </div>
@@ -1263,10 +1340,6 @@ export function AIChatSidebarV2({
             >
               <Icon className="h-4 w-4" />
               <span>{label}</span>
-              {/* Badge for active agents on Agents tab */}
-              {key === 'agents' && activeAgent && (
-                <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-              )}
             </button>
           ))}
         </div>
