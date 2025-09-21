@@ -269,31 +269,8 @@ export function AIChatSidebarV2({
       return false
     }
 
-    if (msg.type === 'ai') {
-      // Exclude congratulatory messages about quiz completion
-      if (msg.message.includes('Great job completing the quiz') ||
-          msg.message.includes('You scored') ||
-          msg.message.includes('Your understanding of the material is excellent')) {
-        return false
-      }
-      // Exclude quiz start messages
-      if (msg.message.includes('Starting your quiz now') ||
-          msg.message.includes('Answer each question to the best of your ability')) {
-        return false
-      }
-      // Exclude countdown messages that appear after quiz completion
-      if (msg.message.includes('video continues in') ||
-          msg.message.includes('Video will resume') ||
-          msg.message.match(/\d+\s*\.\.\.\s*\d+\s*\.\.\.\s*\d+/)) {
-        return false
-      }
-      // Exclude reflection completion messages
-      if (msg.message.includes('Perfect! I\'ve saved your') && msg.message.includes('voice memo')) {
-        return false
-      }
-    }
 
-    return ['system', 'agent-prompt', 'ai', 'quiz-question', 'quiz-result', 'reflection-complete'].includes(msg.type)
+    return ['system', 'agent-prompt', 'quiz-question', 'quiz-result', 'reflection-complete'].includes(msg.type)
   })
   
   const renderMessage = (msg: Message) => {
@@ -907,7 +884,7 @@ export function AIChatSidebarV2({
         {groupedActivities.map((group, groupIndex) => (
           <div key={group.dateKey}>
             {/* Date Header */}
-            <div className="text-xs font-medium text-muted-foreground mb-3 px-2 sticky top-0 bg-background/95 backdrop-blur-sm py-1">
+            <div className="text-xs font-medium text-muted-foreground mb-3 px-2 text-center py-1">
               {group.dateHeader}
             </div>
 
@@ -1392,6 +1369,221 @@ export function AIChatSidebarV2({
               .filter(msg => msg.type === 'agent-prompt' && msg.state === MessageState.UNACTIVATED && !(msg as any).accepted)
               .map(renderMessage)}
 
+            {/* Voice Recording UI - Show right after active agent prompts */}
+            {(isRecording || hasRecording) && (
+              <div className="space-y-3">
+                {/* Voice Recording Card - Same design as finished memo cards */}
+                {isRecording && (
+                  <div className="flex items-center w-full gap-2 p-3 bg-red-50 dark:bg-red-950/20 rounded-lg border border-red-200 dark:border-red-800">
+                    {/* Recording indicator button (replaces play/pause) */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 w-5 p-0 rounded-full flex-shrink-0 relative hover:bg-red-500/20 text-red-600"
+                      onClick={() => {
+                        if (!isPaused) {
+                          if (mediaRecorder && mediaRecorder.state === 'recording') {
+                            mediaRecorder.pause()
+                          }
+                          setIsPaused(true)
+                          if (recordingIntervalRef.current) {
+                            clearInterval(recordingIntervalRef.current)
+                          }
+                        } else {
+                          if (mediaRecorder && mediaRecorder.state === 'paused') {
+                            mediaRecorder.resume()
+                          }
+                          setIsPaused(false)
+                          recordingIntervalRef.current = setInterval(() => {
+                            setRecordingTime(prev => prev + 1)
+                          }, 1000)
+                        }
+                      }}
+                    >
+                      {isPaused ? (
+                        <Play className="h-2 w-2" />
+                      ) : (
+                        <>
+                          <Pause className="h-2 w-2" />
+                          {/* Pulsing recording indicator */}
+                          <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-red-500 rounded-full animate-ping"></div>
+                          <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-red-600 rounded-full"></div>
+                        </>
+                      )}
+                    </Button>
+
+                    {/* Waveform and Time Display - Same style as MessengerAudioPlayer */}
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      {/* Live waveform visualization */}
+                      <div className="relative h-4 flex-1">
+                        <div className="absolute inset-0 flex items-center justify-between px-1">
+                          {[...Array(60)].map((_, i) => {
+                            const height = 4 + Math.random() * 28
+                            return (
+                              <div
+                                key={i}
+                                className="w-0.5 rounded-full bg-red-500"
+                                style={{
+                                  height: `${height}px`,
+                                  animationDelay: `${i * 50}ms`,
+                                  animation: isPaused ? 'none' : 'pulse 1.5s ease-in-out infinite'
+                                }}
+                              />
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Time display */}
+                      <div className="text-xs font-mono text-muted-foreground whitespace-nowrap">
+                        {formatRecordingTime(recordingTime)}
+                      </div>
+                    </div>
+
+                    {/* Stop button */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 w-5 p-0 rounded-full flex-shrink-0 hover:bg-red-500/20 text-red-600"
+                      onClick={() => {
+                        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                          mediaRecorder.stop()
+                        }
+                        setIsRecording(false)
+                        setIsPaused(false)
+                        setRecordingTime(0)
+                        if (recordingIntervalRef.current) {
+                          clearInterval(recordingIntervalRef.current)
+                        }
+                      }}
+                    >
+                      <Square className="h-2 w-2" />
+                    </Button>
+                  </div>
+                )}
+
+                {/* Recording Preview Interface */}
+                {hasRecording && !isRecording && (
+                  <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-950/30">
+                          {isPlaying ? (
+                            <Pause className="h-5 w-5 text-blue-600" />
+                          ) : (
+                            <Mic className="h-5 w-5 text-blue-600" />
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">Voice Memo Ready</p>
+                          <p className="text-xs text-muted-foreground">
+                            {isPlaying
+                              ? `Playing ${formatRecordingTime(playbackTime)} / ${formatRecordingTime(recordingTime)}`
+                              : `Duration: ${formatRecordingTime(recordingTime)}`
+                            }
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Playback controls */}
+                      <div className="flex gap-2">
+                        {!isPlaying ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              setIsPlaying(true)
+                              setPlaybackTime(0)
+
+                              playbackIntervalRef.current = setInterval(() => {
+                                setPlaybackTime(prev => {
+                                  if (prev >= recordingTime) {
+                                    setIsPlaying(false)
+                                    if (playbackIntervalRef.current) {
+                                      clearInterval(playbackIntervalRef.current)
+                                    }
+                                    return recordingTime
+                                  }
+                                  return prev + 1
+                                })
+                              }, 1000)
+                            }}
+                            className="flex-1"
+                          >
+                            <Play className="h-4 w-4 mr-1" />
+                            Play
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              setIsPlaying(false)
+                              if (playbackIntervalRef.current) {
+                                clearInterval(playbackIntervalRef.current)
+                              }
+                            }}
+                            className="flex-1"
+                          >
+                            <Pause className="h-4 w-4 mr-1" />
+                            Pause
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setHasRecording(false)
+                            setRecordingTime(0)
+                            setAudioBlob(null)
+                            setIsPlaying(false)
+                            if (playbackIntervalRef.current) {
+                              clearInterval(playbackIntervalRef.current)
+                            }
+                          }}
+                          className="flex-1"
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Delete
+                        </Button>
+                      </div>
+
+                      {/* Submit button */}
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          if (audioBlob) {
+                            // Create reflection data
+                            const reflectionData = {
+                              type: 'voice',
+                              audioBlob: audioBlob,
+                              duration: recordingTime,
+                              videoTimestamp: currentVideoTime
+                            }
+
+                            onReflectionSubmit?.('voice', reflectionData)
+
+                            // Reset all states
+                            setIsRecording(false)
+                            setHasRecording(false)
+                            setRecordingTime(0)
+                            setAudioBlob(null)
+                            setIsPlaying(false)
+                            if (playbackIntervalRef.current) {
+                              clearInterval(playbackIntervalRef.current)
+                            }
+                          }
+                        }}
+                        className="w-full bg-primary hover:bg-primary/90"
+                      >
+                        Submit Voice Memo
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Activity List */}
             {renderActivityList()}
 
@@ -1404,242 +1596,6 @@ export function AIChatSidebarV2({
       </div>
 
 
-      {/* Voice recording UI - only show for agents tab */}
-      {activeTab === 'agents' && (
-        <div className="border-t bg-background/95 backdrop-blur-sm p-4 flex-shrink-0">
-
-
-            {/* Voice recording UI - moved inside fixed bottom area */}
-            <div className="space-y-3">
-            {/* Voice Recording Interfaces - Only shows in Agents tab */}
-            {isRecording && (
-              <div className="p-3 bg-red-50 dark:bg-red-950/20 rounded-lg border border-red-200 dark:border-red-800">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="relative p-2 rounded-lg bg-red-100 dark:bg-red-950/30">
-                      <Mic className={cn(
-                        "h-5 w-5",
-                        isPaused ? "text-red-400" : "text-red-600"
-                      )} />
-                      {!isPaused && (
-                        <>
-                          <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full animate-ping"></div>
-                          <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-600 rounded-full"></div>
-                        </>
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className={cn(
-                          "text-sm font-medium",
-                          isPaused ? "text-red-400" : "text-red-600"
-                        )}>
-                          {isPaused ? 'Recording paused' : 'Recording'}
-                        </span>
-                        <span className="text-sm font-mono text-muted-foreground">{formatRecordingTime(recordingTime)}</span>
-                      </div>
-                      {/* Minimalist waveform */}
-                      <div className="flex items-center gap-0.5 h-4 mt-1">
-                        {[...Array(20)].map((_, i) => (
-                          <div
-                            key={i}
-                            className="w-0.5 bg-muted-foreground/30 rounded-full"
-                            style={{
-                              height: `${20 + Math.random() * 60}%`,
-                              animationDelay: `${i * 50}ms`,
-                              animation: isPaused ? 'none' : 'pulse 1.5s ease-in-out infinite'
-                            }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Recording Controls */}
-                  <div className="flex gap-2">
-                    {!isPaused ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          if (mediaRecorder && mediaRecorder.state === 'recording') {
-                            mediaRecorder.pause()
-                          }
-                          setIsPaused(true)
-                          if (recordingIntervalRef.current) {
-                            clearInterval(recordingIntervalRef.current)
-                          }
-                        }}
-                        className="flex-1"
-                      >
-                        <Pause className="h-4 w-4 mr-1" />
-                        Pause
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          if (mediaRecorder && mediaRecorder.state === 'paused') {
-                            mediaRecorder.resume()
-                          }
-                          setIsPaused(false)
-                          recordingIntervalRef.current = setInterval(() => {
-                            setRecordingTime(prev => prev + 1)
-                          }, 1000)
-                        }}
-                        className="flex-1"
-                      >
-                        <Mic className="h-4 w-4 mr-1" />
-                        Resume
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => {
-                        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                          mediaRecorder.stop()
-                        }
-                        setIsRecording(false)
-                        setIsPaused(false)
-                        setRecordingTime(0)
-                        if (recordingIntervalRef.current) {
-                          clearInterval(recordingIntervalRef.current)
-                        }
-                      }}
-                      className="flex-1"
-                    >
-                      <Square className="h-4 w-4 mr-1" />
-                      Stop
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Recording Preview Interface */}
-            {hasRecording && !isRecording && (
-              <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-950/30">
-                      {isPlaying ? (
-                        <Pause className="h-5 w-5 text-blue-600" />
-                      ) : (
-                        <Mic className="h-5 w-5 text-blue-600" />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">Voice Memo Ready</p>
-                      <p className="text-xs text-muted-foreground">
-                        {isPlaying
-                          ? `Playing ${formatRecordingTime(playbackTime)} / ${formatRecordingTime(recordingTime)}`
-                          : `Duration: ${formatRecordingTime(recordingTime)}`
-                        }
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Playback controls */}
-                  <div className="flex gap-2">
-                    {!isPlaying ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          setIsPlaying(true)
-                          setPlaybackTime(0)
-
-                          playbackIntervalRef.current = setInterval(() => {
-                            setPlaybackTime(prev => {
-                              if (prev >= recordingTime) {
-                                setIsPlaying(false)
-                                if (playbackIntervalRef.current) {
-                                  clearInterval(playbackIntervalRef.current)
-                                }
-                                return recordingTime
-                              }
-                              return prev + 1
-                            })
-                          }, 1000)
-                        }}
-                        className="flex-1"
-                      >
-                        <Play className="h-4 w-4 mr-1" />
-                        Play
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          setIsPlaying(false)
-                          if (playbackIntervalRef.current) {
-                            clearInterval(playbackIntervalRef.current)
-                          }
-                        }}
-                        className="flex-1"
-                      >
-                        <Pause className="h-4 w-4 mr-1" />
-                        Pause
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setHasRecording(false)
-                        setRecordingTime(0)
-                        setAudioBlob(null)
-                        setIsPlaying(false)
-                        if (playbackIntervalRef.current) {
-                          clearInterval(playbackIntervalRef.current)
-                        }
-                      }}
-                      className="flex-1"
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      Delete
-                    </Button>
-                  </div>
-
-                  {/* Submit button */}
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      if (audioBlob) {
-                        // Create reflection data
-                        const reflectionData = {
-                          type: 'voice',
-                          audioBlob: audioBlob,
-                          duration: recordingTime,
-                          videoTimestamp: currentVideoTime
-                        }
-
-                        onReflectionSubmit?.('voice', reflectionData)
-
-                        // Reset all states
-                        setIsRecording(false)
-                        setHasRecording(false)
-                        setRecordingTime(0)
-                        setAudioBlob(null)
-                        setIsPlaying(false)
-                        if (playbackIntervalRef.current) {
-                          clearInterval(playbackIntervalRef.current)
-                        }
-                      }
-                    }}
-                    className="w-full bg-primary hover:bg-primary/90"
-                  >
-                    Submit Voice Memo
-                  </Button>
-                </div>
-              </div>
-            )}
-            </div>
-        </div>
-      )}
 
     </div>
   )

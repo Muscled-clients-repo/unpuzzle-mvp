@@ -234,7 +234,7 @@ export function MessengerAudioPlayer({
       <div className="flex items-center gap-2 flex-1 min-w-0">
         {/* Static waveform visualization */}
         <div
-          className="relative h-4 cursor-pointer flex-1"
+          className="relative h-6 cursor-pointer flex-1 bg-gray-200 dark:bg-gray-700 rounded"
           onClick={handleSeek}
         >
           {/* Waveform bars */}
@@ -256,15 +256,15 @@ export function MessengerAudioPlayer({
               // else fillPercent stays 0 (not played)
 
               const playedColor = isOwn ? "rgb(37 99 235)" : "rgb(59 130 246)" // blue-600 : blue-500
-              const unplayedColor = isOwn ? "rgba(59 130 246, 0.3)" : "rgba(156 163 175, 0.5)" // blue-500/30 : gray-400/50
+              const unplayedColor = isOwn ? "rgb(156 163 175)" : "rgb(107 114 128)" // gray-400 : gray-500 - solid colors for better visibility
 
-              // Always use small height for timeline
-              const scaledHeight = Math.max(2, height * 0.5)
+              // Use more visible height for timeline
+              const scaledHeight = Math.max(4, height * 0.8)
 
               return (
                 <div
                   key={i}
-                  className="w-1 rounded-full transition-all duration-100 ease-out"
+                  className="w-0.5 rounded-full transition-all duration-100 ease-out"
                   style={{
                     height: `${scaledHeight}px`,
                     background: fillPercent > 0
@@ -273,7 +273,7 @@ export function MessengerAudioPlayer({
                         : `linear-gradient(to bottom, ${playedColor} ${fillPercent}%, ${unplayedColor} ${fillPercent}%)`
                       : unplayedColor,
                     transform: isThisPlaying && fillPercent > 0 && fillPercent < 100 ? 'scaleY(1.1)' : 'scaleY(1)',
-                    opacity: fillPercent > 0 ? 1 : 0.7
+                    opacity: 1
                   }}
                 />
               )
