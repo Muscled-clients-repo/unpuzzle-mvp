@@ -60,13 +60,13 @@ function groupActivitiesByDate(activities: any[]) {
     })
   })
 
-  // Sort groups by date (oldest first for chronological order)
+  // Sort groups by date (newest first for latest-first order)
   const sortedGroups = Object.keys(groups)
-    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
     .map(dateKey => ({
       dateKey,
       dateHeader: groups[dateKey][0].dateHeader,
-      activities: groups[dateKey].sort((a, b) => a.timestamp - b.timestamp) // Oldest first within day
+      activities: groups[dateKey].sort((a, b) => b.timestamp - a.timestamp) // Newest first within day
     }))
 
   return sortedGroups
@@ -238,15 +238,12 @@ export function AIChatSidebarV2({
       : `Discuss this moment (${formattedTime})...`
   }
   
-  // Separate messages into chat and agent categories
+  // Chat messages: Only user messages and direct AI responses (no agent prompts)
   const chatMessages = messages.filter(msg => {
-    // Exclude audio messages - they should appear inside reflection dropdowns in Agents tab only
-    if (msg.type === 'audio') {
-      return false
-    }
-
-    // Include regular chat messages but not system activities
-    return msg.type !== 'system' || !msg.message.includes('📍')
+    // Only include user messages and basic AI responses
+    if (msg.type === 'user') return true
+    if (msg.type === 'ai' && !msg.message.includes('quiz') && !msg.message.includes('reflect')) return true
+    return false
   })
 
   const agentMessages = messages.filter(msg => {
@@ -335,17 +332,12 @@ export function AIChatSidebarV2({
       }
     }
 
-    // Agent prompt messages (unactivated with actions) - Minimalist chat design
+    // Agent prompt messages (unactivated with actions) - Clean UI element design
     if (msg.type === 'agent-prompt' && msg.state === MessageState.UNACTIVATED && !(msg as any).accepted) {
       return (
-        <div key={msg.id} className="flex items-start gap-3 my-3">
-          <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-            <span className="text-xs">AI</span>
-          </div>
-          <div className="flex-1 max-w-[80%]">
-            <div className="bg-muted rounded-2xl px-3 py-2">
-              <p className="text-sm">{msg.message}</p>
-            </div>
+        <div key={msg.id} className="my-3">
+          <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
+            <p className="text-sm font-medium text-foreground mb-3">{msg.message}</p>
             <div className="flex gap-4 mt-2 text-sm">
               {msg.agentType === 'reflect' && showReflectionOptions === msg.id ? (
                 /* Show 3 reflection options after Yes is clicked */
@@ -533,18 +525,13 @@ export function AIChatSidebarV2({
       )
     }
     
-    // Activated agent prompts (show without buttons) - Minimalist design
+    // Activated agent prompts (show without buttons) - Clean UI element design
     // Note: Rejected prompts are hidden completely (not shown)
     if (msg.type === 'agent-prompt' && (msg.state === MessageState.ACTIVATED || (msg as any).accepted)) {
       return (
-        <div key={msg.id} className="flex items-start gap-3 my-3">
-          <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-            <span className="text-xs">AI</span>
-          </div>
-          <div className="flex-1 max-w-[80%]">
-            <div className="bg-muted rounded-2xl px-3 py-2">
-              <p className="text-sm">{msg.message}</p>
-            </div>
+        <div key={msg.id} className="my-3">
+          <div className="bg-secondary/50 border border-border/30 rounded-lg p-3">
+            <p className="text-sm text-muted-foreground">{msg.message}</p>
           </div>
         </div>
       )
@@ -798,7 +785,7 @@ export function AIChatSidebarV2({
       // Default: hide if state is undefined or unknown
       return false
     })
-    .sort((a, b) => a.timestamp - b.timestamp)
+    .sort((a, b) => b.timestamp - a.timestamp)
 
   const activities = filteredActivities
 
@@ -894,13 +881,6 @@ export function AIChatSidebarV2({
     return null
   }
 
-  // Find the latest reflection activity for special styling (after parseActivity is defined)
-  const latestReflectionActivity = activities
-    .filter(activity => {
-      const parsed = parseActivity(activity)
-      return parsed.type === 'reflect' || parsed.type === 'reflect-complete'
-    })
-    .slice(-1)[0] // Get the last (most recent) reflection
 
   const renderActivityList = () => {
     if (activities.length === 0) {
@@ -934,7 +914,6 @@ export function AIChatSidebarV2({
                 const isQuizActivity = parsed.type === 'quiz' || parsed.type === 'quiz-complete'
                 const isReflectionActivity = parsed.type === 'reflect' || parsed.type === 'reflect-complete'
                 const isExpanded = expandedActivity === activity.id
-                const isLatestReflection = latestReflectionActivity && activity.id === latestReflectionActivity.id
 
                 // State-based filtering has already handled message visibility
                 // No need for complex conditional checks here
@@ -943,10 +922,7 @@ export function AIChatSidebarV2({
                   <div key={activity.id}>
                     {isReflectionActivity ? (
                       /* Voice memo gets unified background wrapper */
-                      <div className={cn(
-                        "bg-secondary/100 border border-border/30 rounded-lg p-3",
-                        isLatestReflection && "border-l-4 border-l-blue-500"
-                      )}>
+                      <div className="bg-secondary/100 border border-border/30 rounded-lg p-3">
                         {/* Activity Item - no background for reflections */}
                         <div className="flex items-center gap-3">
                           <div className="p-1.5 rounded-md bg-secondary">
@@ -1347,6 +1323,46 @@ export function AIChatSidebarV2({
 
       </div>
 
+      {/* Agent buttons - Fixed at top for agents tab only */}
+      {activeTab === 'agents' && (
+        <div className="border-b p-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Play className="h-4 w-4" />
+              <span className="font-mono">{formatRecordingTime(currentVideoTime || 0)}</span>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => onAgentRequest('quiz')}
+                className={cn(
+                  "flex items-center gap-2 h-12 px-4 transition-colors",
+                  activeAgent === 'quiz' && "border-primary bg-primary/10 text-primary"
+                )}
+                title="Take a quiz on video content"
+              >
+                <Brain className="h-4 w-4" />
+                <span className="font-medium">Quiz</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={() => onAgentRequest('reflect')}
+                className={cn(
+                  "flex items-center gap-2 h-12 px-4 transition-colors",
+                  activeAgent === 'reflect' && "border-primary bg-primary/10 text-primary"
+                )}
+                title="Reflect on what you learned"
+              >
+                <Zap className="h-4 w-4" />
+                <span className="font-medium">Reflect</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Messages - Scrollable area */}
       <div className={cn("flex-1", activeTab === 'chat' ? "overflow-hidden" : "overflow-y-auto p-4")}>
         {activeTab === 'chat' ? (
@@ -1372,13 +1388,20 @@ export function AIChatSidebarV2({
             }}
           />
         ) : (
-          /* Agents Tab: Scrollable content - restore original behavior */
+          /* Agents Tab: Scrollable content */
           <div className="space-y-2">
+            {/* Active Agent Prompts - Show at top */}
+            {agentMessages
+              .filter(msg => msg.type === 'agent-prompt' && msg.state === MessageState.UNACTIVATED && !(msg as any).accepted)
+              .map(renderMessage)}
+
             {/* Activity List */}
             {renderActivityList()}
 
-            {/* Current Agent Messages - Show all agent messages naturally */}
-            {agentMessages.map(renderMessage)}
+            {/* Other Agent Messages - Show all non-prompt agent messages */}
+            {agentMessages
+              .filter(msg => !(msg.type === 'agent-prompt' && msg.state === MessageState.UNACTIVATED && !(msg as any).accepted))
+              .map(renderMessage)}
           </div>
         )}
       </div>
@@ -1409,27 +1432,6 @@ export function AIChatSidebarV2({
               </div>
             )}
 
-            {/* Agent buttons - Larger with text labels */}
-            <div className="flex gap-2">
-              {[
-                { type: 'quiz', icon: Brain, label: 'Quiz', tooltip: 'Take a quiz on video content' },
-                { type: 'reflect', icon: Zap, label: 'Reflect', tooltip: 'Reflect on what you learned' }
-              ].map(({ type, icon: Icon, label, tooltip }) => (
-                <Button
-                  key={type}
-                  variant="outline"
-                  onClick={() => onAgentRequest(type)}
-                  className={cn(
-                    "flex-1 flex items-center gap-2 h-12 transition-colors",
-                    activeAgent === type && "border-primary bg-primary/10 text-primary"
-                  )}
-                  title={tooltip}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span className="font-medium">{label}</span>
-                </Button>
-              ))}
-            </div>
 
             {/* Voice recording UI - moved inside fixed bottom area */}
             <div className="space-y-3">
