@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils"
 import { Message, MessageState } from "@/lib/video-agent-system"
 import { useTranscriptQuery } from "@/hooks/use-transcript-queries"
 import { useVideoSummary } from "@/hooks/use-video-summary"
+import { UnpuzzlingAnimation } from "@/components/ui/UnpuzzlingAnimation"
 
 interface ChatInterfaceProps {
   messages: Message[]
@@ -43,6 +44,7 @@ export function ChatInterface({
   const [input, setInput] = useState('')
   const [hasUpdatedSegment, setHasUpdatedSegment] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [hasStartedResponse, setHasStartedResponse] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Get transcript data for this video
@@ -145,6 +147,7 @@ export function ChatInterface({
     const userMessage = input.trim()
     setInput('')
     setIsGenerating(true)
+    setHasStartedResponse(false)
 
     // Get selected transcript context if available
     const selectedTranscript = segmentContext?.sentToChat && segmentContext.inPoint !== null && segmentContext.outPoint !== null
@@ -179,8 +182,9 @@ export function ChatInterface({
     ).slice(-6) // Last 6 messages for context
 
     try {
-      // Add 1 second delay before starting API call
+      // Add 1 second delay before starting API call (hide animation at the end)
       await new Promise(resolve => setTimeout(resolve, 1000))
+      setHasStartedResponse(true) // Hide animation right when API call starts
 
       const response = await fetch('/api/ai/chat', {
         method: 'POST',
@@ -225,6 +229,8 @@ export function ChatInterface({
 
               if (data.type === 'chunk') {
                 fullContent = data.fullContent
+
+
                 // Update or create AI message using addOrUpdate for streaming
                 const aiMsg: Message = {
                   id: aiMessageId,
@@ -261,6 +267,7 @@ export function ChatInterface({
       onAddMessage(errorMsg)
     } finally {
       setIsGenerating(false)
+      setHasStartedResponse(false)
     }
   }, [input, isGenerating, videoId, onAddMessage, segmentContext, currentTime, messages])
 
@@ -357,6 +364,46 @@ export function ChatInterface({
               </div>
             </div>
           ))
+        )}
+
+        {/* Loading animation and space reservation */}
+        {isGenerating && (
+          <div className="flex justify-start">
+            {!hasStartedResponse ? (
+              // Show visible animation
+              <div className="max-w-[80%] rounded-lg px-3 py-2 bg-gray-100 dark:bg-gray-800">
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-1">
+                    {[0, 1, 2].map((i) => (
+                      <div
+                        key={i}
+                        className="w-2 h-2 bg-gray-500 rounded-full animate-pulse"
+                        style={{
+                          animationDelay: `${i * 200}ms`,
+                          animationDuration: '1s'
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-sm text-muted-foreground">Unpuzzling...</span>
+                </div>
+              </div>
+            ) : (
+              // Invisible placeholder to prevent layout shift until AI response renders
+              <div className="max-w-[80%] opacity-0 pointer-events-none">
+                <div className="rounded-lg px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1">
+                      {[0, 1, 2].map((i) => (
+                        <div key={i} className="w-2 h-2" />
+                      ))}
+                    </div>
+                    <span className="text-sm">Unpuzzling...</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
 

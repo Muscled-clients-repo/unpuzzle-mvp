@@ -30,7 +30,36 @@ export async function GET(request: NextRequest) {
     }
 
     // Get videos and their transcription status
+    // Note: The JOIN might not work with RLS, so we'll verify the RLS policy is correct
     const { data: videos, error: videosError } = await supabase
+      .from('videos')
+      .select(`
+        id,
+        title,
+        duration,
+        video_transcripts!inner (
+          id,
+          created_at,
+          confidence_score,
+          word_count
+        )
+      `)
+      .eq('course_id', courseId)
+      .order('chapter_id', { ascending: true })
+      .order('order', { ascending: true })
+
+    console.log('📋 [TRANSCRIPT STATUS] Videos with INNER JOIN result:', {
+      courseId,
+      videosCount: videos?.length || 0,
+      videosError
+    })
+
+    if (videosError) {
+      console.error('Error fetching videos with inner join:', videosError)
+    }
+
+    // Also try without INNER join to get all videos
+    const { data: allVideos, error: allVideosError } = await supabase
       .from('videos')
       .select(`
         id,
@@ -39,15 +68,23 @@ export async function GET(request: NextRequest) {
         video_transcripts (
           id,
           created_at,
-          confidence_score
+          confidence_score,
+          word_count
         )
       `)
       .eq('course_id', courseId)
       .order('chapter_id', { ascending: true })
       .order('order', { ascending: true })
 
-    if (videosError) {
-      console.error('Error fetching videos:', videosError)
+    console.log('📋 [TRANSCRIPT STATUS] All videos (LEFT JOIN) result:', {
+      courseId,
+      videosCount: allVideos?.length || 0,
+      videosWithTranscripts: allVideos?.filter(v => v.video_transcripts?.length > 0).length || 0,
+      allVideosError
+    })
+
+    if (allVideosError) {
+      console.error('Error fetching videos:', allVideosError)
       return NextResponse.json({ error: 'Failed to fetch videos' }, { status: 500 })
     }
 
@@ -64,9 +101,38 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching jobs:', jobsError)
     }
 
-    // Map video statuses
-    const statuses = videos?.map(video => {
-      const hasTranscript = video.video_transcripts && video.video_transcripts.length > 0
+    // Combine results: all videos from LEFT JOIN + transcript info from INNER JOIN
+    const videosWithTranscripts = videos || [] // INNER JOIN - videos that have transcripts
+    const allVideosList = allVideos || [] // LEFT JOIN - all videos
+
+    // Create transcript map from INNER JOIN results
+    const transcriptMap = new Map()
+    videosWithTranscripts.forEach(video => {
+      console.log('🔍 [DEBUG] Processing video for transcript map:', {
+        videoId: video.id,
+        title: video.title,
+        videoTranscripts: video.video_transcripts,
+        isArray: Array.isArray(video.video_transcripts),
+        hasTranscripts: !!video.video_transcripts
+      })
+
+      // INNER JOIN returns a single object, not an array
+      if (video.video_transcripts) {
+        transcriptMap.set(video.id, video.video_transcripts)
+        console.log('✅ [DEBUG] Added to transcript map:', video.id)
+      }
+    })
+
+    console.log('🔧 [TRANSCRIPT FIX] Combined approach:', {
+      allVideosCount: allVideosList.length,
+      videosWithTranscriptsCount: videosWithTranscripts.length,
+      transcriptMapSize: transcriptMap.size
+    })
+
+    // Map video statuses using combined approach
+    const statuses = allVideosList?.map(video => {
+      const transcript = transcriptMap.get(video.id)
+      const hasTranscript = !!transcript
 
       // Check if this video is in an active job
       const activeJob = activeJobs?.find(job => {
@@ -82,8 +148,8 @@ export async function GET(request: NextRequest) {
         isProcessing: !!activeJob,
         progress: activeJob?.progress_percent || 0,
         jobId: activeJob?.id,
-        transcriptCreatedAt: hasTranscript ? video.video_transcripts[0]?.created_at : null,
-        confidenceScore: hasTranscript ? video.video_transcripts[0]?.confidence_score : null
+        transcriptCreatedAt: hasTranscript ? transcript?.created_at : null,
+        confidenceScore: hasTranscript ? transcript?.confidence_score : null
       }
     }) || []
 

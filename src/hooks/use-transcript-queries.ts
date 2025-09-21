@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 interface TranscriptSegment {
   start: number
@@ -138,6 +138,39 @@ export function extractTranscriptSegments(data: TranscriptResponse): TranscriptS
   }
 
   return []
+}
+
+/**
+ * Hook to update transcript text and segments
+ */
+export function useTranscriptUpdate(videoId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ text, segments }: { text: string; segments?: any[] }) => {
+      const response = await fetch(`/api/transcription/${videoId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text, segments }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to update transcript')
+      }
+
+      return response.json()
+    },
+    onSuccess: (data) => {
+      // Update the cache with the new transcript data
+      queryClient.setQueryData(transcriptKeys.video(videoId), (old: any) => ({
+        ...old,
+        transcript: data.transcript
+      }))
+    },
+  })
 }
 
 /**

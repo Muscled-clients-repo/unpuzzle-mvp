@@ -182,3 +182,96 @@ export async function GET(
     )
   }
 }
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ videoId: string }> }
+) {
+  try {
+    const { videoId } = await params
+    const { text, segments } = await request.json()
+
+    if (!videoId || !text) {
+      return NextResponse.json({ error: 'Video ID and text are required' }, { status: 400 })
+    }
+
+    const supabase = await createClient()
+
+    // Get current user
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Verify user owns this video (instructors only can edit transcripts)
+    const { data: video, error: videoError } = await supabase
+      .from('videos')
+      .select(`
+        id,
+        title,
+        course_id,
+        courses!inner (
+          instructor_id
+        )
+      `)
+      .eq('id', videoId)
+      .single()
+
+    if (videoError || !video) {
+      return NextResponse.json({ error: 'Video not found' }, { status: 404 })
+    }
+
+    const hasInstructorAccess = video.courses.instructor_id === user.id
+    if (!hasInstructorAccess) {
+      return NextResponse.json({ error: 'Only instructors can edit transcripts' }, { status: 403 })
+    }
+
+    // Derive text from segments if segments are provided, otherwise use provided text
+    const finalText = segments ? segments.map(s => s.text).join(' ') : text
+
+    // Prepare update data
+    const updateData: any = {
+      transcript_text: finalText,
+      word_count: finalText.split(/\s+/).filter(word => word.length > 0).length,
+      updated_at: new Date().toISOString()
+    }
+
+    // Update segments if provided
+    if (segments) {
+      updateData.transcript_segments = segments
+    }
+
+    // Update the transcript
+    const { data: transcript, error: updateError } = await supabase
+      .from('video_transcripts')
+      .update(updateData)
+      .eq('video_id', videoId)
+      .select()
+      .single()
+
+    if (updateError) {
+      console.error('Transcript update error:', updateError)
+      return NextResponse.json({ error: 'Failed to update transcript' }, { status: 500 })
+    }
+
+    return NextResponse.json({
+      success: true,
+      transcript: {
+        id: transcript.id,
+        text: transcript.transcript_text,
+        segments: transcript.transcript_segments,
+        wordCount: transcript.word_count,
+        language: transcript.language_code,
+        confidence: transcript.confidence_score,
+        createdAt: transcript.created_at
+      }
+    })
+
+  } catch (error) {
+    console.error('Transcript update error:', error)
+    return NextResponse.json(
+      { error: 'Failed to update transcript' },
+      { status: 500 }
+    )
+  }
+}

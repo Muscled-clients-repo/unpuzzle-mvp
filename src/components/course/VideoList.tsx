@@ -530,25 +530,40 @@ export function VideoList({
               />
             ) : (
               <div className="space-y-1">
-                <p 
-                  className={cn(
-                    "text-sm font-medium cursor-pointer select-none hover:bg-primary/10 hover:text-primary px-2 py-1 rounded transition-colors",
-                    video.markedForDeletion && "line-through",
-                    // ARCHITECTURE-COMPLIANT: Visual feedback based on TanStack state
-                    (video as any)._isLinking && "opacity-60 cursor-not-allowed hover:bg-transparent hover:text-inherit"
+                <div className="flex items-center gap-2">
+                  <p
+                    className={cn(
+                      "text-sm font-medium cursor-pointer select-none hover:bg-primary/10 hover:text-primary px-2 py-1 rounded transition-colors",
+                      video.markedForDeletion && "line-through",
+                      // ARCHITECTURE-COMPLIANT: Visual feedback based on TanStack state
+                      (video as any)._isLinking && "opacity-60 cursor-not-allowed hover:bg-transparent hover:text-inherit"
+                    )}
+                    title={(video as any)._isLinking ? "Adding to chapter..." : "Click to edit filename"}
+                    data-video-edit={video.id}
+                  >
+                    {getDisplayName(video)}
+                    {/* Show different indicators for different states */}
+                    {(video as any)._isLinking && (
+                      <span className="ml-2 text-xs text-blue-500 animate-pulse">⊚ Linking...</span>
+                    )}
+                    {pendingChanges[video.id] && !(video as any)._isLinking && (
+                      <span className="ml-2 text-xs text-orange-500">●</span>
+                    )}
+                  </p>
+
+                  {/* Transcript Status Badge */}
+                  {transcriptionStatuses?.get(video.id)?.hasTranscript ? (
+                    <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800">
+                      <FileText className="h-3 w-3 mr-1" />
+                      Transcript
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800">
+                      <Upload className="h-3 w-3 mr-1" />
+                      No Transcript
+                    </Badge>
                   )}
-                  title={(video as any)._isLinking ? "Adding to chapter..." : "Click to edit filename"}
-                  data-video-edit={video.id}
-                >
-                  {getDisplayName(video)}
-                  {/* Show different indicators for different states */}
-                  {(video as any)._isLinking && (
-                    <span className="ml-2 text-xs text-blue-500 animate-pulse">⊚ Linking...</span>
-                  )}
-                  {pendingChanges[video.id] && !(video as any)._isLinking && (
-                    <span className="ml-2 text-xs text-orange-500">●</span>
-                  )}
-                </p>
+                </div>
                 {/* ARCHITECTURE-COMPLIANT: Upload progress from TanStack */}
                 <UploadProgress item={video} />
                 {video.duration && video.status === 'ready' && video.duration !== null && (
@@ -592,7 +607,7 @@ export function VideoList({
                     "h-7 w-7",
                     transcriptionStatuses?.get(video.id)?.hasTranscript
                       ? "text-green-600 hover:text-green-700"
-                      : "text-muted-foreground hover:text-primary"
+                      : "text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950"
                   )}
                   onClick={(e) => {
                     e.stopPropagation()
@@ -603,8 +618,8 @@ export function VideoList({
                     transcriptionStatuses?.get(video.id)?.isUploading
                       ? "Uploading transcript..."
                       : transcriptionStatuses?.get(video.id)?.hasTranscript
-                      ? "Transcript uploaded"
-                      : "Upload transcript"
+                      ? "Transcript uploaded - click to re-upload"
+                      : "Upload transcript - click to select file"
                   }
                 >
                   {transcriptionStatuses?.get(video.id)?.isUploading ? (
