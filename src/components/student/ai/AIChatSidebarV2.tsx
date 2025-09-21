@@ -1372,6 +1372,8 @@ export function AIChatSidebarV2({
             videoId={videoId || null}
             courseId={courseId || null}
             currentTime={currentVideoTime || 0}
+            segmentContext={segmentContext}
+            onClearSegmentContext={onClearSegmentContext}
             onSendMessage={(message) => {
               // Bridge to old message handling system
               setInputValue('')
@@ -1406,31 +1408,10 @@ export function AIChatSidebarV2({
         )}
       </div>
 
-      {/* Input/Actions - Fixed at bottom - only show for agents tab */}
+
+      {/* Voice recording UI - only show for agents tab */}
       {activeTab === 'agents' && (
         <div className="border-t bg-background/95 backdrop-blur-sm p-4 flex-shrink-0">
-            {/* Segment Context Display */}
-            {segmentContext?.sentToChat && segmentContext.inPoint !== null && segmentContext.outPoint !== null && (
-              <div className="mb-3 p-2 bg-secondary/50 rounded-lg border border-primary/20">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-1 h-4 bg-gradient-to-b from-green-500 to-red-500 rounded-full" />
-                    <span className="text-xs text-muted-foreground">Context:</span>
-                    <span className="text-xs font-medium">
-                      Video clip from {formatRecordingTime(segmentContext.inPoint)} to {formatRecordingTime(segmentContext.outPoint)}
-                    </span>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={onClearSegmentContext}
-                    className="h-6 w-6 p-0 hover:bg-secondary"
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-            )}
 
 
             {/* Voice recording UI - moved inside fixed bottom area */}
