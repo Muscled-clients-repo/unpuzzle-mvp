@@ -5,6 +5,7 @@ import { Message, MessageState, ReflectionData } from "@/lib/video-agent-system"
 import { SimpleVoiceMemoPlayer } from '@/components/reflection/SimpleVoiceMemoPlayer'
 import { MessengerAudioPlayer } from '@/components/reflection/MessengerAudioPlayer'
 import { LoomVideoCard } from '@/components/reflection/LoomVideoCard'
+import { ChatInterface } from './ChatInterface'
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -1347,61 +1348,41 @@ export function AIChatSidebarV2({
       </div>
 
       {/* Messages - Scrollable area */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="space-y-2">
-          {activeTab === 'chat' ? (
-            /* Chat Tab: Show only chat messages */
-            chatMessages.map(renderMessage)
-          ) : (
-            /* Agents Tab: Show activity timeline and agent messages */
-            <>
+      <div className="flex-1 overflow-hidden">
+        {activeTab === 'chat' ? (
+          /* Chat Tab: Use new ChatInterface component */
+          <ChatInterface
+            messages={messages}
+            videoId={videoId || null}
+            courseId={courseId || null}
+            currentTime={currentVideoTime || 0}
+            onSendMessage={(message) => {
+              // Bridge to old message handling system
+              setInputValue('')
+              // Dispatch new user message
+              dispatch?.({
+                type: 'SEND_MESSAGE',
+                payload: {
+                  type: 'user',
+                  message: message,
+                  timestamp: Date.now(),
+                  sender: 'user'
+                }
+              })
+            }}
+          />
+        ) : (
+          /* Agents Tab: Keep original logic unchanged */
+          <div className="overflow-y-auto p-4">
+            <div className="space-y-2">
               {/* Activity List */}
               {renderActivityList()}
 
               {/* Current Agent Messages - Show all agent messages naturally */}
               {agentMessages.map(renderMessage)}
-            </>
-          )}
-
-          {/* AI State Error */}
-          {aiState?.error && (
-            <div className="flex items-start gap-3">
-              <Avatar className="h-10 w-10 border-2 border-red-500/20 shadow-md">
-                <AvatarFallback className="bg-red-100 dark:bg-red-950">
-                  <Bot className="h-5 w-5 text-red-600 dark:text-red-400" />
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 bg-red-50 dark:bg-red-950/30 rounded-2xl px-3 py-2 border border-red-200 dark:border-red-800">
-                <div className="flex items-center gap-2 mb-2">
-                  <X className="h-4 w-4 text-red-600 dark:text-red-400" />
-                  <span className="font-bold text-sm text-red-600 dark:text-red-400">Error</span>
-                </div>
-                <div className="text-sm text-red-700 dark:text-red-300">
-                  {aiState.error}
-                </div>
-              </div>
             </div>
-          )}
-
-          {isTyping && (
-            <div className="flex items-start gap-3">
-              <Avatar className="h-10 w-10 border-2 border-primary/20 shadow-md">
-                <AvatarFallback className="bg-gradient-to-br from-primary to-primary/70">
-                  <Bot className="h-5 w-5 text-primary-foreground" />
-                </AvatarFallback>
-              </Avatar>
-              <div className="bg-muted rounded-2xl px-3 py-2">
-                <div className="flex items-center gap-1">
-                  <span className="inline-block w-2 h-2 bg-primary rounded-full animate-bounce"></span>
-                  <span className="inline-block w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></span>
-                  <span className="inline-block w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div ref={scrollRef} />
-        </div>
+          </div>
+        )}
       </div>
 
 
