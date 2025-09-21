@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card"
 import { Send, User, Bot, Sparkles, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Message, MessageState } from "@/lib/video-agent-system"
+import { useTranscriptQuery } from "@/hooks/use-transcript-queries"
 
 interface ChatInterfaceProps {
   messages: Message[]
@@ -21,6 +22,7 @@ interface ChatInterfaceProps {
     sentToChat: boolean
   }
   onClearSegmentContext?: () => void
+  onUpdateSegmentContext?: (inPoint: number, outPoint: number) => void
 }
 
 export function ChatInterface({
@@ -30,10 +32,15 @@ export function ChatInterface({
   currentTime,
   onSendMessage,
   segmentContext,
-  onClearSegmentContext
+  onClearSegmentContext,
+  onUpdateSegmentContext
 }: ChatInterfaceProps) {
   const [input, setInput] = useState('')
+  const [hasUpdatedSegment, setHasUpdatedSegment] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Get transcript data for this video
+  const { data: transcriptData } = useTranscriptQuery(videoId || '')
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -42,11 +49,82 @@ export function ChatInterface({
     }
   }, [messages])
 
+  // Update video player in/out points when segment context changes and transcript chunks extend the range
+  useEffect(() => {
+    if (
+      segmentContext?.sentToChat &&
+      segmentContext.inPoint !== null &&
+      segmentContext.outPoint !== null &&
+      onUpdateSegmentContext &&
+      !hasUpdatedSegment
+    ) {
+      const transcriptData = getTranscriptDataBetween(segmentContext.inPoint, segmentContext.outPoint)
+
+      // Only update if the actual boundaries are different from current selection
+      if (
+        transcriptData.actualStart !== segmentContext.inPoint ||
+        transcriptData.actualEnd !== segmentContext.outPoint
+      ) {
+        onUpdateSegmentContext(transcriptData.actualStart, transcriptData.actualEnd)
+        setHasUpdatedSegment(true)
+      }
+    }
+  }, [segmentContext?.sentToChat, segmentContext?.inPoint, segmentContext?.outPoint, onUpdateSegmentContext, hasUpdatedSegment])
+
+  // Reset the flag when segment is cleared or new segment is created
+  useEffect(() => {
+    if (!segmentContext?.sentToChat) {
+      setHasUpdatedSegment(false)
+    }
+  }, [segmentContext?.sentToChat])
+
   // Format time for display
   const formatRecordingTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60)
     const remainingSeconds = Math.floor(seconds % 60)
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
+  }
+
+  // Get transcript text and actual boundaries between two timestamps
+  const getTranscriptDataBetween = (startTime: number, endTime: number): { text: string; actualStart: number; actualEnd: number } => {
+    if (!transcriptData?.hasTranscript || !transcriptData.transcript?.segments) {
+      return { text: '', actualStart: startTime, actualEnd: endTime }
+    }
+
+    let segments = transcriptData.transcript.segments
+
+    // Handle nested segments structure (segments.segments)
+    if (!Array.isArray(segments) && segments.segments && Array.isArray(segments.segments)) {
+      segments = segments.segments
+    }
+
+    // Ensure we have an array
+    if (!Array.isArray(segments)) {
+      return { text: '', actualStart: startTime, actualEnd: endTime }
+    }
+
+    const relevantSegments = segments.filter((segment: any) =>
+      segment &&
+      typeof segment.start === 'number' &&
+      typeof segment.end === 'number' &&
+      typeof segment.text === 'string' &&
+      (
+        (segment.start >= startTime && segment.start <= endTime) ||
+        (segment.end >= startTime && segment.end <= endTime) ||
+        (segment.start <= startTime && segment.end >= endTime)
+      )
+    )
+
+    if (relevantSegments.length === 0) {
+      return { text: '', actualStart: startTime, actualEnd: endTime }
+    }
+
+    // Get actual chunk boundaries
+    const actualStart = Math.min(...relevantSegments.map((segment: any) => segment.start))
+    const actualEnd = Math.max(...relevantSegments.map((segment: any) => segment.end))
+    const text = relevantSegments.map((segment: any) => segment.text).join(' ').trim()
+
+    return { text, actualStart, actualEnd }
   }
 
   // No filtering needed - messages are pre-filtered by parent component
@@ -143,19 +221,34 @@ export function ChatInterface({
       {/* Segment Context - Above Input */}
       {segmentContext?.sentToChat && segmentContext.inPoint !== null && segmentContext.outPoint !== null && (
         <div className="border-t border-b bg-secondary/50 p-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-1 h-4 bg-gradient-to-b from-green-500 to-red-500 rounded-full" />
-              <span className="text-xs text-muted-foreground">Context:</span>
-              <span className="text-xs font-medium">
-                Video clip from {formatRecordingTime(segmentContext.inPoint)} to {formatRecordingTime(segmentContext.outPoint)}
-              </span>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1">
+              {(() => {
+                const transcriptData = getTranscriptDataBetween(segmentContext.inPoint, segmentContext.outPoint)
+                return (
+                  <>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-1 h-4 bg-gradient-to-b from-green-500 to-red-500 rounded-full" />
+                      <span className="text-xs text-muted-foreground">Video clip:</span>
+                      <span className="text-xs font-medium">
+                        {formatRecordingTime(transcriptData.actualStart)} - {formatRecordingTime(transcriptData.actualEnd)}
+                      </span>
+                    </div>
+                    {transcriptData.text && (
+                      <div className="text-xs text-foreground bg-background/50 rounded p-2 border">
+                        <span className="text-muted-foreground">Transcript: </span>
+                        <span className="italic">"{transcriptData.text}"</span>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
             </div>
             <Button
               size="sm"
               variant="ghost"
               onClick={onClearSegmentContext}
-              className="h-6 w-6 p-0 hover:bg-secondary"
+              className="h-6 w-6 p-0 hover:bg-secondary flex-shrink-0"
             >
               <X className="h-3 w-3" />
             </Button>

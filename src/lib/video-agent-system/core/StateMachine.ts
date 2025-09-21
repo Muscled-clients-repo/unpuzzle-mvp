@@ -268,6 +268,16 @@ export class VideoAgentStateMachine {
           maxAttempts: 1,
           status: 'pending'
         }
+      case 'UPDATE_SEGMENT':
+        return {
+          id: `cmd-${Date.now()}`,
+          type: CommandType.UPDATE_SEGMENT,
+          payload: action.payload,
+          timestamp: Date.now(),
+          attempts: 0,
+          maxAttempts: 1,
+          status: 'pending'
+        }
       case 'SEND_SEGMENT_TO_CHAT':
         return {
           id: `cmd-${Date.now()}`,
@@ -363,6 +373,9 @@ export class VideoAgentStateMachine {
         break
       case CommandType.CLEAR_SEGMENT:
         await this.handleClearSegment()
+        break
+      case CommandType.UPDATE_SEGMENT:
+        await this.handleUpdateSegment(command)
         break
       case CommandType.SEND_SEGMENT_TO_CHAT:
         await this.handleSendSegmentToChat()
@@ -1382,8 +1395,34 @@ export class VideoAgentStateMachine {
   }
 
   // Segment management handlers
+  private async getTranscriptChunkBoundaries(videoId: string, timestamp: number): Promise<{ start: number; end: number } | null> {
+    try {
+      const response = await fetch(`/api/transcription/${videoId}`)
+      if (!response.ok) return null
+
+      const data = await response.json()
+      if (!data?.hasTranscript || !data.transcript?.segments) return null
+
+      let segments = data.transcript.segments
+      // Handle nested structure if needed
+      if (!Array.isArray(segments) && segments.segments && Array.isArray(segments.segments)) {
+        segments = segments.segments
+      }
+
+      // Find the chunk that contains this timestamp
+      const chunk = segments.find((segment: any) =>
+        timestamp >= segment.start && timestamp <= segment.end
+      )
+
+      return chunk ? { start: chunk.start, end: chunk.end } : null
+    } catch (error) {
+      console.error('[SM] Failed to get transcript chunk:', error)
+      return null
+    }
+  }
+
   private async handleSetInPoint() {
-    
+
     // NUCLEAR PRINCIPLE: Pause video properly using the async method
     try {
       await this.videoController.pauseVideo()
@@ -1391,17 +1430,17 @@ export class VideoAgentStateMachine {
       console.error('[SM] Failed to pause video for in point:', error)
       // Continue anyway - setting the point is more important than pausing
     }
-    
+
     const currentTime = this.videoController.getCurrentTime()
     const currentOutPoint = this.context.segmentState.outPoint
-    
+
     // NUCLEAR PRINCIPLE: Atomic update with validation
     // If new in point is after current out point, clear out point
     let newOutPoint = currentOutPoint
     if (currentOutPoint !== null && currentTime >= currentOutPoint) {
       newOutPoint = null
     }
-    
+
     // NUCLEAR PRINCIPLE: Single atomic update
     this.updateContext({
       ...this.context,
@@ -1416,11 +1455,11 @@ export class VideoAgentStateMachine {
         sentToChat: false  // Reset when segment changes
       }
     })
-    
+
   }
   
   private async handleSetOutPoint() {
-    
+
     // NUCLEAR PRINCIPLE: Pause video properly using the async method
     try {
       await this.videoController.pauseVideo()
@@ -1428,22 +1467,22 @@ export class VideoAgentStateMachine {
       console.error('[SM] Failed to pause video for out point:', error)
       // Continue anyway - setting the point is more important than pausing
     }
-    
+
     const currentTime = this.videoController.getCurrentTime()
     const currentInPoint = this.context.segmentState.inPoint
-    
+
     // NUCLEAR PRINCIPLE: Atomic update with validation
     // If new out point is before current in point, clear in point
     let newInPoint = currentInPoint
     if (currentInPoint !== null && currentTime <= currentInPoint) {
       newInPoint = null
     }
-    
+
     // If no in point was set, set it to 0
     if (newInPoint === null && currentInPoint === null) {
       newInPoint = 0
     }
-    
+
     this.updateContext({
       ...this.context,
       videoState: {
@@ -1461,7 +1500,7 @@ export class VideoAgentStateMachine {
   }
   
   private async handleClearSegment() {
-    
+
     // NUCLEAR PRINCIPLE: Reset to initial state
     this.updateContext({
       ...this.context,
@@ -1470,6 +1509,22 @@ export class VideoAgentStateMachine {
         outPoint: null,
         isComplete: false,
         sentToChat: false
+      }
+    })
+  }
+
+  private async handleUpdateSegment(command: Command) {
+
+    // Update segment boundaries based on transcript chunk boundaries
+    const { inPoint, outPoint } = command.payload
+
+    this.updateContext({
+      ...this.context,
+      segmentState: {
+        ...this.context.segmentState,
+        inPoint,
+        outPoint,
+        isComplete: inPoint !== null && outPoint !== null && inPoint < outPoint
       }
     })
   }

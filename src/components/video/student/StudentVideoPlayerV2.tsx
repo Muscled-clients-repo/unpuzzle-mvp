@@ -418,6 +418,13 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
     })
   }
 
+  const handleUpdateSegmentContext = (inPoint: number, outPoint: number) => {
+    dispatch({
+      type: 'UPDATE_SEGMENT',
+      payload: { inPoint, outPoint }
+    })
+  }
+
   const handleSendSegmentToChat = () => {
     dispatch({
       type: 'SEND_SEGMENT_TO_CHAT',
@@ -627,6 +634,7 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
               onReflectionCancel={handleReflectionCancel}
               segmentContext={context.segmentState}
               onClearSegmentContext={handleClearSegment}
+              onUpdateSegmentContext={handleUpdateSegmentContext}
               dispatch={dispatch}
               recordingState={context.recordingState}
             />

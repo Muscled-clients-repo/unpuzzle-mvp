@@ -92,6 +92,7 @@ interface AIChatSidebarV2Props {
     sentToChat: boolean
   }
   onClearSegmentContext?: () => void
+  onUpdateSegmentContext?: (inPoint: number, outPoint: number) => void
   dispatch?: (action: any) => void
   recordingState?: {
     isRecording: boolean
@@ -120,6 +121,7 @@ export function AIChatSidebarV2({
   onReflectionCancel,
   segmentContext,
   onClearSegmentContext,
+  onUpdateSegmentContext,
   dispatch,
   aiState,
   recordingState
@@ -1374,6 +1376,7 @@ export function AIChatSidebarV2({
             currentTime={currentVideoTime || 0}
             segmentContext={segmentContext}
             onClearSegmentContext={onClearSegmentContext}
+            onUpdateSegmentContext={onUpdateSegmentContext}
             onSendMessage={(message) => {
               // Bridge to old message handling system
               setInputValue('')
