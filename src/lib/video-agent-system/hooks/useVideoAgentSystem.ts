@@ -75,6 +75,14 @@ export function useVideoAgentSystem(options?: UseVideoAgentSystemOptions) {
     globalStateMachine?.clearAudioMessages()
   }, [])
 
+  const addMessage = useCallback((message: any) => {
+    globalStateMachine?.addMessage(message)
+  }, [])
+
+  const addOrUpdateMessage = useCallback((message: any) => {
+    globalStateMachine?.addOrUpdateMessage(message)
+  }, [])
+
   return {
     context: context || {
       state: SystemState.VIDEO_PAUSED,
@@ -91,6 +99,8 @@ export function useVideoAgentSystem(options?: UseVideoAgentSystemOptions) {
     setVideoId,
     setCourseId,
     loadInitialMessages,
-    clearAudioMessages
+    clearAudioMessages,
+    addMessage,
+    addOrUpdateMessage
   }
 }

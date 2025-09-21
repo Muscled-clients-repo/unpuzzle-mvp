@@ -94,6 +94,8 @@ interface AIChatSidebarV2Props {
   onClearSegmentContext?: () => void
   onUpdateSegmentContext?: (inPoint: number, outPoint: number) => void
   dispatch?: (action: any) => void
+  addMessage?: (message: Message) => void
+  addOrUpdateMessage?: (message: Message) => void
   recordingState?: {
     isRecording: boolean
     isPaused: boolean
@@ -124,7 +126,9 @@ export function AIChatSidebarV2({
   onUpdateSegmentContext,
   dispatch,
   aiState,
-  recordingState
+  recordingState,
+  addMessage,
+  addOrUpdateMessage
 }: AIChatSidebarV2Props) {
   const [inputValue, setInputValue] = useState("")
   const [isTyping, setIsTyping] = useState(false)
@@ -1377,20 +1381,8 @@ export function AIChatSidebarV2({
             segmentContext={segmentContext}
             onClearSegmentContext={onClearSegmentContext}
             onUpdateSegmentContext={onUpdateSegmentContext}
-            onSendMessage={(message) => {
-              // Bridge to old message handling system
-              setInputValue('')
-              // Dispatch new user message
-              dispatch?.({
-                type: 'SEND_MESSAGE',
-                payload: {
-                  type: 'user',
-                  message: message,
-                  timestamp: Date.now(),
-                  sender: 'user'
-                }
-              })
-            }}
+            onAddMessage={addMessage}
+            onAddOrUpdateMessage={addOrUpdateMessage}
           />
         ) : (
           /* Agents Tab: Scrollable content */

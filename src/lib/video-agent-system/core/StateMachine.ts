@@ -134,6 +134,20 @@ export class VideoAgentStateMachine {
     })
   }
 
+  public addMessage(message: Message) {
+    this.updateContext({
+      ...this.context,
+      messages: this.messageManager.addMessage(this.context.messages, message)
+    })
+  }
+
+  public addOrUpdateMessage(message: Message) {
+    this.updateContext({
+      ...this.context,
+      messages: this.messageManager.addOrUpdateMessage(this.context.messages, message)
+    })
+  }
+
   public setReflectionMutation(mutation: (data: any) => Promise<any>) {
     this.reflectionMutation = mutation
   }

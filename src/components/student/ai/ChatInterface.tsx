@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
@@ -8,6 +8,7 @@ import { Send, User, Bot, Sparkles, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Message, MessageState } from "@/lib/video-agent-system"
 import { useTranscriptQuery } from "@/hooks/use-transcript-queries"
+import { useVideoSummary } from "@/hooks/use-video-summary"
 
 interface ChatInterfaceProps {
   messages: Message[]
@@ -15,6 +16,8 @@ interface ChatInterfaceProps {
   courseId: string | null
   currentTime: number
   onSendMessage?: (message: string) => void
+  onAddMessage?: (message: Message) => void
+  onAddOrUpdateMessage?: (message: Message) => void
   segmentContext?: {
     inPoint: number | null
     outPoint: number | null
@@ -31,16 +34,22 @@ export function ChatInterface({
   courseId,
   currentTime,
   onSendMessage,
+  onAddMessage,
+  onAddOrUpdateMessage,
   segmentContext,
   onClearSegmentContext,
   onUpdateSegmentContext
 }: ChatInterfaceProps) {
   const [input, setInput] = useState('')
   const [hasUpdatedSegment, setHasUpdatedSegment] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Get transcript data for this video
   const { data: transcriptData } = useTranscriptQuery(videoId || '')
+
+  // Get video summary for AI context
+  const { data: videoSummary } = useVideoSummary(videoId)
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -130,12 +139,130 @@ export function ChatInterface({
   // No filtering needed - messages are pre-filtered by parent component
   const chatMessages = messages
 
-  const handleSendMessage = () => {
-    if (input.trim() && onSendMessage) {
-      onSendMessage(input.trim())
-      setInput('')
+  const handleSendMessage = useCallback(async () => {
+    if (!input.trim() || isGenerating || !videoId || !onAddMessage || !onAddOrUpdateMessage) return
+
+    const userMessage = input.trim()
+    setInput('')
+    setIsGenerating(true)
+
+    // Get selected transcript context if available
+    const selectedTranscript = segmentContext?.sentToChat && segmentContext.inPoint !== null && segmentContext.outPoint !== null
+      ? getTranscriptDataBetween(segmentContext.inPoint, segmentContext.outPoint)
+      : null
+
+    // Add user message with context metadata (like Cursor AI)
+    const userMsg: Message = {
+      id: `user_${Date.now()}`,
+      type: 'user',
+      state: MessageState.PERMANENT,
+      message: userMessage,
+      timestamp: Date.now(),
+      // Add context as metadata for custom rendering
+      contextData: selectedTranscript ? {
+        transcript: selectedTranscript.text,
+        startTime: selectedTranscript.actualStart,
+        endTime: selectedTranscript.actualEnd
+      } : undefined
     }
-  }
+    onAddMessage(userMsg)
+
+    // Clear the segment context from input area (like Cursor AI)
+    if (selectedTranscript?.text && onClearSegmentContext) {
+      onClearSegmentContext()
+    }
+
+    // Prepare context for AI (selectedTranscript already defined above)
+
+    const chatHistory = messages.filter(msg =>
+      msg.type === 'user' || (msg.type === 'ai' && msg.state === MessageState.PERMANENT)
+    ).slice(-6) // Last 6 messages for context
+
+    try {
+      // Add 1 second delay before starting API call
+      await new Promise(resolve => setTimeout(resolve, 1000))
+
+      const response = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoId,
+          userMessage,
+          videoSummary: videoSummary,
+          selectedTranscript: selectedTranscript ? {
+            text: selectedTranscript.text,
+            startTime: selectedTranscript.actualStart,
+            endTime: selectedTranscript.actualEnd
+          } : null,
+          chatHistory: chatHistory.map(msg => ({
+            type: msg.type,
+            message: msg.message,
+            timestamp: msg.timestamp
+          })),
+          currentTimestamp: currentTime
+        })
+      })
+
+      if (!response.ok) throw new Error('Failed to get AI response')
+
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error('No response body')
+
+      let aiMessageId = `ai_${Date.now()}`
+      let fullContent = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = new TextDecoder().decode(value)
+        const lines = chunk.split('\n')
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+
+              if (data.type === 'chunk') {
+                fullContent = data.fullContent
+                // Update or create AI message using addOrUpdate for streaming
+                const aiMsg: Message = {
+                  id: aiMessageId,
+                  type: 'ai',
+                  state: MessageState.PERMANENT,
+                  message: fullContent,
+                  timestamp: Date.now()
+                }
+                onAddOrUpdateMessage(aiMsg)
+
+                // Add 75ms delay between chunks for more human-like typing
+                await new Promise(resolve => setTimeout(resolve, 75))
+              } else if (data.type === 'complete') {
+                // Final message is already handled by chunks
+                break
+              } else if (data.type === 'error') {
+                throw new Error(data.error)
+              }
+            } catch (e) {
+              // Skip malformed JSON
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Chat error:', error)
+      const errorMsg: Message = {
+        id: `error_${Date.now()}`,
+        type: 'ai',
+        state: MessageState.PERMANENT,
+        message: 'Sorry, I encountered an error. Please try again.',
+        timestamp: Date.now()
+      }
+      onAddMessage(errorMsg)
+    } finally {
+      setIsGenerating(false)
+    }
+  }, [input, isGenerating, videoId, onAddMessage, segmentContext, currentTime, messages])
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -174,44 +301,59 @@ export function ChatInterface({
           </div>
         ) : (
           chatMessages.map((msg) => (
-            <div
-              key={msg.id}
-              className={cn(
-                "flex gap-3",
-                msg.type === 'user' ? "justify-end" : "justify-start"
+            <div key={msg.id} className="space-y-2">
+              {/* Context Area (if user message has context) */}
+              {msg.type === 'user' && msg.contextData && (
+                <div className="flex justify-end">
+                  <div className="max-w-[80%] bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                    <div className="text-xs text-muted-foreground mb-1">
+                      Video context {formatRecordingTime(msg.contextData.startTime)}-{formatRecordingTime(msg.contextData.endTime)}
+                    </div>
+                    <div className="text-sm italic text-gray-700 dark:text-gray-300">
+                      {msg.contextData.transcript}
+                    </div>
+                  </div>
+                </div>
               )}
-            >
+
               {/* Message Content */}
               <div
                 className={cn(
-                  "max-w-[80%] rounded-lg px-3 py-2",
-                  msg.type === 'user'
-                    ? "bg-blue-500 text-white"
-                    : msg.type === 'ai'
-                    ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                    : "bg-orange-50 dark:bg-orange-900/20 text-orange-900 dark:text-orange-100 border border-orange-200 dark:border-orange-800"
+                  "flex gap-3",
+                  msg.type === 'user' ? "justify-end" : "justify-start"
                 )}
               >
-                <div className="text-sm whitespace-pre-wrap">
-                  {msg.message}
+                <div
+                  className={cn(
+                    "max-w-[80%] rounded-lg px-3 py-2",
+                    msg.type === 'user'
+                      ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700"
+                      : msg.type === 'ai'
+                      ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                      : "bg-orange-50 dark:bg-orange-900/20 text-orange-900 dark:text-orange-100 border border-orange-200 dark:border-orange-800"
+                  )}
+                >
+                  <div className="text-sm whitespace-pre-wrap">
+                    {msg.message}
+                  </div>
+                  <div className="text-xs opacity-70 mt-1">
+                    {formatTimeAgo(msg.timestamp)}
+                  </div>
                 </div>
-                <div className="text-xs opacity-70 mt-1">
-                  {formatTimeAgo(msg.timestamp)}
-                </div>
-              </div>
 
-              {/* Avatar */}
-              <div className={cn(
-                "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-                msg.type === 'user'
-                  ? "bg-blue-500 text-white order-first"
-                  : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
-              )}>
-                {msg.type === 'user' ? (
-                  <User className="h-4 w-4" />
-                ) : (
-                  <Bot className="h-4 w-4" />
-                )}
+                {/* Avatar */}
+                <div className={cn(
+                  "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
+                  msg.type === 'user'
+                    ? "bg-gray-400 dark:bg-gray-600 text-white order-first"
+                    : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                )}>
+                  {msg.type === 'user' ? (
+                    <User className="h-4 w-4" />
+                  ) : (
+                    <Bot className="h-4 w-4" />
+                  )}
+                </div>
               </div>
             </div>
           ))
@@ -268,7 +410,7 @@ export function ChatInterface({
           />
           <Button
             onClick={handleSendMessage}
-            disabled={!input.trim()}
+            disabled={!input.trim() || isGenerating}
             size="icon"
           >
             <Send className="h-4 w-4" />
@@ -276,7 +418,7 @@ export function ChatInterface({
         </div>
         <div className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
           <Sparkles className="h-3 w-3" />
-          AI-powered learning assistant
+          {isGenerating ? 'AI is thinking...' : 'AI-powered learning assistant'}
         </div>
       </div>
     </div>

@@ -60,7 +60,7 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   const reflectionsQuery = useReflectionsQuery(props.videoId || '', props.courseId || '')
 
   // State machine for agent system with mutations
-  const { context, dispatch, setVideoRef, setVideoId, setCourseId, loadInitialMessages, clearAudioMessages } = useVideoAgentSystem({
+  const { context, dispatch, setVideoRef, setVideoId, setCourseId, loadInitialMessages, clearAudioMessages, addMessage, addOrUpdateMessage } = useVideoAgentSystem({
     reflectionMutation: reflectionMutation.mutateAsync,
     quizAttemptMutation: quizAttemptMutation.mutateAsync
   })
@@ -637,6 +637,8 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
               onUpdateSegmentContext={handleUpdateSegmentContext}
               dispatch={dispatch}
               recordingState={context.recordingState}
+              addMessage={addMessage}
+              addOrUpdateMessage={addOrUpdateMessage}
             />
           </div>
         </>

@@ -16,4 +16,25 @@ export class MessageManager {
   addMessage(messages: Message[], newMessage: Message): Message[] {
     return [...messages, newMessage]
   }
+
+  updateMessage(messages: Message[], messageId: string, updatedMessage: Partial<Message>): Message[] {
+    return messages.map(msg =>
+      msg.id === messageId
+        ? { ...msg, ...updatedMessage }
+        : msg
+    )
+  }
+
+  addOrUpdateMessage(messages: Message[], message: Message): Message[] {
+    const existingIndex = messages.findIndex(msg => msg.id === message.id)
+    if (existingIndex >= 0) {
+      // Update existing message
+      return messages.map(msg =>
+        msg.id === message.id ? message : msg
+      )
+    } else {
+      // Add new message
+      return [...messages, message]
+    }
+  }
 }
