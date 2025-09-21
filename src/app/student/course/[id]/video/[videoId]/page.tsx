@@ -90,7 +90,6 @@ export default function VideoPlayerPage() {
   // Log resume functionality for debugging
   useEffect(() => {
     if (resumeTimestamp > 0) {
-      console.log(`🎯 Resuming video at ${resumeTimestamp} seconds from URL parameter (${Math.floor(resumeTimestamp / 60)}:${String(resumeTimestamp % 60).padStart(2, '0')})`)
     }
   }, [resumeTimestamp])
 
@@ -101,8 +100,6 @@ export default function VideoPlayerPage() {
 
       if (!isStandaloneLesson) {
         // Load course video data
-        console.log('📹 Loading student video data for:', videoId)
-        console.log('📚 Loading course data for:', courseId)
         try {
           await Promise.all([
             loadStudentVideo(videoId),
@@ -143,11 +140,6 @@ export default function VideoPlayerPage() {
   // Debug video URL - only log once when video loads - MOVED HERE FOR HOOK ORDER
   useEffect(() => {
     if (currentVideo) {
-      console.log('🎥 Video loaded:', {
-        videoId,
-        title: currentVideo.title,
-        hasVideoUrl: !!currentVideo.videoUrl
-      })
     }
   }, [currentVideo?.id, videoId])
 
@@ -203,21 +195,17 @@ export default function VideoPlayerPage() {
   }
 
   const handlePause = (time: number) => {
-    console.log('⏸️ Video paused')
   }
 
   const handlePlay = () => {
-    console.log('▶️ Video playing')
   }
 
   const handleEnded = () => {
-    console.log('🏁 Video ended')
   }
 
 
   // Check if video URL is valid before rendering player
   if (!currentVideo.videoUrl) {
-    console.error('❌ No video URL provided:', currentVideo)
     return (
       <div className="flex min-h-screen flex-col">
         <main className="flex-1 flex items-center justify-center">

@@ -11,6 +11,10 @@ export interface Reflection {
   reflection_prompt: string
   created_at: string
   updated_at: string
+  // Industry standard columns for voice memos
+  file_url?: string
+  duration_seconds?: number
+  video_timestamp_seconds?: number
 }
 
 export function useReflectionsQuery(videoId: string, courseId: string) {

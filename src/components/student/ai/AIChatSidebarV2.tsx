@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Puzzle, Send, Sparkles, Bot, User, Pause, Lightbulb, CheckCircle2, MessageSquare, Route, Clock, Brain, Zap, Target, Mic, Camera, Video, Upload, Square, Play, Trash2, MicOff, Activity, X, Trophy } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useQuizAttemptsQuery } from "@/hooks/use-quiz-attempts-query"
+import { useReflectionsQuery } from "@/hooks/use-reflections-query"
 
 // Utility functions for messenger-style date grouping
 function formatDateHeader(date: Date): string {
@@ -56,13 +57,13 @@ function groupActivitiesByDate(activities: any[]) {
     })
   })
 
-  // Sort groups by date (newest first)
+  // Sort groups by date (oldest first for chronological order)
   const sortedGroups = Object.keys(groups)
-    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
+    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
     .map(dateKey => ({
       dateKey,
       dateHeader: groups[dateKey][0].dateHeader,
-      activities: groups[dateKey].sort((a, b) => b.timestamp - a.timestamp) // Newest first within day
+      activities: groups[dateKey].sort((a, b) => a.timestamp - b.timestamp) // Oldest first within day
     }))
 
   return sortedGroups
@@ -136,8 +137,10 @@ export function AIChatSidebarV2({
   const [showReflectionOptions, setShowReflectionOptions] = useState<string | null>(null) // Track which message is showing reflection options
   const [activeTab, setActiveTab] = useState<'chat' | 'agents'>('chat')
 
-  // Query for quiz attempts from database
+  // Query for quiz attempts and reflections from database
   const quizAttemptsQuery = useQuizAttemptsQuery(videoId || '', courseId || '')
+  const reflectionsQuery = useReflectionsQuery(videoId || '', courseId || '')
+
 
   // Track which agent is currently active based on messages
   const activeAgent = messages.find(msg =>
@@ -173,7 +176,6 @@ export function AIChatSidebarV2({
       : inputValue
     
     // Simulate sending message
-    console.log("Sending message:", messageWithContext)
     setInputValue("")
     setIsTyping(true)
     
@@ -236,8 +238,13 @@ export function AIChatSidebarV2({
   
   // Separate messages into chat and agent categories
   const chatMessages = messages.filter(msg => {
-    // Only include audio messages (voice memos) in chat
-    return msg.type === 'audio'
+    // Exclude audio messages - they should appear inside reflection dropdowns in Agents tab only
+    if (msg.type === 'audio') {
+      return false
+    }
+
+    // Include regular chat messages but not system activities
+    return msg.type !== 'system' || !msg.message.includes('📍')
   })
 
   const agentMessages = messages.filter(msg => {
@@ -273,6 +280,10 @@ export function AIChatSidebarV2({
       if (msg.message.includes('video continues in') ||
           msg.message.includes('Video will resume') ||
           msg.message.match(/\d+\s*\.\.\.\s*\d+\s*\.\.\.\s*\d+/)) {
+        return false
+      }
+      // Exclude reflection completion messages
+      if (msg.message.includes('Perfect! I\'ve saved your') && msg.message.includes('voice memo')) {
         return false
       }
     }
@@ -340,7 +351,6 @@ export function AIChatSidebarV2({
                   <button
                     onClick={async () => {
                       onReflectionTypeChosen?.('voice')
-                      console.log('Voice reflection chosen')
 
                       // Trigger voice recording functionality
                       try {
@@ -363,6 +373,7 @@ export function AIChatSidebarV2({
                         const recorder = new MediaRecorder(stream, { mimeType })
                         setMediaRecorder(recorder)
                         setIsRecording(true)
+                        setIsPaused(false)
                         setRecordingTime(0)
                         setHasRecording(false)
 
@@ -378,6 +389,7 @@ export function AIChatSidebarV2({
                           setAudioBlob(audioBlob)
                           setHasRecording(true)
                           setIsRecording(false)
+                          setIsPaused(false)
                           stream.getTracks().forEach(track => track.stop())
                         }
 
@@ -389,6 +401,7 @@ export function AIChatSidebarV2({
 
                       } catch (error) {
                         console.error('Error starting recording:', error)
+                        alert('Failed to access microphone. Please ensure you have granted microphone permissions.')
                       }
                     }}
                     className="text-blue-600 hover:underline"
@@ -398,7 +411,6 @@ export function AIChatSidebarV2({
                   <button
                     onClick={() => {
                       onReflectionTypeChosen?.('screenshot')
-                      console.log('Screenshot reflection chosen')
                     }}
                     className="text-blue-600 hover:underline"
                   >
@@ -407,7 +419,6 @@ export function AIChatSidebarV2({
                   <button
                     onClick={() => {
                       onReflectionTypeChosen?.('loom')
-                      console.log('Loom reflection chosen')
                     }}
                     className="text-blue-600 hover:underline"
                   >
@@ -614,33 +625,27 @@ export function AIChatSidebarV2({
     return null
   }
 
-  // Extract activity entries from messages and database
+  // Extract ONLY user activities from messages - NO AI responses
   const messageActivities = messages.filter(msg => {
-    // Include system messages with timestamps (📍)
+    // ONLY include system messages with timestamps (📍) - these are user action markers
     if (msg.type === 'system' && msg.message.includes('📍')) {
-      return true
-    }
-    // EXCLUDE quiz-question messages (they're for active quiz taking, not timeline)
-    // Only include quiz in activities AFTER it's completed (when quiz-result exists)
-    if (msg.type === 'quiz-question') {
-      return false
-    }
-    // Include reflection options (when reflect agent is activated)
-    if (msg.type === 'reflection-options') {
-      return true
-    }
-    // Include agent prompt activations ONLY if they're not quiz prompts
-    // Quiz prompts shouldn't appear in timeline until completed
-    if (msg.type === 'agent-prompt' && msg.state === MessageState.ACTIVATED) {
-      if (msg.agentType === 'quiz') {
-        return false // Don't show quiz prompts in timeline
+      // Exclude reflection system messages that don't have audioData - these are duplicates
+      // Keep only quiz messages and other system messages
+      if (msg.message.includes('PuzzleReflect') && !(msg as any).audioData) {
+        return false
       }
       return true
     }
-    // Include completed quiz results in timeline
-    if (msg.type === 'quiz-result') {
+
+    // Include reflection prompts and options (needed for reflection flow)
+    if (msg.type === 'agent-prompt' && msg.agentType === 'reflect' && msg.state === MessageState.ACTIVATED) {
       return true
     }
+    if (msg.type === 'reflection-options') {
+      return true
+    }
+
+    // EXCLUDE everything else - no AI responses, no quiz prompts, no questions
     return false
   })
 
@@ -671,8 +676,75 @@ export function AIChatSidebarV2({
       }))
     : []
 
+  // Convert database reflections to activity format
+  const databaseReflectionActivities = (reflectionsQuery.data?.success && reflectionsQuery.data.data)
+    ? reflectionsQuery.data.data
+        .filter(reflection => {
+          // Only include voice reflections that have valid file URLs and duration
+          return reflection.reflection_type === 'voice' &&
+                 reflection.file_url &&
+                 reflection.file_url.trim() !== '' &&
+                 (reflection.duration_seconds > 0 || reflection.duration_seconds === null) // Allow null duration but not 0
+        })
+        .map(reflection => {
+          // Industry standard: Read from proper database columns
+          const videoTimestamp = reflection.video_timestamp_seconds || 0
+          const fileUrl = reflection.file_url
+          const duration = reflection.duration_seconds || 0
+
+          const audioData = {
+            fileUrl,
+            duration,
+            videoTimestamp,
+            reflectionId: reflection.id
+          }
+
+          return {
+            id: `db-reflection-${reflection.id}`,
+            type: 'system' as const,
+            state: MessageState.PERMANENT,
+            message: `📍 PuzzleReflect • Voice Memo at ${Math.floor(videoTimestamp / 60)}:${String(Math.floor(videoTimestamp % 60)).padStart(2, '0')}`,
+            timestamp: new Date(reflection.created_at).getTime(),
+            audioData,
+            dbReflection: reflection // Store the original database record
+          }
+        })
+    : []
+
   // Combine and sort all activities by timestamp
-  const activities = [...messageActivities, ...databaseQuizActivities].sort((a, b) => a.timestamp - b.timestamp)
+  // Apply state-based filtering - only show ACTIVATED, REJECTED, and PERMANENT messages
+  // This replaces complex conditional filtering with simple state management
+  const filteredActivities = [...messageActivities, ...databaseQuizActivities, ...databaseReflectionActivities]
+    .filter(activity => {
+      // Always show PERMANENT messages (database records, completed reflections)
+      if (activity.state === MessageState.PERMANENT) return true
+
+      // Show ACTIVATED and REJECTED messages
+      if (activity.state === MessageState.ACTIVATED || activity.state === MessageState.REJECTED) return true
+
+      // Hide UNACTIVATED messages (these cause gray bars)
+      if (activity.state === MessageState.UNACTIVATED) return false
+
+      // Fallback: System messages with 📍 should always show (treat as PERMANENT)
+      if (activity.type === 'system' && activity.message.includes('📍')) return true
+
+      // Default: hide if state is undefined or unknown
+      return false
+    })
+    .sort((a, b) => a.timestamp - b.timestamp)
+
+  const activities = filteredActivities
+
+
+  // Auto-expand the latest activity
+  useEffect(() => {
+    if (activities.length > 0) {
+      const latestActivity = activities[activities.length - 1] // Last item is latest now
+      if (latestActivity && latestActivity.id !== expandedActivity) {
+        setExpandedActivity(latestActivity.id)
+      }
+    }
+  }, [activities.length]) // Only trigger when activities count changes
 
   // Parse activity type and details from message - handle both system messages and direct activity types
   const parseActivity = (msg: Message) => {
@@ -778,19 +850,26 @@ export function AIChatSidebarV2({
                 const parsed = parseActivity(activity)
                 const additionalInfo = extractAdditionalInfo(activity.message)
                 const Icon = parsed.icon
+                const isQuizActivity = parsed.type === 'quiz' || parsed.type === 'quiz-complete'
+                const isReflectionActivity = parsed.type === 'reflect' || parsed.type === 'reflect-complete'
                 const isExpanded = expandedActivity === activity.id
+
+                // State-based filtering has already handled message visibility
+                // No need for complex conditional checks here
 
                 return (
                   <div key={activity.id}>
                     {/* Activity Item */}
                     <div
                       className={cn(
-                        "flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer border",
+                        "flex items-center gap-3 p-3 rounded-lg transition-colors border",
+                        isQuizActivity && "cursor-pointer", // Only quizzes are clickable
                         isExpanded
                           ? "bg-primary/10 border-primary/20 rounded-b-none"
-                          : "bg-secondary/20 border-border/30 hover:bg-secondary/40"
+                          : "bg-secondary/20 border-border/30",
+                        isQuizActivity && !isExpanded && "hover:bg-secondary/40" // Only hover on clickable quizzes
                       )}
-                      onClick={() => setExpandedActivity(isExpanded ? null : activity.id)}
+                      onClick={isQuizActivity ? () => setExpandedActivity(isExpanded ? null : activity.id) : undefined}
                     >
                       <div className={cn("p-1.5 rounded-md", isExpanded ? "bg-primary/20" : "bg-secondary")}>
                         <Icon className={cn("h-3 w-3", parsed.color)} />
@@ -847,20 +926,38 @@ export function AIChatSidebarV2({
                   </div>
                   {/* Additional info now shown inline with activity name */}
                 </div>
-                <div className={cn(
-                  "text-xs transition-transform",
-                  isExpanded ? "rotate-180" : ""
-                )}>
-                  ▼
-                </div>
+                {/* Only show dropdown arrow for quiz activities */}
+                {isQuizActivity && (
+                  <div className={cn(
+                    "text-xs transition-transform",
+                    isExpanded ? "rotate-180" : ""
+                  )}>
+                    ▼
+                  </div>
+                )}
               </div>
 
-              {/* Expanded Content - Shows directly below */}
-              {isExpanded && (
+              {/* Show voice memo player directly for reflection activities */}
+              {(parsed.type === 'reflect' || parsed.type === 'reflect-complete') &&
+               (activity as any).dbReflection &&
+               (activity as any).audioData &&
+               (activity as any).audioData.fileUrl && (
+                <div className="mt-3 px-3 pb-3">
+                  <MessengerAudioPlayer
+                    reflectionId={(activity as any).audioData.reflectionId}
+                    fileUrl={(activity as any).audioData.fileUrl}
+                    duration={(activity as any).audioData.duration}
+                    timestamp={(activity as any).audioData.videoTimestamp}
+                    isOwn={true}
+                  />
+                </div>
+              )}
+
+              {/* Expanded Content - Shows directly below (only for quiz activities) */}
+              {isExpanded && isQuizActivity && (
                 <div className="bg-background/50 border border-primary/20 border-t-0 rounded-b-lg p-4">
                   <div className="text-sm font-medium mb-3 text-muted-foreground">
-                    {parsed.type === 'quiz' || parsed.type === 'quiz-complete' ? 'Quiz' :
-                     parsed.type === 'reflect' || parsed.type === 'reflect-complete' ? 'Reflection' : 'Activity Details'}
+                    Quiz
                   </div>
                   <div className="space-y-3">
                     {(() => {
@@ -922,21 +1019,6 @@ export function AIChatSidebarV2({
                             activity.linkedMessageId === msg.id
                           )
                         }
-                      } else if (parsed.type === 'reflect' || parsed.type === 'reflect-complete') {
-                        // Find reflection content - show reflection options for activation, audio player for completion
-                        if (parsed.type === 'reflect-complete') {
-                          // For completed reflections, show the audio player or result
-                          relatedContent = agentMessages.filter(msg =>
-                            msg.type === 'audio' &&
-                            (msg.id === activity.id || msg.linkedMessageId === activity.id || activity.linkedMessageId === msg.id)
-                          )
-                        } else {
-                          // For reflect activation, show reflection options
-                          relatedContent = agentMessages.filter(msg =>
-                            msg.type === 'reflection-options' &&
-                            (msg.id === activity.id || msg.linkedMessageId === activity.id || activity.linkedMessageId === msg.id)
-                          )
-                        }
                       }
 
                       if (relatedContent && relatedContent.length > 0) {
@@ -992,13 +1074,12 @@ export function AIChatSidebarV2({
                           }
                         }
 
+
                         // For other activities, show messages normally
                         return relatedContent.map(renderMessage)
                       }
 
                       // Debug: Show activity info (removed timestamp proximity debug to avoid confusion)
-                      console.log('Activity:', activity.message, 'ID:', activity.id)
-                      console.log('Parsed activity type:', parsed.type)
 
                       // If no content found, try to find quiz state or completed quiz data
                       if (parsed.type === 'quiz' || parsed.type === 'quiz-complete') {
@@ -1013,7 +1094,6 @@ export function AIChatSidebarV2({
                           return hasQuizResult && isRelatedToActivity
                         })
 
-                        console.log('Found quizResult:', quizResult)
 
                         // Extract quiz result data from either message type
                         let result = null
@@ -1023,7 +1103,6 @@ export function AIChatSidebarV2({
                           result = (quizResult as any).quizResult
                         }
 
-                        console.log('Extracted result:', result)
 
                         if (result) {
                           return (
@@ -1149,7 +1228,7 @@ export function AIChatSidebarV2({
             /* Chat Tab: Show only chat messages */
             chatMessages.map(renderMessage)
           ) : (
-            /* Agents Tab: Show activity list + current agent messages + expanded content */
+            /* Agents Tab: Show activity timeline and agent messages */
             <>
               {/* Activity List */}
               {renderActivityList()}
@@ -1199,6 +1278,7 @@ export function AIChatSidebarV2({
           <div ref={scrollRef} />
         </div>
       </div>
+
 
       {/* Input/Actions - Fixed at bottom */}
       <div className="border-t bg-background/95 backdrop-blur-sm p-4 flex-shrink-0">
@@ -1264,8 +1344,235 @@ export function AIChatSidebarV2({
             </div>
           </>
         ) : (
-          /* Agents Tab: Show agent activation buttons only */
+          /* Agents Tab: Show agent activation buttons and voice recording UI */
           <div className="space-y-3">
+            {/* Voice Recording Interfaces - Only shows in Agents tab */}
+            {isRecording && (
+              <div className="p-3 bg-red-50 dark:bg-red-950/20 rounded-lg border border-red-200 dark:border-red-800">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="relative p-2 rounded-lg bg-red-100 dark:bg-red-950/30">
+                      <Mic className={cn(
+                        "h-5 w-5",
+                        isPaused ? "text-red-400" : "text-red-600"
+                      )} />
+                      {!isPaused && (
+                        <>
+                          <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full animate-ping"></div>
+                          <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-600 rounded-full"></div>
+                        </>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          "text-sm font-medium",
+                          isPaused ? "text-red-400" : "text-red-600"
+                        )}>
+                          {isPaused ? 'Recording paused' : 'Recording'}
+                        </span>
+                        <span className="text-sm font-mono text-muted-foreground">{formatRecordingTime(recordingTime)}</span>
+                      </div>
+                      {/* Minimalist waveform */}
+                      <div className="flex items-center gap-0.5 h-4 mt-1">
+                        {[...Array(20)].map((_, i) => (
+                          <div
+                            key={i}
+                            className="w-0.5 bg-muted-foreground/30 rounded-full"
+                            style={{
+                              height: `${20 + Math.random() * 60}%`,
+                              animationDelay: `${i * 50}ms`,
+                              animation: isPaused ? 'none' : 'pulse 1.5s ease-in-out infinite'
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Recording Controls */}
+                  <div className="flex gap-2">
+                    {!isPaused ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          if (mediaRecorder && mediaRecorder.state === 'recording') {
+                            mediaRecorder.pause()
+                          }
+                          setIsPaused(true)
+                          if (recordingIntervalRef.current) {
+                            clearInterval(recordingIntervalRef.current)
+                          }
+                        }}
+                        className="flex-1"
+                      >
+                        <Pause className="h-4 w-4 mr-1" />
+                        Pause
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          if (mediaRecorder && mediaRecorder.state === 'paused') {
+                            mediaRecorder.resume()
+                          }
+                          setIsPaused(false)
+                          recordingIntervalRef.current = setInterval(() => {
+                            setRecordingTime(prev => prev + 1)
+                          }, 1000)
+                        }}
+                        className="flex-1"
+                      >
+                        <Mic className="h-4 w-4 mr-1" />
+                        Resume
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => {
+                        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                          mediaRecorder.stop()
+                        }
+                        setIsRecording(false)
+                        setIsPaused(false)
+                        setRecordingTime(0)
+                        if (recordingIntervalRef.current) {
+                          clearInterval(recordingIntervalRef.current)
+                        }
+                      }}
+                      className="flex-1"
+                    >
+                      <Square className="h-4 w-4 mr-1" />
+                      Stop
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Recording Preview Interface */}
+            {hasRecording && !isRecording && (
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-950/30">
+                      {isPlaying ? (
+                        <Pause className="h-5 w-5 text-blue-600" />
+                      ) : (
+                        <Mic className="h-5 w-5 text-blue-600" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">Voice Memo Ready</p>
+                      <p className="text-xs text-muted-foreground">
+                        {isPlaying
+                          ? `Playing ${formatRecordingTime(playbackTime)} / ${formatRecordingTime(recordingTime)}`
+                          : `Duration: ${formatRecordingTime(recordingTime)}`
+                        }
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Playback controls */}
+                  <div className="flex gap-2">
+                    {!isPlaying ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          setIsPlaying(true)
+                          setPlaybackTime(0)
+
+                          playbackIntervalRef.current = setInterval(() => {
+                            setPlaybackTime(prev => {
+                              if (prev >= recordingTime) {
+                                setIsPlaying(false)
+                                if (playbackIntervalRef.current) {
+                                  clearInterval(playbackIntervalRef.current)
+                                }
+                                return recordingTime
+                              }
+                              return prev + 1
+                            })
+                          }, 1000)
+                        }}
+                        className="flex-1"
+                      >
+                        <Play className="h-4 w-4 mr-1" />
+                        Play
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          setIsPlaying(false)
+                          if (playbackIntervalRef.current) {
+                            clearInterval(playbackIntervalRef.current)
+                          }
+                        }}
+                        className="flex-1"
+                      >
+                        <Pause className="h-4 w-4 mr-1" />
+                        Pause
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setHasRecording(false)
+                        setRecordingTime(0)
+                        setAudioBlob(null)
+                        setIsPlaying(false)
+                        if (playbackIntervalRef.current) {
+                          clearInterval(playbackIntervalRef.current)
+                        }
+                      }}
+                      className="flex-1"
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      Delete
+                    </Button>
+                  </div>
+
+                  {/* Submit button */}
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      if (audioBlob) {
+                        // Create reflection data
+                        const reflectionData = {
+                          type: 'voice',
+                          audioBlob: audioBlob,
+                          duration: recordingTime,
+                          videoTimestamp: currentVideoTime
+                        }
+
+                        onReflectionSubmit?.('voice', reflectionData)
+
+                        // Reset all states
+                        setIsRecording(false)
+                        setHasRecording(false)
+                        setRecordingTime(0)
+                        setAudioBlob(null)
+                        setIsPlaying(false)
+                        if (playbackIntervalRef.current) {
+                          clearInterval(playbackIntervalRef.current)
+                        }
+                      }
+                    }}
+                    className="w-full bg-primary hover:bg-primary/90"
+                  >
+                    Submit Voice Memo
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="text-center text-sm text-muted-foreground mb-3">
               Activate learning agents
             </div>

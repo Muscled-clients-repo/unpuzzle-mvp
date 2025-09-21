@@ -54,7 +54,6 @@ export function isFeatureEnabled(flag: keyof typeof FEATURE_FLAGS): boolean {
   const enabled = FEATURE_FLAGS[flag]
   
   if (FEATURE_FLAGS.SHOW_REFACTOR_DEBUG && enabled) {
-    console.log(`🚩 Feature Flag: ${flag} is ENABLED`)
   }
   
   return enabled
@@ -77,10 +76,8 @@ export function logFeatureFlags() {
   
   if (enabled.length > 0) {
     console.group('🚩 Enabled Feature Flags')
-    enabled.forEach(flag => console.log(`  ✅ ${flag}`))
     console.groupEnd()
   } else {
-    console.log('🚩 All feature flags disabled (using original behavior)')
   }
 }
 
@@ -94,7 +91,6 @@ export function withFeatureFlag<T>(
 ): T {
   if (isFeatureEnabled(flag)) {
     if (FEATURE_FLAGS.SHOW_REFACTOR_DEBUG) {
-      console.log(`🔄 Using NEW implementation for ${flag}`)
     }
     return newImplementation
   }
@@ -120,10 +116,8 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
         const enabled = getEnabledFeatures()
         if (enabled.length > 0) {
           console.group('🚩 Enabled Feature Flags')
-          enabled.forEach(flag => console.log(`  ✅ ${flag}`))
           console.groupEnd()
         } else {
-          console.log('🚩 All feature flags disabled (using original behavior)')
         }
       })
     } else {
@@ -131,10 +125,8 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
       const enabled = getEnabledFeatures()
       if (enabled.length > 0) {
         console.group('🚩 Enabled Feature Flags')
-        enabled.forEach(flag => console.log(`  ✅ ${flag}`))
         console.groupEnd()
       } else {
-        console.log('🚩 All feature flags disabled (using original behavior)')
       }
     }
   }

@@ -16,7 +16,6 @@ export class DiscoveryLogger {
   
   private constructor() {
     if (DISCOVERY_ENABLED) {
-      console.log('🔍 Discovery Logging Enabled - Tracking critical dependencies')
       // Make logs accessible in console for debugging
       if (typeof window !== 'undefined') {
         (window as any).__DISCOVERY_LOGS__ = this.logs
@@ -46,7 +45,6 @@ export class DiscoveryLogger {
     }
     
     this.logs.push(log)
-    console.log('📊 [GetState]', location, state)
   }
   
   /**
@@ -64,7 +62,6 @@ export class DiscoveryLogger {
     }
     
     this.logs.push(log)
-    console.log('🌐 [Singleton]', name, !!instance)
   }
   
   /**
@@ -83,7 +80,6 @@ export class DiscoveryLogger {
     }
     
     this.logs.push(log)
-    console.log('🔗 [RefChain]', level, !!ref)
   }
   
   /**
@@ -102,7 +98,6 @@ export class DiscoveryLogger {
     }
     
     this.logs.push(log)
-    console.log(`${action === 'add' ? '➕' : '➖'} [EventListener]`, element, event)
   }
   
   /**
@@ -121,7 +116,6 @@ export class DiscoveryLogger {
     }
     
     this.logs.push(log)
-    console.log('🔄 [StateSync]', `${source} → ${target}`, value)
   }
   
   /**
@@ -157,7 +151,6 @@ export class DiscoveryLogger {
     }
     
     this.logs.push(log)
-    console.log('🌍 [DOM]', selector, found ? '✓' : '✗')
   }
   
   /**
@@ -165,13 +158,10 @@ export class DiscoveryLogger {
    */
   exportLogs() {
     if (!DISCOVERY_ENABLED) {
-      console.log('Discovery logging is disabled')
       return
     }
     
     console.group('📋 Discovery Logs Export')
-    console.log('Total logs:', this.logs.length)
-    console.log('By type:')
     
     const byType = this.logs.reduce((acc, log) => {
       acc[log.type] = (acc[log.type] || 0) + 1
@@ -179,10 +169,8 @@ export class DiscoveryLogger {
     }, {} as Record<string, number>)
     
     Object.entries(byType).forEach(([type, count]) => {
-      console.log(`  ${type}: ${count}`)
     })
     
-    console.log('\nFull logs available at: window.__DISCOVERY_LOGS__')
     console.groupEnd()
     
     return this.logs
@@ -202,7 +190,6 @@ export class DiscoveryLogger {
     }
     
     this.logs.push(log)
-    console.log('🔄 [StateSync]', action, details)
   }
   
   /**
@@ -210,7 +197,6 @@ export class DiscoveryLogger {
    */
   clearLogs() {
     this.logs = []
-    console.log('🗑️ Discovery logs cleared')
   }
 }
 

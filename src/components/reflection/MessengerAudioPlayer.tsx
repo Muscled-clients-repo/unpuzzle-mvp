@@ -44,17 +44,21 @@ export function MessengerAudioPlayer({
       audioRef.current.src = signedUrl.url
       audioRef.current.preload = 'metadata'
 
-      // Fallback: if metadata doesn't load within 2 seconds, use prop duration
+      // Immediate fallback for prop duration if we have it
+      if (propDuration && propDuration > 0) {
+        setAudioDuration(propDuration)
+      }
+
+      // Fallback: if metadata doesn't load within 3 seconds, use prop duration
       const fallbackTimer = setTimeout(() => {
-        if (propDuration && propDuration > 0 && (!audioDuration || audioDuration === 0)) {
-          console.log('[MessengerAudioPlayer] Using fallback duration:', propDuration)
+        if (propDuration && propDuration > 0 && (!audioDuration || audioDuration === 0 || !isFinite(audioDuration))) {
           setAudioDuration(propDuration)
         }
-      }, 2000)
+      }, 3000)
 
       return () => clearTimeout(fallbackTimer)
     }
-  }, [signedUrl.url, propDuration, audioDuration])
+  }, [signedUrl.url, propDuration])
 
   // Format time display
   const formatTime = (seconds: number) => {
@@ -146,16 +150,11 @@ export function MessengerAudioPlayer({
     const handleLoadedMetadata = () => {
       const metadataDuration = audio.duration
       // Use metadata duration if valid, otherwise fallback to prop duration
-      if (metadataDuration && !isNaN(metadataDuration) && isFinite(metadataDuration)) {
+      if (metadataDuration && !isNaN(metadataDuration) && isFinite(metadataDuration) && metadataDuration > 0) {
         setAudioDuration(metadataDuration)
       } else if (propDuration && propDuration > 0) {
         setAudioDuration(propDuration)
       }
-      console.log('[MessengerAudioPlayer] Duration set:', {
-        metadataDuration,
-        propDuration,
-        finalDuration: audioDuration
-      })
     }
 
     const handleEnded = () => {
@@ -187,15 +186,23 @@ export function MessengerAudioPlayer({
 
   const progress = audioDuration > 0 ? (currentTime / audioDuration) * 100 : 0
 
-  // Static waveform heights based on typical voice patterns (louder at start/middle, quieter at end)
+  // Generate realistic waveform heights based on duration and common voice patterns
   const getWaveformHeights = () => {
-    const heights = [
-      8, 12, 6, 14, 18, 10, 16, 22, 12, 8,
-      20, 16, 24, 18, 14, 10, 8, 12, 16, 14,
-      18, 22, 16, 12, 8, 14, 18, 20, 16, 12,
-      10, 8, 6, 10, 12, 8, 6, 4, 6, 8
+    const baseHeights = [
+      4, 8, 12, 16, 22, 18, 14, 24, 20, 12,
+      8, 16, 20, 28, 24, 16, 12, 8, 14, 18,
+      22, 26, 20, 14, 10, 16, 24, 28, 22, 16,
+      12, 8, 6, 10, 14, 18, 12, 8, 6, 4,
+      8, 12, 16, 20, 14, 10, 6, 12, 16, 20,
+      24, 18, 12, 8, 14, 18, 22, 16, 10, 6
     ]
-    return heights
+
+    // Vary heights slightly based on reflection ID for uniqueness
+    const seed = parseInt(reflectionId.slice(-4), 16) || 1000
+    return baseHeights.map((height, i) => {
+      const variation = ((seed * (i + 1)) % 8) - 4 // -4 to +4 variation
+      return Math.max(4, Math.min(32, height + variation))
+    })
   }
 
   return (
@@ -258,14 +265,16 @@ export function MessengerAudioPlayer({
               return (
                 <div
                   key={i}
-                  className="w-0.5 rounded-full transition-all duration-75"
+                  className="w-1 rounded-full transition-all duration-100 ease-out"
                   style={{
                     height: `${height}px`,
                     background: fillPercent > 0
                       ? fillPercent >= 100
                         ? playedColor
                         : `linear-gradient(to bottom, ${playedColor} ${fillPercent}%, ${unplayedColor} ${fillPercent}%)`
-                      : unplayedColor
+                      : unplayedColor,
+                    transform: isThisPlaying && fillPercent > 0 && fillPercent < 100 ? 'scaleY(1.1)' : 'scaleY(1)',
+                    opacity: fillPercent > 0 ? 1 : 0.7
                   }}
                 />
               )

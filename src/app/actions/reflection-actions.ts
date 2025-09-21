@@ -22,7 +22,20 @@ export async function getReflectionsAction(videoId: string, courseId: string) {
 
     const { data: reflections, error } = await supabase
       .from('reflections')
-      .select('*')
+      .select(`
+        id,
+        user_id,
+        video_id,
+        course_id,
+        reflection_type,
+        reflection_text,
+        reflection_prompt,
+        created_at,
+        updated_at,
+        file_url,
+        duration_seconds,
+        video_timestamp_seconds
+      `)
       .eq('video_id', videoId)
       .eq('course_id', courseId)
       .eq('user_id', user.id)
@@ -163,16 +176,10 @@ export async function submitReflectionAction(formData: FormData) {
       contentUrl = loomUrl
     }
 
-    // 6. Prepare reflection text with file URL and metadata
-    let reflectionText = `${type} reflection captured at ${videoTimestamp}s`
-    if (contentUrl) {
-      reflectionText += `\n\nFile URL: ${contentUrl}`
-    }
-    if (duration) {
-      reflectionText += `\nDuration: ${duration}s`
-    }
+    // 6. Prepare reflection text (simplified, no metadata)
+    const reflectionText = `${type} reflection captured at ${videoTimestamp}s`
 
-    // 7. Save reflection to database
+    // 7. Save reflection to database with proper columns (industry standard)
     const { data: reflection, error: insertError } = await supabase
       .from('reflections')
       .insert({
@@ -182,6 +189,10 @@ export async function submitReflectionAction(formData: FormData) {
         reflection_type: type,
         reflection_text: reflectionText,
         reflection_prompt: `Captured ${type} reflection at video timestamp ${videoTimestamp}`,
+        // Industry standard: Store metadata in separate columns
+        file_url: contentUrl,
+        duration_seconds: duration,
+        video_timestamp_seconds: videoTimestamp,
       })
       .select()
       .single()

@@ -28,20 +28,10 @@ export class VideoController {
 
   setVideoRef(ref: VideoRefLike) {
     discoveryLogger.logRefChain('VideoController.setVideoRef', ref)
-    console.log('[VideoController] Setting video ref:', ref)
-    console.log('[VideoController] Previous ref was:', this.videoRef)
-    console.log('[VideoController] New ref methods:', {
-      pause: typeof ref.pause,
-      play: typeof ref.play,
-      isPaused: typeof ref.isPaused,
-      getCurrentTime: typeof ref.getCurrentTime
-    })
     this.videoRef = ref
-    console.log('[VideoController] Video ref successfully set, testing methods...')
     try {
       const currentTime = ref.getCurrentTime()
       const isPaused = ref.isPaused()
-      console.log('[VideoController] Test successful - currentTime:', currentTime, 'isPaused:', isPaused)
     } catch (error) {
       console.error('[VideoController] Test failed:', error)
     }
@@ -74,7 +64,6 @@ export class VideoController {
       domTime = videoElement.currentTime
     }
     
-    console.log('[VideoController] getCurrentTime - videoRef:', videoRefTime, 'store:', storeTime, 'dom:', domTime)
     
     // Use the highest value (most recent) that's not zero
     const times = [videoRefTime, storeTime, domTime].filter(t => t > 0)
@@ -87,7 +76,6 @@ export class VideoController {
   }
   
   async pauseVideo(): Promise<boolean> {
-    console.log('[VideoController] pauseVideo called, videoRef:', this.videoRef)
     if (!this.videoRef) {
       console.error('[VideoController] No video ref available when trying to pause')
       throw new Error('No video ref available')

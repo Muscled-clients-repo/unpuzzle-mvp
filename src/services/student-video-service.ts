@@ -82,7 +82,6 @@ export class StudentVideoService {
         return { error: 'Video not found or access denied' }
       }
 
-      console.log('Student video data found via server action:', video.title)
 
       return {
         success: true,
@@ -142,7 +141,6 @@ export class StudentVideoService {
   async updateProgress(progress: Partial<VideoProgress>): Promise<ServiceResult<void>> {
     if (useMockData) {
       // Just log in dev
-      console.log('Progress update:', progress)
       return { data: undefined }
     }
 
@@ -154,7 +152,6 @@ export class StudentVideoService {
 
   async createVideoSegment(segment: VideoSegment): Promise<ServiceResult<VideoSegment>> {
     if (useMockData) {
-      console.log('Creating video segment:', segment)
       return { data: segment }
     }
 

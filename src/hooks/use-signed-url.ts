@@ -58,7 +58,6 @@ export function useSignedUrl(
     const now = Date.now()
 
     if (cached && cached.expiresAt > now + (refreshBeforeMinutes * 60 * 1000)) {
-      console.log('[USE_SIGNED_URL] Using cached signed URL for:', url)
       setState({
         url: cached.url,
         isLoading: false,
@@ -71,7 +70,6 @@ export function useSignedUrl(
     setState(prev => ({ ...prev, isLoading: true, error: null }))
 
     try {
-      console.log('[USE_SIGNED_URL] Generating signed URL for:', url)
 
       const result = await generateSignedUrlAction(url)
       
@@ -89,7 +87,6 @@ export function useSignedUrl(
           expiresAt: result.data.expiresAt
         })
 
-        console.log('[USE_SIGNED_URL] Signed URL generated and cached, expires:', new Date(result.data.expiresAt).toISOString())
       } else {
         setState(prev => ({
           ...prev,
@@ -146,7 +143,6 @@ export function useSignedUrl(
   // Auto-refresh when near expiry
   useEffect(() => {
     if (isNearExpiry && !state.isLoading && privateUrl) {
-      console.log('[USE_SIGNED_URL] Auto-refreshing URL near expiry')
       generateUrl(privateUrl)
     }
   }, [isNearExpiry, state.isLoading, privateUrl, generateUrl])
@@ -154,7 +150,6 @@ export function useSignedUrl(
   // Cleanup timer for expired URLs
   useEffect(() => {
     if (isExpired && state.url) {
-      console.log('[USE_SIGNED_URL] URL expired, clearing')
       setState(prev => ({ ...prev, url: null, error: 'URL expired' }))
     }
   }, [isExpired, state.url])

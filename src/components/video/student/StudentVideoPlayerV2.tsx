@@ -73,7 +73,6 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   // Only log signed URL state on changes, not every render
   useEffect(() => {
     if (signedUrl.url) {
-      console.log('[STUDENT VIDEO PLAYER V2] Signed URL ready for:', props.title || 'video')
     } else if (signedUrl.error) {
       console.error('[STUDENT VIDEO PLAYER V2] Signed URL error:', signedUrl.error)
     }
@@ -90,17 +89,9 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   useEffect(() => {
     const connectVideoRef = () => {
       if (videoPlayerRef.current) {
-        console.log('[V2] Setting video ref to state machine:', videoPlayerRef.current)
-        console.log('[V2] Video ref methods:', {
-          pause: typeof videoPlayerRef.current.pause,
-          play: typeof videoPlayerRef.current.play,
-          isPaused: typeof videoPlayerRef.current.isPaused,
-          getCurrentTime: typeof videoPlayerRef.current.getCurrentTime
-        })
         setVideoRef(videoPlayerRef.current)
         return true
       } else {
-        console.log('[V2] Video ref not available yet, will retry...')
         return false
       }
     }
@@ -142,7 +133,6 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   useEffect(() => {
     if (reflectionsQuery.data?.success && reflectionsQuery.data.data) {
       const reflections = reflectionsQuery.data.data
-      console.log('[V2] Loading existing reflections:', reflections)
 
       // Convert voice reflections to audio messages
       const audioMessages = reflections
@@ -177,7 +167,6 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
         .filter(Boolean)
 
       if (audioMessages.length > 0) {
-        console.log('[V2] Loading audio messages:', audioMessages)
         loadInitialMessages(audioMessages)
       }
     }
@@ -187,7 +176,6 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   const handleDeleteAllVoiceMemos = async () => {
     if (confirm('Are you sure you want to delete ALL voice memos? This cannot be undone.')) {
       try {
-        console.log('[CLEANUP] Starting voice memo cleanup...')
 
         // 1. Clear from frontend (remove audio messages from chat)
         clearAudioMessages()
@@ -196,7 +184,6 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
         const result = await deleteAllVoiceMemosAction()
 
         if (result.success) {
-          console.log('[CLEANUP] Success:', result.message)
           alert(result.message)
 
           // 3. Refetch reflections to update UI
@@ -223,7 +210,6 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
 
     // Expose cleanup function to window for console access
     ;(window as any).deleteAllVoiceMemos = handleDeleteAllVoiceMemos
-    console.log('[CLEANUP] Use window.deleteAllVoiceMemos() to clear all voice memos')
 
     document.addEventListener('keydown', handleKeydown)
     return () => {
@@ -320,7 +306,6 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
     switch (e.key) {
       case ' ':
         e.preventDefault()
-        console.log('[V2] Spacebar pressed - routing through state machine')
         // Instead of calling handlePlayPause directly, use state machine
         if (context.videoState?.isPlaying) {
           dispatch({
@@ -365,8 +350,7 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   const handleAgentRequest = (agentType: string) => {
     // Get current time from video player ref
     const currentTime = videoPlayerRef.current?.getCurrentTime() || 0
-    console.log('[V2] Agent button clicked, current time:', currentTime)
-    
+
     dispatch({
       type: 'AGENT_BUTTON_CLICKED',
       payload: { agentType, time: currentTime }
@@ -375,7 +359,6 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
 
   // Handle quiz answer selection
   const handleQuizAnswer = (questionId: string, selectedAnswer: number) => {
-    console.log('[V2] Quiz answer selected:', { questionId, selectedAnswer })
     
     dispatch({
       type: 'QUIZ_ANSWER_SELECTED',
@@ -385,7 +368,6 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
 
   // Handle reflection submission
   const handleReflectionSubmit = (type: string, data: any) => {
-    console.log('[V2] Reflection submitted:', { type, data })
 
     // Add courseId to the data
     const enhancedData = {
@@ -401,7 +383,6 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
 
   // Handle reflection type chosen
   const handleReflectionTypeChosen = (reflectionType: string) => {
-    console.log('[V2] Reflection type chosen:', reflectionType)
     
     dispatch({
       type: 'REFLECTION_TYPE_CHOSEN',
@@ -411,7 +392,6 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
 
   // Handle reflection cancel
   const handleReflectionCancel = () => {
-    console.log('[V2] Reflection cancelled')
     
     dispatch({
       type: 'REFLECTION_CANCELLED',
@@ -421,7 +401,6 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
 
   // Handle segment actions
   const handleSetInPoint = () => {
-    console.log('[V2] Setting in point')
     dispatch({
       type: 'SET_IN_POINT',
       payload: {}
@@ -429,7 +408,6 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   }
 
   const handleSetOutPoint = () => {
-    console.log('[V2] Setting out point')
     dispatch({
       type: 'SET_OUT_POINT',
       payload: {}
@@ -437,7 +415,6 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   }
 
   const handleClearSegment = () => {
-    console.log('[V2] Clearing segment')
     dispatch({
       type: 'CLEAR_SEGMENT',
       payload: {}
@@ -445,7 +422,6 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   }
 
   const handleSendSegmentToChat = () => {
-    console.log('[V2] Sending segment to chat')
     dispatch({
       type: 'SEND_SEGMENT_TO_CHAT',
       payload: {}

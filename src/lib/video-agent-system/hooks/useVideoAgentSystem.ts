@@ -56,7 +56,6 @@ export function useVideoAgentSystem(options?: UseVideoAgentSystemOptions) {
   }, [])
   
   const setVideoRef = useCallback((ref: VideoRefLike) => {
-    console.log('[useVideoAgentSystem] setVideoRef called with:', ref)
     globalStateMachine?.setVideoRef(ref)
   }, [])
 

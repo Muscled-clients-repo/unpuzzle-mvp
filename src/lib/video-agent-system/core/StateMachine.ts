@@ -88,7 +88,6 @@ export class VideoAgentStateMachine {
     }
     
     if (process.env.NODE_ENV === 'development') {
-      console.log('[SM] State Machine initialized', this.context)
     }
   }
   
@@ -387,8 +386,7 @@ export class VideoAgentStateMachine {
     // Handle both old string format and new object format
     const agentType = typeof payload === 'string' ? payload : payload.agentType
     const passedTime = typeof payload === 'object' ? payload.time : null
-    
-    console.log(`[SM] Showing agent: ${agentType}, passed time: ${passedTime}`)
+
     
     // NUCLEAR PRINCIPLE: Pause video first
     // Don't use pausingForAgent flag - it's causing issues
@@ -415,7 +413,6 @@ export class VideoAgentStateMachine {
     if (currentVideoTime === null || currentVideoTime === undefined) {
       currentVideoTime = this.videoController.getCurrentTime()
     }
-    console.log(`[SM] Using video time: ${currentVideoTime}`)
     
     // 3. Add system message with proper typing using actual video time
     const systemMessage: Message = {
@@ -438,6 +435,7 @@ export class VideoAgentStateMachine {
     }
 
     // 5. Update context atomically - ensure video state is paused
+
     this.updateContext({
       ...this.context,
       state: SystemState.AGENT_SHOWING_UNACTIVATED,
@@ -457,6 +455,7 @@ export class VideoAgentStateMachine {
       ]
     })
 
+
     // 6. For quiz agents, contextual enhancement is disabled for now
     // if (agentType === 'quiz') {
     //   try {
@@ -470,10 +469,6 @@ export class VideoAgentStateMachine {
   }
   
   private async handleManualPause(time: number) {
-    console.log(`[SM] Manual pause at ${time}`)
-    console.log('[SM] Current agent state:', JSON.stringify(this.context.agentState))
-    console.log('[SM] Current system state:', this.context.state)
-    console.log('[SM] Active agent type:', this.context.agentState.activeType)
 
     // Simply pause the video
     this.updateContext({
@@ -487,14 +482,10 @@ export class VideoAgentStateMachine {
   }
   
   private async handleVideoResume() {
-    console.log('[SM] Video resumed')
-    console.log('[SM] Current agent state:', JSON.stringify(this.context.agentState))
-    console.log('[SM] Current system state:', this.context.state)
     
     // NUCLEAR PRINCIPLE: Use agent state as single source of truth
     // Special handling for active agents
     if (this.context.agentState.activeType === 'quiz') {
-      console.log('[SM] Quiz in progress - keeping quiz UI while video plays')
       this.updateContext({
         ...this.context,
         state: SystemState.VIDEO_PLAYING,
@@ -512,7 +503,6 @@ export class VideoAgentStateMachine {
       const isCommitted = reflectionOptions && (reflectionOptions as any).reflectionCommitted === true
       
       if (isCommitted) {
-        console.log('[SM] Reflection committed - keeping UI while video plays')
         this.updateContext({
           ...this.context,
           state: SystemState.VIDEO_PLAYING,
@@ -523,7 +513,6 @@ export class VideoAgentStateMachine {
         })
         return
       } else {
-        console.log('[SM] Reflection not committed - will clear')
         // Clear the agent state since reflection wasn't committed
         // Continue to normal clearing logic below
       }
@@ -563,12 +552,10 @@ export class VideoAgentStateMachine {
   }
   
   private async handleAcceptAgent(agentId: string) {
-    console.log(`[SM] Agent accepted: ${agentId}`)
     
     // Check if this agent has already been processed (no longer UNACTIVATED)
     const agentMessage = this.context.messages.find(msg => msg.id === agentId)
     if (!agentMessage || agentMessage.state !== MessageState.UNACTIVATED) {
-      console.log(`[SM] Agent ${agentId} already processed, ignoring duplicate accept`)
       return
     }
     
@@ -661,12 +648,10 @@ export class VideoAgentStateMachine {
   }
   
   private async handleRejectAgent(agentId: string) {
-    console.log(`[SM] Agent rejected: ${agentId}`)
 
     // Check if this agent has already been processed (no longer UNACTIVATED)
     const agentMessage = this.context.messages.find(msg => msg.id === agentId)
     if (!agentMessage || agentMessage.state !== MessageState.UNACTIVATED) {
-      console.log(`[SM] Agent ${agentId} already processed, ignoring duplicate reject`)
       return
     }
 
@@ -696,7 +681,6 @@ export class VideoAgentStateMachine {
     })
 
     // Resume video playback with small delay to prevent race condition
-    console.log('[SM] Resuming video after agent rejection')
     setTimeout(async () => {
       try {
         await this.videoController.playVideo()
@@ -716,7 +700,6 @@ export class VideoAgentStateMachine {
     const newActiveType = this.context.agentState.activeType
     
     if (prevActiveType !== newActiveType) {
-      console.log(`[SM] ActiveType changed: ${prevActiveType} -> ${newActiveType}`)
     }
     
     this.notifySubscribers()
@@ -942,28 +925,19 @@ export class VideoAgentStateMachine {
       }
 
       // Handle different reflection types
-      console.log('[SM] Processing reflection type:', type)
-      console.log('[SM] Input data:', data)
 
       if (type === 'voice' && data.audioBlob) {
-        console.log('[SM] Converting audioBlob to File')
-        console.log('[SM] AudioBlob type:', data.audioBlob.type)
-        console.log('[SM] AudioBlob size:', data.audioBlob.size)
 
         // Convert blob to File for FormData compatibility
         const audioFile = new File([data.audioBlob], 'voice-memo.webm', {
           type: data.audioBlob.type || 'audio/webm'
         })
-        console.log('[SM] Created audioFile:', audioFile)
-        console.log('[SM] AudioFile type:', audioFile.type)
-        console.log('[SM] AudioFile size:', audioFile.size)
 
         reflectionData.file = audioFile
         if (data.duration) {
           reflectionData.duration = data.duration
         }
       } else if (type === 'screenshot' && data.imageBlob) {
-        console.log('[SM] Converting imageBlob to File')
         // Convert blob to File for FormData compatibility
         const imageFile = new File([data.imageBlob], 'screenshot.png', {
           type: data.imageBlob.type || 'image/png'
@@ -975,11 +949,9 @@ export class VideoAgentStateMachine {
         console.error('[SM] No matching reflection type or missing data:', { type, hasAudioBlob: !!data.audioBlob, hasImageBlob: !!data.imageBlob, hasLoomUrl: !!data.loomUrl })
       }
 
-      console.log('[SM] Final reflectionData before mutation:', reflectionData)
 
       // Use TanStack mutation (which calls server action)
       const result = await this.reflectionMutation(reflectionData)
-      console.log('[SM] Reflection saved successfully via TanStack:', result)
 
       // Return the result so we can use the file URL in the message
       return result
@@ -1032,7 +1004,6 @@ export class VideoAgentStateMachine {
   }
 
   private async startQuiz(updatedMessages: Message[]) {
-    console.log('[SM] Starting quiz')
 
     try {
       const currentTime = this.videoController.getCurrentTime()
@@ -1124,7 +1095,6 @@ export class VideoAgentStateMachine {
         setTimeout(() => updateCountdown(), 1000)
       } else {
         // Countdown complete - Create a command to clear the state properly
-        console.log('[SM] Countdown complete - dispatching state clear')
         
         // First clear the countdown message
         const updatedMessages = this.context.messages.filter(msg => msg.id !== countdownMessageId)
@@ -1146,9 +1116,6 @@ export class VideoAgentStateMachine {
         })
         
         // Verify the update worked
-        console.log('[SM] State after countdown reset:')
-        console.log('[SM] - activeType:', this.context.agentState.activeType, '(should be null)')
-        console.log('[SM] - state:', this.context.state)
         
         // Resume video playback
         if (this.videoController && this.videoController.playVideo) {
@@ -1162,8 +1129,6 @@ export class VideoAgentStateMachine {
   }
 
   private async handleQuizAnswer(payload: { questionId: string, selectedAnswer: number }) {
-    console.log('[SM] Quiz answer selected:', payload)
-    console.log('[SM] Current activeType before processing:', this.context.agentState.activeType)
     
     // Find the current quiz question message
     const quizMessages = this.context.messages.filter(msg => msg.type === 'quiz-question')
@@ -1291,9 +1256,7 @@ export class VideoAgentStateMachine {
             quizDurationSeconds: null // TODO: Add duration tracking if needed
           }
 
-          console.log('[SM] Saving quiz attempt to database:', quizAttemptData)
           await this.quizAttemptMutation(quizAttemptData)
-          console.log('[SM] Quiz attempt saved successfully')
         } catch (error) {
           console.error('[SM] Failed to save quiz attempt:', error)
           // Don't block the UI flow if database save fails
@@ -1313,7 +1276,6 @@ export class VideoAgentStateMachine {
         }
       })
       
-      console.log('[SM] Quiz complete - starting countdown with quiz still active')
       // Start countdown to resume video with the countdown message ID
       this.startVideoCountdown(countdownId)
       return // Early return since we already updated context
@@ -1344,7 +1306,6 @@ export class VideoAgentStateMachine {
   }
 
   private async startReflection(updatedMessages: Message[]) {
-    console.log('[SM] Starting reflection')
     
     // Remove any existing reflection-options messages first
     const filteredMessages = updatedMessages.filter(msg => msg.type !== 'reflection-options')
@@ -1382,7 +1343,6 @@ export class VideoAgentStateMachine {
   }
 
   private async handleReflectionTypeChosen(payload: { reflectionType: string }) {
-    console.log('[SM] Reflection type chosen:', payload.reflectionType)
     
     // Mark the reflection as committed
     const updatedMessages = this.context.messages.map(msg => {
@@ -1399,7 +1359,6 @@ export class VideoAgentStateMachine {
   }
 
   private async handleReflectionCancel() {
-    console.log('[SM] Reflection cancelled')
     
     // Clear all reflection-related messages
     const filteredMessages = this.context.messages.filter(msg => {
@@ -1424,12 +1383,10 @@ export class VideoAgentStateMachine {
 
   // Segment management handlers
   private async handleSetInPoint() {
-    console.log('[SM] Setting in point')
     
     // NUCLEAR PRINCIPLE: Pause video properly using the async method
     try {
       await this.videoController.pauseVideo()
-      console.log('[SM] Video paused for in point')
     } catch (error) {
       console.error('[SM] Failed to pause video for in point:', error)
       // Continue anyway - setting the point is more important than pausing
@@ -1442,7 +1399,6 @@ export class VideoAgentStateMachine {
     // If new in point is after current out point, clear out point
     let newOutPoint = currentOutPoint
     if (currentOutPoint !== null && currentTime >= currentOutPoint) {
-      console.log('[SM] In point >= out point, clearing out point')
       newOutPoint = null
     }
     
@@ -1461,16 +1417,13 @@ export class VideoAgentStateMachine {
       }
     })
     
-    console.log(`[SM] In point set to ${this.formatTime(currentTime)}`)
   }
   
   private async handleSetOutPoint() {
-    console.log('[SM] Setting out point')
     
     // NUCLEAR PRINCIPLE: Pause video properly using the async method
     try {
       await this.videoController.pauseVideo()
-      console.log('[SM] Video paused for out point')
     } catch (error) {
       console.error('[SM] Failed to pause video for out point:', error)
       // Continue anyway - setting the point is more important than pausing
@@ -1483,7 +1436,6 @@ export class VideoAgentStateMachine {
     // If new out point is before current in point, clear in point
     let newInPoint = currentInPoint
     if (currentInPoint !== null && currentTime <= currentInPoint) {
-      console.log('[SM] Out point <= in point, clearing in point')
       newInPoint = null
     }
     
@@ -1506,11 +1458,9 @@ export class VideoAgentStateMachine {
       }
     })
     
-    console.log(`[SM] Out point set to ${this.formatTime(currentTime)}`)
   }
   
   private async handleClearSegment() {
-    console.log('[SM] Clearing segment')
     
     // NUCLEAR PRINCIPLE: Reset to initial state
     this.updateContext({
@@ -1532,7 +1482,6 @@ export class VideoAgentStateMachine {
       return
     }
     
-    console.log(`[SM] Setting segment as chat context: ${this.formatTime(inPoint)} - ${this.formatTime(outPoint)}`)
     
     // NUCLEAR PRINCIPLE: Mark segment as sent to chat (as context, not message)
     // The segment stays active as context for the next message
@@ -1544,11 +1493,9 @@ export class VideoAgentStateMachine {
       }
     })
     
-    console.log('[SM] Segment set as chat context')
   }
 
   private async handleReflectionSubmit(payload: { type: string, data: any }) {
-    console.log('[SM] Reflection submitted:', payload)
 
     // Get current video timestamp
     const currentVideoTime = this.videoController.getCurrentTime()
@@ -1683,7 +1630,6 @@ export class VideoAgentStateMachine {
 
   // Recording state handlers
   private async handleRecordingStarted() {
-    console.log('[SM] Recording started')
     this.updateContext({
       ...this.context,
       recordingState: {
@@ -1694,7 +1640,6 @@ export class VideoAgentStateMachine {
   }
 
   private async handleRecordingPaused() {
-    console.log('[SM] Recording paused')
     this.updateContext({
       ...this.context,
       recordingState: {
@@ -1705,7 +1650,6 @@ export class VideoAgentStateMachine {
   }
 
   private async handleRecordingResumed() {
-    console.log('[SM] Recording resumed')
     this.updateContext({
       ...this.context,
       recordingState: {
@@ -1716,7 +1660,6 @@ export class VideoAgentStateMachine {
   }
 
   private async handleRecordingStopped() {
-    console.log('[SM] Recording stopped')
     this.updateContext({
       ...this.context,
       recordingState: {
@@ -1731,7 +1674,6 @@ export class VideoAgentStateMachine {
    * Added for Phase 1.2 - Instance-based state machine
    */
   destroy() {
-    console.log('[SM] Destroying state machine instance')
     
     // Clear all subscribers
     this.subscribers.clear()
