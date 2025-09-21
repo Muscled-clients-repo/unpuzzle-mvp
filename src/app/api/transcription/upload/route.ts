@@ -178,6 +178,53 @@ export async function POST(request: NextRequest) {
       result = data
     }
 
+    // Generate video summary after transcript upload
+    try {
+      console.log('Transcript Upload: Generating video summary for videoId:', videoId)
+
+      // Get video duration for summary generation
+      const { data: videoData } = await supabase
+        .from('videos')
+        .select('duration_seconds')
+        .eq('id', videoId)
+        .single()
+
+      const summaryResponse = await fetch(`${request.nextUrl.origin}/api/ai/video-summary`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoId: videoId,
+          fullTranscript: transcriptText,
+          videoDuration: videoData?.duration_seconds || 1800 // Default to 30 min if not found
+        })
+      })
+
+      if (summaryResponse.ok) {
+        const summaryData = await summaryResponse.json()
+
+        // Store the summary in the videos table
+        const { error: summaryError } = await supabase
+          .from('videos')
+          .update({
+            ai_summary: summaryData.summary,
+            ai_summary_generated_at: new Date().toISOString(),
+            ai_summary_version: 'v1'
+          })
+          .eq('id', videoId)
+
+        if (summaryError) {
+          console.error('Failed to save video summary:', summaryError)
+        } else {
+          console.log('Video summary generated and saved successfully')
+        }
+      } else {
+        console.error('Failed to generate video summary:', await summaryResponse.text())
+      }
+    } catch (summaryError) {
+      console.error('Video summary generation error:', summaryError)
+      // Don't fail the transcript upload if summary generation fails
+    }
+
     return NextResponse.json({
       success: true,
       transcript: {
