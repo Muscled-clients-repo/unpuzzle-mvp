@@ -633,6 +633,10 @@ export function AIChatSidebarV2({
       if (msg.message.includes('PuzzleReflect')) {
         return false
       }
+      // Exclude ALL PuzzleCheck system messages - database handles these now
+      if (msg.message.includes('PuzzleCheck')) {
+        return false
+      }
       return true
     }
 
