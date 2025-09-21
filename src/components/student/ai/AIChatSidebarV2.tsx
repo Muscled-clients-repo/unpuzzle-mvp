@@ -1348,11 +1348,11 @@ export function AIChatSidebarV2({
       </div>
 
       {/* Messages - Scrollable area */}
-      <div className="flex-1 overflow-hidden">
+      <div className={cn("flex-1", activeTab === 'chat' ? "overflow-hidden" : "overflow-y-auto p-4")}>
         {activeTab === 'chat' ? (
-          /* Chat Tab: Use new ChatInterface component */
+          /* Chat Tab: Use new ChatInterface component with only chat messages */
           <ChatInterface
-            messages={messages}
+            messages={chatMessages}
             videoId={videoId || null}
             courseId={courseId || null}
             currentTime={currentVideoTime || 0}
@@ -1372,25 +1372,20 @@ export function AIChatSidebarV2({
             }}
           />
         ) : (
-          /* Agents Tab: Keep original logic unchanged */
-          <div className="overflow-y-auto p-4">
-            <div className="space-y-2">
-              {/* Activity List */}
-              {renderActivityList()}
+          /* Agents Tab: Scrollable content - restore original behavior */
+          <div className="space-y-2">
+            {/* Activity List */}
+            {renderActivityList()}
 
-              {/* Current Agent Messages - Show all agent messages naturally */}
-              {agentMessages.map(renderMessage)}
-            </div>
+            {/* Current Agent Messages - Show all agent messages naturally */}
+            {agentMessages.map(renderMessage)}
           </div>
         )}
       </div>
 
-
-      {/* Input/Actions - Fixed at bottom */}
-      <div className="border-t bg-background/95 backdrop-blur-sm p-4 flex-shrink-0">
-        {activeTab === 'chat' ? (
-          /* Chat Tab: Show input field and agent buttons */
-          <>
+      {/* Input/Actions - Fixed at bottom - only show for agents tab */}
+      {activeTab === 'agents' && (
+        <div className="border-t bg-background/95 backdrop-blur-sm p-4 flex-shrink-0">
             {/* Segment Context Display */}
             {segmentContext?.sentToChat && segmentContext.inPoint !== null && segmentContext.outPoint !== null && (
               <div className="mb-3 p-2 bg-secondary/50 rounded-lg border border-primary/20">
@@ -1414,44 +1409,30 @@ export function AIChatSidebarV2({
               </div>
             )}
 
-            <div className="flex gap-2 mb-2">
-              <Input
-                placeholder={getPlaceholderText()}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                className="flex-1 border-2 focus:border-primary/50 transition-colors"
-              />
-              <Button onClick={handleSendMessage} size="sm" className="px-3">
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {/* Agent buttons below input - Minimalist icons only */}
-            <div className="flex gap-1 px-1">
+            {/* Agent buttons - Larger with text labels */}
+            <div className="flex gap-2">
               {[
-                { type: 'quiz', icon: Brain, tooltip: 'Take a quiz on video content' },
-                { type: 'reflect', icon: Zap, tooltip: 'Reflect on what you learned' }
-              ].map(({ type, icon: Icon, tooltip }) => (
+                { type: 'quiz', icon: Brain, label: 'Quiz', tooltip: 'Take a quiz on video content' },
+                { type: 'reflect', icon: Zap, label: 'Reflect', tooltip: 'Reflect on what you learned' }
+              ].map(({ type, icon: Icon, label, tooltip }) => (
                 <Button
                   key={type}
-                  size="sm"
-                  variant="ghost"
+                  variant="outline"
                   onClick={() => onAgentRequest(type)}
                   className={cn(
-                    "h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors",
-                    activeAgent === type && "text-foreground bg-muted"
+                    "flex-1 flex items-center gap-2 h-12 transition-colors",
+                    activeAgent === type && "border-primary bg-primary/10 text-primary"
                   )}
                   title={tooltip}
                 >
-                  <Icon className="h-3.5 w-3.5" />
+                  <Icon className="h-4 w-4" />
+                  <span className="font-medium">{label}</span>
                 </Button>
               ))}
             </div>
-          </>
-        ) : (
-          /* Agents Tab: Show agent activation buttons and voice recording UI */
-          <div className="space-y-3">
+
+            {/* Voice recording UI - moved inside fixed bottom area */}
+            <div className="space-y-3">
             {/* Voice Recording Interfaces - Only shows in Agents tab */}
             {isRecording && (
               <div className="p-3 bg-red-50 dark:bg-red-950/20 rounded-lg border border-red-200 dark:border-red-800">
@@ -1678,33 +1659,9 @@ export function AIChatSidebarV2({
                 </div>
               </div>
             )}
-
-            <div className="text-center text-sm text-muted-foreground mb-3">
-              Activate learning agents
             </div>
-            <div className="flex gap-2">
-              {[
-                { type: 'quiz', icon: Brain, label: 'Quiz', tooltip: 'Take a quiz on video content' },
-                { type: 'reflect', icon: Zap, label: 'Reflect', tooltip: 'Reflect on what you learned' }
-              ].map(({ type, icon: Icon, label, tooltip }) => (
-                <Button
-                  key={type}
-                  variant="outline"
-                  onClick={() => onAgentRequest(type)}
-                  className={cn(
-                    "flex-1 flex items-center gap-2 h-12 transition-colors",
-                    activeAgent === type && "border-primary bg-primary/10 text-primary"
-                  )}
-                  title={tooltip}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span className="font-medium">{label}</span>
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
     </div>
   )

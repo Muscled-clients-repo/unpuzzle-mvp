@@ -45,54 +45,47 @@
 - [ ] **Manual Check**: Agent tab still uses old working logic
 - [ ] **Manual Check**: Quiz/reflection buttons still work in Agent tab
 
-#### Step 3.2: Message Filtering Migration
-- [ ] Move chat message filtering to ChatInterface
-- [ ] Keep agent message filtering in old AIChatSidebarV2
-- [ ] **Manual Check**: Chat messages display correctly
-- [ ] **Manual Check**: Agent functionality unchanged
+#### Step 3.2: Clean Data Separation
+**Goal**: Give each component only the data it needs (no internal filtering)
+- [ ] Pass only chat messages to ChatInterface (remove internal filtering)
+- [ ] Pass only agent messages to AgentInterface (keep agent tab working)
+- [ ] **Manual Check**: Chat tab shows only conversational messages
+- [ ] **Manual Check**: Agent tab shows only activities/prompts
+- [ ] **Manual Check**: No duplicate messages between tabs
 
-#### Step 3.3: Agent Tab Structure Migration
-- [ ] Replace agent tab structure with LearningTabs
-- [ ] Keep agent logic/handlers in AIChatSidebarV2
-- [ ] **Manual Check**: Agent tab layout looks correct
+#### Step 3.3: Component Independence
+**Goal**: Make components self-contained with their specific data
+- [ ] Remove all filtering logic from ChatInterface
+- [ ] Remove all filtering logic from AgentInterface
+- [ ] Components simply render the data they receive
+- [ ] **Manual Check**: Components work independently
 - [ ] **Manual Check**: Quiz/reflection buttons still work
 
-### Phase 4: Handler Migration (Critical Phase)
-**Goal**: Move quiz/reflection handlers to new architecture
+### Phase 4: Handler Integration (Critical Phase)
+**Goal**: Connect new components to existing handler system
 
-#### Step 4.1: Handler Prop Passing
-- [ ] Pass quiz/reflection handlers through component chain
-- [ ] Keep old handlers as fallback
-- [ ] **Manual Check**: Handlers reach AgentInterface correctly
-- [ ] **Manual Check**: Buttons still work via old handlers
-
-#### Step 4.2: Handler Activation
-- [ ] Switch AgentInterface to use new handlers
-- [ ] Keep old handlers for emergency fallback
-- [ ] **Manual Check**: Quiz buttons work with new handlers
-- [ ] **Manual Check**: Reflection buttons work with new handlers
+#### Step 4.1: Direct Handler Connection
+- [ ] Pass handlers directly to AgentInterface
+- [ ] Remove handler bridging complexity
+- [ ] **Manual Check**: Quiz buttons work with direct handlers
+- [ ] **Manual Check**: Reflection buttons work with direct handlers
 - [ ] **Manual Check**: Voice recording still works
 - [ ] **Manual Check**: Loom functionality still works
 
-#### Step 4.3: Handler Cleanup
-- [ ] Remove old handler code from AIChatSidebarV2
-- [ ] **Manual Check**: Everything still works perfectly
+### Phase 5: Data Source Migration
+**Goal**: Replace message-based system with proper data APIs
 
-### Phase 5: Data Flow Migration
-**Goal**: Replace message-based system with proper data sources
-
-#### Step 5.1: Agent Prompts Migration
-- [ ] Create agent prompts via learning_activities instead of messages
-- [ ] Keep message bridge as fallback
+#### Step 5.1: Agent Data Sources
+- [ ] AgentInterface uses TanStack Query directly (no message dependency)
+- [ ] Create agent prompts via learning_activities API
 - [ ] **Manual Check**: Agent prompts appear correctly
 - [ ] **Manual Check**: Quiz/reflection flow works end-to-end
 
-#### Step 5.2: Activity Data Migration
-- [ ] Use TanStack Query for activity data
-- [ ] Remove dependency on message filtering
-- [ ] **Manual Check**: Activities display correctly
-- [ ] **Manual Check**: Quiz results show properly
-- [ ] **Manual Check**: Voice memos appear correctly
+#### Step 5.2: Chat Data Sources
+- [ ] ChatInterface uses direct chat message API
+- [ ] Remove message filtering dependency entirely
+- [ ] **Manual Check**: Chat functionality works independently
+- [ ] **Manual Check**: Message sending/receiving works correctly
 
 ### Phase 6: Final Cleanup
 **Goal**: Remove old architecture and finalize

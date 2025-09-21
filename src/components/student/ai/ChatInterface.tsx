@@ -33,21 +33,8 @@ export function ChatInterface({
     }
   }, [messages])
 
-  // Filter messages for chat tab (no agent prompts)
-  const chatMessages = messages.filter(msg => {
-    // EXCLUDE all agent-prompt messages from chat tab
-    if (msg.type === 'agent-prompt') {
-      return false
-    }
-
-    // EXCLUDE quiz and reflection specific messages
-    if (['quiz-question', 'quiz-result', 'reflection-complete'].includes(msg.type)) {
-      return false
-    }
-
-    // INCLUDE conversational messages
-    return ['user', 'ai', 'system'].includes(msg.type)
-  })
+  // No filtering needed - messages are pre-filtered by parent component
+  const chatMessages = messages
 
   const handleSendMessage = () => {
     if (input.trim() && onSendMessage) {
