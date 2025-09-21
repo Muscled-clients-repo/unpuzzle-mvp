@@ -735,12 +735,19 @@ export function AIChatSidebarV2({
   const activities = filteredActivities
 
 
-  // Auto-expand the latest activity
+  // Auto-expand the latest quiz activity only (not reflections)
   useEffect(() => {
     if (activities.length > 0) {
       const latestActivity = activities[activities.length - 1] // Last item is latest now
       if (latestActivity && latestActivity.id !== expandedActivity) {
-        setExpandedActivity(latestActivity.id)
+        // Parse activity to check if it's a quiz
+        const parsed = parseActivity(latestActivity)
+        const isQuizActivity = parsed.type === 'quiz' || parsed.type === 'quiz-complete'
+
+        // Only auto-expand quiz activities
+        if (isQuizActivity) {
+          setExpandedActivity(latestActivity.id)
+        }
       }
     }
   }, [activities.length]) // Only trigger when activities count changes
@@ -863,14 +870,15 @@ export function AIChatSidebarV2({
                       className={cn(
                         "flex items-center gap-3 p-3 rounded-lg transition-colors border",
                         isQuizActivity && "cursor-pointer", // Only quizzes are clickable
-                        isExpanded
+                        // Only quiz activities can be expanded - reflections always use normal styling
+                        isExpanded && isQuizActivity
                           ? "bg-primary/10 border-primary/20 rounded-b-none"
                           : "bg-secondary/20 border-border/30",
                         isQuizActivity && !isExpanded && "hover:bg-secondary/40" // Only hover on clickable quizzes
                       )}
                       onClick={isQuizActivity ? () => setExpandedActivity(isExpanded ? null : activity.id) : undefined}
                     >
-                      <div className={cn("p-1.5 rounded-md", isExpanded ? "bg-primary/20" : "bg-secondary")}>
+                      <div className={cn("p-1.5 rounded-md", (isExpanded && isQuizActivity) ? "bg-primary/20" : "bg-secondary")}>
                         <Icon className={cn("h-3 w-3", parsed.color)} />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -882,7 +890,14 @@ export function AIChatSidebarV2({
                           return 'PuzzleCheck • Quiz'
                         }
                         if (parsed.type === 'reflect' || parsed.type === 'reflect-complete') {
-                          return 'PuzzleReflect • Reflection'
+                          // Twitter-style compact format: "🎙️ Voice memo (duration) at timestamp"
+                          if ((activity as any).audioData) {
+                            const duration = (activity as any).audioData.duration || 0
+                            const timestamp = (activity as any).audioData.videoTimestamp || 0
+                            const durationText = duration > 0 ? `${duration.toFixed(1)}s` : '0:00'
+                            return `🎙️ Voice memo (${durationText}) at ${timestamp.toFixed(0)}s`
+                          }
+                          return '🎙️ Voice memo'
                         }
                         if (parsed.type === 'hint') {
                           return 'PuzzleHint • Hint'
@@ -936,12 +951,12 @@ export function AIChatSidebarV2({
                 )}
               </div>
 
-              {/* Show voice memo player directly for reflection activities */}
+              {/* Show compact MessengerAudioPlayer for reflection activities */}
               {(parsed.type === 'reflect' || parsed.type === 'reflect-complete') &&
                (activity as any).dbReflection &&
                (activity as any).audioData &&
                (activity as any).audioData.fileUrl && (
-                <div className="mt-3 px-3 pb-3">
+                <div className="mt-2 px-3 pb-3">
                   <MessengerAudioPlayer
                     reflectionId={(activity as any).audioData.reflectionId}
                     fileUrl={(activity as any).audioData.fileUrl}

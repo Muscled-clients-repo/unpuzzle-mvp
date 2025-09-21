@@ -206,18 +206,13 @@ export function MessengerAudioPlayer({
   }
 
   return (
-    <div className={cn(
-      "flex items-center gap-3 p-2 rounded-lg max-w-sm w-full",
-      isOwn
-        ? "bg-blue-500/10 border border-blue-500/20 ml-auto"
-        : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-    )}>
+    <div className="flex items-center w-full gap-2 p-1">
       {/* Play/Pause Button */}
       <Button
         variant="ghost"
         size="sm"
         className={cn(
-          "h-7 w-7 p-0 rounded-full flex-shrink-0",
+          "h-5 w-5 p-0 rounded-full flex-shrink-0",
           isOwn
             ? "hover:bg-blue-500/20 text-blue-600"
             : "hover:bg-gray-200 dark:hover:bg-gray-700"
@@ -226,19 +221,19 @@ export function MessengerAudioPlayer({
         disabled={signedUrl.isLoading || !signedUrl.url}
       >
         {signedUrl.isLoading ? (
-          <div className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+          <div className="h-2 w-2 animate-spin rounded-full border border-current border-t-transparent" />
         ) : isThisPlaying ? (
-          <Pause className="h-3 w-3" />
+          <Pause className="h-2 w-2" />
         ) : (
-          <Play className="h-3 w-3 ml-0.5" />
+          <Play className="h-2 w-2" />
         )}
       </Button>
 
       {/* Waveform and Time Display */}
-      <div className="flex items-center gap-3 flex-1 min-w-0">
+      <div className="flex items-center gap-2 flex-1 min-w-0">
         {/* Static waveform visualization */}
         <div
-          className="relative h-8 cursor-pointer flex-1"
+          className="relative h-4 cursor-pointer flex-1"
           onClick={handleSeek}
         >
           {/* Waveform bars */}
@@ -262,12 +257,15 @@ export function MessengerAudioPlayer({
               const playedColor = isOwn ? "rgb(37 99 235)" : "rgb(59 130 246)" // blue-600 : blue-500
               const unplayedColor = isOwn ? "rgba(59 130 246, 0.3)" : "rgba(156 163 175, 0.5)" // blue-500/30 : gray-400/50
 
+              // Always use small height for timeline
+              const scaledHeight = Math.max(2, height * 0.5)
+
               return (
                 <div
                   key={i}
                   className="w-1 rounded-full transition-all duration-100 ease-out"
                   style={{
-                    height: `${height}px`,
+                    height: `${scaledHeight}px`,
                     background: fillPercent > 0
                       ? fillPercent >= 100
                         ? playedColor
@@ -284,7 +282,7 @@ export function MessengerAudioPlayer({
 
         {/* Time Display */}
         <span className={cn(
-          "text-xs font-mono flex-shrink-0",
+          "text-[10px] font-mono flex-shrink-0",
           isOwn ? "text-blue-600" : "text-gray-600 dark:text-gray-400"
         )}>
           {formatTime(currentTime)}/{formatTime(audioDuration)}
