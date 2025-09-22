@@ -34,7 +34,234 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          id: string
+          email: string
+          full_name: string | null
+          avatar_url: string | null
+          role: 'student' | 'instructor' | 'admin'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          email: string
+          full_name?: string | null
+          avatar_url?: string | null
+          role?: 'student' | 'instructor' | 'admin'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          email?: string
+          full_name?: string | null
+          avatar_url?: string | null
+          role?: 'student' | 'instructor' | 'admin'
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      courses: {
+        Row: {
+          id: string
+          instructor_id: string
+          title: string
+          description: string | null
+          thumbnail_url: string | null
+          status: 'published' | 'draft' | 'under_review'
+          price: number
+          is_free: boolean
+          total_videos: number
+          total_duration_minutes: number
+          students: number
+          revenue: number
+          completion_rate: number
+          pending_confusions: number
+          difficulty: 'beginner' | 'intermediate' | 'advanced'
+          tags: string[]
+          rating: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          instructor_id: string
+          title: string
+          description?: string | null
+          thumbnail_url?: string | null
+          status?: 'published' | 'draft' | 'under_review'
+          price?: number
+          is_free?: boolean
+          total_videos?: number
+          total_duration_minutes?: number
+          students?: number
+          revenue?: number
+          completion_rate?: number
+          pending_confusions?: number
+          difficulty?: 'beginner' | 'intermediate' | 'advanced'
+          tags?: string[]
+          rating?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          instructor_id?: string
+          title?: string
+          description?: string | null
+          thumbnail_url?: string | null
+          status?: 'published' | 'draft' | 'under_review'
+          price?: number
+          is_free?: boolean
+          total_videos?: number
+          total_duration_minutes?: number
+          students?: number
+          revenue?: number
+          completion_rate?: number
+          pending_confusions?: number
+          difficulty?: 'beginner' | 'intermediate' | 'advanced'
+          tags?: string[]
+          rating?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "courses_instructor_id_fkey"
+            columns: ["instructor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      videos: {
+        Row: {
+          id: string
+          course_id: string
+          chapter_id: string
+          title: string
+          description: string
+          duration: string
+          duration_seconds: number
+          video_url: string | null
+          thumbnail_url: string | null
+          filename: string
+          file_size: number
+          status: 'pending' | 'uploading' | 'processing' | 'complete' | 'error'
+          progress: number
+          backblaze_file_id: string | null
+          backblaze_url: string | null
+          bunny_url: string | null
+          video_format: string
+          video_quality: string
+          order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          course_id: string
+          chapter_id: string
+          title: string
+          description?: string
+          duration?: string
+          duration_seconds?: number
+          video_url?: string | null
+          thumbnail_url?: string | null
+          filename: string
+          file_size: number
+          status?: 'pending' | 'uploading' | 'processing' | 'complete' | 'error'
+          progress?: number
+          backblaze_file_id?: string | null
+          backblaze_url?: string | null
+          bunny_url?: string | null
+          video_format?: string
+          video_quality?: string
+          order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          course_id?: string
+          chapter_id?: string
+          title?: string
+          description?: string
+          duration?: string
+          duration_seconds?: number
+          video_url?: string | null
+          thumbnail_url?: string | null
+          filename?: string
+          file_size?: number
+          status?: 'pending' | 'uploading' | 'processing' | 'complete' | 'error'
+          progress?: number
+          backblaze_file_id?: string | null
+          backblaze_url?: string | null
+          bunny_url?: string | null
+          video_format?: string
+          video_quality?: string
+          order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "videos_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      course_chapters: {
+        Row: {
+          id: string
+          course_id: string
+          title: string
+          description: string
+          order: number
+          is_published: boolean
+          is_preview: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          course_id: string
+          title: string
+          description?: string
+          order?: number
+          is_published?: boolean
+          is_preview?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          course_id?: string
+          title?: string
+          description?: string
+          order?: number
+          is_published?: boolean
+          is_preview?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_chapters_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -43,7 +270,9 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      user_role: 'student' | 'instructor' | 'admin'
+      subscription_plan: 'free' | 'pro' | 'premium'
+      subscription_status: 'active' | 'inactive' | 'cancelled'
     }
     CompositeTypes: {
       [_ in never]: never

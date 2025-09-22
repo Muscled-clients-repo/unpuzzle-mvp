@@ -21,7 +21,7 @@ export interface EditingState {
 
 export interface ModalState {
   type: 'video-preview' | 'delete-confirmation' | 'upload-settings' | null
-  data?: any
+  data?: unknown
 }
 
 export interface ValidationError {

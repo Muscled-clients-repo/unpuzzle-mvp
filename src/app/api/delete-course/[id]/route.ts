@@ -5,10 +5,11 @@ import { authenticateApiRequest, verifyResourceOwnership } from '@/lib/auth/api-
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const courseId = params.id
+    const resolvedParams = await params
+    const courseId = resolvedParams.id
     console.log('[API] Delete course called for ID:', courseId)
     
     // Authenticate user and require instructor role

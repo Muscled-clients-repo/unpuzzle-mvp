@@ -5,10 +5,11 @@ import { authenticateApiRequest } from '@/lib/auth/api-auth'
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const videoId = params.id
+    const resolvedParams = await params
+    const videoId = resolvedParams.id
     console.log('[API] Delete video called for ID:', videoId)
     
     // Authenticate user first

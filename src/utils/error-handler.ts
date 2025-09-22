@@ -16,7 +16,7 @@ export interface AppError {
   type: ErrorType
   message: string
   code?: string | number
-  details?: any
+  details?: unknown
   timestamp: Date
   recoverable: boolean
   userMessage: string
@@ -26,7 +26,7 @@ export interface ErrorContext {
   component?: string
   action?: string
   userId?: string
-  additionalData?: Record<string, any>
+  additionalData?: Record<string, unknown>
 }
 
 export class ErrorHandler {
@@ -47,7 +47,7 @@ export class ErrorHandler {
     message: string,
     options: {
       code?: string | number
-      details?: any
+      details?: unknown
       recoverable?: boolean
       userMessage?: string
     } = {}

@@ -3,7 +3,7 @@ import { Header } from "@/components/layout/header"
 
 interface LayoutProps {
   children: React.ReactNode
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 // This would normally fetch from a database
@@ -29,25 +29,25 @@ const getLessonData = (id: string) => {
       tags: ['TypeScript', 'React']
     }
   }
-  
+
   return lessons[id as keyof typeof lessons] || null
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params
   const lesson = getLessonData(id)
-  
+
   if (!lesson) {
     return {
       title: 'Lesson Not Found | Unpuzzle',
       description: 'This lesson could not be found.'
     }
   }
-  
+
   const title = `${lesson.title} | Free Lesson | Unpuzzle`
   const description = `${lesson.description} Learn with AI-powered features. ${lesson.tags.join(', ')}.`
   const url = `https://unpuzzle.com/lesson/${id}`
-  
+
   return {
     title,
     description,
@@ -55,7 +55,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     authors: [{ name: 'Unpuzzle' }],
     creator: 'Unpuzzle',
     publisher: 'Unpuzzle',
-    
+
     openGraph: {
       title,
       description,
@@ -79,7 +79,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       ],
       locale: 'en_US',
     },
-    
+
     twitter: {
       card: 'summary_large_image',
       title,
@@ -88,11 +88,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       creator: '@unpuzzle',
       site: '@unpuzzle',
     },
-    
+
     alternates: {
       canonical: url,
     },
-    
+
     robots: {
       index: true,
       follow: true,
@@ -104,7 +104,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
         'max-snippet': -1,
       },
     },
-    
+
     other: {
       'og:video:duration': '600', // Duration in seconds
       'og:video:release_date': new Date().toISOString(),

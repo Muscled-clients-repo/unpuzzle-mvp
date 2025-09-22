@@ -60,3 +60,19 @@ L Writing similar components from scratch
 L Creating new patterns when existing ones work
 L Ignoring established project conventions
 L Not checking existing implementations first
+
+## Build error resolve instruction
+### Handling TypeScript Build Errors
+- Investigate the source of the error thoroughly
+- Locate where all related types are defined in the project
+- Follow the existing TypeScript structure and conventions already used in the codebase
+- Create or update types properly, ensuring they are reusable and consistent with the current typing patterns
+
+### Handling ESLint Errors
+- Understand the rule causing the error
+- Review how similar code is written elsewhere in the project
+- Refactor the code to follow the existing ESLint configuration and coding standards
+- Only use eslint-disable comments if it's well-justified and discussed
+
+## important note for build error
+- The goal is to maintain code quality and consistency — avoid introducing exceptions unless they’re clearly necessary and approved

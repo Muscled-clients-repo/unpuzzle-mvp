@@ -10,15 +10,23 @@
 
 const DISCOVERY_ENABLED = process.env.NEXT_PUBLIC_DISCOVERY_LOGGING === 'true'
 
+interface LogEntry {
+  type: string
+  timestamp: string
+  stack?: string
+  [key: string]: unknown
+}
+
 export class DiscoveryLogger {
   private static instance: DiscoveryLogger
-  private logs: any[] = []
-  
+  private logs: LogEntry[] = []
+
   private constructor() {
     if (DISCOVERY_ENABLED) {
       // Make logs accessible in console for debugging
       if (typeof window !== 'undefined') {
-        (window as any).__DISCOVERY_LOGS__ = this.logs
+        window.__DISCOVERY_LOGS__ = this.logs
+        window.discoveryLogger = this
       }
     }
   }
@@ -33,7 +41,7 @@ export class DiscoveryLogger {
   /**
    * Log getState() calls with stack trace
    */
-  logGetState(location: string, state: any) {
+  logGetState(location: string, state: unknown) {
     if (!DISCOVERY_ENABLED) return
     
     const log = {
@@ -50,7 +58,7 @@ export class DiscoveryLogger {
   /**
    * Log global singleton access
    */
-  logSingletonAccess(name: string, instance: any) {
+  logSingletonAccess(name: string, instance: unknown) {
     if (!DISCOVERY_ENABLED) return
     
     const log = {
@@ -67,7 +75,7 @@ export class DiscoveryLogger {
   /**
    * Log ref chain passage
    */
-  logRefChain(level: string, ref: any) {
+  logRefChain(level: string, ref: unknown) {
     if (!DISCOVERY_ENABLED) return
     
     const log = {
@@ -103,27 +111,29 @@ export class DiscoveryLogger {
   /**
    * Log state synchronization attempts
    */
-  logStateSync(source: string, target: string, value: any) {
+  logStateSync(source: string, target: string, value: unknown, action?: string, details?: unknown) {
     if (!DISCOVERY_ENABLED) return
-    
+
     const log = {
       type: 'STATE_SYNC',
       source,
       target,
       value,
+      action,
+      details,
       timestamp: new Date().toISOString(),
       stack: new Error().stack
     }
-    
+
     this.logs.push(log)
   }
-  
+
   /**
    * Log circular dependency detection
    */
   logCircularDep(from: string, to: string) {
     if (!DISCOVERY_ENABLED) return
-    
+
     const log = {
       type: 'CIRCULAR_DEP',
       from,
@@ -131,17 +141,17 @@ export class DiscoveryLogger {
       timestamp: new Date().toISOString(),
       stack: new Error().stack
     }
-    
+
     this.logs.push(log)
     console.warn('🔴 [CircularDep]', `${from} ↔ ${to}`)
   }
-  
+
   /**
    * Log DOM access
    */
   logDOMAccess(selector: string, found: boolean) {
     if (!DISCOVERY_ENABLED) return
-    
+
     const log = {
       type: 'DOM_ACCESS',
       selector,
@@ -149,10 +159,10 @@ export class DiscoveryLogger {
       timestamp: new Date().toISOString(),
       stack: new Error().stack
     }
-    
+
     this.logs.push(log)
   }
-  
+
   /**
    * Export logs for analysis
    */
@@ -160,36 +170,21 @@ export class DiscoveryLogger {
     if (!DISCOVERY_ENABLED) {
       return
     }
-    
+
     console.group('📋 Discovery Logs Export')
-    
+
     const byType = this.logs.reduce((acc, log) => {
       acc[log.type] = (acc[log.type] || 0) + 1
       return acc
     }, {} as Record<string, number>)
-    
+
     Object.entries(byType).forEach(([type, count]) => {
+      console.log(`${type}: ${count}`)
     })
-    
+
     console.groupEnd()
-    
+
     return this.logs
-  }
-  
-  /**
-   * Log state synchronization events
-   */
-  logStateSync(action: string, details: any) {
-    if (!DISCOVERY_ENABLED) return
-    
-    const log = {
-      type: 'STATE_SYNC',
-      action,
-      details,
-      timestamp: new Date().toISOString()
-    }
-    
-    this.logs.push(log)
   }
   
   /**

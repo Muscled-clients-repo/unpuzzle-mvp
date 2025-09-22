@@ -4,9 +4,9 @@ import { BlogDetailClient } from './blog-detail-client'
 import { blogPosts } from '@/data/blog-posts'
 
 interface PageProps {
-  params: {
+  params: Promise<{
     slug: string
-  }
+  }>
 }
 
 export async function generateStaticParams() {
@@ -16,7 +16,8 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const post = blogPosts.find(p => p.slug === params.slug)
+  const resolvedParams = await params
+  const post = blogPosts.find(p => p.slug === resolvedParams.slug)
   
   if (!post) {
     return {
@@ -43,8 +44,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 }
 
-export default function BlogDetailPage({ params }: PageProps) {
-  const post = blogPosts.find(p => p.slug === params.slug)
+export default async function BlogDetailPage({ params }: PageProps) {
+  const resolvedParams = await params
+  const post = blogPosts.find(p => p.slug === resolvedParams.slug)
   
   if (!post) {
     notFound()

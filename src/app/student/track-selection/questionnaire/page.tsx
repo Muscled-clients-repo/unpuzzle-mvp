@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -140,7 +140,7 @@ const questions = [
   }
 ]
 
-export default function QuestionnairePage() {
+function QuestionnairePageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
@@ -360,6 +360,14 @@ export default function QuestionnairePage() {
         </Button>
       </div>
     </div>
+  )
+}
+
+export default function QuestionnairePage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading questionnaire...</div>}>
+      <QuestionnairePageContent />
+    </Suspense>
   )
 }
 
