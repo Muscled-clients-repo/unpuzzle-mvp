@@ -282,6 +282,11 @@ export class BackblazeService {
     // Ensure fileName starts with /
     const filePath = fileName.startsWith('/') ? fileName : `/${fileName}`
 
+    // Debug logging
+    console.log('[BACKBLAZE] generateCDNUrl - fileName:', fileName)
+    console.log('[BACKBLAZE] generateCDNUrl - filePath:', filePath)
+    console.log('[BACKBLAZE] generateCDNUrl - has spaces:', filePath.includes(' '))
+
     // Generate CDN URL with HMAC token
     const url = generateCDNUrlWithToken(cdnUrl, filePath, authSecret, {
       expirationHours
@@ -340,13 +345,18 @@ export class BackblazeService {
       let downloadUrl: string
 
       console.log(`[BACKBLAZE] DEBUG: CLOUDFLARE_CDN_URL = "${process.env.CLOUDFLARE_CDN_URL}"`)
+      console.log(`[BACKBLAZE] DEBUG: USE_CDN_TOKENS = "${process.env.USE_CDN_TOKENS}"`)
 
-      if (process.env.CLOUDFLARE_CDN_URL) {
-        // CDN URL - Transform Rule will add /file/bucket prefix
-        downloadUrl = `${process.env.CLOUDFLARE_CDN_URL}/${fileName}?Authorization=${authorizationToken}`
-        console.log(`[BACKBLAZE] DEBUG: Using CDN URL: ${downloadUrl}`)
+      // When USE_CDN_TOKENS is false, use direct Backblaze URLs
+      // When USE_CDN_TOKENS is true, the CDN with HMAC tokens is handled in generateSignedUrl method above
+      // Legacy CDN mode (with Backblaze auth) is disabled for now due to conflicts
+      if (false && process.env.CLOUDFLARE_CDN_URL && process.env.USE_CDN_TOKENS !== 'true' && process.env.USE_CDN_TOKENS !== 'false') {
+        // Legacy mode: DISABLED - Was causing conflicts
+        // Would need: ${CLOUDFLARE_CDN_URL}/file/${BUCKET_NAME}/${fileName}?Authorization=...
+        downloadUrl = `${process.env.CLOUDFLARE_CDN_URL}/file/${process.env.BACKBLAZE_BUCKET_NAME}/${fileName}?Authorization=${authorizationToken}`
+        console.log(`[BACKBLAZE] DEBUG: Using legacy CDN URL: ${downloadUrl}`)
       } else {
-        // Direct B2 URL - include full path
+        // Default: Direct B2 URL (when USE_CDN_TOKENS is false or CDN not configured)
         downloadUrl = `https://f005.backblazeb2.com/file/${process.env.BACKBLAZE_BUCKET_NAME}/${fileName}?Authorization=${authorizationToken}`
         console.log(`[BACKBLAZE] DEBUG: Using direct B2 URL: ${downloadUrl}`)
       }

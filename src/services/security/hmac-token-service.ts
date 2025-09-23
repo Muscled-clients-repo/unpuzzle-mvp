@@ -131,13 +131,21 @@ export function generateCDNUrlWithToken(
   secret: string,
   options: TokenOptions = {}
 ): string {
-  const token = generateHMACToken(filePath, secret, options)
-
   // Ensure filePath starts with /
   const normalizedPath = filePath.startsWith('/') ? filePath : `/${filePath}`
 
-  // Build CDN URL with token
-  return `${cdnBaseUrl}${normalizedPath}?token=${token}`
+  // URL-encode the path to handle spaces and special characters
+  // This ensures the token is generated for the exact path the browser will request
+  const pathParts = normalizedPath.split('/')
+  const encodedPath = pathParts.map((part, index) =>
+    index === 0 ? part : encodeURIComponent(part)
+  ).join('/')
+
+  // Generate token for the encoded path
+  const token = generateHMACToken(encodedPath, secret, options)
+
+  // Build CDN URL with the encoded path and token
+  return `${cdnBaseUrl}${encodedPath}?token=${token}`
 }
 
 /**

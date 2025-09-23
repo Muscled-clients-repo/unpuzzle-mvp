@@ -257,14 +257,37 @@ export function SimpleVideoPreview({ video, isOpen, onClose, title, autoPlay = t
                   }
                 }}
                 onError={(e) => {
-                  console.error('Video playback error:', e)
                   const target = e.target as HTMLVideoElement
                   const error = target.error
+
+                  // Map MediaError codes to meaningful messages
+                  const errorMessages: Record<number, string> = {
+                    1: 'MEDIA_ERR_ABORTED - Video playback was aborted',
+                    2: 'MEDIA_ERR_NETWORK - Network error while loading video',
+                    3: 'MEDIA_ERR_DECODE - Video decoding failed',
+                    4: 'MEDIA_ERR_SRC_NOT_SUPPORTED - Video format not supported'
+                  }
+
                   if (error) {
-                    console.error('Video error details:', {
-                      code: error.code,
-                      message: error.message,
-                      url: target.src
+                    const errorCode = error.code || 0
+                    const errorMessage = errorMessages[errorCode] || `Unknown error (code: ${errorCode})`
+
+                    console.error('Video playback error:', {
+                      errorCode,
+                      errorMessage,
+                      mediaErrorMessage: error.message || 'No additional details',
+                      videoSrc: target.src || 'No source',
+                      videoUrl: signedUrl.url || 'No signed URL',
+                      originalUrl: videoUrl || 'No original URL'
+                    })
+
+                    // Show user-friendly error
+                    toast.error(`Video Error: ${errorMessage}`)
+                  } else {
+                    console.error('Video error event triggered but no error object available', {
+                      videoSrc: target.src || 'No source',
+                      readyState: target.readyState,
+                      networkState: target.networkState
                     })
                   }
                 }}
