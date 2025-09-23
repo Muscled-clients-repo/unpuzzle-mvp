@@ -29,6 +29,31 @@ export async function GET(
       .select('*')
       .eq('video_id', videoId)
 
+    // If no transcript found, check if this is a media file ID that has transcripts via course videos
+    let mediaFileTranscripts = null
+    if (!directTranscripts || directTranscripts.length === 0) {
+      const { data: courseVideoTranscripts } = await supabase
+        .from('videos')
+        .select(`
+          id,
+          video_transcripts!inner (
+            id,
+            transcript_text,
+            transcript_segments,
+            word_count,
+            language_code,
+            confidence_score,
+            created_at
+          )
+        `)
+        .eq('media_file_id', videoId)
+        .single()
+
+      if (courseVideoTranscripts?.video_transcripts) {
+        mediaFileTranscripts = [courseVideoTranscripts.video_transcripts]
+      }
+    }
+
     // Also try querying by course_id in case foreign key mismatch
     const { data: byCourse } = await supabase
       .from('video_transcripts')
@@ -37,10 +62,10 @@ export async function GET(
 
     console.log('Transcript API: Direct transcript query result', {
       directTranscripts: JSON.stringify(directTranscripts, null, 2),
-      byCourse: JSON.stringify(byCourse, null, 2),
+      mediaFileTranscripts: JSON.stringify(mediaFileTranscripts, null, 2),
       directError,
       foundCount: directTranscripts?.length || 0,
-      byCourseCount: byCourse?.length || 0
+      mediaFileCount: mediaFileTranscripts?.length || 0
     })
 
     // Let's also check what transcripts exist in the database (limit 5)
@@ -140,8 +165,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized access to video' }, { status: 403 })
     }
 
-    // Use direct query result since JOIN doesn't work with RLS
-    const transcript = directTranscripts?.[0]
+    // Use direct query result or media file transcript
+    const transcript = directTranscripts?.[0] || mediaFileTranscripts?.[0]
 
     console.log('Transcript API: Transcript lookup result', {
       transcriptCount: videoWithTranscript.video_transcripts?.length || 0,

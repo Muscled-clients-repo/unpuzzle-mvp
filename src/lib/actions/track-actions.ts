@@ -362,7 +362,7 @@ export async function getStudentPreferences(): Promise<StudentPreferences | null
 
 // Update student preferences
 // Submit questionnaire and create conversation for instructor review
-export async function submitQuestionnaire(questionnaireResponses: any, trackType: 'agency' | 'saas') {
+export async function submitQuestionnaire(questionnaireResponses: any, trackType: 'agency' | 'saas', changeRequestId?: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -371,13 +371,23 @@ export async function submitQuestionnaire(questionnaireResponses: any, trackType
   }
 
   // Create conversation with pending status
+  const conversationData: any = {
+    student_id: user.id,
+    track_type: trackType,
+    status: 'pending_instructor_review'
+  }
+
+  // If this is for a track change request, add metadata
+  if (changeRequestId) {
+    conversationData.metadata = {
+      track_change_request_id: changeRequestId,
+      transition_type: 'track_change'
+    }
+  }
+
   const { data: conversation, error: conversationError } = await supabase
     .from('goal_conversations')
-    .insert({
-      student_id: user.id,
-      track_type: trackType,
-      status: 'pending_instructor_review'
-    })
+    .insert(conversationData)
     .select()
     .single()
 
@@ -646,4 +656,65 @@ function extractAmountFromGoalId(goalId: string): number {
     return goalId.includes('k') ? num * 1000 : num
   }
   return 1000 // default
+}
+
+// Get instructor pending reviews (alias for getPendingStudentReviews)
+export async function getInstructorPendingReviews() {
+  return getPendingStudentReviews()
+}
+
+// Simplified goal assignment function
+export async function assignGoalToStudent(studentId: string, goalId: string, trackType: 'agency' | 'saas') {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('User not authenticated')
+  }
+
+  // Check if user is instructor
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'instructor') {
+    throw new Error('Access denied: Instructor role required')
+  }
+
+  // Find the student's pending conversation
+  const { data: conversation, error: conversationError } = await supabase
+    .from('goal_conversations')
+    .select('id')
+    .eq('student_id', studentId)
+    .eq('status', 'pending_instructor_review')
+    .single()
+
+  if (conversationError || !conversation) {
+    throw new Error('No pending conversation found for student')
+  }
+
+  // Get goal title from predefined goals
+  const goalTitles: Record<string, string> = {
+    'agency-1k': 'Earn $1k total from agency services',
+    'agency-5k': 'Earn $5k total from agency services',
+    'agency-10k': 'Earn $10k total from agency services',
+    'agency-20k': 'Earn $20k total from agency services',
+    'agency-50k': 'Earn $50k total from agency services',
+    'saas-1k': 'Reach $1k Monthly Recurring Revenue',
+    'saas-3k': 'Reach $3k Monthly Recurring Revenue',
+    'saas-5k': 'Reach $5k Monthly Recurring Revenue',
+    'saas-10k': 'Reach $10k Monthly Recurring Revenue',
+    'saas-20k': 'Reach $20k Monthly Recurring Revenue',
+  }
+
+  const goalTitle = goalTitles[goalId] || goalId
+
+  // Use the existing function
+  return assignGoalToStudentConversation({
+    conversationId: conversation.id,
+    goalId,
+    goalTitle
+  })
 }

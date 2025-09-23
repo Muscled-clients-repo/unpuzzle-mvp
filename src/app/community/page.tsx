@@ -1,20 +1,17 @@
-import { CommunityHero } from '@/components/community/CommunityHero'
+'use client'
+
+import { CommunityHeader } from '@/components/community/CommunityHeader'
+import { CommunityReviewsSection } from '@/components/community/CommunityReviewsSection'
 
 export default function CommunityPage() {
   return (
     <div className="min-h-screen bg-white">
-      <CommunityHero />
+      {/* Hero Section with Navigation */}
+      <CommunityHeader />
+
+      {/* Reviews Section */}
+      <CommunityReviewsSection />
     </div>
   )
 }
 
-export const metadata = {
-  title: 'Join The Puzzle - Learn My $300K Upwork System',
-  description: 'Join 50 founding members learning the exact system I used to build $300K on Upwork. No Code Tech Agency & Code With AI SaaS tracks available.',
-  keywords: 'upwork, freelancing, agency, no code, AI, SaaS, claude code, development',
-  openGraph: {
-    title: 'Join The Puzzle - Learn My $300K Upwork System',
-    description: 'Join 50 founding members learning the exact system I used to build $300K on Upwork.',
-    type: 'website',
-  },
-}

@@ -42,8 +42,11 @@ export function SimpleVideoPreview({ video, isOpen, onClose, title, autoPlay = t
   const [originalSegments, setOriginalSegments] = useState<any[]>([])
   const [editingSegment, setEditingSegment] = useState<number | null>(null)
   const [segments, setSegments] = useState<any[]>([])
+  const [currentTime, setCurrentTime] = useState(0)
+  const [activeSegmentIndex, setActiveSegmentIndex] = useState<number | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const transcriptScrollRef = useRef<HTMLDivElement>(null)
   
   // Get signed URL for private video access
   const videoUrl = video?.video_url || video?.url || video?.backblaze_url
@@ -53,14 +56,7 @@ export function SimpleVideoPreview({ video, isOpen, onClose, title, autoPlay = t
   const { data: transcriptData, isLoading: transcriptLoading } = useTranscriptQuery(video?.id || '')
   const transcriptMutation = useTranscriptUpdate(video?.id || '')
   
-  console.log('[VIDEO PREVIEW] Video URL format:', videoUrl)
-  console.log('[VIDEO PREVIEW] Video data for title:', video)
-  console.log('[VIDEO PREVIEW] SignedUrl state:', {
-    isLoading: signedUrl.isLoading,
-    error: signedUrl.error,
-    data: signedUrl.data,
-    hasData: !!signedUrl.data
-  })
+  console.log('[VIDEO PREVIEW] Video ID:', video?.id, 'hasTranscript:', transcriptData?.hasTranscript)
 
   // Initialize transcript text and segments when data loads
   useEffect(() => {
@@ -84,6 +80,42 @@ export function SimpleVideoPreview({ video, isOpen, onClose, title, autoPlay = t
       }
     }
   }, [transcriptData])
+
+  // Track video time and find active segment
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    const handleTimeUpdate = () => {
+      const time = video.currentTime
+      setCurrentTime(time)
+
+      // Find the active segment based on current time
+      const activeIndex = segments.findIndex(segment =>
+        time >= segment.start && time <= segment.end
+      )
+
+      if (activeIndex !== -1 && activeIndex !== activeSegmentIndex) {
+        setActiveSegmentIndex(activeIndex)
+
+        // Auto-scroll to active segment
+        if (transcriptScrollRef.current) {
+          const activeElement = transcriptScrollRef.current.querySelector(`[data-segment-index="${activeIndex}"]`)
+          if (activeElement) {
+            activeElement.scrollIntoView({
+              behavior: 'smooth',
+              block: 'center'
+            })
+          }
+        }
+      } else if (activeIndex === -1) {
+        setActiveSegmentIndex(null)
+      }
+    }
+
+    video.addEventListener('timeupdate', handleTimeUpdate)
+    return () => video.removeEventListener('timeupdate', handleTimeUpdate)
+  }, [segments, activeSegmentIndex])
 
   // Handle transcript text changes
   const handleTranscriptChange = (newText: string) => {
@@ -183,7 +215,7 @@ export function SimpleVideoPreview({ video, isOpen, onClose, title, autoPlay = t
       isOpen={isOpen}
       onClose={onClose}
       title={title || video?.name || video?.title || video?.originalFilename || video?.filename || extractFilename(video?.filename) || video?.fileName || video?.file_name || video?.originalName || "Video Preview"}
-      maxWidth={showTranscript ? "max-w-7xl" : "max-w-4xl"}
+      maxWidth={showTranscript ? "max-w-[90vw]" : "max-w-4xl"}
     >
       <div className="p-0">
         <div className={`flex ${showTranscript ? 'gap-4' : ''}`}>
@@ -279,7 +311,7 @@ export function SimpleVideoPreview({ video, isOpen, onClose, title, autoPlay = t
 
           {/* Transcript Sidebar */}
           {showTranscript && (
-            <div className="w-80 border-l bg-background">
+            <div className="w-96 border-l bg-background">
               <div className="p-4">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -303,17 +335,22 @@ export function SimpleVideoPreview({ video, isOpen, onClose, title, autoPlay = t
                   <div className="space-y-4">
                     {/* Segments View */}
                     {segments.length > 0 ? (
-                      <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                      <div ref={transcriptScrollRef} className="space-y-2 max-h-[400px] overflow-y-auto">
                         {segments.map((segment, index) => (
                           <div
                             key={index}
-                            className="flex gap-3 p-3 border rounded-lg hover:bg-accent/50 transition-colors"
+                            data-segment-index={index}
+                            className={`flex gap-3 p-3 border rounded-lg transition-colors ${
+                              activeSegmentIndex === index
+                                ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+                                : 'hover:bg-accent/50'
+                            }`}
                           >
                             {/* Timestamp - Clickable */}
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-auto p-1 font-mono text-xs min-w-[60px]"
+                              className="h-auto p-1 font-mono text-xs min-w-[45px] text-left"
                               onClick={() => handleTimestampClick(segment.start)}
                               title={`Jump to ${formatTime(segment.start)}`}
                             >
@@ -370,11 +407,7 @@ export function SimpleVideoPreview({ video, isOpen, onClose, title, autoPlay = t
                       </div>
                     )}
 
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-muted-foreground">
-                        {transcriptData.transcript?.wordCount} words
-                        {segments.length > 0 && ` • ${segments.length} segments`}
-                      </div>
+                    <div className="flex justify-end">
                       <Button
                         onClick={handleSaveTranscript}
                         disabled={!hasChanges || transcriptMutation.isPending}

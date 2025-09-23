@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useAppStore } from "@/stores/app-store"
@@ -22,6 +23,12 @@ import {
   GraduationCap,
   Trophy,
   Target,
+  ClipboardList,
+  ChevronDown,
+  ChevronRight,
+  UserCheck,
+  GitBranch,
+  History,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -30,27 +37,59 @@ interface SidebarProps {
   role?: "learner" | "instructor" | "admin"
 }
 
-const learnerNavItems = [
+interface NavItem {
+  href: string
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+  submenu?: NavItem[]
+}
+
+const learnerNavItems: NavItem[] = [
   { href: "/student", label: "Dashboard", icon: Home },
   { href: "/student/courses", label: "My Courses", icon: BookOpen },
-  { href: "/student/goals", label: "Goals", icon: Target },
+  {
+    href: "/student/goals",
+    label: "Goals",
+    icon: Target,
+    submenu: [
+      { href: "/student/goals", label: "Current Goal", icon: Target },
+      { href: "/student/goals/history", label: "Track History", icon: History },
+    ]
+  },
   { href: "/student/reflections", label: "Reflections", icon: MessageSquare },
 ]
 
-const instructorNavItems = [
+const instructorNavItems: NavItem[] = [
   { href: "/instructor", label: "Dashboard", icon: Home },
   { href: "/instructor/courses", label: "My Courses", icon: BookOpen },
   { href: "/instructor/lessons", label: "My Lessons", icon: PlayCircle },
   { href: "/instructor/media", label: "Media", icon: Upload },
   { href: "/instructor/confusions", label: "Confusions", icon: MessageSquare },
+  {
+    href: "/instructor/requests",
+    label: "Requests",
+    icon: ClipboardList,
+    submenu: [
+      { href: "/instructor/requests", label: "All Requests", icon: ClipboardList },
+      { href: "/instructor/requests/track-assignments", label: "Track Assignments", icon: UserCheck },
+    ]
+  },
   { href: "/instructor/students", label: "Students", icon: Users },
-  { href: "/instructor/student-goals", label: "Student Goals", icon: Target },
+  {
+    href: "/instructor/student-goals",
+    label: "Student Goals",
+    icon: Target,
+    submenu: [
+      { href: "/instructor/student-goals", label: "Current Goals", icon: Target },
+      { href: "/instructor/student-goals/history", label: "Track History", icon: History },
+    ]
+  },
   { href: "/instructor/engagement", label: "Engagement", icon: TrendingUp },
 ]
 
 // Moderator features removed - not part of MVP
 
-const adminNavItems = [
+const adminNavItems: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: Home },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/courses", label: "Courses", icon: BookOpen },
@@ -64,8 +103,13 @@ export function Sidebar({ role = "learner" }: SidebarProps) {
   const pathname = usePathname()
   const profile = useAppStore((state) => state.profile)
   const { pendingConfusions, instructorStats } = useAppStore()
+  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set([
+    '/instructor/requests',
+    '/student/goals',
+    '/instructor/student-goals'
+  ]))
   
-  const navItems = 
+  const navItems =
     role === "admin" ? adminNavItems :
     role === "instructor" ? instructorNavItems :
     learnerNavItems
@@ -75,11 +119,29 @@ export function Sidebar({ role = "learner" }: SidebarProps) {
   const dailyUsed = subscription?.dailyAiInteractions || 0
   const isBasic = subscription?.plan === 'basic'
   const isPremium = subscription?.plan === 'premium'
-  
+
   // Check if user can access multiple modes
   const userRole = profile?.role
   const isModerator = userRole === 'moderator' || userRole === 'instructor'
   const isInstructor = userRole === 'instructor'
+
+  const toggleMenu = (menuKey: string) => {
+    const newExpanded = new Set(expandedMenus)
+    if (newExpanded.has(menuKey)) {
+      newExpanded.delete(menuKey)
+    } else {
+      newExpanded.add(menuKey)
+    }
+    setExpandedMenus(newExpanded)
+  }
+
+  // Check if submenu item is active
+  const checkSubmenuActive = (submenu: NavItem[]) => {
+    return submenu.some(subItem =>
+      pathname === subItem.href ||
+      (subItem.href !== "/instructor" && pathname.startsWith(subItem.href))
+    )
+  }
 
   return (
     <aside className="hidden md:flex w-64 flex-col border-r bg-background fixed left-0 top-16 bottom-0 z-40">
@@ -125,13 +187,19 @@ export function Sidebar({ role = "learner" }: SidebarProps) {
         <nav className="space-y-1 px-3">
           {navItems.map((item) => {
             const Icon = item.icon
-            const isActive = pathname === item.href || 
-              (item.href !== "/student" && item.href !== "/instructor" && item.href !== "/admin" && pathname.startsWith(item.href))
-            
-            // Get badge info for instructor and moderator items
+            const hasSubmenu = item.submenu && item.submenu.length > 0
+            const isExpanded = expandedMenus.has(item.href)
+            // Parent menu should only be active if on exact page OR no submenu item is active
+            const isActive = hasSubmenu
+              ? false // Never highlight parent if it has submenu - only submenu items should be highlighted
+              : pathname === item.href ||
+                (item.href !== "/student" && item.href !== "/instructor" && item.href !== "/admin" && pathname.startsWith(item.href))
+            const isSubmenuActive = hasSubmenu && checkSubmenuActive(item.submenu)
+
+            // Get badge info for instructor items
             let badgeContent = null
             let badgeVariant: "default" | "secondary" | "destructive" | "outline" = "outline"
-            
+
             if (role === "instructor") {
               if (item.href === "/instructor/courses" && instructorStats) {
                 badgeContent = instructorStats.totalCourses
@@ -139,37 +207,100 @@ export function Sidebar({ role = "learner" }: SidebarProps) {
                 badgeContent = pendingConfusions.length
                 badgeVariant = "destructive"
               }
-            } else if (role === "moderator") {
-              if (item.href === "/moderator/queue" && moderationQueue) {
-                const pendingCount = moderationQueue.filter(q => q.status === 'pending').length
-                badgeContent = pendingCount
-                badgeVariant = pendingCount > 0 ? "destructive" : "secondary"
-              } else if (item.href === "/moderator/assignments" && myAssignments) {
-                badgeContent = myAssignments.length
-              }
             }
-            
+
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              <div key={item.href}>
+                {hasSubmenu ? (
+                  <button
+                    onClick={() => toggleMenu(item.href)}
+                    className={cn(
+                      "w-full flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                      isActive || isSubmenuActive
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon className="h-4 w-4" />
+                      {item.label}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {badgeContent !== null && badgeContent > 0 && (
+                        <Badge variant={badgeVariant}>
+                          {badgeContent}
+                        </Badge>
+                      )}
+                      {isExpanded ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
+                    </div>
+                  </button>
+                ) : (
+                  <Link
+                    href={item.href}
+                    className={cn(
+                      "flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                      isActive
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon className="h-4 w-4" />
+                      {item.label}
+                    </div>
+                    {badgeContent !== null && badgeContent > 0 && (
+                      <Badge variant={badgeVariant} className="ml-auto">
+                        {badgeContent}
+                      </Badge>
+                    )}
+                  </Link>
                 )}
-              >
-                <div className="flex items-center gap-3">
-                  <Icon className="h-4 w-4" />
-                  {item.label}
-                </div>
-                {badgeContent !== null && badgeContent > 0 && (
-                  <Badge variant={badgeVariant} className="ml-auto">
-                    {badgeContent}
-                  </Badge>
+
+                {hasSubmenu && isExpanded && (
+                  <div className="ml-6 mt-1 space-y-1">
+                    {item.submenu.map((subItem) => {
+                      const SubIcon = subItem.icon
+                      // Check if this submenu item should be highlighted
+                      // For submenu items, prioritize exact matches and be careful with startsWith
+                      const isExactMatch = pathname === subItem.href
+
+                      // Check if any sibling submenu item has a more specific match
+                      const hasMoreSpecificSibling = item.submenu?.some(sibling =>
+                        sibling.href !== subItem.href &&
+                        pathname.startsWith(sibling.href) &&
+                        sibling.href.length > subItem.href.length
+                      )
+
+                      const isSubActive = isExactMatch ||
+                        (!hasMoreSpecificSibling &&
+                         subItem.href !== "/instructor" &&
+                         subItem.href !== "/student" &&
+                         subItem.href !== "/admin" &&
+                         pathname.startsWith(subItem.href + "/")) // Only match child paths, not the exact parent
+
+                      return (
+                        <Link
+                          key={subItem.href}
+                          href={subItem.href}
+                          className={cn(
+                            "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                            isSubActive
+                              ? "bg-primary/10 text-primary"
+                              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                          )}
+                        >
+                          <SubIcon className="h-4 w-4" />
+                          {subItem.label}
+                        </Link>
+                      )
+                    })}
+                  </div>
                 )}
-              </Link>
+              </div>
             )
           })}
         </nav>
