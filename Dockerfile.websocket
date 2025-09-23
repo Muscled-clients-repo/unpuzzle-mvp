@@ -1,0 +1,42 @@
+# Dockerfile for WebSocket server
+FROM node:20-alpine
+
+# Install PM2 globally for process management
+RUN npm install -g pm2
+
+WORKDIR /app
+
+# Copy WebSocket server files
+COPY websocket-server.js ./
+COPY transcription-worker.js ./
+COPY ecosystem.config.js ./
+COPY package.json package-lock.json* ./
+
+# Install only production dependencies
+RUN npm ci --only=production && \
+    npm cache clean --force
+
+# Create logs directory
+RUN mkdir -p logs
+
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 websocket
+
+# Set ownership
+RUN chown -R websocket:nodejs /app
+
+USER websocket
+
+# Cloud Run expects port 8080
+ENV PORT=8080
+ENV NODE_ENV=production
+
+EXPOSE 8080
+
+# Health check endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:8080/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1))"
+
+# Start WebSocket server directly (not using PM2 for container)
+CMD ["node", "websocket-server.js"]
