@@ -8,12 +8,14 @@ import { backblazeService } from '@/services/video/backblaze-service'
 export async function generateSignedUrlAction(privateUrl: string) {
   try {
     console.log('[SIGNED_URL_ACTION] Generating signed URL for:', privateUrl)
-    
+
     if (!privateUrl || !privateUrl.startsWith('private:')) {
       throw new Error('Invalid private URL format')
     }
-    
-    const result = await backblazeService.getSignedUrlFromPrivate(privateUrl, 2) // 2 hours expiration
+
+    // Use longer expiration for CDN tokens (6 hours), shorter for Backblaze (2 hours)
+    const expirationHours = process.env.USE_CDN_TOKENS === 'true' ? 6 : 2
+    const result = await backblazeService.getSignedUrlFromPrivate(privateUrl, expirationHours)
     
     console.log('[SIGNED_URL_ACTION] Signed URL generated successfully')
     
@@ -39,10 +41,11 @@ export async function generateBatchSignedUrlsAction(privateUrls: string[]) {
   try {
     console.log('[SIGNED_URL_ACTION] Generating batch signed URLs for:', privateUrls.length, 'files')
     
+    const expirationHours = process.env.USE_CDN_TOKENS === 'true' ? 6 : 2
     const results = await Promise.all(
       privateUrls.map(async (privateUrl) => {
         try {
-          const result = await backblazeService.getSignedUrlFromPrivate(privateUrl, 2)
+          const result = await backblazeService.getSignedUrlFromPrivate(privateUrl, expirationHours)
           return {
             privateUrl,
             success: true,
