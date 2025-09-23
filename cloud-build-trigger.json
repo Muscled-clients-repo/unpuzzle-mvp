@@ -1,0 +1,36 @@
+{
+  "name": "unpuzzle-deploy-trigger",
+  "description": "Automatically deploy Unpuzzle MVP on push to main branch",
+  "github": {
+    "owner": "YOUR_GITHUB_USERNAME",
+    "name": "unpuzzle-mvp-lts",
+    "push": {
+      "branch": "^main$"
+    }
+  },
+  "filename": "cloudbuild.yaml",
+  "substitutions": {
+    "_NEXT_PUBLIC_SUPABASE_URL": "$(body.secrets.NEXT_PUBLIC_SUPABASE_URL)",
+    "_NEXT_PUBLIC_SUPABASE_ANON_KEY": "$(body.secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY)",
+    "_NEXT_PUBLIC_GROQ_API_KEY": "$(body.secrets.NEXT_PUBLIC_GROQ_API_KEY)",
+    "_NEXT_PUBLIC_APP_URL": "$(body.secrets.NEXT_PUBLIC_APP_URL)",
+    "_NEXT_PUBLIC_WEBSOCKET_URL": "$(body.secrets.NEXT_PUBLIC_WEBSOCKET_URL)"
+  },
+  "includedFiles": [
+    "src/**",
+    "public/**",
+    "package.json",
+    "package-lock.json",
+    "next.config.ts",
+    "Dockerfile",
+    "Dockerfile.websocket",
+    "cloudbuild.yaml"
+  ],
+  "ignoredFiles": [
+    ".git/**",
+    "node_modules/**",
+    ".next/**",
+    "*.md",
+    ".env*"
+  ]
+}
