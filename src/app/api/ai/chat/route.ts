@@ -1,12 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Groq from 'groq-sdk'
 
+// Initialize Groq client with fallback for build time
 const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
+  apiKey: process.env.GROQ_API_KEY || process.env.NEXT_PUBLIC_GROQ_API_KEY || 'fallback-key-for-build',
 })
 
 export async function POST(request: NextRequest) {
   try {
+    // Check if API key is available at runtime
+    const apiKey = process.env.GROQ_API_KEY || process.env.NEXT_PUBLIC_GROQ_API_KEY
+    if (!apiKey || apiKey === 'fallback-key-for-build') {
+      return NextResponse.json(
+        { error: 'AI service is not configured. Please contact support.' },
+        { status: 503 }
+      )
+    }
+
     const {
       videoId,
       userMessage,
