@@ -97,10 +97,9 @@ jobs:
             --cpu 2 \
             --memory 2Gi \
             --timeout 60 \
-            --set-env-vars "NODE_ENV=production" \
+            --set-env-vars "NODE_ENV=production,GROQ_API_KEY=${{ secrets.NEXT_PUBLIC_GROQ_API_KEY }}" \
             --set-secrets "\
               SUPABASE_SERVICE_KEY=supabase-service-key:latest,\
-              GROQ_API_KEY=groq-api-key:latest,\
               BACKBLAZE_APPLICATION_KEY_ID=backblaze-key-id:latest,\
               BACKBLAZE_APPLICATION_KEY=backblaze-key:latest,\
               CDN_AUTH_SECRET=cdn-auth-secret:latest"
