@@ -40,7 +40,7 @@ async function verifyHMACToken(token, secret, filePath, clientIp = null) {
   }
 }
 
-const worker = {
+export default {
   async fetch(request, env, ctx) {
     const BUCKET_NAME = env?.BUCKET_NAME || "unpuzzle-mvp";
     const B2_DOMAIN = env?.B2_DOMAIN || "https://f005.backblazeb2.com";
@@ -100,26 +100,15 @@ const worker = {
         const clientIp = request.headers.get('cf-connecting-ip') ||
                         request.headers.get('x-forwarded-for')?.split(',')[0];
 
-        // Debug logging for path verification
-        console.log('[WORKER] Original path:', filePath);
-        console.log('[WORKER] Path has encoded spaces:', filePath.includes('%20'));
-        console.log('[WORKER] Token received:', token.substring(0, 50) + '...');
-
-        // The token should be verified against the exact path as received (already URL-encoded by browser)
-        // This matches what generateCDNUrlWithToken now does - it encodes the path before generating the token
+        // Verify HMAC token
         const verificationResult = await verifyHMACToken(token, AUTH_SECRET, filePath, clientIp);
 
         if (!verificationResult.valid) {
-          console.error('[WORKER] Token verification failed:', verificationResult.error);
-          console.error('[WORKER] Path used for verification:', filePath);
-
           return new Response(`Unauthorized - ${verificationResult.error || 'Invalid token'}`, {
             status: 401,
             headers: { 'Content-Type': 'text/plain' }
           });
         }
-
-        console.log('[WORKER] Token verified successfully');
       }
 
       // ============ CACHE KEY OPTIMIZATION ============
@@ -300,5 +289,3 @@ const worker = {
     }
   }
 }
-
-export default worker;
