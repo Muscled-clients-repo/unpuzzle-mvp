@@ -171,7 +171,7 @@ export function RelatedLessonsCarousel({
                   <div className="flex items-center gap-4 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Eye className="h-3 w-3" />
-                      {lesson.views.toLocaleString()}
+                      {(lesson.views || 0).toLocaleString()}
                     </span>
                     <span className="flex items-center gap-1">
                       <Sparkles className="h-3 w-3" />

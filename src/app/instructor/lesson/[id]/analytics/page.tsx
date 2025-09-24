@@ -144,7 +144,7 @@ export default function LessonAnalyticsPage() {
             <Eye className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{lesson.totalViews.toLocaleString()}</div>
+            <div className="text-2xl font-bold">{(lesson.totalViews || 0).toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">All time</p>
           </CardContent>
         </Card>
@@ -155,7 +155,7 @@ export default function LessonAnalyticsPage() {
             <UserCheck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{lesson.authenticatedUsers.toLocaleString()}</div>
+            <div className="text-2xl font-bold">{(lesson.authenticatedUsers || 0).toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">
               {Math.round((lesson.authenticatedUsers / lesson.totalStudents) * 100)}% of viewers
             </p>

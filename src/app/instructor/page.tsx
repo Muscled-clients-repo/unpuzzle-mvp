@@ -169,7 +169,7 @@ export default function InstructorDashboard() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${periodTotals.revenue.toLocaleString()}</div>
+            <div className="text-2xl font-bold">${(periodTotals.revenue || 0).toLocaleString()}</div>
             <div className="flex items-center text-xs mt-2">
               {changes.revenue > 0 ? (
                 <>
@@ -193,7 +193,7 @@ export default function InstructorDashboard() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{periodTotals.students.toLocaleString()}</div>
+            <div className="text-2xl font-bold">{(periodTotals.students || 0).toLocaleString()}</div>
             <div className="flex items-center text-xs mt-2">
               {changes.students > 0 ? (
                 <>

@@ -374,7 +374,7 @@ export default function InstructorVideoPage() {
                   <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Eye className="h-4 w-4" />
-                      {lesson.views.toLocaleString()} views
+                      {(lesson.views || 0).toLocaleString()} views
                     </span>
                     <span className="flex items-center gap-1">
                       <Clock className="h-4 w-4" />
