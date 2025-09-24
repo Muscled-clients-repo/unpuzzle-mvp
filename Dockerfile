@@ -6,7 +6,8 @@ WORKDIR /app
 
 # Copy package files
 COPY package.json package-lock.json* ./
-RUN npm ci --only=production && \
+# Install ALL dependencies (including devDependencies for TypeScript)
+RUN npm ci && \
     npm cache clean --force
 
 # Stage 2: Builder
@@ -34,7 +35,15 @@ ENV NEXT_PUBLIC_WEBSOCKET_URL=$NEXT_PUBLIC_WEBSOCKET_URL
 # Build the application with GROQ_API_KEY available during build
 RUN GROQ_API_KEY=$NEXT_PUBLIC_GROQ_API_KEY npm run build
 
-# Stage 3: Runner
+# Stage 3: Production Dependencies
+FROM node:20-alpine AS prod-deps
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm ci --only=production && \
+    npm cache clean --force
+
+# Stage 4: Runner
 FROM node:20-alpine AS runner
 WORKDIR /app
 
