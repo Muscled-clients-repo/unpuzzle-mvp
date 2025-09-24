@@ -43,69 +43,45 @@ export function InstructorTrackHistoryView() {
 
       const supabase = createClient()
 
-      // Get all conversations with student and track details
-      const { data: conversations, error } = await supabase
-        .from('goal_conversations')
-        .select(`
-          id,
-          student_id,
-          status,
-          created_at,
-          ended_at,
-          end_reason,
-          profiles!goal_conversations_student_id_fkey (
-            id,
-            full_name,
-            email
-          ),
-          tracks!goal_conversations_track_id_fkey (
-            name
-          ),
-          track_goals (
-            name,
-            description,
-            target_amount,
-            currency
-          ),
-          transition_to_track:tracks!goal_conversations_transition_to_track_id_fkey (
-            name
-          )
-        `)
+      // Use optimized view for single-query performance
+      const { data: trackHistory, error } = await supabase
+        .from('instructor_track_history')
+        .select('*')
         .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Failed to fetch students track history:', error)
-        throw new Error('Failed to fetch students track history')
+        console.error('Failed to fetch track history:', error)
+        throw new Error('Failed to fetch track history')
       }
 
-      // Group conversations by student
+      // Group track history by student (optimized data structure)
       const studentsMap = new Map<string, StudentTrackHistory>()
 
-      conversations?.forEach(conv => {
-        const studentId = conv.student_id
-        const student = conv.profiles
+      trackHistory?.forEach(history => {
+        const studentId = history.student_id
 
         if (!studentsMap.has(studentId)) {
           studentsMap.set(studentId, {
             student_id: studentId,
-            student_name: student?.full_name || 'Unknown Student',
-            student_email: student?.email || 'No email',
+            student_name: history.student_name || 'Unknown Student',
+            student_email: history.student_email || 'No email',
             conversations: []
           })
         }
 
         studentsMap.get(studentId)!.conversations.push({
-          id: conv.id,
-          status: conv.status,
-          created_at: conv.created_at,
-          ended_at: conv.ended_at,
-          end_reason: conv.end_reason,
-          track_name: conv.tracks?.name || 'Unknown Track',
-          goal_name: conv.track_goals?.name,
-          goal_description: conv.track_goals?.description,
-          target_amount: conv.track_goals?.target_amount,
-          currency: conv.track_goals?.currency || 'USD',
-          transition_to_track_name: conv.transition_to_track?.name
+          id: history.conversation_id,
+          status: history.conversation_status,
+          created_at: history.created_at,
+          ended_at: history.ended_at,
+          end_reason: history.end_reason,
+          track_name: history.track_name || 'Unknown Track',
+          goal_name: history.goal_name,
+          goal_description: history.goal_description,
+          target_amount: history.target_amount,
+          currency: history.currency || 'USD',
+          transition_to_track_name: history.transition_to_track_name,
+          progress_status: history.progress_status
         })
       })
 

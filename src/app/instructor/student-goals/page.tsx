@@ -62,15 +62,19 @@ export default function InstructorStudentGoalsPage() {
 
       const supabase = createClient()
 
-      // Get all students with goal assignments
+      // Get all students with active goal assignments (no enrollment filtering needed)
       const { data: studentsWithGoals, error } = await supabase
-        .from('profiles')
+        .from('user_track_assignments')
         .select(`
           id,
-          full_name,
-          email,
-          current_goal_id,
-          goal_assigned_at,
+          assigned_at,
+          status,
+          user_id,
+          profiles!inner (
+            id,
+            full_name,
+            email
+          ),
           track_goals (
             id,
             name,
@@ -83,8 +87,8 @@ export default function InstructorStudentGoalsPage() {
             )
           )
         `)
-        .not('current_goal_id', 'is', null)
-        .order('goal_assigned_at', { ascending: false })
+        .eq('status', 'active')
+        .order('assigned_at', { ascending: false })
 
       if (error) {
         console.error('Failed to fetch student goals:', error)
@@ -96,7 +100,7 @@ export default function InstructorStudentGoalsPage() {
       // Transform database data to component interface
       return studentsWithGoals.map(student => {
         const goal = student.track_goals
-        const startDate = student.goal_assigned_at || new Date().toISOString()
+        const startDate = student.assigned_at || new Date().toISOString()
 
         // Format target amount from structured data
         const formatTargetAmount = (amount: number, currency: string = 'USD') => {
@@ -113,9 +117,9 @@ export default function InstructorStudentGoalsPage() {
         const daysActive = Math.max(1, Math.floor((new Date().getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)))
 
         return {
-          studentId: student.id,
-          studentName: student.full_name || 'Unknown Student',
-          studentEmail: student.email || 'No email',
+          studentId: student.profiles?.id || '',
+          studentName: student.profiles?.full_name || 'Unknown Student',
+          studentEmail: student.profiles?.email || 'No email',
           goalTitle: goal?.description || 'No goal assigned',
           currentAmount: '$0', // TODO: This should come from actual progress tracking
           targetAmount: formatTargetAmount(goal?.target_amount || 1000, goal?.currency || 'USD'),
