@@ -104,7 +104,7 @@ jobs:
             --cpu 2 \
             --memory 2Gi \
             --timeout 60 \
-            --set-env-vars "NODE_ENV=production,GROQ_API_KEY=${{ secrets.NEXT_PUBLIC_GROQ_API_KEY }}" \
+            --set-env-vars "NODE_ENV=production,GROQ_API_KEY=${{ secrets.NEXT_PUBLIC_GROQ_API_KEY }},BACKBLAZE_BUCKET_NAME=unpuzzle-mvp" \
             --set-secrets "\
               SUPABASE_SERVICE_KEY=supabase-service-key:latest,\
               BACKBLAZE_APPLICATION_KEY_ID=backblaze-key-id:latest,\

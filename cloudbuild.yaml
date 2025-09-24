@@ -102,7 +102,7 @@ steps:
       - '--timeout'
       - '60'
       - '--set-env-vars'
-      - 'NODE_ENV=production'
+      - 'NODE_ENV=production,BACKBLAZE_BUCKET_NAME=unpuzzle-mvp'
       - '--set-secrets'
       - 'SUPABASE_SERVICE_KEY=supabase-service-key:latest,GROQ_API_KEY=groq-api-key:latest,BACKBLAZE_APPLICATION_KEY_ID=backblaze-key-id:latest,BACKBLAZE_APPLICATION_KEY=backblaze-key:latest,CDN_AUTH_SECRET=cdn-auth-secret:latest'
 
@@ -134,7 +134,7 @@ steps:
       - '300'
       - '--session-affinity'  # Important for WebSocket
       - '--set-env-vars'
-      - 'NODE_ENV=production'
+      - 'NODE_ENV=production,BACKBLAZE_BUCKET_NAME=unpuzzle-mvp'
 
   # Step 7: Get service URLs
   - name: 'gcr.io/cloud-builders/gcloud'
