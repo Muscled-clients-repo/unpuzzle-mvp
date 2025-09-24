@@ -108,7 +108,7 @@ export default function CourseAnalyticsPageClean() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${course.revenue.total.toLocaleString()}</div>
+            <div className="text-2xl font-bold">${(course.revenue?.total || 0).toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">${course.revenue.thisMonth} this month</p>
           </CardContent>
         </Card>

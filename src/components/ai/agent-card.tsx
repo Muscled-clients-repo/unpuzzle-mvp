@@ -53,6 +53,38 @@ export function AgentCard({
   badge,
 }: AgentCardProps) {
   const config = agentConfig[type]
+
+  // Safety check for invalid agent types
+  if (!config) {
+    console.error(`Invalid agent type: "${type}". Expected one of: ${Object.keys(agentConfig).join(', ')}`)
+    // Fallback to a default configuration
+    const fallbackConfig = {
+      icon: Lightbulb,
+      color: "text-gray-500",
+      bgColor: "bg-gray-500/10",
+      borderColor: "border-gray-500/20",
+    }
+    const Icon = fallbackConfig.icon
+
+    return (
+      <Card className={cn("relative overflow-hidden transition-all", fallbackConfig.borderColor)}>
+        <CardHeader>
+          <div className="flex items-start gap-3">
+            <div className={cn("rounded-lg p-2", fallbackConfig.bgColor)}>
+              <Icon className={cn("h-5 w-5", fallbackConfig.color)} />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-base">{title}</CardTitle>
+              <CardDescription className="mt-1 text-sm">
+                {description}
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
+    )
+  }
+
   const Icon = config.icon
 
   return (

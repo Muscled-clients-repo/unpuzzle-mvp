@@ -287,7 +287,7 @@ export default function TeachLessonsPage() {
                 <div className="grid grid-cols-3 gap-2 text-sm">
                   <div className="flex items-center gap-1">
                     <Eye className="h-3 w-3 text-muted-foreground" />
-                    <span>{lesson.views.toLocaleString()}</span>
+                    <span>{(lesson.views || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <Sparkles className="h-3 w-3 text-muted-foreground" />

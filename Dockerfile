@@ -1,0 +1,86 @@
+# Multi-stage Dockerfile for Next.js application
+# Stage 1: Dependencies
+FROM node:20-alpine AS deps
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+
+# Copy package files
+COPY package.json package-lock.json* ./
+# Install ALL dependencies (including devDependencies for TypeScript)
+RUN npm ci && \
+    npm cache clean --force
+
+# Stage 2: Builder
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+# Copy dependencies from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Build arguments for environment variables at build time
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ARG NEXT_PUBLIC_GROQ_API_KEY
+ARG NEXT_PUBLIC_APP_URL
+ARG NEXT_PUBLIC_WEBSOCKET_URL
+ARG NEXT_PUBLIC_USE_MOCK_DATA
+ARG NEXT_PUBLIC_USE_REAL_COURSES
+ARG NEXT_PUBLIC_USE_REAL_COURSE_CREATION
+ARG NEXT_PUBLIC_USE_REAL_COURSE_UPDATES
+ARG NEXT_PUBLIC_USE_REAL_COURSE_DELETION
+ARG NEXT_PUBLIC_USE_REAL_STUDENT_DATA
+ARG NEXT_PUBLIC_USE_REAL_VIDEO_UPLOAD
+
+# Set environment variables for build
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
+ENV NEXT_PUBLIC_GROQ_API_KEY=$NEXT_PUBLIC_GROQ_API_KEY
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+ENV NEXT_PUBLIC_WEBSOCKET_URL=$NEXT_PUBLIC_WEBSOCKET_URL
+ENV NEXT_PUBLIC_USE_MOCK_DATA=$NEXT_PUBLIC_USE_MOCK_DATA
+ENV NEXT_PUBLIC_USE_REAL_COURSES=$NEXT_PUBLIC_USE_REAL_COURSES
+ENV NEXT_PUBLIC_USE_REAL_COURSE_CREATION=$NEXT_PUBLIC_USE_REAL_COURSE_CREATION
+ENV NEXT_PUBLIC_USE_REAL_COURSE_UPDATES=$NEXT_PUBLIC_USE_REAL_COURSE_UPDATES
+ENV NEXT_PUBLIC_USE_REAL_COURSE_DELETION=$NEXT_PUBLIC_USE_REAL_COURSE_DELETION
+ENV NEXT_PUBLIC_USE_REAL_STUDENT_DATA=$NEXT_PUBLIC_USE_REAL_STUDENT_DATA
+ENV NEXT_PUBLIC_USE_REAL_VIDEO_UPLOAD=$NEXT_PUBLIC_USE_REAL_VIDEO_UPLOAD
+
+# Build the application with GROQ_API_KEY available during build
+RUN GROQ_API_KEY=$NEXT_PUBLIC_GROQ_API_KEY npm run build
+
+# Stage 3: Production Dependencies
+FROM node:20-alpine AS prod-deps
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm ci --only=production && \
+    npm cache clean --force
+
+# Stage 4: Runner
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# Copy necessary files
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+
+# Set correct permissions
+RUN chown -R nextjs:nodejs /app
+
+USER nextjs
+
+# Cloud Run expects port 8080
+ENV PORT=8080
+ENV NODE_ENV=production
+ENV HOSTNAME="0.0.0.0"
+
+EXPOSE 8080
+
+# Start the application
+CMD ["node", "server.js"]

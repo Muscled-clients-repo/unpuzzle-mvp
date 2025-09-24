@@ -4,6 +4,7 @@
  */
 
 import B2 from 'backblaze-b2'
+import { generateCDNUrlWithToken, extractFilePathFromPrivateUrl } from '../security/hmac-token-service'
 
 interface UploadProgress {
   loaded: number
@@ -265,16 +266,66 @@ export class BackblazeService {
   }
   
   /**
+   * Generate a CDN URL with HMAC token (new method)
+   * @param fileName - File name/path
+   * @param expirationHours - Hours until URL expires (default: 6)
+   */
+  generateCDNUrl(fileName: string, expirationHours: number = 6): SignedUrlResult {
+    const cdnUrl = process.env.CLOUDFLARE_CDN_URL || 'https://cdn.unpuzzle.co'
+    const authSecret = process.env.CDN_AUTH_SECRET || process.env.AUTH_SECRET || ''
+
+    if (!authSecret) {
+      console.warn('[BACKBLAZE] CDN_AUTH_SECRET not configured, falling back to Backblaze signed URLs')
+      throw new Error('CDN authentication not configured')
+    }
+
+    // Ensure fileName starts with /
+    const filePath = fileName.startsWith('/') ? fileName : `/${fileName}`
+
+    // Debug logging
+    console.log('[BACKBLAZE] generateCDNUrl - fileName:', fileName)
+    console.log('[BACKBLAZE] generateCDNUrl - filePath:', filePath)
+    console.log('[BACKBLAZE] generateCDNUrl - has spaces:', filePath.includes(' '))
+
+    // Generate CDN URL with HMAC token
+    const url = generateCDNUrlWithToken(cdnUrl, filePath, authSecret, {
+      expirationHours
+    })
+
+    // Calculate expiration time
+    const expiresAt = Date.now() + (expirationHours * 60 * 60 * 1000)
+
+    console.log(`[BACKBLAZE] Generated CDN URL with HMAC token for ${fileName}`)
+    console.log(`[BACKBLAZE] CDN URL: ${url.substring(0, 50)}...`)
+    console.log(`[BACKBLAZE] Expires at: ${new Date(expiresAt).toISOString()}`)
+
+    return { url, expiresAt }
+  }
+
+  /**
    * Generate a signed URL for private file access
    * @param fileId - Backblaze file ID
    * @param fileName - File name
    * @param expirationHours - Hours until URL expires (default: 2)
    */
   async generateSignedUrl(fileId: string, fileName: string, expirationHours: number = 2): Promise<SignedUrlResult> {
+    // Check if we should use CDN with HMAC tokens
+    const useCDNTokens = process.env.USE_CDN_TOKENS === 'true'
+
+    if (useCDNTokens) {
+      try {
+        console.log('[BACKBLAZE] USE_CDN_TOKENS enabled, generating CDN URL with HMAC token')
+        return this.generateCDNUrl(fileName, expirationHours)
+      } catch (error) {
+        console.error('[BACKBLAZE] Failed to generate CDN URL, falling back to Backblaze:', error)
+        // Fall through to Backblaze signed URL generation
+      }
+    }
+
     await this.authorize()
-    
+
     try {
-      console.log(`[BACKBLAZE] Generating signed URL for ${fileName} (expires in ${expirationHours}h)`)
+      console.log(`[BACKBLAZE] Generating Backblaze signed URL for ${fileName} (expires in ${expirationHours}h)`)
       
       // Calculate expiration timestamp
       const expiresAt = Date.now() + (expirationHours * 60 * 60 * 1000)
@@ -294,13 +345,18 @@ export class BackblazeService {
       let downloadUrl: string
 
       console.log(`[BACKBLAZE] DEBUG: CLOUDFLARE_CDN_URL = "${process.env.CLOUDFLARE_CDN_URL}"`)
+      console.log(`[BACKBLAZE] DEBUG: USE_CDN_TOKENS = "${process.env.USE_CDN_TOKENS}"`)
 
-      if (process.env.CLOUDFLARE_CDN_URL) {
-        // CDN URL - Transform Rule will add /file/bucket prefix
-        downloadUrl = `${process.env.CLOUDFLARE_CDN_URL}/${fileName}?Authorization=${authorizationToken}`
-        console.log(`[BACKBLAZE] DEBUG: Using CDN URL: ${downloadUrl}`)
+      // When USE_CDN_TOKENS is false, use direct Backblaze URLs
+      // When USE_CDN_TOKENS is true, the CDN with HMAC tokens is handled in generateSignedUrl method above
+      // Legacy CDN mode (with Backblaze auth) is disabled for now due to conflicts
+      if (false && process.env.CLOUDFLARE_CDN_URL && process.env.USE_CDN_TOKENS !== 'true' && process.env.USE_CDN_TOKENS !== 'false') {
+        // Legacy mode: DISABLED - Was causing conflicts
+        // Would need: ${CLOUDFLARE_CDN_URL}/file/${BUCKET_NAME}/${fileName}?Authorization=...
+        downloadUrl = `${process.env.CLOUDFLARE_CDN_URL}/file/${process.env.BACKBLAZE_BUCKET_NAME}/${fileName}?Authorization=${authorizationToken}`
+        console.log(`[BACKBLAZE] DEBUG: Using legacy CDN URL: ${downloadUrl}`)
       } else {
-        // Direct B2 URL - include full path
+        // Default: Direct B2 URL (when USE_CDN_TOKENS is false or CDN not configured)
         downloadUrl = `https://f005.backblazeb2.com/file/${process.env.BACKBLAZE_BUCKET_NAME}/${fileName}?Authorization=${authorizationToken}`
         console.log(`[BACKBLAZE] DEBUG: Using direct B2 URL: ${downloadUrl}`)
       }
@@ -337,13 +393,29 @@ export class BackblazeService {
     if (!privateUrl.startsWith('private:')) {
       throw new Error('Invalid private URL format. Expected: private:fileId:fileName')
     }
-    
+
     const parts = privateUrl.split(':')
     if (parts.length !== 3) {
       throw new Error('Invalid private URL format. Expected: private:fileId:fileName')
     }
-    
+
     const [, fileId, fileName] = parts
+
+    // Check if we should use CDN with HMAC tokens
+    const useCDNTokens = process.env.USE_CDN_TOKENS === 'true'
+
+    if (useCDNTokens) {
+      try {
+        console.log('[BACKBLAZE] USE_CDN_TOKENS enabled, generating CDN URL from private URL')
+        // Extract file path and generate CDN URL
+        const filePath = extractFilePathFromPrivateUrl(privateUrl)
+        return this.generateCDNUrl(filePath, expirationHours)
+      } catch (error) {
+        console.error('[BACKBLAZE] Failed to generate CDN URL from private URL, falling back to Backblaze:', error)
+        // Fall through to Backblaze signed URL generation
+      }
+    }
+
     return this.generateSignedUrl(fileId, fileName, expirationHours)
   }
 }
