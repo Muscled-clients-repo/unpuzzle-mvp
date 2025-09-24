@@ -1,6 +1,7 @@
 interface CourseEvent {
   type: string
-  courseId: string
+  courseId?: string  // Made optional for non-course events like drafts
+  userId?: string    // Added for user-specific events like drafts
   data: any
   timestamp: number
   operationId?: string
@@ -41,12 +42,15 @@ class CourseEventObserver {
     }
   }
 
-  emit(eventType: string, courseId: string, data: any, operationId?: string) {
+  emit(eventType: string, courseIdOrUserId: string, data: any, operationId?: string) {
     const startTime = performance.now()
-    
+
+    // Determine if this is a user-specific event (like drafts) or course-specific
+    const isDraftEvent = Object.values(DRAFT_EVENTS).includes(eventType as any)
+
     const event: CourseEvent = {
       type: eventType,
-      courseId,
+      ...(isDraftEvent ? { userId: courseIdOrUserId } : { courseId: courseIdOrUserId }),
       data,
       timestamp: Date.now(),
       operationId
@@ -286,6 +290,30 @@ export interface CourseStatusChangeEvent {
   course: any
 }
 
+// Draft event interfaces
+export interface DraftSavedEvent {
+  draftId: string
+  type: 'bug_report' | 'feature_request'
+  title?: string
+  description?: string
+  metadata?: any
+  userId: string
+  operationId?: string
+}
+
+export interface DraftDeletedEvent {
+  draftId: string
+  type: 'bug_report' | 'feature_request'
+  userId: string
+  operationId?: string
+}
+
+export interface DraftListUpdatedEvent {
+  userId: string
+  drafts: any[]
+  operationId?: string
+}
+
 // Event type constants
 export const COURSE_EVENTS = {
   CHAPTER_UPDATE_COMPLETE: 'chapter-update-complete',
@@ -330,12 +358,20 @@ export const COURSE_GOAL_EVENTS = {
   ASSIGNMENT_CHANGED: 'course-goal-assignment-changed'
 } as const
 
+// Draft events (real-time draft auto-save)
+export const DRAFT_EVENTS = {
+  DRAFT_SAVED: 'draft-saved',
+  DRAFT_DELETED: 'draft-deleted',
+  DRAFT_LIST_UPDATED: 'draft-list-updated'
+} as const
+
 export type CourseEventType = typeof COURSE_EVENTS[keyof typeof COURSE_EVENTS]
 export type MediaEventType = typeof MEDIA_EVENTS[keyof typeof MEDIA_EVENTS]
 export type ConversationEventType = typeof CONVERSATION_EVENTS[keyof typeof CONVERSATION_EVENTS]
 export type StudentEventType = typeof STUDENT_EVENTS[keyof typeof STUDENT_EVENTS]
 export type CourseGoalEventType = typeof COURSE_GOAL_EVENTS[keyof typeof COURSE_GOAL_EVENTS]
-export type AllEventType = CourseEventType | MediaEventType | ConversationEventType | StudentEventType | CourseGoalEventType
+export type DraftEventType = typeof DRAFT_EVENTS[keyof typeof DRAFT_EVENTS]
+export type AllEventType = CourseEventType | MediaEventType | ConversationEventType | StudentEventType | CourseGoalEventType | DraftEventType
 
 // Development utilities
 if (process.env.NODE_ENV === 'development') {

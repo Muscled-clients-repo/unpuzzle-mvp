@@ -72,8 +72,17 @@ export default function TrackAssignmentsPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['instructor-pending-reviews'] })
       queryClient.invalidateQueries({ queryKey: ['track-change-requests'] })
+
+      // Update the request with the conversation ID for direct linking
+      if (selectedRequest && data.conversationId) {
+        setSelectedRequest({
+          ...selectedRequest,
+          conversationId: data.conversationId,
+          status: 'approved'
+        })
+      }
+
       setAcceptModalOpen(false)
-      setSelectedRequest(null)
       toast.success(data.message)
     },
     onError: (error) => {
@@ -634,9 +643,9 @@ function TrackChangeCard({ request, onAcceptRequest, isAccepting }: {
             </p>
             <div className="flex gap-2">
               <Button size="sm" variant="outline" asChild>
-                <a href="/instructor/student-goals">
+                <a href={`/instructor/student-goals/${request.user_id}`}>
                   <Target className="h-4 w-4 mr-1" />
-                  Go to Student Goals
+                  Go to Student Conversation
                 </a>
               </Button>
               <Button

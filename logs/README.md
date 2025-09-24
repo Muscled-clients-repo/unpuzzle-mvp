@@ -12,7 +12,7 @@ Time should always be in EST.
 Example:
 1-0905AM-Refactoring the code analysis
 
-Make sure to read the dated folder's filenames to ensure new MD files being created in there follows the order, there shouldn't be duplicated numbered files, even if the rest of the filename is different. It needs to follow the order from earliest to latest files. For example, a file that starts with '1' would be the file created earliest and file that ends with 10 would be the file that was created the latest.
+Make sure to read the dated folder's filenames to ensure new MD files being created in there follows the sequential numbering system, there shouldn't be duplicated numbered files, even if the rest of the filename is different. It needs to follow the order from earliest to latest files. For example, a file that starts with '1' would be the file created earliest and file that ends with 10 would be the file that was created the latest.
 
 Don't make new MD files unless you're asked to. 
 

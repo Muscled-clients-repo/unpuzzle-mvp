@@ -39,6 +39,14 @@ BEGIN
 END $$;
 
 -- =============================================================================
+-- DROP DEPENDENT VIEWS FIRST
+-- =============================================================================
+
+-- Drop views that depend on the columns we're removing
+DROP VIEW IF EXISTS instructor_courses_view CASCADE;
+DROP VIEW IF EXISTS courses_with_assignments CASCADE;
+
+-- =============================================================================
 -- REMOVE UNUSED COLUMNS
 -- =============================================================================
 
@@ -53,6 +61,58 @@ ALTER TABLE courses DROP COLUMN IF EXISTS completion_rate;
 
 -- Remove pending_confusions column (not used in UI, not wanted at the moment)
 ALTER TABLE courses DROP COLUMN IF EXISTS pending_confusions;
+
+-- =============================================================================
+-- RECREATE VIEWS WITHOUT REMOVED COLUMNS
+-- =============================================================================
+
+-- Recreate instructor_courses_view without revenue column
+CREATE OR REPLACE VIEW instructor_courses_view AS
+SELECT
+    c.id,
+    c.instructor_id,
+    c.title,
+    c.description,
+    c.thumbnail_url,
+    c.status,
+    c.price,
+    c.is_free,
+    c.total_videos,
+    c.total_duration_minutes,
+    c.students,
+    c.tags,
+    c.rating,
+    c.created_at,
+    c.updated_at
+FROM courses c;
+
+-- Recreate courses_with_assignments view without revenue column
+CREATE OR REPLACE VIEW courses_with_assignments AS
+SELECT
+    c.id,
+    c.instructor_id,
+    c.title,
+    c.description,
+    c.thumbnail_url,
+    c.status,
+    c.price,
+    c.is_free,
+    c.total_videos,
+    c.total_duration_minutes,
+    c.students,
+    c.tags,
+    c.rating,
+    c.created_at,
+    c.updated_at,
+    array_agg(DISTINCT t.id) FILTER (WHERE t.id IS NOT NULL) as track_ids,
+    array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL) as track_names,
+    array_agg(DISTINCT tg.id) FILTER (WHERE tg.id IS NOT NULL) as goal_ids,
+    array_agg(DISTINCT tg.name) FILTER (WHERE tg.name IS NOT NULL) as goal_names
+FROM courses c
+LEFT JOIN course_goal_assignments cga ON c.id = cga.course_id
+LEFT JOIN track_goals tg ON cga.goal_id = tg.id
+LEFT JOIN tracks t ON tg.track_id = t.id
+GROUP BY c.id;
 
 -- NOTE: KEEPING essential columns:
 -- - tags: Used for course filtering and organization

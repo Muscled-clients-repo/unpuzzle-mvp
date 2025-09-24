@@ -17,7 +17,6 @@ import {
   Search,
   Filter,
   Users,
-  DollarSign,
   TrendingUp,
   MoreVertical,
   Edit,
@@ -101,10 +100,6 @@ export default function TeachCoursesPage() {
     switch (sortBy) {
       case 'students':
         return b.students - a.students
-      case 'revenue':
-        return b.revenue - a.revenue
-      case 'completionRate':
-        return b.completionRate - a.completionRate
       default:
         return 0 // Mock - would use actual dates
     }
@@ -154,7 +149,7 @@ export default function TeachCoursesPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {(courses || []).reduce((acc, c) => acc + c.students, 0).toLocaleString()}
+                {(courses || []).reduce((acc, c) => acc + (c.students || 0), 0).toLocaleString()}
               </div>
               <p className="text-xs text-muted-foreground">
                 Across all courses
@@ -162,38 +157,7 @@ export default function TeachCoursesPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                ${(courses || []).reduce((acc, c) => acc + c.revenue, 0).toLocaleString()}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Lifetime earnings
-              </p>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Avg Completion</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {Math.round(
-                  (courses || []).filter(c => c.status === 'published').reduce((acc, c) => acc + c.completionRate, 0) / 
-                  Math.max((courses || []).filter(c => c.status === 'published').length, 1)
-                )}%
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Student success rate
-              </p>
-            </CardContent>
-          </Card>
           </StatsGrid>
         )}
 
@@ -226,8 +190,6 @@ export default function TeachCoursesPage() {
             options={[
               { value: "lastUpdated", label: "Last Updated" },
               { value: "students", label: "Most Students" },
-              { value: "revenue", label: "Highest Revenue" },
-              { value: "completionRate", label: "Completion Rate" }
             ]}
           />
         </FiltersSection>
@@ -333,17 +295,7 @@ export default function TeachCoursesPage() {
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Students</span>
-                  <span className="font-medium">{course.students.toLocaleString()}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Completion</span>
-                  <span className="font-medium">{course.completionRate}%</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Revenue</span>
-                  <span className="font-medium text-green-600">
-                    ${course.revenue.toLocaleString()}
-                  </span>
+                  <span className="font-medium">{(course.students || 0).toLocaleString()}</span>
                 </div>
                 
                 <div className="pt-3 border-t">

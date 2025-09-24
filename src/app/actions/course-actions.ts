@@ -41,7 +41,6 @@ export async function createCourseAction(data: {
   description?: string
   price?: number
   category?: string
-  level?: string
 }): Promise<ActionResult> {
   try {
     const user = await requireAuth()
@@ -58,8 +57,6 @@ export async function createCourseAction(data: {
 
     // Add optional fields if they exist
     if (data.price !== undefined) courseData.price = data.price
-    if (data.level !== undefined) courseData.difficulty = data.level
-    if (data.difficulty !== undefined) courseData.difficulty = data.difficulty
 
     const { data: course, error } = await supabase
       .from('courses')
@@ -181,9 +178,7 @@ export async function saveCourseAsDraftAction(
     if (data.thumbnail_url !== undefined) updateData.thumbnail_url = data.thumbnail_url
     if (data.is_free !== undefined) updateData.is_free = data.is_free
     
-    // Map 'level' to 'difficulty' to match database schema
-    if (data.level !== undefined) updateData.difficulty = data.level
-    if (data.difficulty !== undefined) updateData.difficulty = data.difficulty
+    // Note: difficulty/level fields removed from database schema
     
     // Note: 'category' field doesn't exist in the current schema, so we skip it
     // if (data.category !== undefined) updateData.category = data.category
@@ -368,9 +363,7 @@ export async function updateCourseAction(courseId: string, updates: any): Promis
     if (updates.is_free !== undefined) updateData.is_free = updates.is_free
     if (updates.status !== undefined) updateData.status = updates.status
     
-    // Map 'level' to 'difficulty' to match database schema
-    if (updates.level !== undefined) updateData.difficulty = updates.level
-    if (updates.difficulty !== undefined) updateData.difficulty = updates.difficulty
+    // Note: difficulty/level fields removed from database schema
     
     // Note: 'category' field doesn't exist in the current schema, so we skip it
     // if (updates.category !== undefined) updateData.category = updates.category

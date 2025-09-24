@@ -128,6 +128,7 @@ export async function getAllRequests() {
     .from('requests')
     .select(`
       id,
+      user_id,
       request_type,
       title,
       description,

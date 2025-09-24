@@ -281,7 +281,7 @@ export default function MyCoursesPageEnhanced() {
                             </CardDescription>
                           </div>
                           <Badge variant="secondary" className="capitalize">
-                            {course.difficulty}
+                            {course.tags?.[0] || 'Course'}
                           </Badge>
                         </div>
                       </CardHeader>

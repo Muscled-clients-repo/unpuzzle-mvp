@@ -178,19 +178,84 @@ export default function RequestsPage() {
                   {request.description}
                 </p>
 
-                {/* Track Change Metadata */}
-                {request.request_type === 'track_change' && request.metadata && (
-                  <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">
-                      Track Change Details:
-                    </p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      From: <span className="font-medium">{request.metadata.current_track}</span>
-                    </p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      To: <span className="font-medium">{request.metadata.desired_track}</span>
-                    </p>
-                  </div>
+                {/* Request Type Specific Metadata */}
+                {request.metadata && (
+                  <>
+                    {/* Track Change Metadata */}
+                    {request.request_type === 'track_change' && (
+                      <div className="bg-blue-50 dark:bg-blue-800/20 p-3 rounded-lg">
+                        <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">
+                          Track Change Details:
+                        </p>
+                        <p className="text-sm text-blue-700 dark:text-blue-300">
+                          From: <span className="font-medium">{request.metadata.current_track}</span>
+                        </p>
+                        <p className="text-sm text-blue-700 dark:text-blue-300">
+                          To: <span className="font-medium">{request.metadata.desired_track}</span>
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Bug Report Metadata */}
+                    {request.request_type === 'bug_report' && (
+                      <div className="bg-red-50 dark:bg-red-800/20 p-3 rounded-lg space-y-2">
+                        <p className="text-sm font-medium text-red-900 dark:text-red-100 mb-1">
+                          Bug Report Details:
+                        </p>
+                        {request.metadata.loomLink && (
+                          <div>
+                            <p className="text-xs text-red-700 dark:text-red-300 font-medium">Loom Video:</p>
+                            <a
+                              href={request.metadata.loomLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 underline"
+                            >
+                              {request.metadata.loomLink}
+                            </a>
+                          </div>
+                        )}
+                        {request.metadata.context && (
+                          <div>
+                            <p className="text-xs text-red-700 dark:text-red-300 font-medium">Technical Context:</p>
+                            <p className="text-sm text-red-600 dark:text-red-400">
+                              Page: {request.metadata.context.route} | {request.metadata.context.userRole}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Feature Request Metadata */}
+                    {request.request_type === 'feature_request' && (
+                      <div className="bg-green-50 dark:bg-green-800/20 p-3 rounded-lg space-y-2">
+                        <p className="text-sm font-medium text-green-900 dark:text-green-100 mb-1">
+                          Feature Request Details:
+                        </p>
+                        {request.metadata.useCase && (
+                          <div>
+                            <p className="text-xs text-green-700 dark:text-green-300 font-medium">Why beneficial for community:</p>
+                            <p className="text-sm text-green-600 dark:text-green-400">
+                              {request.metadata.useCase}
+                            </p>
+                          </div>
+                        )}
+                        {request.metadata.loomLink && (
+                          <div>
+                            <p className="text-xs text-green-700 dark:text-green-300 font-medium">Loom Video:</p>
+                            <a
+                              href={request.metadata.loomLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-200 underline"
+                            >
+                              {request.metadata.loomLink}
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
 
                 <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-gray-700">

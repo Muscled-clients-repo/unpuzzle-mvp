@@ -21,12 +21,8 @@ export interface VideoRow {
   filename: string
   file_size: number
   status: 'pending' | 'uploading' | 'processing' | 'complete' | 'error'
-  progress: number
   backblaze_file_id?: string
   backblaze_url?: string
-  bunny_url?: string
-  video_format: string
-  video_quality: string
   order: number
   created_at: string
   updated_at: string
@@ -75,13 +71,18 @@ function rowToVideo(row: VideoRow): Video {
 
 // Convert database row to UI VideoUpload interface (for course creation)
 function rowToVideoUpload(row: VideoRow): VideoUpload {
+  // Determine progress based on status since progress column is removed
+  const progress = row.status === 'complete' ? 100 :
+                  row.status === 'processing' ? 90 :
+                  row.status === 'uploading' ? 50 : 0;
+
   return {
     id: row.id,
     name: row.title,
     size: row.file_size,
     duration: row.duration,
     status: row.status,
-    progress: row.progress,
+    progress: progress,
     url: row.video_url,
     thumbnailUrl: row.thumbnail_url,
     chapterId: row.chapter_id,
@@ -118,7 +119,7 @@ export class SupabaseVideoService {
         filename: (videoUpload as any).backblazeFileName || `${videoUpload.name}.${videoUpload.file?.name.split('.').pop() || 'mp4'}`,
         file_size: videoUpload.size,
         status: videoUpload.status,
-        progress: videoUpload.progress,
+        // Note: progress column removed - status is sufficient for tracking
         order: videoUpload.order || 0, // Use provided order
         video_url: videoUpload.url,
         thumbnail_url: videoUpload.thumbnailUrl,
@@ -176,7 +177,7 @@ export class SupabaseVideoService {
         dbUpdates.duration_seconds = parseDuration(updates.duration)
       }
       if (updates.status !== undefined) dbUpdates.status = updates.status
-      if (updates.progress !== undefined) dbUpdates.progress = updates.progress
+      // Note: progress column removed - progress is derived from status
       if (updates.url !== undefined) dbUpdates.video_url = updates.url
       if (updates.thumbnailUrl !== undefined) dbUpdates.thumbnail_url = updates.thumbnailUrl
       if (updates.chapterId !== undefined) dbUpdates.chapter_id = updates.chapterId

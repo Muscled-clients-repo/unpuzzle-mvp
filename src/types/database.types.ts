@@ -135,18 +135,14 @@ export type Database = {
       courses: {
         Row: {
           category: string | null
-          completion_rate: number | null
           created_at: string | null
           description: string | null
-          difficulty: string | null
           id: string
           instructor_id: string
           is_free: boolean | null
           level: string | null
-          pending_confusions: number | null
           price: number | null
           rating: number | null
-          revenue: number | null
           status: string
           students: number | null
           tags: string[] | null
@@ -158,18 +154,14 @@ export type Database = {
         }
         Insert: {
           category?: string | null
-          completion_rate?: number | null
           created_at?: string | null
           description?: string | null
-          difficulty?: string | null
           id?: string
           instructor_id: string
           is_free?: boolean | null
           level?: string | null
-          pending_confusions?: number | null
           price?: number | null
           rating?: number | null
-          revenue?: number | null
           status?: string
           students?: number | null
           tags?: string[] | null
@@ -181,18 +173,14 @@ export type Database = {
         }
         Update: {
           category?: string | null
-          completion_rate?: number | null
           created_at?: string | null
           description?: string | null
-          difficulty?: string | null
           id?: string
           instructor_id?: string
           is_free?: boolean | null
           level?: string | null
-          pending_confusions?: number | null
           price?: number | null
           rating?: number | null
-          revenue?: number | null
           status?: string
           students?: number | null
           tags?: string[] | null
@@ -911,7 +899,6 @@ export type Database = {
         Row: {
           backblaze_file_id: string | null
           backblaze_url: string | null
-          bunny_url: string | null
           chapter_id: string
           course_id: string
           created_at: string | null
@@ -923,19 +910,15 @@ export type Database = {
           id: string
           media_file_id: string | null
           order: number | null
-          progress: number | null
           status: string | null
           thumbnail_url: string | null
           title: string
           updated_at: string | null
-          video_format: string | null
-          video_quality: string | null
           video_url: string | null
         }
         Insert: {
           backblaze_file_id?: string | null
           backblaze_url?: string | null
-          bunny_url?: string | null
           chapter_id: string
           course_id: string
           created_at?: string | null
@@ -947,19 +930,15 @@ export type Database = {
           id?: string
           media_file_id?: string | null
           order?: number | null
-          progress?: number | null
           status?: string | null
           thumbnail_url?: string | null
           title: string
           updated_at?: string | null
-          video_format?: string | null
-          video_quality?: string | null
           video_url?: string | null
         }
         Update: {
           backblaze_file_id?: string | null
           backblaze_url?: string | null
-          bunny_url?: string | null
           chapter_id?: string
           course_id?: string
           created_at?: string | null
@@ -971,13 +950,10 @@ export type Database = {
           id?: string
           media_file_id?: string | null
           order?: number | null
-          progress?: number | null
           status?: string | null
           thumbnail_url?: string | null
           title?: string
           updated_at?: string | null
-          video_format?: string | null
-          video_quality?: string | null
           video_url?: string | null
         }
         Relationships: [
@@ -1097,7 +1073,6 @@ export type Database = {
         Returns: {
           backblaze_file_id: string | null
           backblaze_url: string | null
-          bunny_url: string | null
           chapter_id: string
           course_id: string
           created_at: string | null
@@ -1109,13 +1084,10 @@ export type Database = {
           id: string
           media_file_id: string | null
           order: number | null
-          progress: number | null
           status: string | null
           thumbnail_url: string | null
           title: string
           updated_at: string | null
-          video_format: string | null
-          video_quality: string | null
           video_url: string | null
         }[]
       }

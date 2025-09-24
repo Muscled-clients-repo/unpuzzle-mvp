@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import React, { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useAppStore } from "@/stores/app-store"
@@ -135,6 +135,28 @@ export function Sidebar({ role = "learner" }: SidebarProps) {
     setExpandedMenus(newExpanded)
   }
 
+  // Auto-expand menus based on current route (Shopify-style)
+  React.useEffect(() => {
+    const newExpanded = new Set(expandedMenus)
+
+    // Auto-expand Requests submenu when on any requests route
+    if (pathname.startsWith('/instructor/requests')) {
+      newExpanded.add('/instructor/requests')
+    }
+
+    // Auto-expand Student Goals submenu when on any student-goals route
+    if (pathname.startsWith('/instructor/student-goals')) {
+      newExpanded.add('/instructor/student-goals')
+    }
+
+    // Auto-expand Goals submenu when on any student goals route
+    if (pathname.startsWith('/student/goals')) {
+      newExpanded.add('/student/goals')
+    }
+
+    setExpandedMenus(newExpanded)
+  }, [pathname])
+
   // Check if submenu item is active
   const checkSubmenuActive = (submenu: NavItem[]) => {
     return submenu.some(subItem =>
@@ -189,9 +211,9 @@ export function Sidebar({ role = "learner" }: SidebarProps) {
             const Icon = item.icon
             const hasSubmenu = item.submenu && item.submenu.length > 0
             const isExpanded = expandedMenus.has(item.href)
-            // Parent menu should only be active if on exact page OR no submenu item is active
+            // Parent menu highlighting logic
             const isActive = hasSubmenu
-              ? false // Never highlight parent if it has submenu - only submenu items should be highlighted
+              ? pathname === item.href // Highlight parent if on exact parent route (e.g., /instructor/requests)
               : pathname === item.href ||
                 (item.href !== "/student" && item.href !== "/instructor" && item.href !== "/admin" && pathname.startsWith(item.href))
             const isSubmenuActive = hasSubmenu && checkSubmenuActive(item.submenu)
@@ -212,8 +234,8 @@ export function Sidebar({ role = "learner" }: SidebarProps) {
             return (
               <div key={item.href}>
                 {hasSubmenu ? (
-                  <button
-                    onClick={() => toggleMenu(item.href)}
+                  <Link
+                    href={item.href}
                     className={cn(
                       "w-full flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors",
                       isActive || isSubmenuActive
@@ -231,13 +253,8 @@ export function Sidebar({ role = "learner" }: SidebarProps) {
                           {badgeContent}
                         </Badge>
                       )}
-                      {isExpanded ? (
-                        <ChevronDown className="h-4 w-4" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4" />
-                      )}
                     </div>
-                  </button>
+                  </Link>
                 ) : (
                   <Link
                     href={item.href}

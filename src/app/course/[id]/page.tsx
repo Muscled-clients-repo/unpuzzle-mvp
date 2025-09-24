@@ -107,9 +107,6 @@ export default function CoursePreviewPage() {
                   <Badge variant="secondary" className="capitalize">
                     {course.tags?.[0] || 'Development'}
                   </Badge>
-                  <Badge variant="outline" className="capitalize">
-                    {course.difficulty}
-                  </Badge>
                   <Badge className="bg-gradient-to-r from-blue-600 to-purple-600 border-0">
                     <Brain className="mr-1 h-3 w-3" />
                     {aiInsights.matchScore}% AI Match

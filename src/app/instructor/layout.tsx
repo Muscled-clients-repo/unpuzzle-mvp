@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation"
 import { Header } from "@/components/layout/header"
 import { Sidebar } from "@/components/layout/sidebar"
+import { HelpWidget } from "@/components/help/HelpWidget"
 export default function InstructorLayout({
   children,
 }: {
@@ -22,6 +23,9 @@ export default function InstructorLayout({
           {children}
         </main>
       </div>
+
+      {/* Help Widget - only show on non-fullscreen pages */}
+      {!isFullscreenPage && <HelpWidget />}
     </div>
   )
 }

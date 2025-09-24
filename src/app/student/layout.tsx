@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation"
 import { Header } from "@/components/layout/header"
 import { Sidebar } from "@/components/layout/sidebar"
+import { HelpWidget } from "@/components/help/HelpWidget"
 export default function StudentLayout({
   children,
 }: {
@@ -36,6 +37,9 @@ export default function StudentLayout({
           {children}
         </main>
       </div>
+
+      {/* Help Widget */}
+      <HelpWidget />
     </div>
   )
 }

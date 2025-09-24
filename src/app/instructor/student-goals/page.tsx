@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Target, User, Search, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -38,6 +39,20 @@ export default function InstructorStudentGoalsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed' | 'paused'>('all')
   const { user } = useAppStore()
+  const searchParams = useSearchParams()
+
+  // Handle deep linking to specific student
+  useEffect(() => {
+    const studentParam = searchParams.get('student')
+    const emailParam = searchParams.get('email')
+
+    if (emailParam) {
+      setSearchQuery(decodeURIComponent(emailParam))
+    } else if (studentParam) {
+      // If we only have student ID, we could set a flag to highlight that student
+      // For now, let's focus on the email since it's more user-friendly
+    }
+  }, [searchParams])
 
   // Fetch real student goal assignments from database (TanStack Query layer)
   const { data: studentGoals, isLoading: goalsLoading, error: goalsError } = useQuery({
@@ -242,8 +257,13 @@ export default function InstructorStudentGoalsPage() {
 
       {/* Student Goals Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredStudents.map((student) => (
-          <Card key={student.studentId} className="hover:shadow-md transition-shadow">
+        {filteredStudents.map((student) => {
+          const isHighlighted = searchParams.get('student') === student.studentId
+          return (
+          <Card
+            key={student.studentId}
+            className={`hover:shadow-md transition-shadow ${isHighlighted ? 'ring-2 ring-blue-500 ring-opacity-50 bg-blue-50 dark:bg-blue-900/20' : ''}`}
+          >
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -323,7 +343,8 @@ export default function InstructorStudentGoalsPage() {
               </Button>
             </CardContent>
           </Card>
-        ))}
+          )
+        })}
       </div>
 
       {/* Empty State */}
