@@ -333,7 +333,7 @@ export default function TeachCoursesPage() {
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Students</span>
-                  <span className="font-medium">{course.students.toLocaleString()}</span>
+                  <span className="font-medium">{(course.students || 0).toLocaleString()}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Completion</span>
@@ -342,7 +342,7 @@ export default function TeachCoursesPage() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Revenue</span>
                   <span className="font-medium text-green-600">
-                    ${course.revenue.toLocaleString()}
+                    ${(course.revenue || 0).toLocaleString()}
                   </span>
                 </div>
                 
