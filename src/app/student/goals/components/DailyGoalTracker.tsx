@@ -805,7 +805,7 @@ Share what you accomplished, any challenges you faced, insights you gained, or h
                                     // Image preview using signed URL
                                     <div className="relative">
                                       <DailyNoteImage
-                                        privateUrl={file.cdn_url}
+                                        attachmentId={file.id}
                                         originalFilename={file.original_filename}
                                         className="w-full h-32"
                                         onClick={() => {
@@ -1031,7 +1031,7 @@ Share what you accomplished, any challenges you faced, insights you gained, or h
                                           // Image preview
                                           <div className="relative">
                                             <DailyNoteImage
-                                              privateUrl={file.cdn_url}
+                                              attachmentId={file.id}
                                               originalFilename={file.original_filename}
                                               className="w-full h-32"
                                               onClick={() => {

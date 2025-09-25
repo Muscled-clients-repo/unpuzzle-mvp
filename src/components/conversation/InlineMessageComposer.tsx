@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
@@ -78,6 +78,53 @@ export function InlineMessageComposer({
     initialIndex: 0
   })
 
+  // File blob URL cache to prevent state updates during render
+  const [fileBlobUrls, setFileBlobUrls] = useState<Map<string, string>>(new Map())
+
+  // Create blob URLs for files when they change
+  useEffect(() => {
+    const newBlobUrls = new Map<string, string>()
+
+    attachedFiles.forEach(file => {
+      if (file.type.startsWith('image/')) {
+        const fileKey = file.name + file.size
+
+        // Check if we already have a blob URL for this file
+        if (!fileBlobUrls.has(fileKey)) {
+          const blobUrl = URL.createObjectURL(file)
+          newBlobUrls.set(fileKey, blobUrl)
+
+          // Also update the UI transition store (but not during render)
+          setImageTransition(file.name, file.size, blobUrl)
+        } else {
+          // Keep existing blob URL
+          newBlobUrls.set(fileKey, fileBlobUrls.get(fileKey)!)
+        }
+      }
+    })
+
+    // Clean up old blob URLs that are no longer needed
+    fileBlobUrls.forEach((blobUrl, fileKey) => {
+      const fileStillExists = attachedFiles.some(file => (file.name + file.size) === fileKey)
+      if (!fileStillExists) {
+        URL.revokeObjectURL(blobUrl)
+      } else {
+        newBlobUrls.set(fileKey, blobUrl)
+      }
+    })
+
+    setFileBlobUrls(newBlobUrls)
+  }, [attachedFiles, setImageTransition])
+
+  // Cleanup blob URLs on unmount
+  useEffect(() => {
+    return () => {
+      fileBlobUrls.forEach(blobUrl => {
+        URL.revokeObjectURL(blobUrl)
+      })
+    }
+  }, [])
+
   // Change detection for edit mode
   const hasContentChanged = isEditMode ? messageText.trim() !== originalMessageText.trim() : false
   const originalAttachmentIds = originalAttachments.map(att => att.id).sort()
@@ -93,16 +140,21 @@ export function InlineMessageComposer({
   const getFileDisplayUrl = (file: File) => {
     if (!file.type.startsWith('image/')) return null
 
-    // First check UI transition store using file-based mapping
+    const fileKey = file.name + file.size
+
+    // First check our local cache
+    if (fileBlobUrls.has(fileKey)) {
+      return fileBlobUrls.get(fileKey)
+    }
+
+    // Then check UI transition store using file-based mapping
     const transition = getTransitionByFile(file.name, file.size)
     if (transition) {
       return transition.blobUrl
     }
 
-    // Create and set up new transition mapping for this file
-    const blobUrl = URL.createObjectURL(file)
-    setImageTransition(file.name, file.size, blobUrl)
-    return blobUrl
+    // Return null if we don't have a blob URL yet (useEffect will create it)
+    return null
   }
 
   // Convert File objects and existing attachments to format expected by image viewer
@@ -129,7 +181,7 @@ export function InlineMessageComposer({
         original_filename: file.name,
         file_size: file.size,
         mime_type: file.type,
-        cdn_url: getFileDisplayUrl(file) || URL.createObjectURL(file),
+        cdn_url: getFileDisplayUrl(file) || '',
         storage_path: '',
         message_text: messageText || 'Preview before sending'
       }))
@@ -260,7 +312,7 @@ export function InlineMessageComposer({
                 {attachment.mimeType.startsWith('image/') ? (
                   <div className="relative">
                     <DailyNoteImage
-                      privateUrl={attachment.url}
+                      attachmentId={attachment.id}
                       originalFilename={attachment.name}
                       className="w-full h-32"
                       onClick={() => !isLoading && openImageViewer(attachment.id)}
@@ -323,12 +375,18 @@ export function InlineMessageComposer({
                 {file.type.startsWith('image/') ? (
                   <div className="relative">
                     {/* Show actual image preview (WhatsApp/Messenger style with UI orchestration) */}
-                    <img
-                      src={getFileDisplayUrl(file)}
-                      alt={file.name}
-                      className="w-full h-32 object-cover rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:opacity-90 transition-opacity"
-                      onClick={() => !isLoading && openImageViewer(file.name + file.size)}
-                    />
+                    {getFileDisplayUrl(file) ? (
+                      <img
+                        src={getFileDisplayUrl(file)!}
+                        alt={file.name}
+                        className="w-full h-32 object-cover rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={() => !isLoading && openImageViewer(file.name + file.size)}
+                      />
+                    ) : (
+                      <div className="w-full h-32 bg-gray-200 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 flex items-center justify-center">
+                        <div className="text-gray-500 text-sm">Loading...</div>
+                      </div>
+                    )}
 
                     {/* Upload progress overlay */}
                     {isLoading && (

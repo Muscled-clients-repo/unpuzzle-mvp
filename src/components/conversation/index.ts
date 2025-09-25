@@ -7,7 +7,7 @@ export { InlineMessageComposer } from './InlineMessageComposer'
 export type {
   Conversation,
   ConversationMessage,
-  MessageAttachment,
+  ConversationAttachment,
   ConversationData,
   CreateMessageRequest,
   MessageFormData

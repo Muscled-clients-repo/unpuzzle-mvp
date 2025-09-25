@@ -1,20 +1,20 @@
 'use client'
 
-import { useSignedUrl } from '@/hooks/use-signed-url'
+import { useAttachmentCDN } from '@/hooks/use-attachment-cdn'
 import { useUITransitionStore } from '@/stores/ui-transition-store'
 
 interface DailyNoteImageProps {
-  privateUrl: string | null
+  privateUrl?: string | null // Keep for backwards compatibility but not used
   originalFilename: string
   className?: string
   onClick?: () => void
-  attachmentId?: string // For debugging
+  attachmentId: string // Now required for CDN URL generation
   fileSize?: number // For file-based UI transition lookup
 }
 
-export function DailyNoteImage({ privateUrl, originalFilename, className = '', onClick, attachmentId, fileSize }: DailyNoteImageProps) {
-  // TanStack layer: Server data
-  const { url: signedUrl, isLoading, error } = useSignedUrl(privateUrl)
+export function DailyNoteImage({ originalFilename, className = '', onClick, attachmentId, fileSize }: DailyNoteImageProps) {
+  // TanStack layer: CDN URL with HMAC tokens (CloudFlare Worker)
+  const { url: cdnUrl, isLoading, error } = useAttachmentCDN(attachmentId)
 
   // Zustand layer: UI transition state using file-based lookup
   const transition = useUITransitionStore(state =>
@@ -22,20 +22,20 @@ export function DailyNoteImage({ privateUrl, originalFilename, className = '', o
   )
 
   // UI Orchestration: Coordinate display logic from multiple layers (no data mixing)
-  const displayUrl = transition?.isTransitioning ? transition.blobUrl : signedUrl
+  const displayUrl = transition?.isTransitioning ? transition.blobUrl : cdnUrl
   const shouldShowSkeleton = isLoading && !displayUrl
 
-  console.log('🖼️ DailyNoteImage UI Orchestration (File-Based):', {
-    privateUrl,
+  console.log('🖼️ DailyNoteImage CDN UI Orchestration:', {
     originalFilename,
     fileSize,
     attachmentId,
-    signedUrl: signedUrl ? 'PRESENT' : 'MISSING',
+    cdnUrl: cdnUrl ? 'PRESENT' : 'MISSING',
     transitionBlobUrl: transition?.blobUrl ? 'PRESENT' : 'MISSING',
     transitionFileKey: transition?.fileKey,
     displayUrl: displayUrl ? 'PRESENT' : 'MISSING',
     shouldShowSkeleton,
-    isLoading
+    isLoading,
+    error
   })
 
   // Show image from either layer (UI orchestration)

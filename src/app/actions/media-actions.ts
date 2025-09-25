@@ -196,22 +196,7 @@ export async function uploadMediaFileAction(
 
     console.log('💾 Media file saved to database:', savedFile.id)
 
-    // Add history entry for file upload
-    const { error: historyError } = await supabase.rpc('add_media_file_history', {
-      p_media_file_id: savedFile.id,
-      p_action: 'uploaded',
-      p_description: `File "${file.name}" uploaded (${formatFileSize(file.size)})`,
-      p_metadata: {
-        file_size: file.size,
-        mime_type: file.type,
-        original_name: file.name,
-        backblaze_file_id: uploadResult.fileId
-      }
-    })
-
-    if (historyError) {
-      console.warn('⚠️ Failed to add history entry:', historyError)
-    }
+    // Note: File upload history tracking removed (media_file_history table deleted)
 
     // Broadcast completion
     broadcastWebSocketMessage({
@@ -328,62 +313,8 @@ export async function getMediaFilesAction() {
   }
 }
 
-export async function getMediaFileHistoryAction(fileId: string) {
-  try {
-    const supabase = await createSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user) {
-      return {
-        success: false,
-        error: 'User not authenticated',
-        history: []
-      }
-    }
-
-    const { data: history, error } = await supabase
-      .from('media_file_history')
-      .select(`
-        id,
-        action,
-        description,
-        metadata,
-        created_at,
-        media_files!inner(uploaded_by)
-      `)
-      .eq('media_file_id', fileId)
-      .eq('media_files.uploaded_by', user.id) // Ensure user can only see history for their own files
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      console.error('❌ Failed to fetch file history:', error)
-      return {
-        success: false,
-        error: error.message,
-        history: []
-      }
-    }
-
-    // Transform history data
-    const transformedHistory = history.map(entry => ({
-      id: entry.id,
-      action: entry.action,
-      description: entry.description,
-      metadata: entry.metadata,
-      timestamp: entry.created_at,
-      user: 'You' // Since we only show user's own files
-    }))
-
-    return { success: true, history: transformedHistory }
-  } catch (error) {
-    console.error('❌ Failed to fetch file history:', error)
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Failed to fetch history',
-      history: []
-    }
-  }
-}
+// Note: getMediaFileHistoryAction removed - media_file_history table deleted
+// File history functionality simplified to use created_at/updated_at from media_files table
 
 function formatFileSize(bytes: number): string {
   const sizes = ['Bytes', 'KB', 'MB', 'GB']
@@ -600,22 +531,7 @@ export async function bulkDeleteMediaFilesAction(fileIds: string[], operationId:
           continue
         }
 
-        // Add history entry
-        const { error: historyError } = await supabase.rpc('add_media_file_history', {
-          p_media_file_id: fileId,
-          p_action: 'deleted',
-          p_description: `File "${fileInfo.name}" bulk deleted (${formatFileSize(fileInfo.file_size)})`,
-          p_metadata: {
-            file_size: fileInfo.file_size,
-            file_type: fileInfo.file_type,
-            operation_id: operationId,
-            bulk_operation: true
-          }
-        })
-
-        if (historyError) {
-          console.warn(`⚠️ Failed to add history for ${fileId}:`, historyError)
-        }
+        // Note: History tracking removed (media_file_history table deleted)
 
         results.push({ fileId, success: true })
         completedCount++
@@ -751,21 +667,7 @@ export async function deleteMediaFileAction(fileId: string) {
     
     console.log('✅ File marked as deleted in database')
 
-    // Add history entry for file deletion
-    const { error: historyError } = await supabase.rpc('add_media_file_history', {
-      p_media_file_id: fileId,
-      p_action: 'deleted',
-      p_description: `File "${fileInfo.name}" deleted (${formatFileSize(fileInfo.file_size)})`,
-      p_metadata: {
-        file_size: fileInfo.file_size,
-        file_type: fileInfo.file_type,
-        deleted_name: fileInfo.name
-      }
-    })
-
-    if (historyError) {
-      console.warn('⚠️ Failed to add history entry:', historyError)
-    }
+    // Note: File deletion history tracking removed (media_file_history table deleted)
     
     // Revalidate the media page
     revalidatePath('/instructor/media')
@@ -887,21 +789,7 @@ export async function bulkAddTagsAction(fileIds: string[], tagsToAdd: string[]) 
         continue
       }
 
-      // Add history entry
-      const { error: historyError } = await supabase.rpc('add_media_file_history', {
-        p_media_file_id: fileId,
-        p_action: 'updated',
-        p_description: `Tags added: ${tagsToAdd.join(', ')} to "${currentFile.name}"`,
-        p_metadata: {
-          operation: 'bulk_add_tags',
-          tags_added: tagsToAdd,
-          new_tags: newTags
-        }
-      })
-
-      if (historyError) {
-        console.warn(`⚠️ Failed to add history for ${fileId}:`, historyError)
-      }
+      // Note: Tag history tracking removed (media_file_history table deleted)
 
       results.push({ fileId, success: true })
     }
@@ -983,21 +871,7 @@ export async function bulkRemoveTagsAction(fileIds: string[], tagsToRemove: stri
         continue
       }
 
-      // Add history entry
-      const { error: historyError } = await supabase.rpc('add_media_file_history', {
-        p_media_file_id: fileId,
-        p_action: 'updated',
-        p_description: `Tags removed: ${tagsToRemove.join(', ')} from "${currentFile.name}"`,
-        p_metadata: {
-          operation: 'bulk_remove_tags',
-          tags_removed: tagsToRemove,
-          new_tags: newTags
-        }
-      })
-
-      if (historyError) {
-        console.warn(`⚠️ Failed to add history for ${fileId}:`, historyError)
-      }
+      // Note: Tag history tracking removed (media_file_history table deleted)
 
       results.push({ fileId, success: true })
     }
@@ -1078,21 +952,7 @@ export async function bulkReplaceTagsAction(fileIds: string[], newTags: string[]
         continue
       }
 
-      // Add history entry
-      const { error: historyError } = await supabase.rpc('add_media_file_history', {
-        p_media_file_id: fileId,
-        p_action: 'updated',
-        p_description: `Tags replaced on "${currentFile.name}" with: ${uniqueNewTags.length > 0 ? uniqueNewTags.join(', ') : 'no tags'}`,
-        p_metadata: {
-          operation: 'bulk_replace_tags',
-          old_tags: currentFile.tags || [],
-          new_tags: uniqueNewTags
-        }
-      })
-
-      if (historyError) {
-        console.warn(`⚠️ Failed to add history for ${fileId}:`, historyError)
-      }
+      // Note: Tag history tracking removed (media_file_history table deleted)
 
       results.push({ fileId, success: true })
     }

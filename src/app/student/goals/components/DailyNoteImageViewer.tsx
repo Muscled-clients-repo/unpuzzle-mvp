@@ -120,8 +120,8 @@ export function DailyNoteImageViewer({
           {/* Image Section */}
           <div className="flex-1 relative bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
             <DailyNoteImage
-              privateUrl={currentImage?.cdn_url}
-              originalFilename={currentImage?.original_filename}
+              attachmentId={currentImage?.id || ''}
+              originalFilename={currentImage?.original_filename || ''}
               className="max-w-full max-h-full object-contain"
             />
             
@@ -195,7 +195,7 @@ export function DailyNoteImageViewer({
                       onClick={() => setCurrentImageIndex(index)}
                     >
                       <DailyNoteImage
-                        privateUrl={file.cdn_url}
+                        attachmentId={file.id}
                         originalFilename={file.original_filename}
                         className="w-full h-full object-cover"
                       />

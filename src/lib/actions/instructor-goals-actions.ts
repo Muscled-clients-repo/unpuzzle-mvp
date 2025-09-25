@@ -292,25 +292,6 @@ export async function getStudentDailyGoalData(studentId: string, {
 
   const serviceClient = createServiceClient()
 
-  // Get daily notes using service client
-  let notesQuery = (serviceClient as any)
-    .from('user_daily_notes')
-    .select('*')
-    .eq('user_id', studentId)
-    .order('note_date', { ascending: false })
-
-  if (startDate) {
-    notesQuery = notesQuery.gte('note_date', startDate)
-  }
-
-  if (endDate) {
-    notesQuery = notesQuery.lte('note_date', endDate)
-  }
-
-  if (limit) {
-    notesQuery = notesQuery.limit(limit)
-  }
-
   // Get user actions using service client
   let actionsQuery = (serviceClient as any)
     .from('user_actions')
@@ -330,33 +311,15 @@ export async function getStudentDailyGoalData(studentId: string, {
     actionsQuery = actionsQuery.limit(limit)
   }
 
-  const [dailyNotesResult, userActionsResult] = await Promise.all([
-    notesQuery,
-    actionsQuery
-  ])
-
-  if (dailyNotesResult.error) {
-    throw new Error('Failed to get student daily notes')
-  }
+  const userActionsResult = await actionsQuery
 
   if (userActionsResult.error) {
     throw new Error('Failed to get student actions')
   }
 
-  // Get files for each daily note
-  const { getDailyNoteFiles } = await import('./daily-note-attachments')
-  const notesWithFiles = await Promise.all(
-    (dailyNotesResult.data || []).map(async (note: any) => {
-      const files = await getDailyNoteFiles(note.id, studentId) // Pass studentId for instructor view
-      return {
-        ...note,
-        attachedFiles: files
-      }
-    })
-  )
-
+  // Note: Daily notes feature removed - data migrated to conversation_messages system
   return {
-    dailyNotes: notesWithFiles,
+    dailyNotes: [], // Daily notes feature removed
     userActions: userActionsResult.data || []
   }
 }

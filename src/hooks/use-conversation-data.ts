@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getConversationData, createMessage, updateMessage, deleteMessage, getStudentGoalProgress, getMessagesForDate } from '@/lib/actions/conversation-actions'
-import { uploadMessageAttachments, deleteMessageAttachment } from '@/lib/actions/message-attachments'
+import { uploadMessageAttachments, deleteMessageAttachment } from '@/lib/actions/conversation-attachments'
 import { toast } from 'sonner'
 
 // TanStack Query hooks for unified conversation system
@@ -17,6 +17,7 @@ export function useConversationData(studentId: string, options: {
   limit?: number
   instructorId?: string
 } = {}) {
+
   // Normalize options to create more consistent cache keys
   const normalizedOptions = {
     startDate: options.startDate,
@@ -25,13 +26,17 @@ export function useConversationData(studentId: string, options: {
     instructorId: options.instructorId
   }
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ['conversation', studentId, normalizedOptions],
     queryFn: () => getConversationData(studentId, normalizedOptions),
     staleTime: 30000, // 30 seconds - longer since we have real-time updates
-    refetchOnWindowFocus: true
+    refetchOnWindowFocus: true,
+    enabled: !!studentId
     // Removed refetchInterval - WebSocket provides real-time updates
   })
+
+
+  return query
 }
 
 /**

@@ -30,11 +30,11 @@ export interface ConversationMessage {
   // Computed fields from joins
   sender_name?: string
   sender_role?: 'student' | 'instructor'
-  attachments?: MessageAttachment[]
+  attachments?: ConversationAttachment[]
   replies?: ConversationMessage[]
 }
 
-export interface MessageAttachment {
+export interface ConversationAttachment {
   id: string
   message_id: string
   filename: string

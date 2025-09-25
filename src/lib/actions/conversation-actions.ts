@@ -22,10 +22,10 @@ export interface ConversationMessage {
   sender_avatar?: string
   reply_content?: string
   reply_sender_name?: string
-  attachments: MessageAttachment[]
+  attachments: ConversationAttachment[]
 }
 
-export interface MessageAttachment {
+export interface ConversationAttachment {
   id: string
   filename: string
   original_filename: string
@@ -126,6 +126,7 @@ export async function getConversationData(studentId: string, options: {
   instructorId?: string
 } = {}): Promise<ConversationData> {
   const user = await requireAuth()
+
   const serviceClient = createServiceClient()
 
   // Validate studentId
@@ -274,6 +275,51 @@ export async function getConversationData(studentId: string, options: {
       }) || []
     }
   } else {
+    // DEBUG: First check if messages exist in the raw table
+    const { data: rawMessages, error: rawError } = await (serviceClient as any)
+      .from('conversation_messages')
+      .select('id, content, message_type, target_date, created_at')
+      .eq('conversation_id', conversation.id)
+      .limit(5)
+
+    console.log('[CONVERSATION] DEBUG - Raw messages in conversation_messages table:', {
+      rawCount: rawMessages?.length || 0,
+      rawError: rawError?.message || null,
+      rawMessages: rawMessages || []
+    })
+
+    // DEBUG: Also test direct query with manual joins to bypass view issues
+    const { data: debugMessages, error: debugError } = await (serviceClient as any)
+      .from('conversation_messages')
+      .select(`
+        id,
+        conversation_id,
+        sender_id,
+        message_type,
+        content,
+        target_date,
+        created_at,
+        profiles!sender_id (
+          full_name,
+          role,
+          avatar_url
+        )
+      `)
+      .eq('conversation_id', conversation.id)
+      .limit(5)
+
+    console.log('[CONVERSATION] DEBUG - Direct message query with profiles:', {
+      debugCount: debugMessages?.length || 0,
+      debugError: debugError?.message || null,
+      debugMessages: debugMessages?.map(m => ({
+        id: m.id,
+        content: m.content?.substring(0, 30),
+        target_date: m.target_date,
+        hasProfile: !!m.profiles,
+        profileName: m.profiles?.full_name || 'MISSING'
+      })) || []
+    })
+
     // Use conversation_timeline view for regular conversations
     let query = (serviceClient as any)
       .from('conversation_timeline')
@@ -281,6 +327,7 @@ export async function getConversationData(studentId: string, options: {
       .eq('conversation_id', conversation.id)
 
     console.log('[CONVERSATION] Querying conversation_timeline for conversation:', conversation.id)
+    console.log('[CONVERSATION] Query options:', { options, startDate: options.startDate, endDate: options.endDate, limit: options.limit })
 
     if (options.startDate) {
       query = query.gte('target_date', options.startDate)
@@ -294,13 +341,36 @@ export async function getConversationData(studentId: string, options: {
       .order('created_at', { ascending: true })
       .limit(options.limit || 50)
 
+    console.log('[CONVERSATION] Executing query...')
     const { data: timelineMessages, error: timelineError } = await query
+    console.log('[CONVERSATION] Raw query result:', {
+      messagesFound: timelineMessages?.length || 0,
+      hasError: !!timelineError,
+      errorMsg: timelineError?.message,
+      firstRawMessage: timelineMessages?.[0] || null
+    })
 
-    if (timelineError) {
+    messages = timelineMessages || []
+
+    // 🔍 DEBUG: Log query results
+    console.log('🔍 CONVERSATION TIMELINE QUERY RESULTS:', {
+      conversationId: conversation.id,
+      messagesCount: timelineMessages?.length || 0,
+      error: timelineError?.message || null,
+      firstMessage: timelineMessages?.[0] ? {
+        id: timelineMessages[0].id,
+        content: timelineMessages[0].content?.substring(0, 50) + '...',
+        message_type: timelineMessages[0].message_type,
+        target_date: timelineMessages[0].target_date,
+        attachments: timelineMessages[0].attachments,
+        attachmentsCount: Array.isArray(timelineMessages[0].attachments) ? timelineMessages[0].attachments.length : 'NOT_ARRAY'
+      } : null
+    })
+
+    if (timelineError && messages.length === 0) {
       error = timelineError
-    } else {
-      messages = timelineMessages || []
     }
+    // messages already set above in the temp fix logic
   }
 
   if (error) {

@@ -54,6 +54,7 @@ export async function getUserGoalProgress(): Promise<UserGoalProgress | null> {
 }
 
 // Get user's daily notes for a date range
+// NOTE: Daily notes feature migrated to conversation_messages system
 export async function getUserDailyNotes({
   startDate,
   endDate,
@@ -65,39 +66,17 @@ export async function getUserDailyNotes({
 } = {}): Promise<DailyNote[]> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  
+
   if (!user) {
     throw new Error('User not authenticated')
   }
 
-  let query = supabase
-    .from('user_daily_notes')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('note_date', { ascending: false })
-
-  if (startDate) {
-    query = query.gte('note_date', startDate)
-  }
-
-  if (endDate) {
-    query = query.lte('note_date', endDate)
-  }
-
-  if (limit) {
-    query = query.limit(limit)
-  }
-
-  const { data, error } = await query
-
-  if (error) {
-    throw new Error('Failed to get daily notes')
-  }
-
-  return data || []
+  // Daily notes feature removed - data migrated to conversation_messages system
+  return []
 }
 
 // Create or update daily note for a specific date
+// NOTE: Daily notes feature migrated to conversation_messages system
 export async function createOrUpdateDailyNote({
   note,
   noteDate,
@@ -109,76 +88,14 @@ export async function createOrUpdateDailyNote({
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  
+
   if (!user) {
     throw new Error('User not authenticated')
   }
 
-  const targetDate = noteDate || new Date().toISOString().split('T')[0]
-
-  // Get user's current goal
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('current_goal_id')
-    .eq('id', user.id)
-    .single()
-
-  // Check if there's already a note for this date
-  const { data: existingNote } = await supabase
-    .from('user_daily_notes')
-    .select('note')
-    .eq('user_id', user.id)
-    .eq('note_date', targetDate)
-    .single()
-
-  // Format the note content
-  const newEntry = note.trim()
-  let finalNote: string
-
-  if (existingNote?.note) {
-    // Append as new bullet point
-    finalNote = `${existingNote.note}\n• ${newEntry}`
-  } else {
-    // First entry, add bullet point
-    finalNote = `• ${newEntry}`
-  }
-
-  // Upsert the daily note
-  const { data, error } = await supabase
-    .from('user_daily_notes')
-    .upsert({
-      user_id: user.id,
-      goal_id: profile?.current_goal_id || null,
-      note: finalNote,
-      note_date: targetDate
-    }, {
-      onConflict: 'user_id, note_date'
-    })
-    .select()
-    .single()
-
-  if (error) {
-    throw new Error('Failed to save daily note')
-  }
-
-  // Handle file uploads if provided
-  if (files && data) {
-    const { uploadDailyNoteFiles } = await import('./daily-note-attachments')
-    const uploadResults = await uploadDailyNoteFiles({
-      dailyNoteId: data.id,
-      files,
-      messageText: newEntry // Pass the specific message that was added with the files
-    })
-    
-    // Log any upload failures but don't fail the note creation
-    const failedUploads = uploadResults.filter(result => !result.success)
-    if (failedUploads.length > 0) {
-      console.error('Some file uploads failed:', failedUploads)
-    }
-  }
-
-  revalidatePath('/student/goals')
-  return data
+  // Daily notes feature removed - data migrated to conversation_messages system
+  // Files are now handled through the conversation system with message_attachments
+  throw new Error('Daily notes feature has been migrated to the conversation system')
 }
 
 // Update user's goal progress
@@ -206,43 +123,29 @@ export async function updateUserGoalProgress(goalData: Partial<UserGoalProgress>
 }
 
 // Get combined daily data (notes + actions + files) for goals page
+// NOTE: Daily notes feature migrated to conversation_messages system
 export async function getDailyGoalData({
   startDate,
   endDate,
   limit = 30
 }: {
   startDate?: string
-  endDate?: string  
+  endDate?: string
   limit?: number
 } = {}) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  
+
   if (!user) {
     throw new Error('User not authenticated')
   }
 
-  // Get daily notes and user actions in parallel
-  const [dailyNotes, userActions] = await Promise.all([
-    getUserDailyNotes({ startDate, endDate, limit }),
-    // Import and call getUserActions from user-actions.ts
-    (await import('./user-actions')).getUserActions({ startDate, endDate, limit })
-  ])
+  // Get user actions (daily notes removed - migrated to conversation system)
+  const userActions = await (await import('./user-actions')).getUserActions({ startDate, endDate, limit })
 
-  // Get files for each daily note
-  const { getDailyNoteFiles } = await import('./daily-note-attachments')
-  const notesWithFiles = await Promise.all(
-    dailyNotes.map(async (note) => {
-      const files = await getDailyNoteFiles(note.id)
-      return {
-        ...note,
-        attachedFiles: files
-      }
-    })
-  )
-
+  // Daily notes feature removed - data migrated to conversation_messages system
   return {
-    dailyNotes: notesWithFiles,
+    dailyNotes: [], // Daily notes feature removed
     userActions
   }
 }

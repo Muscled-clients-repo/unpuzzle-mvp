@@ -673,10 +673,9 @@ export function DailyGoalTrackerV2({
                                   <div key={file.id} className="group relative">
                                     {file.mime_type.startsWith('image/') ? (
                                       <DailyNoteImage
-                                        privateUrl={file.cdn_url}
+                                        attachmentId={file.id}
                                         originalFilename={file.original_filename}
                                         className="w-full h-32"
-                                        attachmentId={file.id}
                                         fileSize={file.file_size}
                                         onClick={() => openImageViewer(entry, file.id)}
                                       />
@@ -882,10 +881,9 @@ export function DailyGoalTrackerV2({
                                   <div key={file.id} className="group relative">
                                     {file.mime_type.startsWith('image/') ? (
                                       <DailyNoteImage
-                                        privateUrl={file.cdn_url}
+                                        attachmentId={file.id}
                                         originalFilename={file.original_filename}
                                         className="w-full h-32"
-                                        attachmentId={file.id}
                                         fileSize={file.file_size}
                                         onClick={() => openImageViewer(entry, file.id)}
                                       />
