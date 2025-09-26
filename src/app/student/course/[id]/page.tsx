@@ -21,7 +21,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useQuery } from '@tanstack/react-query'
-import { getEnrolledCourses, getNextVideoForCourse, getCourseProgress } from '@/app/actions/student-course-actions'
+import { getNextVideoForCourse, getCourseProgress } from '@/app/actions/student-course-actions'
 import { useWebSocketConnection } from '@/hooks/use-websocket-connection'
 import { CourseThumbnail } from '@/components/ui/course-thumbnail'
 
@@ -36,13 +36,15 @@ export default function StudentCourseOverviewPage() {
   // WebSocket connection for real-time updates
   useWebSocketConnection(userId || '')
 
-  // ARCHITECTURE-COMPLIANT: TanStack Query for server state with videos
-  const { data: courses, isLoading: coursesLoading } = useQuery({
-    queryKey: ['enrolled-courses', userId],
-    queryFn: getEnrolledCourses,
-    enabled: !!userId,
-    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
-  })
+  // Use store pattern (working version)
+  const { currentCourse: course, loadCourseById, loading: courseLoading } = useAppStore()
+
+  // Load course data into store
+  useEffect(() => {
+    if (courseId && userId) {
+      loadCourseById(courseId)
+    }
+  }, [courseId, userId, loadCourseById])
 
   // Get course progress and next video
   const { data: courseData, isLoading: progressLoading } = useQuery({
@@ -61,10 +63,7 @@ export default function StudentCourseOverviewPage() {
     staleTime: 1000 * 60 * 2, // Cache for 2 minutes
   })
 
-  // Extract course from enrolled courses (includes videos)
-  const course = courses?.find(c => c.id === courseId)
-
-  const isLoading = coursesLoading || progressLoading
+  const isLoading = courseLoading || progressLoading
 
   if (isLoading) return <LoadingSpinner />
 

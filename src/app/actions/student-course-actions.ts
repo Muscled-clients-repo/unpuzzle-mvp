@@ -590,65 +590,86 @@ export async function getCourseById(courseId: string): Promise<Course | null> {
       return null
     }
 
-    // Get course data using existing function logic
-    const { data: courseData } = await supabase
-      .rpc('get_user_courses', { user_id: user.id })
+    // Get course data with videos (using same approach as instructor getCourseAction)
+    const { data: courseData, error: courseError } = await supabase
+      .from('courses')
+      .select(`
+        *,
+        videos (
+          id,
+          title,
+          description,
+          thumbnail_url,
+          duration_seconds,
+          order,
+          chapter_id,
+          video_url,
+          status,
+          created_at,
+          updated_at
+        )
+      `)
+      .eq('id', courseId)
+      .eq('status', 'published')
+      .single()
 
-    const course = courseData?.find((c: any) => c.id === courseId)
-    if (!course) {
-      console.log('[Server Action] Course not found:', courseId)
+    if (courseError || !courseData) {
+      console.log('[Server Action] Course not found or not published:', courseId, courseError)
       return null
     }
 
-    // Get videos for this course
-    const { data: videos } = await supabase
-      .from('videos')
-      .select('*')
-      .eq('course_id', courseId)
-      .order('chapter_id', { ascending: true })
-      .order('order', { ascending: true })
+    // Sort videos by chapter and order
+    if (courseData.videos) {
+      courseData.videos.sort((a: any, b: any) => {
+        // First sort by chapter_id, then by order
+        if (a.chapter_id !== b.chapter_id) {
+          return (a.chapter_id || '').localeCompare(b.chapter_id || '')
+        }
+        return (a.order || 0) - (b.order || 0)
+      })
+    }
 
-    console.log('[Server Action] Found videos for course:', { courseId, videoCount: videos?.length || 0 })
+    console.log('[Server Action] Found videos for course:', { courseId, videoCount: courseData.videos?.length || 0 })
 
-    const transformedVideos = (videos || []).map((video: any, index: number) => ({
+    const transformedVideos = (courseData.videos || []).map((video: any) => ({
       id: video.id,
-      courseId: courseId,
+      courseId: courseData.id,
       title: video.title,
       description: video.description || '',
       duration: video.duration_seconds || 600,
-      order: index + 1,
-      videoUrl: video.video_url, // Keep private format for useSignedUrl hook
+      order: video.order || 0,
+      videoUrl: video.video_url,
       thumbnailUrl: video.thumbnail_url,
       transcript: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt: video.created_at,
+      updatedAt: video.updated_at
     }))
 
     const transformedCourse: Course = {
-      id: course.id,
-      title: course.title,
-      description: course.description,
-      thumbnailUrl: course.thumbnail_url,
+      id: courseData.id,
+      title: courseData.title,
+      description: courseData.description,
+      thumbnailUrl: courseData.thumbnail_url,
       instructor: {
-        id: course.instructor_id || '',
+        id: courseData.instructor_id || '',
         name: 'Instructor',
         email: 'instructor@example.com',
         avatar: ''
       },
-      price: course.price || 0,
-      duration: course.total_duration_minutes || 0,
-      difficulty: course.difficulty || 'beginner',
+      price: courseData.price || 0,
+      duration: courseData.total_duration_minutes || 0,
+      difficulty: 'beginner',
       videos: transformedVideos,
-      tags: [],
-      enrollmentCount: 0,
-      rating: 4.5,
-      isPublished: true,
-      isFree: course.price === 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      tags: courseData.tags || [],
+      enrollmentCount: courseData.students || 0,
+      rating: courseData.rating || 4.5,
+      isPublished: courseData.status === 'published',
+      isFree: courseData.is_free || courseData.price === 0,
+      createdAt: courseData.created_at,
+      updatedAt: courseData.updated_at
     }
 
-    console.log('[Server Action] Course retrieved:', transformedCourse.title)
+    console.log('[Server Action] Course retrieved:', transformedCourse.title, 'with', transformedCourse.videos.length, 'videos')
     return transformedCourse
 
   } catch (error) {

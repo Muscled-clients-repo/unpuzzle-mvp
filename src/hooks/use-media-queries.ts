@@ -1,7 +1,7 @@
 "use client"
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getMediaFilesAction, deleteMediaFileAction, uploadMediaFileAction, getMediaFileHistoryAction, generateBulkDeletePreviewAction, bulkDeleteMediaFilesAction, getExistingTagsAction, bulkAddTagsAction, bulkRemoveTagsAction, bulkReplaceTagsAction } from '@/app/actions/media-actions'
+import { getMediaFilesAction, deleteMediaFileAction, uploadMediaFileAction, generateBulkDeletePreviewAction, bulkDeleteMediaFilesAction, getExistingTagsAction, bulkAddTagsAction, bulkRemoveTagsAction, bulkReplaceTagsAction } from '@/app/actions/media-actions'
 import { toast } from 'sonner'
 import { courseEventObserver, MEDIA_EVENTS } from '@/lib/course-event-observer'
 import { useEffect } from 'react'
@@ -237,15 +237,11 @@ export function useDeleteMediaFile() {
 }
 
 export function useMediaFileHistory(fileId: string | null) {
+  // Media file history removed - media_file_history table deleted
   return useQuery({
     queryKey: ['media-file-history', fileId],
     queryFn: async () => {
-      if (!fileId) return { success: false, history: [] }
-      const result = await getMediaFileHistoryAction(fileId)
-      if (!result.success) {
-        throw new Error(result.error)
-      }
-      return result
+      return { success: true, history: [] }
     },
     enabled: !!fileId
   })
