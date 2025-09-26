@@ -27,6 +27,42 @@
 - Network error handling and retry logic
 - **Background job results**: Transcription data, processing status
 
+### TanStack Query Loading State Pattern (Critical for UI)
+**Problem**: TanStack Query's `isLoading` becomes false before data is fully processed, causing flash of "Not Found" states.
+
+**Solution**: Check both loading state AND data availability:
+```tsx
+// ❌ WRONG: Shows "Not Found" flash
+if (!isLoading && !data) return <NotFound />
+
+// ✅ CORRECT: Wait for data processing completion
+if (!isLoading && queryResult && !processedData) return <NotFound />
+```
+
+**Why This Happens**:
+- `isLoading` = network request state
+- `queryResult` = raw server response
+- `processedData` = computed from queryResult
+- Gap exists between `isLoading: false` and `processedData` availability
+
+**Implementation Pattern**:
+```tsx
+const { data: queryResult, isLoading, error } = useQuery(...)
+const processedData = queryResult?.success ? queryResult.data : null
+
+// Loading state
+if (isLoading) return <Skeleton />
+
+// Error state
+if (error || (queryResult && !queryResult.success)) return <Error />
+
+// Not found - only after data processing complete
+if (!isLoading && queryResult && !processedData) return <NotFound />
+
+// Success state
+return <Content data={processedData} />
+```
+
 ### Form State Responsibilities (Input Processing)
 - Input field values and change tracking
 - Dirty flag calculation (has user made changes)

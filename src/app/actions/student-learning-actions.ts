@@ -85,47 +85,6 @@ export async function getVideoAnalytics(lessonId: string) {
   }
 }
 
-/**
- * Get AI interaction history for a student
- */
-export async function getAIInteractionHistory(courseId?: string) {
-  const supabase = await createClient()
-  
-  try {
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    
-    if (authError || !user) {
-      throw new Error('Not authenticated')
-    }
-    
-    console.log('[Server Action] Getting AI interaction history for:', { userId: user.id, courseId })
-    
-    let query = supabase
-      .from('ai_interactions')
-      .select('*')
-      .eq('student_id', user.id)
-      .order('created_at', { ascending: false })
-    
-    // Filter by course if provided
-    if (courseId) {
-      query = query.eq('course_id', courseId)
-    }
-    
-    const { data, error } = await query
-    
-    if (error) {
-      console.error('[Server Action] Error fetching AI interaction history:', error)
-      return []
-    }
-    
-    console.log('[Server Action] Found AI interactions:', data?.length || 0)
-    return data || []
-    
-  } catch (error) {
-    console.error('[Server Action] Failed to get AI interaction history:', error)
-    return []
-  }
-}
 
 /**
  * Update video progress

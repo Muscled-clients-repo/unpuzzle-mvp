@@ -677,3 +677,211 @@ export async function getCourseById(courseId: string): Promise<Course | null> {
     return null
   }
 }
+
+/**
+ * 🎯 OPTIMIZED: Get course with chapters and videos in single query
+ * Following 001 Architecture Principles - TanStack Query server state management
+ */
+export async function getCourseWithChaptersAndVideos(courseId: string): Promise<{
+  success: boolean
+  data?: {
+    id: string
+    title: string
+    description: string
+    thumbnail_url?: string
+    instructor_id: string
+    chapters: {
+      id: string
+      title: string
+      order: number
+      videos: {
+        id: string
+        title: string
+        duration_seconds: number
+        order: number
+        chapter_id: string
+      }[]
+    }[]
+    total_videos: number
+    total_duration_minutes: number
+  }
+  error?: string
+}> {
+  const supabase = await createClient()
+
+  try {
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      throw new Error('Not authenticated')
+    }
+
+    console.log('[Server Action] Getting optimized course content for:', courseId)
+
+    // 🎯 GOAL-BASED ACCESS: Verify user has access to this course
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('current_goal_id')
+      .eq('id', user.id)
+      .single()
+
+    if (!profile?.current_goal_id) {
+      throw new Error('No goal assigned')
+    }
+
+    const { data: courseAccess } = await supabase
+      .from('course_goal_assignments')
+      .select('course_id')
+      .eq('goal_id', profile.current_goal_id)
+      .eq('course_id', courseId)
+      .single()
+
+    if (!courseAccess) {
+      throw new Error('Course not accessible')
+    }
+
+    // 🎯 OPTIMIZED QUERIES: Parallel fetch course, chapters, and videos
+    const [courseResult, chaptersResult, videosResult] = await Promise.all([
+      supabase
+        .from('courses')
+        .select('id, title, description, thumbnail_url, instructor_id')
+        .eq('id', courseId)
+        .eq('status', 'published')
+        .single(),
+
+      supabase
+        .from('course_chapters')
+        .select('id, title, order')
+        .eq('course_id', courseId)
+        .order('order', { ascending: true }),
+
+      supabase
+        .from('videos')
+        .select('id, title, duration_seconds, order, chapter_id')
+        .eq('course_id', courseId)
+        .order('chapter_id')
+        .order('order', { ascending: true })
+    ])
+
+    if (courseResult.error || !courseResult.data) {
+      throw new Error(`Course not found: ${courseResult.error?.message}`)
+    }
+
+    const courseData = courseResult.data
+    const allChapters = chaptersResult.data || []
+    const allVideos = videosResult.data || []
+
+    console.log('[Server Action] Raw data loaded:', {
+      courseId,
+      chaptersCount: allChapters.length,
+      videosCount: allVideos.length
+    })
+
+    // 🐛 DEBUG: Log video details to identify filtering issue
+    console.log('[DEBUG] All videos:', allVideos.map(v => ({
+      id: v.id,
+      title: v.title,
+      chapter_id: v.chapter_id,
+      duration_seconds: v.duration_seconds,
+      order: v.order
+    })))
+
+    console.log('[DEBUG] All chapters:', allChapters.map(ch => ({
+      id: ch.id,
+      title: ch.title,
+      order: ch.order
+    })))
+
+    // 🎯 DATA TRANSFORMATION: Manual join chapters with their videos
+    const chapters = allChapters
+      .map(chapter => ({
+        id: chapter.id,
+        title: chapter.title,
+        order: chapter.order,
+        videos: allVideos
+          .filter(video => video.chapter_id === chapter.id)
+          // 🔧 REMOVED duration filter - videos can have 0 duration (not yet processed)
+          .sort((a, b) => (a.order || 0) - (b.order || 0))
+      }))
+      .filter(chapter => chapter.videos.length > 0) // Only include chapters with videos
+      .sort((a, b) => a.order - b.order)
+
+    // 🎯 HANDLE VIDEOS WITHOUT CHAPTERS: Create chapters from video chapter_ids
+    const videosWithoutExistingChapter = allVideos
+      .filter(video => video.chapter_id && !allChapters.find(ch => ch.id === video.chapter_id))
+
+    // Group videos by their chapter_id and create missing chapters
+    const missingChapterGroups = videosWithoutExistingChapter.reduce((acc, video) => {
+      if (!acc[video.chapter_id]) {
+        acc[video.chapter_id] = []
+      }
+      acc[video.chapter_id].push(video)
+      return acc
+    }, {} as Record<string, typeof allVideos>)
+
+    // Create chapters for missing chapter_ids
+    Object.entries(missingChapterGroups).forEach(([chapterId, videos], index) => {
+      chapters.push({
+        id: chapterId,
+        title: `Chapter ${index + 1}`, // Generate chapter title
+        order: index + 1,
+        videos: videos.sort((a, b) => (a.order || 0) - (b.order || 0))
+      })
+    })
+
+    // Handle truly orphaned videos (no chapter_id at all)
+    const videosWithoutChapter = allVideos
+      .filter(video => !video.chapter_id)
+      .sort((a, b) => (a.order || 0) - (b.order || 0))
+
+    // 🐛 DEBUG: Log filtering results
+    console.log('[DEBUG] Missing chapters created:', Object.keys(missingChapterGroups).length)
+    console.log('[DEBUG] Videos without chapter_id:', videosWithoutChapter.length)
+    console.log('[DEBUG] Total chapters after processing:', chapters.length)
+
+    if (videosWithoutChapter.length > 0) {
+      chapters.unshift({
+        id: 'default-chapter',
+        title: 'Course Videos',
+        order: 0,
+        videos: videosWithoutChapter
+      })
+      console.log('[DEBUG] Added default chapter with', videosWithoutChapter.length, 'videos')
+    }
+
+    // 🎯 COMPUTED METRICS: Calculate totals efficiently
+    const totalVideos = chapters.reduce((sum, chapter) => sum + chapter.videos.length, 0)
+    const totalDurationMinutes = Math.ceil(
+      chapters.reduce((sum, chapter) =>
+        sum + chapter.videos.reduce((videoSum, video) => videoSum + video.duration_seconds, 0), 0
+      ) / 60
+    )
+
+    console.log('[Server Action] Course content loaded:', {
+      courseId,
+      chaptersCount: chapters.length,
+      totalVideos,
+      totalDurationMinutes
+    })
+
+    return {
+      success: true,
+      data: {
+        id: courseData.id,
+        title: courseData.title,
+        description: courseData.description,
+        thumbnail_url: courseData.thumbnail_url,
+        instructor_id: courseData.instructor_id,
+        chapters,
+        total_videos: totalVideos,
+        total_duration_minutes: totalDurationMinutes
+      }
+    }
+
+  } catch (error) {
+    console.error('[Server Action] Failed to get course content:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch course content'
+    }
+  }
+}
