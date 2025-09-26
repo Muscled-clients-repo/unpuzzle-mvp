@@ -58,49 +58,105 @@ export default function InstructorStudentGoalsPage() {
   const { data: studentGoals, isLoading: goalsLoading, error: goalsError } = useQuery({
     queryKey: ['instructor-student-goals', user?.id],
     queryFn: async () => {
-      if (!user?.id) return []
+      console.log('🔍 [STEP 1] Query starting', { userId: user?.id, timestamp: new Date().toISOString() });
 
+      if (!user?.id) {
+        console.log('🔍 [STEP 1] No user ID - aborting');
+        return []
+      }
+
+      console.log('🔍 [STEP 2] Creating Supabase client');
       const supabase = createClient()
 
-      // Get all students with active goal assignments (no enrollment filtering needed)
+      console.log('🔍 [STEP 3] Getting auth session');
+      const { data: session, error: sessionError } = await supabase.auth.getSession()
+      console.log('🔍 [STEP 3] Session result:', {
+        hasSession: !!session?.session,
+        userId: session?.session?.user?.id,
+        userEmail: session?.session?.user?.email,
+        sessionError: sessionError?.message
+      });
+
+      console.log('🔍 [STEP 4] Getting current user');
+      const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser()
+      console.log('🔍 [STEP 4] Current user:', {
+        hasUser: !!currentUser,
+        userId: currentUser?.id,
+        userEmail: currentUser?.email,
+        userError: userError?.message
+      });
+
+      console.log('🔍 [STEP 5] Testing what profiles exist in the database');
+      // First, let's see ALL profiles to understand the data structure
       const { data: studentsWithGoals, error } = await supabase
-        .from('user_track_assignments')
+        .from('profiles')
         .select(`
           id,
-          assigned_at,
-          status,
-          user_id,
-          profiles!inner (
-            id,
-            full_name,
-            email
-          ),
-          track_goals (
-            id,
-            name,
-            description,
-            target_amount,
-            currency,
-            goal_type,
-            tracks (
-              name
-            )
-          )
+          full_name,
+          email,
+          current_goal_id,
+          goal_assigned_at,
+          role
         `)
-        .eq('status', 'active')
-        .order('assigned_at', { ascending: false })
+        .not('full_name', 'is', null) // Get profiles that have names (not instructor with null name)
+        .order('email', { ascending: true })
+
+      console.log('🔍 [STEP 5.5] All active assignments data:', studentsWithGoals);
+
+      console.log('🔍 [STEP 6] Query result:', {
+        dataLength: studentsWithGoals?.length,
+        hasError: !!error,
+        errorDetails: error ? {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+          fullError: JSON.stringify(error, null, 2)
+        } : null
+      });
 
       if (error) {
-        console.error('Failed to fetch student goals:', error)
+        console.error('🔍 [ERROR] Full error object:', error);
+        console.error('🔍 [ERROR] Error keys:', Object.keys(error));
+        console.error('🔍 [ERROR] Error constructor:', error.constructor.name);
         throw new Error('Failed to fetch student goals')
       }
 
       if (!studentsWithGoals) return []
 
+      console.log('🔍 [STEP 7] Students found:', studentsWithGoals.length);
+      // We already have profile data, now get goal details
+      const goalIds = studentsWithGoals.filter(student => student.current_goal_id).map(student => student.current_goal_id)
+      console.log('🔍 [STEP 7.5] Fetching goal details for IDs:', goalIds);
+
+      // Get goal data for students with current_goal_id
+      const { data: goals, error: goalError } = await supabase
+        .from('track_goals')
+        .select(`
+          id,
+          name,
+          description,
+          target_amount,
+          currency,
+          goal_type,
+          tracks (
+            name
+          )
+        `)
+        .in('id', goalIds)
+
+      if (goalError) {
+        console.error('Failed to fetch goals:', goalError)
+        // Continue without goal data
+      }
+
+      // Create goal lookup map
+      const goalMap = new Map(goals?.map(g => [g.id, g]) || [])
+
       // Transform database data to component interface
       return studentsWithGoals.map(student => {
-        const goal = student.track_goals
-        const startDate = student.assigned_at || new Date().toISOString()
+        const goal = goalMap.get(student.current_goal_id)
+        const startDate = student.goal_assigned_at || new Date().toISOString()
 
         // Format target amount from structured data
         const formatTargetAmount = (amount: number, currency: string = 'USD') => {
@@ -117,9 +173,9 @@ export default function InstructorStudentGoalsPage() {
         const daysActive = Math.max(1, Math.floor((new Date().getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)))
 
         return {
-          studentId: student.profiles?.id || '',
-          studentName: student.profiles?.full_name || 'Unknown Student',
-          studentEmail: student.profiles?.email || 'No email',
+          studentId: student.id || '',
+          studentName: student.full_name || 'Unknown Student',
+          studentEmail: student.email || 'No email',
           goalTitle: goal?.description || 'No goal assigned',
           currentAmount: '$0', // TODO: This should come from actual progress tracking
           targetAmount: formatTargetAmount(goal?.target_amount || 1000, goal?.currency || 'USD'),

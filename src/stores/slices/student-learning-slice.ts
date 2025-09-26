@@ -11,110 +11,61 @@ import { studentCourseService } from '@/services/student-course-service'
 // TYPES FOR ENHANCED LEARNING STATE
 // ============================================================
 
-export interface CourseWithAnalytics {
+export interface GoalBasedCourse {
   // Course basic info
   course: Course
   courseId: string
-  
-  // Progress tracking
-  progress: number
-  completedLessons: number
-  totalLessons: number
-  currentLesson: string
-  currentVideoId: string | null
-  estimatedTimeLeft: string
-  lastAccessed: string
-  
-  // AI & Analytics
-  aiInteractionsUsed: number
-  strugglingTopics: string[]
-  nextMilestone: string
-  
-  // Enrollment metadata
-  enrollmentId: string
-  enrolledAt: string
-  completedAt: string | null
-}
 
-export interface UserLearningStats {
-  totalCoursesEnrolled: number
-  activeCoursesCount: number
-  completedCoursesCount: number
-  totalVideosCompleted: number
-  totalWatchTimeFormatted: string
-  totalAIInteractions: number
-  averageCompletionRate: number
+  // Goal-based metadata
+  goalAccessGrantedAt: string
 }
 
 export interface StudentLearningState {
-  // Courses with full analytics
-  enrolledCoursesWithAnalytics: CourseWithAnalytics[]
-  
-  // Original course arrays for compatibility
-  enrolledCourses: Course[]
+  // Goal-based courses
+  goalBasedCourses: GoalBasedCourse[]
+
+  // Other course arrays for compatibility
   recommendedCourses: Course[]
   allCourses: Course[]
-  
+
   // Current selections
   currentCourse: Course | null
-  currentCourseAnalytics: CourseWithAnalytics | null
-  
-  // User stats
-  userStats: UserLearningStats | null
-  
+  currentGoalBasedCourse: GoalBasedCourse | null
+
   // UI state
   loading: boolean
   error: string | null
   lastFetch: string | null
-  
-  // Filters
-  activeFilter: 'all' | 'in-progress' | 'completed'
 }
 
 export interface StudentLearningActions {
   // Main data loading with analytics
   loadStudentLearningData: (userId: string) => Promise<void>
-  
+
   // Individual loaders (for compatibility)
-  loadEnrolledCourses: (userId: string) => Promise<void>
+  loadGoalBasedCourses: (userId: string) => Promise<void>
   loadRecommendedCourses: (userId: string) => Promise<void>
   loadAllCourses: () => Promise<void>
   loadCourseById: (courseId: string) => Promise<void>
-  loadUserStats: (userId: string) => Promise<void>
-  
-  // Course actions
-  enrollInCourse: (userId: string, courseId: string) => Promise<void>
-  updateVideoProgress: (userId: string, courseId: string, videoId: string, percent: number, position: number) => Promise<void>
-  
-  // AI interactions
-  recordAIInteraction: (userId: string, courseId: string, videoId: string | null, type: string, prompt: string, response: string) => Promise<void>
-  
-  // Learning struggles
-  reportStruggle: (userId: string, courseId: string, videoId: string, concept: string) => Promise<void>
-  
+
   // UI actions
   setCurrentCourse: (course: Course | null) => void
-  setActiveFilter: (filter: 'all' | 'in-progress' | 'completed') => void
-  
+
   // Computed
-  getFilteredCourses: () => CourseWithAnalytics[]
-  getCourseAnalytics: (courseId: string) => CourseWithAnalytics | undefined
+  getGoalBasedCourse: (courseId: string) => GoalBasedCourse | undefined
 }
 
 export interface StudentLearningSlice extends StudentLearningState, StudentLearningActions {}
 
 const initialState: StudentLearningState = {
-  enrolledCoursesWithAnalytics: [],
-  enrolledCourses: [],
+  goalBasedCourses: [],
   recommendedCourses: [],
   allCourses: [],
   currentCourse: null,
-  currentCourseAnalytics: null,
-  userStats: null,
+  currentGoalBasedCourse: null,
   loading: false,
   error: null,
-  lastFetch: null,
-  activeFilter: 'all'
+  lastFetch: null
 }
 
 export const createStudentLearningSlice: StateCreator<StudentLearningSlice> = (set, get) => ({
@@ -125,69 +76,26 @@ export const createStudentLearningSlice: StateCreator<StudentLearningSlice> = (s
   // ============================================================
   loadStudentLearningData: async (userId: string) => {
     set({ loading: true, error: null })
-    
+
     try {
-      // Get enrolled courses with full analytics
-      const enrollmentsResult = await studentLearningService.getStudentCoursesWithAnalytics(userId)
-      
-      if (enrollmentsResult.error) {
-        set({ loading: false, error: enrollmentsResult.error })
+      // Use existing goal-based course service
+      const { getEnrolledCourses } = await import('@/app/actions/student-course-actions')
+      const courses = await getEnrolledCourses()
+
+      if (!courses) {
+        set({ loading: false, error: 'Failed to load courses' })
         return
       }
 
-      const enrollments = enrollmentsResult.data || []
-      
-      // Transform to UI format
-      const coursesWithAnalytics: CourseWithAnalytics[] = enrollments.map(enrollment => ({
-        course: {
-          id: enrollment.course.id,
-          title: enrollment.course.title,
-          description: enrollment.course.description,
-          thumbnailUrl: enrollment.course.thumbnail_url,
-          instructor: {
-            id: enrollment.course.instructor_id,
-            name: 'Instructor', // Will be populated from profiles table
-            email: '',
-            avatar: ''
-          },
-          price: enrollment.course.price,
-          duration: enrollment.course.total_duration,
-          difficulty: enrollment.course.difficulty as 'beginner' | 'intermediate' | 'advanced',
-          tags: [],
-          videos: enrollment.course.videos || [],
-          enrollmentCount: 0,
-          rating: 0,
-          isPublished: enrollment.course.is_published,
-          isFree: enrollment.course.price === 0,
-          createdAt: enrollment.course.created_at,
-          updatedAt: enrollment.course.updated_at
-        },
-        courseId: enrollment.course_id,
-        progress: enrollment.progress_percent,
-        completedLessons: enrollment.completed_videos,
-        totalLessons: enrollment.total_videos,
-        currentLesson: enrollment.current_lesson_title,
-        currentVideoId: enrollment.current_video_id,
-        estimatedTimeLeft: enrollment.estimated_time_remaining_formatted,
-        lastAccessed: studentLearningService.transformToUIFormat([enrollment])[0].lastAccessed,
-        aiInteractionsUsed: enrollment.ai_interactions_count,
-        strugglingTopics: enrollment.learning_struggles?.map(s => s.concept_name) || [],
-        nextMilestone: enrollment.learning_milestones?.[0]?.title || 'Continue learning',
-        enrollmentId: enrollment.id,
-        enrolledAt: enrollment.enrolled_at,
-        completedAt: enrollment.completed_at
+      // Transform to simple goal-based format
+      const goalBasedCourses: GoalBasedCourse[] = courses.map(course => ({
+        course: course,
+        courseId: course.id,
+        goalAccessGrantedAt: new Date().toISOString()
       }))
 
-      // Also set regular enrolledCourses for compatibility
-      const courses = coursesWithAnalytics.map(c => c.course)
-      
-      // Get user stats
-      const statsResult = await studentLearningService.getUserLearningStats(userId)
-      
-      set({ 
-        enrolledCoursesWithAnalytics: coursesWithAnalytics,
-        enrolledCourses: courses,
-        userStats: statsResult.data || null,
+      set({
+        goalBasedCourses: goalBasedCourses,
         loading: false,
         error: null,
         lastFetch: new Date().toISOString()
@@ -204,24 +112,9 @@ export const createStudentLearningSlice: StateCreator<StudentLearningSlice> = (s
   // ============================================================
   // COMPATIBILITY METHODS (for existing UI)
   // ============================================================
-  loadEnrolledCourses: async (userId: string) => {
-    // Check if we should use database (import feature flag)
-    const { FEATURE_FLAGS } = await import('@/config/features')
-    
-    if (FEATURE_FLAGS.USE_DB_FOR_ENROLLMENT) {
-      // Use the main loader which gets everything from database
-      await get().loadStudentLearningData(userId)
-    } else {
-      // Use existing mock data service
-      set({ loading: true, error: null })
-      const result = await studentCourseService.getEnrolledCourses(userId)
-      
-      if (result.error) {
-        set({ loading: false, error: result.error })
-      } else {
-        set({ loading: false, enrolledCourses: result.data || [], error: null })
-      }
-    }
+  loadGoalBasedCourses: async (userId: string) => {
+    // Use the main loader which gets goal-based courses
+    await get().loadStudentLearningData(userId)
   },
 
   loadRecommendedCourses: async (userId: string) => {
@@ -260,139 +153,35 @@ export const createStudentLearningSlice: StateCreator<StudentLearningSlice> = (s
       const course = result.data
       set({ loading: false, currentCourse: course || null, error: null })
       
-      // Also set analytics if we have it
+      // Also set goal-based course if we have it
       if (course) {
-        const analytics = get().getCourseAnalytics(course.id)
-        set({ currentCourseAnalytics: analytics || null })
+        const goalBasedCourse = get().getGoalBasedCourse(course.id)
+        set({ currentGoalBasedCourse: goalBasedCourse || null })
       }
     }
   },
 
-  loadUserStats: async (userId: string) => {
-    const result = await studentLearningService.getUserLearningStats(userId)
-    
-    if (result.data) {
-      set({ userStats: result.data })
-    }
-  },
-
-  // ============================================================
-  // COURSE ACTIONS
-  // ============================================================
-  enrollInCourse: async (userId: string, courseId: string) => {
-    set({ loading: true, error: null })
-    
-    const result = await studentLearningService.enrollInCourse(userId, courseId)
-    
-    if (result.error) {
-      set({ loading: false, error: result.error })
-    } else if (result.data?.success) {
-      // Reload all data after enrollment
-      await get().loadStudentLearningData(userId)
-    }
-  },
-
-  updateVideoProgress: async (userId: string, courseId: string, videoId: string, percent: number, position: number) => {
-    const result = await studentLearningService.updateVideoProgress(
-      userId,
-      courseId,
-      videoId,
-      percent,
-      position
-    )
-    
-    if (result.error) {
-      console.error('Failed to update progress:', result.error)
-    } else {
-      // Optionally reload data to get updated progress
-      // For performance, you might want to update local state instead
-      await get().loadStudentLearningData(userId)
-    }
-  },
-
-  // ============================================================
-  // AI & LEARNING ANALYTICS
-  // ============================================================
-  recordAIInteraction: async (userId: string, courseId: string, videoId: string | null, type: string, prompt: string, response: string) => {
-    const result = await studentLearningService.recordAIInteraction(
-      userId,
-      courseId,
-      videoId,
-      type,
-      prompt,
-      response
-    )
-    
-    if (!result.error) {
-      // Update local state to increment AI interaction count
-      const courses = get().enrolledCoursesWithAnalytics
-      const updatedCourses = courses.map(c => 
-        c.courseId === courseId 
-          ? { ...c, aiInteractionsUsed: c.aiInteractionsUsed + 1 }
-          : c
-      )
-      set({ enrolledCoursesWithAnalytics: updatedCourses })
-    }
-  },
-
-  reportStruggle: async (userId: string, courseId: string, videoId: string, concept: string) => {
-    const result = await studentLearningService.detectLearningStruggle(
-      userId,
-      courseId,
-      videoId,
-      concept,
-      'manual_report'
-    )
-    
-    if (!result.error) {
-      // Update local state to add struggling topic
-      const courses = get().enrolledCoursesWithAnalytics
-      const updatedCourses = courses.map(c => {
-        if (c.courseId === courseId && !c.strugglingTopics.includes(concept)) {
-          return { ...c, strugglingTopics: [...c.strugglingTopics, concept] }
-        }
-        return c
-      })
-      set({ enrolledCoursesWithAnalytics: updatedCourses })
-    }
-  },
 
   // ============================================================
   // UI ACTIONS
   // ============================================================
   setCurrentCourse: (course: Course | null) => {
     set({ currentCourse: course })
-    
-    // Also set analytics if available
-    if (course) {
-      const analytics = get().getCourseAnalytics(course.id)
-      set({ currentCourseAnalytics: analytics || null })
-    } else {
-      set({ currentCourseAnalytics: null })
-    }
-  },
 
-  setActiveFilter: (filter: 'all' | 'in-progress' | 'completed') => {
-    set({ activeFilter: filter })
+    // Also set goal-based course if available
+    if (course) {
+      const goalBasedCourse = get().getGoalBasedCourse(course.id)
+      set({ currentGoalBasedCourse: goalBasedCourse || null })
+    } else {
+      set({ currentGoalBasedCourse: null })
+    }
   },
 
   // ============================================================
   // COMPUTED GETTERS
   // ============================================================
-  getFilteredCourses: () => {
-    const { enrolledCoursesWithAnalytics, activeFilter } = get()
-    
-    switch (activeFilter) {
-      case 'in-progress':
-        return enrolledCoursesWithAnalytics.filter(c => c.progress > 0 && c.progress < 100)
-      case 'completed':
-        return enrolledCoursesWithAnalytics.filter(c => c.progress >= 100)
-      default:
-        return enrolledCoursesWithAnalytics
-    }
-  },
 
-  getCourseAnalytics: (courseId: string) => {
-    return get().enrolledCoursesWithAnalytics.find(c => c.courseId === courseId)
+  getGoalBasedCourse: (courseId: string) => {
+    return get().goalBasedCourses.find(c => c.courseId === courseId)
   }
 })

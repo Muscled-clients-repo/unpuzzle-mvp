@@ -127,42 +127,15 @@ export async function GET(
       userId: user.id
     })
 
-    // Check if user has access (instructor or enrolled student)
+    // Check if user is instructor (only instructors can access via direct API)
+    // Students access transcripts through video pages which have proper access control
     const hasInstructorAccess = videoWithTranscript.courses?.instructor_id === user.id
 
-    let hasStudentAccess = false
     if (!hasInstructorAccess) {
-      const { data: enrollment, error: enrollmentError } = await supabase
-        .from('enrollments')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('course_id', videoWithTranscript.course_id)
-        .single()
-
-      hasStudentAccess = !!enrollment
-      console.log('Transcript API: Enrollment check', {
-        hasEnrollment: !!enrollment,
-        enrollmentError,
-        courseId: videoWithTranscript.course_id
-      })
-    }
-
-    console.log('Transcript API: Access check', { hasInstructorAccess, hasStudentAccess })
-
-    // For development: Allow access if user can access video through other means
-    // TODO: Fix enrollment logic or add proper authorization
-    let hasAnyAccess = hasInstructorAccess || hasStudentAccess
-
-    // Temporary bypass for development - if user is authenticated and video exists, allow access
-    // This matches the behavior of the video page itself which is working
-    if (!hasAnyAccess) {
-      console.log('Transcript API: Using development bypass - allowing authenticated access')
-      hasAnyAccess = true
-    }
-
-    if (!hasAnyAccess) {
-      console.log('Transcript API: Access denied')
-      return NextResponse.json({ error: 'Unauthorized access to video' }, { status: 403 })
+      console.log('Transcript API: Access denied - not course instructor')
+      return NextResponse.json({
+        error: 'Access denied. Only instructors can directly access transcript API.'
+      }, { status: 403 })
     }
 
     // Use direct query result or media file transcript

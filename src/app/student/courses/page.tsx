@@ -4,8 +4,6 @@ import { ErrorBoundary } from "@/components/common"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { useAppStore } from "@/stores/app-store"
 import { LoadingSpinner } from "@/components/common"
@@ -158,38 +156,17 @@ export default function MyCoursesPage() {
             </Button>
           </div>
 
-          {/* Course Tabs */}
-          <Tabs defaultValue="all" className="mb-8">
-            <TabsList>
-              <TabsTrigger value="all">All Courses ({displayCourses.length})</TabsTrigger>
-              <TabsTrigger value="in-progress">In Progress ({displayCourses.filter(c => c.progress?.progress > 0 && c.progress?.progress < 100).length})</TabsTrigger>
-              <TabsTrigger value="completed">Completed ({displayCourses.filter(c => c.progress?.progress === 100).length})</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="all" className="mt-6">
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {displayCourses.map((course) => {
-                  const progress = course.progress || {
-                    progress: 0,
-                    lastAccessed: "Never",
-                    completedLessons: 0,
-                    totalLessons: course.total_videos || 0,
-                    currentLesson: "Not started",
-                    estimatedTimeLeft: `${course.total_duration_minutes || 60} min`,
-                    nextVideoId: undefined
-                  }
-                  
-                  return (
-                    <Card key={course.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                      {/* Course Thumbnail */}
-                      <div className="relative">
-                        <CourseThumbnail title={course.title} />
-                        {/* Progress Overlay */}
-                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background/90 to-transparent p-4">
-                          <Progress value={progress.progress} className="h-2" />
-                          <p className="text-xs text-white mt-1">{progress.progress}% Complete</p>
-                        </div>
-                      </div>
+          {/* Available Courses */}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold mb-6">Available Courses ({displayCourses.length})</h2>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {displayCourses.map((course) => {
+                return (
+                  <Card key={course.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                    {/* Course Thumbnail */}
+                    <div className="relative">
+                      <CourseThumbnail title={course.title} />
+                    </div>
 
                       <CardHeader>
                         <div className="flex items-start justify-between">
@@ -206,64 +183,29 @@ export default function MyCoursesPage() {
                       </CardHeader>
 
                       <CardContent className="space-y-4">
-                        {/* Current Progress */}
+                        {/* Course Info */}
                         <div className="space-y-2">
                           <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Current Lesson</span>
-                            <span className="font-medium">{progress.currentLesson}</span>
+                            <span className="text-muted-foreground">Total Lessons</span>
+                            <span className="font-medium">{course.total_videos || 0}</span>
                           </div>
                           <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Completed</span>
-                            <span className="font-medium">{progress.completedLessons}/{progress.totalLessons} lessons</span>
+                            <span className="text-muted-foreground">Duration</span>
+                            <span className="font-medium">{course.total_duration_minutes || 60} min</span>
                           </div>
                           <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Time left</span>
-                            <span className="font-medium">{progress.estimatedTimeLeft}</span>
-                          </div>
-                        </div>
-
-                        {/* AI Insights */}
-                        <div className="rounded-lg bg-primary/5 border border-primary/10 p-3 space-y-2">
-                          <div className="flex items-center gap-2 text-sm font-medium">
-                            <Sparkles className="h-4 w-4 text-primary" />
-                            Learning Progress
-                          </div>
-
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-muted-foreground">Progress</span>
-                              <span className="font-medium">{progress.progress}%</span>
-                            </div>
-
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-muted-foreground">Completed</span>
-                              <span className="font-medium">{progress.completedLessons}/{progress.totalLessons}</span>
-                            </div>
-
-                            <div className="flex items-center gap-2 text-xs">
-                              <Target className="h-3 w-3 text-green-500" />
-                              <span className="text-muted-foreground">Current: {progress.currentLesson}</span>
-                            </div>
+                            <span className="text-muted-foreground">Difficulty</span>
+                            <span className="font-medium capitalize">{course.difficulty || 'Beginner'}</span>
                           </div>
                         </div>
 
                         {/* Action Button */}
                         <Button asChild className="w-full">
-                          <Link href={
-                            progress.nextVideoId
-                              ? `/student/course/${course.id}/video/${progress.nextVideoId}`
-                              : `/student/course/${course.id}`
-                          }>
+                          <Link href={`/student/course/${course.id}`}>
                             <Play className="mr-2 h-4 w-4" />
-                            Continue Learning
+                            Start Learning
                           </Link>
                         </Button>
-
-                        {/* Last Accessed */}
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          Last accessed {progress.lastAccessed}
-                        </div>
                       </CardContent>
                     </Card>
                   )
@@ -284,171 +226,8 @@ export default function MyCoursesPage() {
                   </Link>
                 </Card>
               </div>
-            </TabsContent>
+            </div>
 
-            <TabsContent value="in-progress" className="mt-6">
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {displayCourses
-                  .filter(course => course.progress?.progress > 0 && course.progress?.progress < 100)
-                  .map((course) => {
-                    const progress = course.progress!
-
-                    return (
-                      <Card key={course.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                        {/* Course Thumbnail */}
-                        <div className="relative">
-                          <CourseThumbnail title={course.title} />
-                          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background/90 to-transparent p-4">
-                            <Progress value={progress.progress} className="h-2" />
-                            <p className="text-xs text-white mt-1">{progress.progress}% Complete</p>
-                          </div>
-                        </div>
-                        <CardHeader>
-                          <CardTitle className="text-lg">{course.title}</CardTitle>
-                          <p className="text-sm text-muted-foreground">
-                            {progress.completedLessons}/{progress.totalLessons} lessons • {progress.estimatedTimeLeft} left
-                          </p>
-                        </CardHeader>
-                        <CardContent>
-                          <Button asChild className="w-full">
-                            <Link href={
-                              progress.nextVideoId
-                                ? `/student/course/${course.id}/video/${progress.nextVideoId}`
-                                : `/student/course/${course.id}`
-                            }>
-                              <Play className="mr-2 h-4 w-4" />
-                              Continue Learning
-                            </Link>
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    )
-                  })}
-              </div>
-              {displayCourses.filter(c => c.progress?.progress > 0 && c.progress?.progress < 100).length === 0 && (
-                <div className="text-center py-12">
-                  <BookOpen className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Courses in Progress</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Start learning by clicking "Continue Learning" on any course!
-                  </p>
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="completed" className="mt-6">
-              {displayCourses.filter(c => c.progress?.progress === 100).length > 0 ? (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                  {displayCourses
-                    .filter(course => course.progress?.progress === 100)
-                    .map((course) => {
-                      const progress = course.progress!
-
-                      return (
-                        <Card key={course.id} className="overflow-hidden hover:shadow-lg transition-shadow border-green-200 dark:border-green-800">
-                          {/* Course Thumbnail */}
-                          <div className="relative">
-                            <CourseThumbnail title={course.title} />
-                            <div className="absolute top-2 right-2">
-                              <Badge className="bg-green-600 hover:bg-green-700">
-                                <CheckCircle2 className="mr-1 h-3 w-3" />
-                                Completed
-                              </Badge>
-                            </div>
-                          </div>
-                          <CardHeader>
-                            <CardTitle className="text-lg">{course.title}</CardTitle>
-                            <p className="text-sm text-muted-foreground">
-                              {progress.totalLessons} lessons completed
-                            </p>
-                          </CardHeader>
-                          <CardContent>
-                            <Button asChild className="w-full" variant="outline">
-                              <Link href={`/student/course/${course.id}`}>
-                                <Eye className="mr-2 h-4 w-4" />
-                                Review Course
-                              </Link>
-                            </Button>
-                          </CardContent>
-                        </Card>
-                      )
-                    })}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <CheckCircle2 className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Completed Courses Yet</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Keep learning to complete your first course!
-                  </p>
-                  <Button asChild>
-                    <Link href="/student">
-                      Go to Dashboard
-                    </Link>
-                  </Button>
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-
-          {/* Learning Stats Summary */}
-          <div className="grid gap-4 md:grid-cols-4">
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
-                    <BookOpen className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{courses.length}</p>
-                    <p className="text-xs text-muted-foreground">Active Courses</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
-                    <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">6</p>
-                    <p className="text-xs text-muted-foreground">Lessons Completed</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-purple-100 dark:bg-purple-900/20 flex items-center justify-center">
-                    <Brain className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">45</p>
-                    <p className="text-xs text-muted-foreground">AI Interactions</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center">
-                    <Clock className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">12.5h</p>
-                    <p className="text-xs text-muted-foreground">Total Study Time</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
       </div>
     </ErrorBoundary>
   )

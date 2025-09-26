@@ -163,7 +163,7 @@ export interface Course {
   difficulty: 'beginner' | 'intermediate' | 'advanced'
   tags: string[]
   videos: Video[]
-  enrollmentCount: number
+  studentCount: number
   rating: number
   isPublished: boolean
   isFree: boolean

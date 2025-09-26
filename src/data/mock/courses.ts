@@ -9,7 +9,7 @@ export interface Course {
   thumbnailUrl: string
   price: number
   duration: string
-  enrollmentCount: number
+  studentCount: number
   rating: number
   level: "beginner" | "intermediate" | "advanced"
   category: string
@@ -54,7 +54,7 @@ export const mockCourses: Course[] = [
     thumbnailUrl: "https://images.unsplash.com/photo-1516116216624-53e697fedbea?w=800&q=80",
     price: 79,
     duration: "12 hours",
-    enrollmentCount: 2543,
+    studentCount: 2543,
     rating: 4.8,
     level: "beginner",
     category: "Programming",
@@ -153,7 +153,7 @@ export const mockCourses: Course[] = [
     thumbnailUrl: "https://images.unsplash.com/photo-1555949963-aa79dcee981c?w=800&q=80",
     price: 129,
     duration: "20 hours",
-    enrollmentCount: 1832,
+    studentCount: 1832,
     rating: 4.9,
     level: "intermediate",
     category: "Data Science",
@@ -246,7 +246,7 @@ export const mockCourses: Course[] = [
     thumbnailUrl: "https://images.unsplash.com/photo-1432888498266-38ffec3eaf0a?w=800&q=80",
     price: 99,
     duration: "15 hours",
-    enrollmentCount: 3421,
+    studentCount: 3421,
     rating: 4.7,
     level: "beginner",
     category: "Marketing",

@@ -331,7 +331,7 @@ export function CommunityHeader({ communityPosts, userRole = 'student', goalData
 
               {/* Goal Tracks Slider */}
               <div className="mb-4">
-                <h3 className="font-medium text-gray-900 mb-3 text-center">Choose Your Goal</h3>
+                <h3 className="font-medium text-gray-900 mb-3 text-center">Choose Your Track</h3>
                 <div className="flex gap-3 justify-center">
                   <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 w-40">
                     <div className="text-center">
