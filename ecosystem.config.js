@@ -32,7 +32,7 @@ module.exports = {
     },
     {
       name: 'unpuzzle-transcription-worker-1',
-      script: 'transcription-worker.js',
+      script: 'workers/transcription/transcription-worker.js',
       instances: 1,
       exec_mode: 'fork',
       watch: false,
@@ -59,7 +59,7 @@ module.exports = {
     },
     {
       name: 'unpuzzle-transcription-worker-2',
-      script: 'transcription-worker.js',
+      script: 'workers/transcription/transcription-worker.js',
       instances: 1,
       exec_mode: 'fork',
       watch: false,
@@ -82,6 +82,30 @@ module.exports = {
       error_file: './logs/transcription-worker-2-error.log',
       out_file: './logs/transcription-worker-2-out.log',
       log_file: './logs/transcription-worker-2-combined.log',
+      time: true
+    },
+    {
+      name: 'unpuzzle-duration-worker',
+      script: 'workers/duration/duration-worker.js',
+      instances: 1,
+      exec_mode: 'fork',
+      watch: false,
+      max_memory_restart: '500M',
+      max_restarts: 5,
+      min_uptime: '10s',
+      env: {
+        WORKER_ID: 'duration-1',
+        WORKER_TYPE: 'duration',
+        WEBSOCKET_SERVER_URL: 'http://localhost:8080',
+        // FFprobe configuration
+        FFPROBE_PATH: '/usr/local/bin/ffprobe',
+        // Database
+        NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+        SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY
+      },
+      error_file: './logs/duration-worker-error.log',
+      out_file: './logs/duration-worker-out.log',
+      log_file: './logs/duration-worker-combined.log',
       time: true
     }
   ]

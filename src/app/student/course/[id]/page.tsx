@@ -1,73 +1,143 @@
 "use client"
 
 import { useParams } from "next/navigation"
+import { useQuery } from '@tanstack/react-query'
 import { ErrorBoundary } from "@/components/common"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { useAppStore } from "@/stores/app-store"
-import { LoadingSpinner } from "@/components/common"
-import { ErrorFallback } from "@/components/common"
+import { LoadingSpinner, ErrorFallback } from "@/components/common"
 import {
   BookOpen,
   Clock,
   Play,
-  CheckCircle2,
   ArrowLeft,
-  User,
-  BarChart3,
-  Target
+  ChevronDown,
+  ChevronRight,
+  List
 } from "lucide-react"
 import Link from "next/link"
-import { useQuery } from '@tanstack/react-query'
-import { getNextVideoForCourse, getCourseProgress } from '@/app/actions/student-course-actions'
-import { useWebSocketConnection } from '@/hooks/use-websocket-connection'
+import { useAppStore } from "@/stores/app-store"
+import { getCourseWithChaptersAndVideos } from '@/app/actions/student-course-actions'
 import { CourseThumbnail } from '@/components/ui/course-thumbnail'
+import { useState, useEffect } from 'react'
+import { PageHeaderSkeleton, Skeleton } from "@/components/common/universal-skeleton"
 
-export default function StudentCourseOverviewPage() {
+interface Chapter {
+  id: string
+  title: string
+  order: number
+  videos: Video[]
+}
+
+interface Video {
+  id: string
+  title: string
+  duration_seconds: number
+  order: number
+  chapter_id: string
+}
+
+interface CourseWithContent {
+  id: string
+  title: string
+  description: string
+  thumbnail_url?: string
+  instructor_id: string
+  chapters: Chapter[]
+  total_videos: number
+  total_duration_minutes: number
+}
+
+export default function StudentCoursePage() {
   const params = useParams()
   const courseId = params.id as string
   const { user, profile } = useAppStore()
 
-  // Get authenticated user ID
-  const userId = user?.id || profile?.id
-
-  // WebSocket connection for real-time updates
-  useWebSocketConnection(userId || '')
-
-  // Use store pattern (working version)
-  const { currentCourse: course, loadCourseById, loading: courseLoading } = useAppStore()
-
-  // Load course data into store
-  useEffect(() => {
-    if (courseId && userId) {
-      loadCourseById(courseId)
-    }
-  }, [courseId, userId, loadCourseById])
-
-  // Get course progress and next video
-  const { data: courseData, isLoading: progressLoading } = useQuery({
-    queryKey: ['course-overview', courseId, userId],
-    queryFn: async () => {
-      if (!courseId) return null
-
-      const [progress, nextVideo] = await Promise.all([
-        getCourseProgress(courseId),
-        getNextVideoForCourse(courseId)
-      ])
-
-      return { progress, nextVideo }
-    },
-    enabled: !!courseId && !!userId,
-    staleTime: 1000 * 60 * 2, // Cache for 2 minutes
+  // 🎯 ARCHITECTURE-COMPLIANT: TanStack Query for server state
+  const { data: courseResult, isLoading, error } = useQuery({
+    queryKey: ['course-content', courseId, user?.id],
+    queryFn: () => getCourseWithChaptersAndVideos(courseId),
+    enabled: !!(courseId && (user?.id || profile?.id)),
+    staleTime: 1000 * 60 * 5, // 5 minutes cache for better performance
+    retry: 2
   })
 
-  const isLoading = courseLoading || progressLoading
+  // 🎯 ARCHITECTURE-COMPLIANT: Zustand for UI state
+  const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set())
 
-  if (isLoading) return <LoadingSpinner />
+  const course = courseResult?.success ? courseResult.data : null
 
-  if (!course) {
+  // Expand all chapters by default when course data loads
+  useEffect(() => {
+    if (course?.chapters) {
+      setExpandedChapters(new Set(course.chapters.map(chapter => chapter.id)))
+    }
+  }, [course?.chapters])
+
+  // Loading state - show skeleton while loading OR while processing data
+  if (isLoading || !courseResult) {
+    return (
+      <ErrorBoundary>
+        <div className="flex-1 p-6 max-w-6xl mx-auto">
+          <PageHeaderSkeleton />
+
+          {/* Course Content Skeleton */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-5 w-5" />
+                <Skeleton className="h-6 w-32" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {[1, 2].map((i) => (
+                  <div key={i} className="border rounded-lg">
+                    {/* Chapter Header Skeleton */}
+                    <div className="p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="h-4 w-4" />
+                        <div>
+                          <Skeleton className="h-5 w-32 mb-1" />
+                          <Skeleton className="h-4 w-24" />
+                        </div>
+                      </div>
+                      <Skeleton className="h-6 w-16" />
+                    </div>
+
+                    {/* Videos Skeleton */}
+                    <div className="border-t bg-muted/20">
+                      {[1, 2, 3].map((j) => (
+                        <div key={j} className="flex items-center justify-between p-4 border-t first:border-t-0">
+                          <div className="flex items-center gap-4">
+                            <Skeleton className="h-8 w-8 rounded-full" />
+                            <div>
+                              <Skeleton className="h-4 w-48 mb-1" />
+                              <Skeleton className="h-3 w-16" />
+                            </div>
+                          </div>
+                          <Skeleton className="h-8 w-16" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </ErrorBoundary>
+    )
+  }
+
+  // Error state
+  if (error || (courseResult && !courseResult.success)) {
+    return <ErrorFallback error={error || new Error(courseResult?.error)} />
+  }
+
+  // Not found state - only show if not loading and course is null
+  if (!isLoading && courseResult && !course) {
     return (
       <ErrorBoundary>
         <div className="flex min-h-screen flex-col">
@@ -90,8 +160,36 @@ export default function StudentCourseOverviewPage() {
     )
   }
 
-  const progress = courseData?.progress
-  const nextVideo = courseData?.nextVideo
+  // 🎯 COMPONENT RESPONSIBILITY: Event handling for UI state
+  const toggleChapter = (chapterId: string) => {
+    const newExpanded = new Set(expandedChapters)
+    if (newExpanded.has(chapterId)) {
+      newExpanded.delete(chapterId)
+    } else {
+      newExpanded.add(chapterId)
+    }
+    setExpandedChapters(newExpanded)
+  }
+
+  const formatDuration = (seconds: number) => {
+    if (!seconds || seconds === 0) return '--'
+
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    const remainingSeconds = seconds % 60
+
+    const parts = []
+    if (hours > 0) parts.push(`${hours}h`)
+    if (minutes > 0) parts.push(`${minutes}m`)
+    if (remainingSeconds > 0 || parts.length === 0) parts.push(`${remainingSeconds}s`)
+
+    return parts.join(' ')
+  }
+
+  const getChapterDuration = (chapter: Chapter) => {
+    const totalSeconds = chapter.videos.reduce((sum, video) => sum + (video.duration_seconds || 0), 0)
+    return formatDuration(totalSeconds)
+  }
 
   return (
     <ErrorBoundary>
@@ -113,101 +211,30 @@ export default function StudentCourseOverviewPage() {
               <h1 className="text-3xl font-bold mb-2">{course.title}</h1>
               <p className="text-muted-foreground mb-4">{course.description}</p>
 
-              <div className="flex items-center gap-4 mb-6">
+              <div className="flex items-center gap-6 mb-6">
+                <div className="flex items-center gap-2">
+                  <List className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">{course.chapters.length} chapters</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Play className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">{course.total_videos} videos</span>
+                </div>
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">{course.total_duration_minutes || course.duration || 0} min</span>
+                  <span className="text-sm">{formatDuration(course.total_duration_minutes * 60)}</span>
                 </div>
               </div>
-
-              {/* Progress Overview */}
-              {progress && (
-                <Card className="mb-6">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <BarChart3 className="h-5 w-5" />
-                      Your Progress
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div>
-                        <div className="flex justify-between text-sm mb-2">
-                          <span>Course Completion</span>
-                          <span className="font-medium">{progress.progressPercentage}%</span>
-                        </div>
-                        <Progress value={progress.progressPercentage} className="h-2" />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Completed</span>
-                          <p className="font-medium">{progress.completedLessons}/{progress.totalLessons} lessons</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Time Remaining</span>
-                          <p className="font-medium">{progress.estimatedTimeRemaining}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
             </div>
 
             {/* Course Thumbnail */}
             <div>
               <CourseThumbnail title={course.title} className="mb-6" />
-
-              {/* Action Buttons */}
-              <div className="space-y-3">
-                {nextVideo ? (
-                  <div className="space-y-2">
-                    <Button asChild className="w-full" size="lg">
-                      <Link href={`/student/course/${courseId}/video/${nextVideo.videoId}${nextVideo.resumeTimestamp ? `?t=${nextVideo.resumeTimestamp}` : ''}`}>
-                        <Play className="mr-2 h-4 w-4" />
-                        {nextVideo.isResuming
-                          ? `Resume Learning (${Math.floor((nextVideo.resumeTimestamp || 0) / 60)}:${String(Math.floor((nextVideo.resumeTimestamp || 0) % 60)).padStart(2, '0')})`
-                          : nextVideo.completionStatus === 'completed'
-                            ? 'Review Course'
-                            : progress?.progressPercentage > 0
-                              ? 'Continue Learning'
-                              : 'Start Course'
-                        }
-                      </Link>
-                    </Button>
-                    {nextVideo.isResuming && (
-                      <p className="text-xs text-muted-foreground text-center">
-                        Pick up where you left off in "{nextVideo.title}"
-                      </p>
-                    )}
-                  </div>
-                ) : course.videos && course.videos.length > 0 ? (
-                  <Button asChild className="w-full" size="lg" variant="outline">
-                    <Link href={`/student/course/${courseId}/video/${course.videos[0].id}`}>
-                      <Play className="mr-2 h-4 w-4" />
-                      Start Learning
-                    </Link>
-                  </Button>
-                ) : (
-                  <Button className="w-full" size="lg" variant="outline" disabled>
-                    <Play className="mr-2 h-4 w-4" />
-                    No Videos Available
-                  </Button>
-                )}
-
-                {progress?.progressPercentage === 100 && (
-                  <div className="flex items-center justify-center gap-2 text-green-600 dark:text-green-400">
-                    <CheckCircle2 className="h-5 w-5" />
-                    <span className="font-medium">Course Completed!</span>
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         </div>
 
-        {/* Course Content Overview */}
+        {/* Course Content */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -216,85 +243,87 @@ export default function StudentCourseOverviewPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {course.videos && course.videos.length > 0 ? (
-              <div className="space-y-2">
-                {course.videos.map((video, index) => (
-                  <div
-                    key={video.id}
-                    className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium">
-                        {index + 1}
-                      </div>
-                      <div>
-                        <h4 className="font-medium">{video.title}</h4>
-                        {video.description && (
-                          <p className="text-sm text-muted-foreground">{video.description}</p>
+            {course.chapters.length > 0 ? (
+              <div className="space-y-3">
+                {course.chapters
+                  .sort((a, b) => a.order - b.order)
+                  .map((chapter) => {
+                    const isExpanded = expandedChapters.has(chapter.id)
+                    const chapterVideos = chapter.videos.sort((a, b) => a.order - b.order)
+
+                    return (
+                      <div key={chapter.id} className="border rounded-lg">
+                        {/* Chapter Header */}
+                        <button
+                          onClick={() => toggleChapter(chapter.id)}
+                          className="w-full p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="flex-shrink-0">
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4" />
+                              )}
+                            </div>
+                            <div className="text-left">
+                              <h3 className="font-semibold">{chapter.title}</h3>
+                              <p className="text-sm text-muted-foreground">
+                                {chapterVideos.length} videos • {getChapterDuration(chapter)}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge variant="outline">
+                            Chapter {chapter.order}
+                          </Badge>
+                        </button>
+
+                        {/* Chapter Videos */}
+                        {isExpanded && (
+                          <div className="border-t bg-muted/20">
+                            {chapterVideos.map((video, index) => (
+                              <div
+                                key={video.id}
+                                className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors border-t first:border-t-0"
+                              >
+                                <div className="flex items-center gap-4">
+                                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium">
+                                    {index + 1}
+                                  </div>
+                                  <div>
+                                    <h4 className="font-medium">{video.title}</h4>
+                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                      <Clock className="h-3 w-3" />
+                                      <span>{formatDuration(video.duration_seconds)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <Button size="sm" asChild>
+                                  <Link href={`/student/course/${courseId}/video/${video.id}`}>
+                                    <Play className="h-3 w-3 mr-1" />
+                                    Play
+                                  </Link>
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
                         )}
                       </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Clock className="h-3 w-3" />
-                        <span>{Math.ceil((video.duration || 600) / 60)} min</span>
-                      </div>
-
-                      <Button size="sm" asChild>
-                        <Link href={`/student/course/${courseId}/video/${video.id}`}>
-                          <Play className="h-3 w-3" />
-                        </Link>
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                    )
+                  })}
               </div>
             ) : (
-              <div className="text-center py-8">
-                <BookOpen className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+              <div className="text-center py-12">
+                <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-lg font-semibold mb-2">No Content Available</h3>
                 <p className="text-muted-foreground">
-                  This course doesn't have any videos yet.
+                  This course doesn't have any chapters or videos yet.
                 </p>
               </div>
             )}
           </CardContent>
         </Card>
-
-        {/* Next Video Suggestion */}
-        {nextVideo && (
-          <Card className="mt-6 border-primary/20 bg-primary/5">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
-                    <Target className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">
-                      {nextVideo.isResuming ? 'Resume Video' : 'Up Next'}
-                    </h3>
-                    <p className="text-sm text-muted-foreground">{nextVideo.title}</p>
-                    {nextVideo.isResuming && nextVideo.resumeTimestamp && (
-                      <p className="text-xs text-muted-foreground">
-                        Resume at {Math.floor(nextVideo.resumeTimestamp / 60)}:
-                        {String(Math.floor(nextVideo.resumeTimestamp % 60)).padStart(2, '0')}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <Button asChild>
-                  <Link href={`/student/course/${courseId}/video/${nextVideo.videoId}${nextVideo.resumeTimestamp ? `?t=${nextVideo.resumeTimestamp}` : ''}`}>
-                    <Play className="mr-2 h-4 w-4" />
-                    {nextVideo.isResuming ? 'Resume' : 'Continue'}
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
     </ErrorBoundary>
   )

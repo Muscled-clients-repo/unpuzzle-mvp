@@ -196,6 +196,30 @@ export async function uploadMediaFileAction(
 
     console.log('💾 Media file saved to database:', savedFile.id)
 
+    // Create duration extraction job for video files
+    if (getFileType(file.type) === 'video') {
+      try {
+        console.log('🎬 Creating duration extraction job for video:', savedFile.id)
+
+        await broadcastWebSocketMessage({
+          type: 'create-duration-job',
+          operationId: `duration_${savedFile.id}_${Date.now()}`,
+          data: {
+            jobType: 'duration',
+            videoId: savedFile.id,
+            videoUrl: uploadResult.fileUrl,
+            fileName: file.name,
+            userId: user.id
+          }
+        })
+
+        console.log('✅ Duration extraction job created for video:', savedFile.id)
+      } catch (jobError) {
+        console.warn('⚠️ Failed to create duration extraction job:', jobError)
+        // Don't fail the upload if job creation fails
+      }
+    }
+
     // Note: File upload history tracking removed (media_file_history table deleted)
 
     // Broadcast completion

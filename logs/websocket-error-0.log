@@ -1,0 +1,170 @@
+2025-09-27T02:34:39: Error: listen EADDRINUSE: address already in use :::8080
+2025-09-27T02:34:39:     at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+2025-09-27T02:34:39:     at listenInCluster (node:net:1965:12)
+2025-09-27T02:34:39:     at Server.listen (node:net:2067:7)
+2025-09-27T02:34:39:     at Object.<anonymous> (/Users/mahtabalam/Desktop/Coding/Unpuzzle-MVP/websocket-server.js:341:8)
+2025-09-27T02:34:39:     at Module._compile (node:internal/modules/cjs/loader:1469:14)
+2025-09-27T02:34:39:     at Module._extensions..js (node:internal/modules/cjs/loader:1548:10)
+2025-09-27T02:34:39:     at Module.load (node:internal/modules/cjs/loader:1288:32)
+2025-09-27T02:34:39:     at Module._load (node:internal/modules/cjs/loader:1104:12)
+2025-09-27T02:34:39:     at Object.<anonymous> (/Users/mahtabalam/.nvm/versions/node/v20.18.1/lib/node_modules/pm2/lib/ProcessContainerFork.js:33:23)
+2025-09-27T02:34:39:     at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+2025-09-27T02:34:39:   code: 'EADDRINUSE',
+2025-09-27T02:34:39:   errno: -48,
+2025-09-27T02:34:39:   syscall: 'listen',
+2025-09-27T02:34:39:   address: '::',
+2025-09-27T02:34:39:   port: 8080
+2025-09-27T02:34:39: }
+2025-09-27T02:34:39: Error: listen EADDRINUSE: address already in use :::8080
+2025-09-27T02:34:39:     at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+2025-09-27T02:34:39:     at listenInCluster (node:net:1965:12)
+2025-09-27T02:34:39:     at Server.listen (node:net:2067:7)
+2025-09-27T02:34:39:     at Object.<anonymous> (/Users/mahtabalam/Desktop/Coding/Unpuzzle-MVP/websocket-server.js:341:8)
+2025-09-27T02:34:39:     at Module._compile (node:internal/modules/cjs/loader:1469:14)
+2025-09-27T02:34:39:     at Module._extensions..js (node:internal/modules/cjs/loader:1548:10)
+2025-09-27T02:34:39:     at Module.load (node:internal/modules/cjs/loader:1288:32)
+2025-09-27T02:34:39:     at Module._load (node:internal/modules/cjs/loader:1104:12)
+2025-09-27T02:34:39:     at Object.<anonymous> (/Users/mahtabalam/.nvm/versions/node/v20.18.1/lib/node_modules/pm2/lib/ProcessContainerFork.js:33:23)
+2025-09-27T02:34:39:     at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+2025-09-27T02:34:39:   code: 'EADDRINUSE',
+2025-09-27T02:34:39:   errno: -48,
+2025-09-27T02:34:39:   syscall: 'listen',
+2025-09-27T02:34:39:   address: '::',
+2025-09-27T02:34:39:   port: 8080
+2025-09-27T02:34:39: }
+2025-09-27T02:34:39: Error: listen EADDRINUSE: address already in use :::8080
+2025-09-27T02:34:39:     at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+2025-09-27T02:34:39:     at listenInCluster (node:net:1965:12)
+2025-09-27T02:34:39:     at Server.listen (node:net:2067:7)
+2025-09-27T02:34:39:     at Object.<anonymous> (/Users/mahtabalam/Desktop/Coding/Unpuzzle-MVP/websocket-server.js:341:8)
+2025-09-27T02:34:39:     at Module._compile (node:internal/modules/cjs/loader:1469:14)
+2025-09-27T02:34:39:     at Module._extensions..js (node:internal/modules/cjs/loader:1548:10)
+2025-09-27T02:34:39:     at Module.load (node:internal/modules/cjs/loader:1288:32)
+2025-09-27T02:34:39:     at Module._load (node:internal/modules/cjs/loader:1104:12)
+2025-09-27T02:34:39:     at Object.<anonymous> (/Users/mahtabalam/.nvm/versions/node/v20.18.1/lib/node_modules/pm2/lib/ProcessContainerFork.js:33:23)
+2025-09-27T02:34:39:     at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+2025-09-27T02:34:39:   code: 'EADDRINUSE',
+2025-09-27T02:34:39:   errno: -48,
+2025-09-27T02:34:39:   syscall: 'listen',
+2025-09-27T02:34:39:   address: '::',
+2025-09-27T02:34:39:   port: 8080
+2025-09-27T02:34:39: }
+2025-09-27T02:34:39: Error: listen EADDRINUSE: address already in use :::8080
+2025-09-27T02:34:39:     at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+2025-09-27T02:34:39:     at listenInCluster (node:net:1965:12)
+2025-09-27T02:34:39:     at Server.listen (node:net:2067:7)
+2025-09-27T02:34:39:     at Object.<anonymous> (/Users/mahtabalam/Desktop/Coding/Unpuzzle-MVP/websocket-server.js:341:8)
+2025-09-27T02:34:39:     at Module._compile (node:internal/modules/cjs/loader:1469:14)
+2025-09-27T02:34:39:     at Module._extensions..js (node:internal/modules/cjs/loader:1548:10)
+2025-09-27T02:34:39:     at Module.load (node:internal/modules/cjs/loader:1288:32)
+2025-09-27T02:34:39:     at Module._load (node:internal/modules/cjs/loader:1104:12)
+2025-09-27T02:34:39:     at Object.<anonymous> (/Users/mahtabalam/.nvm/versions/node/v20.18.1/lib/node_modules/pm2/lib/ProcessContainerFork.js:33:23)
+2025-09-27T02:34:39:     at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+2025-09-27T02:34:39:   code: 'EADDRINUSE',
+2025-09-27T02:34:39:   errno: -48,
+2025-09-27T02:34:39:   syscall: 'listen',
+2025-09-27T02:34:39:   address: '::',
+2025-09-27T02:34:39:   port: 8080
+2025-09-27T02:34:39: }
+2025-09-27T02:34:39: Error: listen EADDRINUSE: address already in use :::8080
+2025-09-27T02:34:39:     at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+2025-09-27T02:34:39:     at listenInCluster (node:net:1965:12)
+2025-09-27T02:34:39:     at Server.listen (node:net:2067:7)
+2025-09-27T02:34:39:     at Object.<anonymous> (/Users/mahtabalam/Desktop/Coding/Unpuzzle-MVP/websocket-server.js:341:8)
+2025-09-27T02:34:39:     at Module._compile (node:internal/modules/cjs/loader:1469:14)
+2025-09-27T02:34:39:     at Module._extensions..js (node:internal/modules/cjs/loader:1548:10)
+2025-09-27T02:34:39:     at Module.load (node:internal/modules/cjs/loader:1288:32)
+2025-09-27T02:34:39:     at Module._load (node:internal/modules/cjs/loader:1104:12)
+2025-09-27T02:34:39:     at Object.<anonymous> (/Users/mahtabalam/.nvm/versions/node/v20.18.1/lib/node_modules/pm2/lib/ProcessContainerFork.js:33:23)
+2025-09-27T02:34:39:     at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+2025-09-27T02:34:39:   code: 'EADDRINUSE',
+2025-09-27T02:34:39:   errno: -48,
+2025-09-27T02:34:39:   syscall: 'listen',
+2025-09-27T02:34:39:   address: '::',
+2025-09-27T02:34:39:   port: 8080
+2025-09-27T02:34:39: }
+2025-09-27T02:34:40: Error: listen EADDRINUSE: address already in use :::8080
+2025-09-27T02:34:40:     at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+2025-09-27T02:34:40:     at listenInCluster (node:net:1965:12)
+2025-09-27T02:34:40:     at Server.listen (node:net:2067:7)
+2025-09-27T02:34:40:     at Object.<anonymous> (/Users/mahtabalam/Desktop/Coding/Unpuzzle-MVP/websocket-server.js:341:8)
+2025-09-27T02:34:40:     at Module._compile (node:internal/modules/cjs/loader:1469:14)
+2025-09-27T02:34:40:     at Module._extensions..js (node:internal/modules/cjs/loader:1548:10)
+2025-09-27T02:34:40:     at Module.load (node:internal/modules/cjs/loader:1288:32)
+2025-09-27T02:34:40:     at Module._load (node:internal/modules/cjs/loader:1104:12)
+2025-09-27T02:34:40:     at Object.<anonymous> (/Users/mahtabalam/.nvm/versions/node/v20.18.1/lib/node_modules/pm2/lib/ProcessContainerFork.js:33:23)
+2025-09-27T02:34:40:     at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+2025-09-27T02:34:40:   code: 'EADDRINUSE',
+2025-09-27T02:34:40:   errno: -48,
+2025-09-27T02:34:40:   syscall: 'listen',
+2025-09-27T02:34:40:   address: '::',
+2025-09-27T02:34:40:   port: 8080
+2025-09-27T02:34:40: }
+2025-09-27T02:34:40: Error: listen EADDRINUSE: address already in use :::8080
+2025-09-27T02:34:40:     at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+2025-09-27T02:34:40:     at listenInCluster (node:net:1965:12)
+2025-09-27T02:34:40:     at Server.listen (node:net:2067:7)
+2025-09-27T02:34:40:     at Object.<anonymous> (/Users/mahtabalam/Desktop/Coding/Unpuzzle-MVP/websocket-server.js:341:8)
+2025-09-27T02:34:40:     at Module._compile (node:internal/modules/cjs/loader:1469:14)
+2025-09-27T02:34:40:     at Module._extensions..js (node:internal/modules/cjs/loader:1548:10)
+2025-09-27T02:34:40:     at Module.load (node:internal/modules/cjs/loader:1288:32)
+2025-09-27T02:34:40:     at Module._load (node:internal/modules/cjs/loader:1104:12)
+2025-09-27T02:34:40:     at Object.<anonymous> (/Users/mahtabalam/.nvm/versions/node/v20.18.1/lib/node_modules/pm2/lib/ProcessContainerFork.js:33:23)
+2025-09-27T02:34:40:     at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+2025-09-27T02:34:40:   code: 'EADDRINUSE',
+2025-09-27T02:34:40:   errno: -48,
+2025-09-27T02:34:40:   syscall: 'listen',
+2025-09-27T02:34:40:   address: '::',
+2025-09-27T02:34:40:   port: 8080
+2025-09-27T02:34:40: }
+2025-09-27T02:34:40: Error: listen EADDRINUSE: address already in use :::8080
+2025-09-27T02:34:40:     at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+2025-09-27T02:34:40:     at listenInCluster (node:net:1965:12)
+2025-09-27T02:34:40:     at Server.listen (node:net:2067:7)
+2025-09-27T02:34:40:     at Object.<anonymous> (/Users/mahtabalam/Desktop/Coding/Unpuzzle-MVP/websocket-server.js:341:8)
+2025-09-27T02:34:40:     at Module._compile (node:internal/modules/cjs/loader:1469:14)
+2025-09-27T02:34:40:     at Module._extensions..js (node:internal/modules/cjs/loader:1548:10)
+2025-09-27T02:34:40:     at Module.load (node:internal/modules/cjs/loader:1288:32)
+2025-09-27T02:34:40:     at Module._load (node:internal/modules/cjs/loader:1104:12)
+2025-09-27T02:34:40:     at Object.<anonymous> (/Users/mahtabalam/.nvm/versions/node/v20.18.1/lib/node_modules/pm2/lib/ProcessContainerFork.js:33:23)
+2025-09-27T02:34:40:     at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+2025-09-27T02:34:40:   code: 'EADDRINUSE',
+2025-09-27T02:34:40:   errno: -48,
+2025-09-27T02:34:40:   syscall: 'listen',
+2025-09-27T02:34:40:   address: '::',
+2025-09-27T02:34:40:   port: 8080
+2025-09-27T02:34:40: }
+2025-09-27T02:34:40: Error: listen EADDRINUSE: address already in use :::8080
+2025-09-27T02:34:40:     at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+2025-09-27T02:34:40:     at listenInCluster (node:net:1965:12)
+2025-09-27T02:34:40:     at Server.listen (node:net:2067:7)
+2025-09-27T02:34:40:     at Object.<anonymous> (/Users/mahtabalam/Desktop/Coding/Unpuzzle-MVP/websocket-server.js:341:8)
+2025-09-27T02:34:40:     at Module._compile (node:internal/modules/cjs/loader:1469:14)
+2025-09-27T02:34:40:     at Module._extensions..js (node:internal/modules/cjs/loader:1548:10)
+2025-09-27T02:34:40:     at Module.load (node:internal/modules/cjs/loader:1288:32)
+2025-09-27T02:34:40:     at Module._load (node:internal/modules/cjs/loader:1104:12)
+2025-09-27T02:34:40:     at Object.<anonymous> (/Users/mahtabalam/.nvm/versions/node/v20.18.1/lib/node_modules/pm2/lib/ProcessContainerFork.js:33:23)
+2025-09-27T02:34:40:     at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+2025-09-27T02:34:40:   code: 'EADDRINUSE',
+2025-09-27T02:34:40:   errno: -48,
+2025-09-27T02:34:40:   syscall: 'listen',
+2025-09-27T02:34:40:   address: '::',
+2025-09-27T02:34:40:   port: 8080
+2025-09-27T02:34:40: }
+2025-09-27T02:34:40: Error: listen EADDRINUSE: address already in use :::8080
+2025-09-27T02:34:40:     at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+2025-09-27T02:34:40:     at listenInCluster (node:net:1965:12)
+2025-09-27T02:34:40:     at Server.listen (node:net:2067:7)
+2025-09-27T02:34:40:     at Object.<anonymous> (/Users/mahtabalam/Desktop/Coding/Unpuzzle-MVP/websocket-server.js:341:8)
+2025-09-27T02:34:40:     at Module._compile (node:internal/modules/cjs/loader:1469:14)
+2025-09-27T02:34:40:     at Module._extensions..js (node:internal/modules/cjs/loader:1548:10)
+2025-09-27T02:34:40:     at Module.load (node:internal/modules/cjs/loader:1288:32)
+2025-09-27T02:34:40:     at Module._load (node:internal/modules/cjs/loader:1104:12)
+2025-09-27T02:34:40:     at Object.<anonymous> (/Users/mahtabalam/.nvm/versions/node/v20.18.1/lib/node_modules/pm2/lib/ProcessContainerFork.js:33:23)
+2025-09-27T02:34:40:     at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+2025-09-27T02:34:40:   code: 'EADDRINUSE',
+2025-09-27T02:34:40:   errno: -48,
+2025-09-27T02:34:40:   syscall: 'listen',
+2025-09-27T02:34:40:   address: '::',
+2025-09-27T02:34:40:   port: 8080
+2025-09-27T02:34:40: }
