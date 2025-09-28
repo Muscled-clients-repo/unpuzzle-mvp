@@ -30,6 +30,7 @@ import { publishCourseAction, unpublishCourseAction } from '@/app/actions/course
 import { linkMediaToChapterAction } from '@/app/actions/chapter-media-actions'
 import { MediaSelector } from '@/components/media/media-selector'
 import { ChapterMediaList } from '@/components/course/ChapterMediaList'
+import { CourseTrackGoalSelector } from '@/components/course/CourseTrackGoalSelector'
 
 export default function CourseEditPage(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params)
@@ -151,174 +152,196 @@ export default function CourseEditPage(props: { params: Promise<{ id: string }> 
     <PageContainer>
       <div className="max-w-6xl mx-auto p-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => router.push('/instructor/courses')}
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div>
-              <h1 className="text-2xl font-bold">Edit Course</h1>
-              <div className="flex items-center gap-2 mt-1">
-                <Badge variant={course.status === 'published' ? 'default' : 'secondary'}>
-                  {course.status === 'published' ? 'Published' : 'Draft'}
-                </Badge>
+        <div className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b mb-6">
+          <div className="flex items-center justify-between py-4">
+            <div className="flex items-center gap-4">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => router.push('/instructor/courses')}
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div>
+                <h1 className="text-2xl font-bold">Edit Course</h1>
+                <div className="flex items-center gap-2 mt-1">
+                  <Badge variant={course.status === 'published' ? 'default' : 'secondary'}>
+                    {course.status === 'published' ? 'Published' : 'Draft'}
+                  </Badge>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2">
-            <Button
-              variant={course.status === 'published' ? 'outline' : 'default'}
-              onClick={handlePublish}
-            >
-              {course.status === 'published' ? (
-                <>
-                  <EyeOff className="h-4 w-4 mr-2" />
-                  Unpublish
-                </>
-              ) : (
-                <>
-                  <Eye className="h-4 w-4 mr-2" />
-                  Publish
-                </>
-              )}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={course.status === 'published' ? 'outline' : 'default'}
+                onClick={handlePublish}
+              >
+                {course.status === 'published' ? (
+                  <>
+                    <EyeOff className="h-4 w-4 mr-2" />
+                    Unpublish
+                  </>
+                ) : (
+                  <>
+                    <Eye className="h-4 w-4 mr-2" />
+                    Publish
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
 
-        {/* Course Basic Info */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Course Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Title */}
-            <div>
-              <Label htmlFor="title">Course Title</Label>
-              {editingTitle ? (
-                <div className="flex gap-2 mt-1">
-                  <Input
-                    value={titleValue}
-                    onChange={(e) => setTitleValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') setEditingTitle(false)
-                      if (e.key === 'Escape') {
-                        setTitleValue(course.title || "")
-                        setEditingTitle(false)
-                      }
-                    }}
-                    autoFocus
-                  />
-                  <Button size="sm" onClick={() => setEditingTitle(false)}>
-                    <CheckCircle className="h-4 w-4" />
-                  </Button>
-                </div>
-              ) : (
-                <div
-                  className="text-lg font-medium cursor-pointer hover:bg-gray-50 p-2 rounded border mt-1"
-                  onClick={() => setEditingTitle(true)}
-                >
-                  {course.title || 'Click to add title'}
-                </div>
-              )}
-            </div>
-
-            {/* Description */}
-            <div>
-              <Label htmlFor="description">Course Description</Label>
-              {editingDescription ? (
-                <div className="mt-1">
-                  <Textarea
-                    value={descriptionValue}
-                    onChange={(e) => setDescriptionValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') {
-                        setDescriptionValue(course.description || "")
-                        setEditingDescription(false)
-                      }
-                    }}
-                    rows={4}
-                    autoFocus
-                  />
-                  <div className="flex gap-2 mt-2">
-                    <Button size="sm" onClick={() => setEditingDescription(false)}>
-                      <CheckCircle className="h-4 w-4 mr-1" />
-                      Save
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setDescriptionValue(course.description || "")
-                        setEditingDescription(false)
-                      }}
+        {/* Two Column Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Course Details - 33% Width */}
+          <div className="lg:col-span-1">
+            <Card className="sticky top-24 z-10">
+              <CardHeader>
+                <CardTitle className="text-lg">Course Details</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Basic information
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Course Title */}
+                <div>
+                  <Label htmlFor="title">Course Title</Label>
+                  {editingTitle ? (
+                    <div className="flex gap-2 mt-1">
+                      <Input
+                        value={titleValue}
+                        onChange={(e) => setTitleValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') setEditingTitle(false)
+                          if (e.key === 'Escape') {
+                            setTitleValue(course.title || "")
+                            setEditingTitle(false)
+                          }
+                        }}
+                        autoFocus
+                        className="font-medium"
+                      />
+                      <Button size="sm" onClick={() => setEditingTitle(false)}>
+                        <CheckCircle className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div
+                      className="font-medium cursor-pointer hover:bg-gray-50 p-2 rounded border mt-1"
+                      onClick={() => setEditingTitle(true)}
                     >
-                      Cancel
-                    </Button>
-                  </div>
+                      {course.title || 'Click to add title'}
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div
-                  className="min-h-[80px] cursor-pointer hover:bg-gray-50 p-3 rounded border mt-1"
-                  onClick={() => setEditingDescription(true)}
-                >
-                  {course.description || 'Click to add description'}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
 
-        {/* Chapters and Media */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Course Content</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {chapters.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">No chapters yet. Create your first chapter to get started.</p>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {chapters.map((chapter) => (
-                  <Card key={chapter.id} className="border-l-4 border-l-primary">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-semibold">{chapter.title}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            {chapter.media?.length || 0} media files
-                          </p>
-                        </div>
+                {/* Description */}
+                <div>
+                  <Label htmlFor="description">Description</Label>
+                  {editingDescription ? (
+                    <div className="mt-1">
+                      <Textarea
+                        value={descriptionValue}
+                        onChange={(e) => setDescriptionValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') {
+                            setDescriptionValue(course.description || "")
+                            setEditingDescription(false)
+                          }
+                        }}
+                        rows={4}
+                        className="resize-none"
+                        autoFocus
+                      />
+                      <div className="flex gap-2 mt-2">
+                        <Button size="sm" onClick={() => setEditingDescription(false)}>
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          Save
+                        </Button>
                         <Button
-                          variant="outline"
                           size="sm"
-                          onClick={() => setShowMediaSelector(chapter.id)}
-                          className="h-8 px-2 text-xs"
+                          variant="outline"
+                          onClick={() => {
+                            setDescriptionValue(course.description || "")
+                            setEditingDescription(false)
+                          }}
                         >
-                          <Library className="h-3 w-3 mr-1" />
-                          Browse Library
+                          Cancel
                         </Button>
                       </div>
-                    </CardHeader>
-                    <CardContent>
-                      <ChapterMediaList
-                        chapterId={chapter.id}
-                        courseId={courseId}
-                        media={chapter.media || []}
-                      />
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                    </div>
+                  ) : (
+                    <div
+                      className="min-h-[80px] cursor-pointer hover:bg-gray-50 p-3 rounded border mt-1"
+                      onClick={() => setEditingDescription(true)}
+                    >
+                      {course.description || 'Click to add description'}
+                    </div>
+                  )}
+                </div>
+
+                {/* Goal Visibility */}
+                <CourseTrackGoalSelector courseId={courseId} />
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Course Content - 67% Width */}
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Course Content</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Organize your course into chapters and lessons
+                </p>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="px-6 pb-6">
+                  {chapters.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">No chapters yet. Create your first chapter to get started.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {chapters.map((chapter) => (
+                        <Card key={chapter.id} className="border-l-4 border-l-primary">
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h3 className="font-semibold">{chapter.title}</h3>
+                                <p className="text-sm text-muted-foreground">
+                                  {chapter.media?.length || 0} media files
+                                </p>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setShowMediaSelector(chapter.id)}
+                                className="h-8 px-2 text-xs"
+                              >
+                                <Library className="h-3 w-3 mr-1" />
+                                Browse Library
+                              </Button>
+                            </div>
+                          </CardHeader>
+                          <CardContent>
+                            <ChapterMediaList
+                              chapterId={chapter.id}
+                              courseId={courseId}
+                              media={chapter.media || []}
+                            />
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
 
         {/* Media Selector Modal */}
         {showMediaSelector && (
