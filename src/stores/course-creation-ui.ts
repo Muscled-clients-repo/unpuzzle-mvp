@@ -52,21 +52,22 @@ interface CourseCreationUIState {
   
   // ===== UNIFIED CONTENT EDITING STATE (UI State - what's being edited) =====
   contentPendingChanges: {
-    videos: Record<string, string>    // videoId -> newTitle
     chapters: Record<string, string>  // chapterId -> newTitle
+    media: Record<string, string>     // junctionId -> newTitle (for junction table)
   }
-  setContentPendingChange: (type: 'videos' | 'chapters', id: string, newTitle: string) => void
-  removeContentPendingChange: (type: 'videos' | 'chapters', id: string) => void
+  setContentPendingChange: (type: 'chapters' | 'media', id: string, newTitle: string) => void
+  removeContentPendingChange: (type: 'chapters' | 'media', id: string) => void
   clearAllContentPendingChanges: () => void
   getContentPendingChangesCount: () => number
   
-  // Convenience methods for backward compatibility and specific access
-  setVideoPendingChange: (videoId: string, newTitle: string) => void
+  // Convenience methods for specific access
   setChapterPendingChange: (chapterId: string, newTitle: string) => void
-  getVideoPendingChanges: () => Record<string, string>
+  setMediaPendingChange: (junctionId: string, newTitle: string) => void
   getChapterPendingChanges: () => Record<string, string>
-  getVideoPendingChangesCount: () => number
+  getMediaPendingChanges: () => Record<string, string>
   getChapterPendingChangesCount: () => number
+  getMediaPendingChangesCount: () => number
+  clearAllMediaPendingChanges: () => void
   
   // ===== UI PREFERENCES =====
   preferences: {
@@ -112,8 +113,8 @@ export const useCourseCreationUI = create<CourseCreationUIState>()(
         },
         pendingDeletes: new Set(),
         contentPendingChanges: {
-          videos: {},
-          chapters: {}
+          chapters: {},
+          media: {}
         },
         preferences: {
           autoSave: true,
@@ -286,49 +287,25 @@ export const useCourseCreationUI = create<CourseCreationUIState>()(
         clearAllContentPendingChanges: () => {
           set({
             contentPendingChanges: {
-              videos: {},
-              chapters: {}
+              chapters: {},
+              media: {}
             }
           })
         },
 
         getContentPendingChangesCount: () => {
           const { contentPendingChanges } = get()
-          return Object.keys(contentPendingChanges.videos).length + 
-                 Object.keys(contentPendingChanges.chapters).length
+          return Object.keys(contentPendingChanges.chapters).length +
+                 Object.keys(contentPendingChanges.media).length
         },
 
-        // ===== BACKWARD COMPATIBILITY METHODS =====
-        setVideoPendingChange: (videoId, newTitle) => {
-          get().setContentPendingChange('videos', videoId, newTitle)
-        },
-
+        // ===== CONTENT PENDING CHANGES METHODS =====
         setChapterPendingChange: (chapterId, newTitle) => {
           get().setContentPendingChange('chapters', chapterId, newTitle)
         },
 
-        clearAllVideoPendingChanges: () => {
-          set((state) => ({
-            contentPendingChanges: {
-              ...state.contentPendingChanges,
-              videos: {}
-            }
-          }))
-        },
-
-        clearAllChapterPendingChanges: () => {
-          set((state) => ({
-            contentPendingChanges: {
-              ...state.contentPendingChanges,
-              chapters: {}
-            }
-          }))
-        },
-
-        // ===== COMPATIBILITY GETTERS =====
-        getVideoPendingChanges: () => {
-          const { contentPendingChanges } = get()
-          return contentPendingChanges.videos
+        setMediaPendingChange: (junctionId, newTitle) => {
+          get().setContentPendingChange('media', junctionId, newTitle)
         },
 
         getChapterPendingChanges: () => {
@@ -336,14 +313,28 @@ export const useCourseCreationUI = create<CourseCreationUIState>()(
           return contentPendingChanges.chapters
         },
 
-        getVideoPendingChangesCount: () => {
-          const { contentPendingChanges } = get()
-          return Object.keys(contentPendingChanges.videos).length
-        },
-
         getChapterPendingChangesCount: () => {
           const { contentPendingChanges } = get()
           return Object.keys(contentPendingChanges.chapters).length
+        },
+
+        getMediaPendingChanges: () => {
+          const { contentPendingChanges } = get()
+          return contentPendingChanges.media
+        },
+
+        getMediaPendingChangesCount: () => {
+          const { contentPendingChanges } = get()
+          return Object.keys(contentPendingChanges.media).length
+        },
+
+        clearAllMediaPendingChanges: () => {
+          set((state) => ({
+            contentPendingChanges: {
+              ...state.contentPendingChanges,
+              media: {}
+            }
+          }))
         },
 
         // Preferences methods

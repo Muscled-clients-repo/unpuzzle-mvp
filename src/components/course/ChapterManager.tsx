@@ -16,55 +16,46 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCourseCreationUI } from '@/stores/course-creation-ui'
-import { VideoList } from "./VideoList"
+import { ChapterMediaList } from "./ChapterMediaList"
 import { MediaSelector } from "../media/media-selector"
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
-import { useLinkMediaToChapter } from '@/hooks/use-video-queries'
-import type { VideoUpload, Chapter } from "@/types/course"
+import { linkMediaToChapterAction } from '@/app/actions/chapter-media-actions'
+import type { ChapterWithMedia } from "@/hooks/use-chapter-media-queries"
 import type { MediaFile } from "@/hooks/use-media-queries"
 
 interface ChapterManagerProps {
-  chapters: Chapter[]
-  courseId: string // NEW: Add courseId prop for media linking
+  chapters: ChapterWithMedia[]  // NEW: Use junction table data structure
+  courseId: string
   onCreateChapter: (title: string) => void
-  onUpdateChapter: (chapterId: string, updates: Partial<Chapter>) => void
+  onUpdateChapter: (chapterId: string, updates: Partial<ChapterWithMedia>) => void
   onDeleteChapter: (chapterId: string) => void
-  isDeletingChapter?: boolean // TanStack deletion state
-  deletingChapterIds?: Set<string> // NEW: Specific chapters being deleted
-  onReorderChapters: (chapters: Chapter[]) => void
-  onVideoRename: (videoId: string, newName: string) => void
-  batchRenameMutation?: any // TanStack Query mutation
-  onVideoDelete: (videoId: string) => void
-  onVideoPreview?: (video: VideoUpload) => void
-  onMoveVideo: (videoId: string, fromChapterId: string, toChapterId: string) => void
-  onReorderVideosInChapter?: (chapterId: string, videos: VideoUpload[]) => void
+  isDeletingChapter?: boolean
+  deletingChapterIds?: Set<string>
+  onReorderChapters: (chapters: ChapterWithMedia[]) => void
+  // NEW: Media-specific handlers for junction table
+  onMediaUnlink: (junctionId: string) => void
+  onMediaPreview?: (media: any) => void
+  onMediaReorder?: (chapterId: string, newOrder: Array<{ junctionId: string, newPosition: number }>) => void
+  onMediaTitleUpdate?: (junctionId: string, customTitle: string) => void
   onPendingChangesUpdate?: (hasChanges: boolean, changeCount: number, saveFunction: () => void, isSaving?: boolean) => void
-  onTabNavigation?: (currentId: string, currentType: 'chapter' | 'video', direction: 'next' | 'previous') => void
-  onTranscriptUpload?: (videoId: string, file: File) => void
-  transcriptionStatuses?: Map<string, { hasTranscript: boolean; isUploading: boolean }>
   className?: string
 }
 
 export function ChapterManager({
   chapters,
-  courseId, // NEW: Add courseId parameter
+  courseId,
   onCreateChapter,
   onUpdateChapter,
   onDeleteChapter,
   isDeletingChapter,
   deletingChapterIds,
   onReorderChapters,
-  onVideoRename,
-  batchRenameMutation,
-  onVideoDelete,
-  onVideoPreview,
-  onMoveVideo,
-  onReorderVideosInChapter,
+  onMediaUnlink,
+  onMediaPreview,
+  onMediaReorder,
+  onMediaTitleUpdate,
   onPendingChangesUpdate,
-  onTabNavigation,
-  onTranscriptUpload,
-  transcriptionStatuses,
   className
 }: ChapterManagerProps) {
   // Safety check for undefined chapters
@@ -88,7 +79,6 @@ export function ChapterManager({
   const [editingChapter, setEditingChapter] = useState<string | null>(null)
   const [chapterTitle, setChapterTitle] = useState("")
   const [draggedChapter, setDraggedChapter] = useState<string | null>(null)
-  const [draggedVideo, setDraggedVideo] = useState<string | null>(null)
   const [dragOverChapter, setDragOverChapter] = useState<string | null>(null)
   const [showMediaSelector, setShowMediaSelector] = useState<string | null>(null)
   const [linkingChapters, setLinkingChapters] = useState<Set<string>>(new Set())
@@ -109,7 +99,7 @@ export function ChapterManager({
     })
   }
 
-  const handleStartEditChapter = (chapter: Chapter) => {
+  const handleStartEditChapter = (chapter: ChapterWithMedia) => {
     setEditingChapter(chapter.id)
     // CONTROLLED INPUT FIX: Ensure chapterTitle is always a string
     setChapterTitle(ui.getChapterPendingChanges()[chapter.id] || chapter.title || '')
@@ -151,55 +141,43 @@ export function ChapterManager({
     setDragOverChapter(null)
   }
 
-  const handleVideoDrop = (chapterId: string) => {
-    if (draggedVideo) {
-      // Find which chapter the video is currently in
-      const fromChapter = chapters.find(ch => 
-        ch.videos.some(v => v.id === draggedVideo)
-      )
-      if (fromChapter && fromChapter.id !== chapterId) {
-        onMoveVideo(draggedVideo, fromChapter.id, chapterId)
-      }
-    }
-    setDraggedVideo(null)
-  }
 
-  // Phase 4B: Real media selection handler using TanStack Query
-  const linkMediaMutation = useLinkMediaToChapter()
-  
+  const queryClient = useQueryClient()
+
   const handleMediaSelected = async (files: MediaFile[], chapterId: string) => {
     console.log(`🔗 [Phase 1] Linking ${files.length} media files to chapter ${chapterId} in course ${courseId}`)
-    
+
     // Mark this chapter as linking
     setLinkingChapters(prev => new Set([...prev, chapterId]))
-    
+
     try {
       // Phase 2: Link all selected media files in parallel for 4x speed improvement
       console.log(`🚀 [Phase 2] Starting parallel processing of ${files.length} files`)
-      
-      const linkingPromises = files.map(file => 
-        linkMediaMutation.mutateAsync({
-          mediaId: file.id,
-          chapterId: chapterId,
-          courseId: courseId
-        }).then(result => {
+
+      const linkingPromises = files.map(file =>
+        linkMediaToChapterAction(file.id, chapterId).then(result => {
           console.log(`✅ [Phase 2] Parallel link successful for ${file.name}:`, result)
           return { file, result, success: true }
         }).catch(error => {
           console.error(`❌ [Phase 2] Parallel link failed for ${file.name}:`, error)
+          toast.error(`Failed to link ${file.name}`)
           return { file, error, success: false }
         })
       )
-      
+
       // Wait for all operations to complete (success or failure)
       const results = await Promise.all(linkingPromises)
-      
+
       // Log summary
       const successful = results.filter(r => r.success).length
       const failed = results.filter(r => !r.success).length
       console.log(`📊 [Phase 2] Parallel processing complete: ${successful} successful, ${failed} failed out of ${files.length} total`)
-      
-      // Individual errors are already handled by mutation's onError, no need to throw here
+
+      // If any successful, invalidate queries to refresh data
+      if (successful > 0) {
+        queryClient.invalidateQueries({ queryKey: ['course-with-media', courseId] })
+        toast.success(`Successfully linked ${successful} media file${successful > 1 ? 's' : ''}`)
+      }
     } finally {
       // Remove chapter from linking state
       setLinkingChapters(prev => {
@@ -437,38 +415,23 @@ export function ChapterManager({
                 <CardContent
                   className={cn(
                     "pt-0",
-                    (!chapter.videos || chapter.videos.length === 0) && "min-h-[100px]"
+                    (!chapter.media || chapter.media.length === 0) && "min-h-[100px]"
                   )}
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    handleVideoDrop(chapter.id)
-                  }}
-                  onDragOver={(e) => e.preventDefault()}
                 >
-                  {(!chapter.videos || chapter.videos.length === 0) ? (
+                  {(!chapter.media || chapter.media.length === 0) ? (
                     <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
                       <Upload className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">Drag videos here or use the upload button</p>
+                      <p className="text-sm">Add media from your library to this chapter</p>
                     </div>
                   ) : (
-                    <VideoList
-                      videos={chapter.videos || []}
-                      onVideoRename={onVideoRename}
-                      batchRenameMutation={batchRenameMutation}
-                      onVideoDelete={onVideoDelete}
-                      onVideoPreview={onVideoPreview}
-                      onVideoDragStart={setDraggedVideo}
-                      onVideoDragEnd={() => setDraggedVideo(null)}
-                      onVideoReorder={(reorderedVideos) => {
-                        if (onReorderVideosInChapter) {
-                          onReorderVideosInChapter(chapter.id, reorderedVideos)
-                        }
-                      }}
+                    <ChapterMediaList
+                      chapterId={chapter.id}
+                      media={chapter.media || []}
+                      onMediaUnlink={onMediaUnlink}
+                      onMediaPreview={onMediaPreview}
+                      onMediaReorder={(newOrder) => onMediaReorder?.(chapter.id, newOrder)}
+                      onTitleUpdate={onMediaTitleUpdate}
                       onPendingChangesUpdate={onPendingChangesUpdate}
-                      onTabNavigation={onTabNavigation}
-                      onTranscriptUpload={onTranscriptUpload}
-                      transcriptionStatuses={transcriptionStatuses}
                     />
                   )}
                 </CardContent>

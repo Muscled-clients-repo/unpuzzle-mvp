@@ -3,7 +3,6 @@ import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useWebSocketConnection } from './use-websocket-connection'
 import { useAuth } from './use-auth'
-import { videoKeys } from './use-video-queries'
 import { chapterKeys } from './use-chapter-queries'
 
 interface OperationTracker {
