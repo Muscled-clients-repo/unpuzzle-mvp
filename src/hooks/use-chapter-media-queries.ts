@@ -68,7 +68,7 @@ export interface CourseWithMedia {
  */
 export function useCourseWithMedia(courseId: string) {
   const queryClient = useQueryClient()
-  const websocket = useCourseWebSocketSimple(courseId)
+  // const websocket = useCourseWebSocketSimple(courseId) // Temporarily disabled to fix infinite loop
 
   const query = useQuery({
     queryKey: chapterMediaKeys.course(courseId),
@@ -92,45 +92,45 @@ export function useCourseWithMedia(courseId: string) {
     retry: 2
   })
 
-  // Listen for real-time updates via WebSocket observer
-  useEffect(() => {
-    const unsubscribers = [
-      // Media linked event
-      courseEventObserver.subscribe(MEDIA_EVENTS.MEDIA_LINKED, (event) => {
-        if (event.courseId === courseId) {
-          console.log('🔗 [COURSE MEDIA] Media linked event received, refreshing course data')
-          queryClient.invalidateQueries({ queryKey: chapterMediaKeys.course(courseId) })
-        }
-      }),
+  // Listen for real-time updates via WebSocket observer (temporarily disabled to fix infinite loop)
+  // useEffect(() => {
+  //   const unsubscribers = [
+  //     // Media linked event
+  //     courseEventObserver.subscribe(MEDIA_EVENTS.MEDIA_LINKED, (event) => {
+  //       if (event.courseId === courseId) {
+  //         console.log('🔗 [COURSE MEDIA] Media linked event received, refreshing course data')
+  //         queryClient.invalidateQueries({ queryKey: chapterMediaKeys.course(courseId) })
+  //       }
+  //     }),
 
-      // Media unlinked event
-      courseEventObserver.subscribe(MEDIA_EVENTS.MEDIA_UNLINKED, (event) => {
-        if (event.courseId === courseId) {
-          console.log('🔓 [COURSE MEDIA] Media unlinked event received, refreshing course data')
-          queryClient.invalidateQueries({ queryKey: chapterMediaKeys.course(courseId) })
-        }
-      }),
+  //     // Media unlinked event
+  //     courseEventObserver.subscribe(MEDIA_EVENTS.MEDIA_UNLINKED, (event) => {
+  //       if (event.courseId === courseId) {
+  //         console.log('🔓 [COURSE MEDIA] Media unlinked event received, refreshing course data')
+  //         queryClient.invalidateQueries({ queryKey: chapterMediaKeys.course(courseId) })
+  //       }
+  //     }),
 
-      // Chapter update events
-      courseEventObserver.subscribe(COURSE_EVENTS.CHAPTER_UPDATE_COMPLETE, (event) => {
-        if (event.courseId === courseId) {
-          console.log('📚 [COURSE MEDIA] Chapter updated, refreshing course data')
-          queryClient.invalidateQueries({ queryKey: chapterMediaKeys.course(courseId) })
-        }
-      })
-    ]
+  //     // Chapter update events
+  //     courseEventObserver.subscribe(COURSE_EVENTS.CHAPTER_UPDATE_COMPLETE, (event) => {
+  //       if (event.courseId === courseId) {
+  //         console.log('📚 [COURSE MEDIA] Chapter updated, refreshing course data')
+  //         queryClient.invalidateQueries({ queryKey: chapterMediaKeys.course(courseId) })
+  //       }
+  //     })
+  //   ]
 
-    return () => {
-      unsubscribers.forEach(unsubscribe => unsubscribe())
-    }
-  }, [courseId, queryClient])
+  //   return () => {
+  //     unsubscribers.forEach(unsubscribe => unsubscribe())
+  //   }
+  // }, [courseId, queryClient])
 
   return {
     courseData: query.data,
     isLoading: query.isLoading,
     error: query.error,
     refetch: query.refetch,
-    isWebSocketConnected: websocket.isConnected
+    isWebSocketConnected: false // websocket.isConnected (temporarily disabled)
   }
 }
 
@@ -194,13 +194,13 @@ export function useLinkMediaToChapter(chapterId: string) {
       // Also invalidate course-level cache
       queryClient.invalidateQueries({ queryKey: chapterMediaKeys.courses() })
 
-      // Broadcast event for other components
-      courseEventObserver.emit(MEDIA_EVENTS.MEDIA_LINKED, {
-        courseId: result.data?.course_chapters?.course_id || '',
-        chapterId: chapterId,
-        mediaId: result.data?.media_file_id || '',
-        junctionId: result.data?.id || ''
-      })
+      // Broadcast event for other components (temporarily disabled to fix infinite loop)
+      // courseEventObserver.emit(MEDIA_EVENTS.MEDIA_LINKED, {
+      //   courseId: result.data?.course_chapters?.course_id || '',
+      //   chapterId: chapterId,
+      //   mediaId: result.data?.media_file_id || '',
+      //   junctionId: result.data?.id || ''
+      // })
 
       toast.success(result.message || 'Media linked to chapter')
     },

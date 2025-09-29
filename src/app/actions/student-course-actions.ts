@@ -64,29 +64,60 @@ export async function getEnrolledCourses(): Promise<Course[]> {
     const enhancedCourses: Course[] = []
 
     for (const courseData of courses) {
-      // Get videos for this course directly (avoiding foreign key relationship issue)
-      const { data: videos } = await supabase
-        .from('videos')
-        .select('*')
+      // Get media files for this course via junction table (new architecture)
+      const { data: chapters } = await supabase
+        .from('course_chapters')
+        .select(`
+          id,
+          title,
+          order_position,
+          course_chapter_media (
+            id,
+            order_in_chapter,
+            title,
+            media_files (
+              id,
+              name,
+              file_type,
+              file_size,
+              duration_seconds,
+              cdn_url,
+              thumbnail_url
+            )
+          )
+        `)
         .eq('course_id', courseData.id)
-        .order('chapter_id', { ascending: true })
-        .order('order', { ascending: true })
+        .order('order_position', { ascending: true })
 
-      console.log('[Server Action] Found videos for course:', { courseId: courseData.id, videoCount: videos?.length || 0 })
+      console.log('[Server Action] Found chapters for course:', { courseId: courseData.id, chapterCount: chapters?.length || 0 })
 
-      const transformedVideos = (videos || []).map((video: any, index: number) => ({
-        id: video.id,
-        courseId: courseData.id,
-        title: video.title,
-        description: video.description || '',
-        duration: video.duration_seconds || 600,
-        order: index + 1,
-        videoUrl: video.video_url, // Keep private format for useSignedUrl hook
-        thumbnailUrl: video.thumbnail_url,
-        transcript: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }))
+      // Transform junction table data to video format for compatibility
+      const transformedVideos: any[] = []
+      let globalIndex = 0
+
+      for (const chapter of chapters || []) {
+        const sortedMedia = (chapter.course_chapter_media || [])
+          .sort((a, b) => a.order_in_chapter - b.order_in_chapter)
+
+        for (const mediaItem of sortedMedia) {
+          if (mediaItem.media_files) {
+            transformedVideos.push({
+              id: mediaItem.media_files.id,
+              courseId: courseData.id,
+              title: mediaItem.title || mediaItem.media_files.name,
+              description: '',
+              duration: mediaItem.media_files.duration_seconds || 600,
+              order: globalIndex + 1,
+              videoUrl: mediaItem.media_files.cdn_url, // CDN URL for new architecture
+              thumbnailUrl: mediaItem.media_files.thumbnail_url,
+              transcript: [],
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            })
+            globalIndex++
+          }
+        }
+      }
 
       const course: Course = {
         id: courseData.id,

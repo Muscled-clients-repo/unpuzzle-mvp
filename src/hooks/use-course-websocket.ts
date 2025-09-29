@@ -94,11 +94,10 @@ export function useCourseWebSocket(courseId: string) {
     if (data.courseId !== courseId) return
 
     console.log('🎬 Video update completed via WebSocket:', data)
-    
-    // Temporarily disable invalidation to prevent infinite loops
-    // queryClient.invalidateQueries({ queryKey: videoKeys.list(courseId) })
-    // queryClient.invalidateQueries({ queryKey: chapterKeys.list(courseId) })
-    
+
+    // Re-enable cache invalidation for junction table
+    queryClient.invalidateQueries({ queryKey: ['chapter-media', courseId] })
+
     // Track operation completion
     if (data.operationId) {
       const tracker = operationTrackers.current.get(data.operationId)
@@ -110,7 +109,7 @@ export function useCourseWebSocket(courseId: string) {
         toast.success('Video updated')
       }
     }
-  }, [courseId, checkOperationComplete])
+  }, [courseId, checkOperationComplete, queryClient])
 
   // Handle chapter creation completion
   const handleChapterCreateComplete = useCallback((data: CourseWebSocketData) => {

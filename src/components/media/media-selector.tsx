@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useMediaFiles } from "@/hooks/use-media-queries"
 import { useMediaStore } from "@/stores/media-store"
 import {
@@ -104,22 +105,25 @@ export function MediaSelector({
 
   if (isLoading) {
     return (
-      <Dialog open={isOpen} onOpenChange={handleClose}>
-        <DialogContent className="max-w-4xl max-h-[80vh]">
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-          </DialogHeader>
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-          </div>
-        </DialogContent>
-      </Dialog>
+      <TooltipProvider>
+        <Dialog open={isOpen} onOpenChange={handleClose}>
+          <DialogContent className="max-w-4xl max-h-[80vh]">
+            <DialogHeader>
+              <DialogTitle>{title}</DialogTitle>
+            </DialogHeader>
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+            </div>
+          </DialogContent>
+        </Dialog>
+      </TooltipProvider>
     )
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+    <TooltipProvider>
+      <Dialog open={isOpen} onOpenChange={handleClose}>
+        <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
@@ -202,7 +206,14 @@ export function MediaSelector({
 
                   {/* Content */}
                   <div className="p-3">
-                    <h4 className="font-medium truncate mb-1">{item.name}</h4>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <h4 className="font-medium truncate mb-1">{item.name}</h4>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{item.name}</p>
+                      </TooltipContent>
+                    </Tooltip>
                     <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
                       <span>{item.size}</span>
                       <span>{item.uploadedAt}</span>
@@ -247,7 +258,14 @@ export function MediaSelector({
                   </div>
                   
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-medium truncate">{item.name}</h4>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <h4 className="font-medium truncate">{item.name}</h4>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{item.name}</p>
+                      </TooltipContent>
+                    </Tooltip>
                     <p className="text-sm text-muted-foreground">{item.size} • {item.uploadedAt}</p>
                   </div>
                   
@@ -292,7 +310,8 @@ export function MediaSelector({
             )}
           </Button>
         </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+    </TooltipProvider>
   )
 }

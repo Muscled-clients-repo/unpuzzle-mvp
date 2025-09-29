@@ -12,11 +12,11 @@ import { Badge } from "@/components/ui/badge"
 import {
   ArrowLeft,
   AlertCircle,
-  CheckCircle,
   Library,
   Save,
   Eye,
-  EyeOff
+  EyeOff,
+  Edit2
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { PageContainer } from "@/components/layout/page-container"
@@ -24,13 +24,17 @@ import { PageHeaderSkeleton, Skeleton } from "@/components/common/universal-skel
 
 // Junction Table Architecture - Only working hooks
 import { useCourseWithMedia } from '@/hooks/use-chapter-media-queries'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, useMutation } from '@tanstack/react-query'
 import { chapterMediaKeys } from '@/hooks/use-chapter-media-queries'
+import { useCourseWebSocket } from '@/hooks/use-course-websocket'
 import { publishCourseAction, unpublishCourseAction } from '@/app/actions/course-actions'
-import { linkMediaToChapterAction } from '@/app/actions/chapter-media-actions'
+import { linkMediaToChapterAction, unlinkMediaFromChapterAction } from '@/app/actions/chapter-media-actions'
+import { updateChapterAction } from '@/app/actions/chapter-crud-actions'
 import { MediaSelector } from '@/components/media/media-selector'
 import { ChapterMediaList } from '@/components/course/ChapterMediaList'
 import { CourseTrackGoalSelector } from '@/components/course/CourseTrackGoalSelector'
+import { SimpleVideoPreview } from '@/components/ui/SimpleVideoPreview'
+import { TranscriptUploadModal } from '@/components/course/TranscriptUploadModal'
 
 export default function CourseEditPage(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params)
@@ -40,14 +44,27 @@ export default function CourseEditPage(props: { params: Promise<{ id: string }> 
   // State for media selector
   const [showMediaSelector, setShowMediaSelector] = React.useState<string | null>(null)
 
+  // State for video preview
+  const [previewVideo, setPreviewVideo] = React.useState<any>(null)
+
+  // State for transcript upload modal
+  const [transcriptUploadVideo, setTranscriptUploadVideo] = React.useState<any>(null)
+
   // State for basic course editing
   const [editingTitle, setEditingTitle] = React.useState(false)
   const [editingDescription, setEditingDescription] = React.useState(false)
   const [titleValue, setTitleValue] = React.useState("")
   const [descriptionValue, setDescriptionValue] = React.useState("")
 
+  // State for chapter editing
+  const [editingChapter, setEditingChapter] = React.useState<string | null>(null)
+  const [chapterTitleValue, setChapterTitleValue] = React.useState("")
+
   // Junction table hooks (working correctly)
   const { courseData, isLoading: isLoadingCourse } = useCourseWithMedia(courseId)
+
+  // WebSocket for real-time updates (temporarily disabled to fix infinite loop)
+  // const websocket = useCourseWebSocket(courseId)
   const queryClient = useQueryClient()
 
   // Extract data from junction table
@@ -79,27 +96,203 @@ export default function CourseEditPage(props: { params: Promise<{ id: string }> 
     }
   }
 
-  // Media selection handler for Browse Library
-  const handleMediaSelected = async (mediaFiles: any[], chapterId: string) => {
-    console.log('🎬 [MEDIA SELECTOR] Linking media to chapter:', { chapterId, mediaCount: mediaFiles.length })
-
-    try {
+  // Optimistic media linking mutation
+  const linkMediaMutation = useMutation({
+    mutationFn: async ({ mediaFiles, chapterId }: { mediaFiles: any[], chapterId: string }) => {
+      const results = []
       for (const mediaFile of mediaFiles) {
         const result = await linkMediaToChapterAction(mediaFile.id, chapterId)
         if (!result.success) {
           throw new Error(result.error || 'Failed to link media')
         }
+        results.push(result)
       }
-      toast.success(`Linked ${mediaFiles.length} media file(s) to chapter`)
+      return results
+    },
+    onMutate: async ({ mediaFiles, chapterId }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: chapterMediaKeys.course(courseId) })
 
-      // Invalidate TanStack Query cache to refresh the course data
-      queryClient.invalidateQueries({ queryKey: chapterMediaKeys.course(courseId) })
-    } catch (error) {
-      console.error('❌ [MEDIA SELECTOR] Failed to link media:', error)
+      // Snapshot the previous value
+      const previousCourse = queryClient.getQueryData(chapterMediaKeys.course(courseId))
+
+      // Optimistically update the cache
+      queryClient.setQueryData(chapterMediaKeys.course(courseId), (old: any) => {
+        if (!old) return old
+
+        const updatedChapters = old.chapters?.map((chapter: any) => {
+          if (chapter.id === chapterId) {
+            const newMedia = mediaFiles.map((mediaFile, index) => ({
+              junctionId: `temp-${Date.now()}-${index}`,
+              id: mediaFile.id,
+              name: mediaFile.name,
+              customTitle: null,
+              file_type: mediaFile.file_type,
+              file_size: mediaFile.file_size,
+              duration_seconds: mediaFile.duration_seconds,
+              cdn_url: mediaFile.cdn_url,
+              order: (chapter.media?.length || 0) + index + 1,
+              transcript_text: null,
+              transcript_file_path: null
+            }))
+
+            return {
+              ...chapter,
+              media: [...(chapter.media || []), ...newMedia]
+            }
+          }
+          return chapter
+        })
+
+        return { ...old, chapters: updatedChapters }
+      })
+
+      return { previousCourse }
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousCourse) {
+        queryClient.setQueryData(chapterMediaKeys.course(courseId), context.previousCourse)
+      }
+      console.error('❌ [MEDIA SELECTOR] Failed to link media:', err)
       toast.error('Failed to link media to chapter')
-    } finally {
+    },
+    onSuccess: (data, { mediaFiles }) => {
+      toast.success(`Linked ${mediaFiles.length} media file(s) to chapter`)
+    },
+    onSettled: () => {
+      // Always refetch after error or success
+      queryClient.invalidateQueries({ queryKey: chapterMediaKeys.course(courseId) })
       setShowMediaSelector(null)
     }
+  })
+
+  // Media selection handler for Browse Library
+  const handleMediaSelected = (mediaFiles: any[], chapterId: string) => {
+    console.log('🎬 [MEDIA SELECTOR] Linking media to chapter:', { chapterId, mediaCount: mediaFiles.length })
+    linkMediaMutation.mutate({ mediaFiles, chapterId })
+  }
+
+  // Optimistic media unlinking mutation
+  const unlinkMediaMutation = useMutation({
+    mutationFn: async (junctionId: string) => {
+      const result = await unlinkMediaFromChapterAction(junctionId)
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to unlink media')
+      }
+      return result
+    },
+    onMutate: async (junctionId) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: chapterMediaKeys.course(courseId) })
+
+      // Snapshot the previous value
+      const previousCourse = queryClient.getQueryData(chapterMediaKeys.course(courseId))
+
+      // Optimistically remove the media from cache
+      queryClient.setQueryData(chapterMediaKeys.course(courseId), (old: any) => {
+        if (!old) return old
+
+        const updatedChapters = old.chapters?.map((chapter: any) => ({
+          ...chapter,
+          media: chapter.media?.filter((media: any) => media.junctionId !== junctionId) || []
+        }))
+
+        return { ...old, chapters: updatedChapters }
+      })
+
+      return { previousCourse }
+    },
+    onError: (err, junctionId, context) => {
+      // Rollback on error
+      if (context?.previousCourse) {
+        queryClient.setQueryData(chapterMediaKeys.course(courseId), context.previousCourse)
+      }
+      console.error('❌ [COURSE EDIT] Failed to unlink media:', err)
+      toast.error('Failed to unlink media from chapter')
+    },
+    onSuccess: () => {
+      toast.success('Media unlinked from chapter')
+    },
+    onSettled: () => {
+      // Always refetch after error or success
+      queryClient.invalidateQueries({ queryKey: chapterMediaKeys.course(courseId) })
+    }
+  })
+
+  // Media unlink handler
+  const handleMediaUnlink = (junctionId: string) => {
+    console.log('🔓 [COURSE EDIT] Unlinking media from chapter:', junctionId)
+    unlinkMediaMutation.mutate(junctionId)
+  }
+
+  // Handle media preview
+  const handleMediaPreview = (media: any) => {
+    // Convert ChapterMedia to format expected by SimpleVideoPreview
+    const videoData = {
+      id: media.id, // This is the media file ID
+      name: media.customTitle || media.name,
+      title: media.customTitle || media.name,
+      video_url: media.cdn_url,
+      url: media.cdn_url
+    }
+    setPreviewVideo(videoData)
+  }
+
+  // Handle transcript upload
+  const handleTranscriptUpload = (media: any) => {
+    // Open dedicated transcript upload modal
+    setTranscriptUploadVideo(media)
+  }
+
+  // Chapter editing handlers
+  const handleStartChapterEdit = (chapter: any) => {
+    setEditingChapter(chapter.id)
+    setChapterTitleValue(chapter.title || "")
+  }
+
+  const handleSaveChapterEdit = async (chapterId: string) => {
+    if (!chapterTitleValue.trim()) {
+      toast.error('Chapter title cannot be empty')
+      return
+    }
+
+    // Find the original chapter to compare titles
+    const originalChapter = chapters.find(ch => ch.id === chapterId)
+    const originalTitle = originalChapter?.title || ""
+    const newTitle = chapterTitleValue.trim()
+
+    // If no changes, just exit editing mode without showing toast
+    if (newTitle === originalTitle) {
+      setEditingChapter(null)
+      setChapterTitleValue("")
+      return
+    }
+
+    try {
+      const result = await updateChapterAction(chapterId, {
+        title: newTitle
+      })
+
+      if (result.success) {
+        toast.success('Chapter title updated')
+        // Refresh the course data
+        queryClient.invalidateQueries({ queryKey: chapterMediaKeys.course(courseId) })
+      } else {
+        toast.error(result.error || 'Failed to update chapter title')
+      }
+    } catch (error) {
+      console.error('Chapter update error:', error)
+      toast.error('Failed to update chapter title')
+    } finally {
+      setEditingChapter(null)
+      setChapterTitleValue("")
+    }
+  }
+
+  const handleCancelChapterEdit = () => {
+    setEditingChapter(null)
+    setChapterTitleValue("")
   }
 
   // Loading state
@@ -309,9 +502,41 @@ export default function CourseEditPage(props: { params: Promise<{ id: string }> 
                         <Card key={chapter.id} className="border-l-4 border-l-primary">
                           <CardHeader className="pb-3">
                             <div className="flex items-center justify-between">
-                              <div>
-                                <h3 className="font-semibold">{chapter.title}</h3>
-                                <p className="text-sm text-muted-foreground">
+                              <div className="flex-1 min-w-0 mr-4">
+                                {editingChapter === chapter.id ? (
+                                  <input
+                                    value={chapterTitleValue}
+                                    onChange={(e) => setChapterTitleValue(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault()
+                                        handleSaveChapterEdit(chapter.id)
+                                      } else if (e.key === 'Escape') {
+                                        e.preventDefault()
+                                        handleCancelChapterEdit()
+                                      }
+                                    }}
+                                    onBlur={() => handleSaveChapterEdit(chapter.id)}
+                                    className="font-semibold text-base bg-transparent border-none outline-none p-0 w-full focus:ring-0"
+                                    autoFocus
+                                  />
+                                ) : (
+                                  <div className="group flex items-center gap-1">
+                                    <h3
+                                      className="font-semibold cursor-pointer hover:bg-gray-50/50 p-1 rounded transition-colors"
+                                      onClick={() => handleStartChapterEdit(chapter)}
+                                      title="Click to edit"
+                                    >
+                                      {chapter.title}
+                                    </h3>
+                                    <Edit2
+                                      className="h-3 w-3 text-muted-foreground/60 cursor-pointer"
+                                      onClick={() => handleStartChapterEdit(chapter)}
+                                      title="Edit chapter title"
+                                    />
+                                  </div>
+                                )}
+                                <p className="text-sm text-muted-foreground mt-1">
                                   {chapter.media?.length || 0} media files
                                 </p>
                               </div>
@@ -329,8 +554,10 @@ export default function CourseEditPage(props: { params: Promise<{ id: string }> 
                           <CardContent>
                             <ChapterMediaList
                               chapterId={chapter.id}
-                              courseId={courseId}
                               media={chapter.media || []}
+                              onMediaUnlink={handleMediaUnlink}
+                              onMediaPreview={handleMediaPreview}
+                              onTranscriptUpload={handleTranscriptUpload}
                             />
                           </CardContent>
                         </Card>
@@ -351,6 +578,31 @@ export default function CourseEditPage(props: { params: Promise<{ id: string }> 
             onSelect={(mediaFiles) => handleMediaSelected(mediaFiles, showMediaSelector)}
             allowMultiple={true}
             title="Select Media Files for Chapter"
+          />
+        )}
+
+        {/* Video Preview Modal */}
+        {previewVideo && (
+          <SimpleVideoPreview
+            video={previewVideo}
+            isOpen={!!previewVideo}
+            onClose={() => setPreviewVideo(null)}
+            title={previewVideo.name || previewVideo.title}
+            autoPlay={false}
+          />
+        )}
+
+        {/* Transcript Upload Modal */}
+        {transcriptUploadVideo && (
+          <TranscriptUploadModal
+            isOpen={!!transcriptUploadVideo}
+            onClose={() => setTranscriptUploadVideo(null)}
+            videoId={transcriptUploadVideo.id}
+            videoTitle={transcriptUploadVideo.customTitle || transcriptUploadVideo.name}
+            onUploadComplete={() => {
+              // Refresh course data to update any transcript status
+              queryClient.invalidateQueries({ queryKey: chapterMediaKeys.course(courseId) })
+            }}
           />
         )}
       </div>

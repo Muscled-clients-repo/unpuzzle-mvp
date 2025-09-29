@@ -119,6 +119,7 @@ export interface SystemContext {
     outPoint: number | null
     isComplete: boolean
     sentToChat: boolean  // Track if segment has been sent as context
+    transcriptText?: string  // Extracted transcript text for the segment
   }
   recordingState: {
     isRecording: boolean

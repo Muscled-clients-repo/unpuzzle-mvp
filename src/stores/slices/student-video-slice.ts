@@ -68,11 +68,28 @@ export const createStudentVideoSlice: StateCreator<StudentVideoSlice> = (set, ge
   showLiveTranscript: false,
 
   loadStudentVideo: async (videoId: string) => {
-    const result = await studentVideoService.getVideoWithStudentData(videoId)
-    if (result.data) {
-      set({ 
-        currentVideo: result.data,
-        reflections: result.data.reflections || []
+    // 001-COMPLIANT: Use junction table action instead of old videos table
+    const { getStudentVideoFromJunctionTable } = await import('@/app/actions/student-course-actions-junction')
+
+    try {
+      const videoData = await getStudentVideoFromJunctionTable(videoId)
+      if (videoData) {
+        set({
+          currentVideo: videoData,
+          reflections: videoData.reflections || []
+        })
+      } else {
+        console.warn('[Student Video Slice] Video not found or no access:', videoId)
+        set({
+          currentVideo: null,
+          reflections: []
+        })
+      }
+    } catch (error) {
+      console.error('[Student Video Slice] Error loading video:', error)
+      set({
+        currentVideo: null,
+        reflections: []
       })
     }
   },

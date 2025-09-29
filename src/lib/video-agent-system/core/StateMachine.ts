@@ -5,7 +5,7 @@ import { VideoController, VideoRef, VideoRefLike } from './VideoController'
 import { MessageManager } from './MessageManager'
 import { videoStateCoordinator } from '@/lib/video-state/VideoStateCoordinator'
 import { isFeatureEnabled } from '@/utils/feature-flags'
-import { getTranscriptContextForAI } from '@/hooks/use-transcript-queries'
+import { getTranscriptContextForAI, extractTranscriptSegments } from '@/hooks/use-transcript-queries'
 
 export class VideoAgentStateMachine {
   private context: SystemContext
@@ -840,7 +840,15 @@ export class VideoAgentStateMachine {
         }
       })
 
-      const transcriptSegment = await getTranscriptContextForAI(videoId, timestamp)
+      // Use segment context transcript if available, otherwise get context for timestamp
+      let transcriptSegment = ''
+      if (this.context.segmentState.sentToChat && this.context.segmentState.transcriptText) {
+        transcriptSegment = this.context.segmentState.transcriptText
+        console.log('[SM] Using segment context for quiz:', this.context.segmentState.transcriptText.substring(0, 100) + '...')
+      } else {
+        transcriptSegment = await getTranscriptContextForAI(videoId, timestamp)
+        console.log('[SM] Using timestamp context for quiz:', transcriptSegment.substring(0, 100) + '...')
+      }
 
       const response = await fetch('/api/ai/quiz', {
         method: 'POST',
@@ -1411,6 +1419,13 @@ export class VideoAgentStateMachine {
   // Segment management handlers
   private async getTranscriptChunkBoundaries(videoId: string, timestamp: number): Promise<{ start: number; end: number } | null> {
     try {
+      // FIXME: Students should not access instructor-only transcription API
+      // This function is disabled for now to prevent 403 errors
+      // Students get transcript data through video props, not direct API calls
+      console.log('[SM] Transcript chunk boundaries disabled - students use video props for transcript data')
+      return null
+
+      /* COMMENTED OUT - CAUSES 403 FOR STUDENTS
       const response = await fetch(`/api/transcription/${videoId}`)
       if (!response.ok) return null
 
@@ -1429,6 +1444,7 @@ export class VideoAgentStateMachine {
       )
 
       return chunk ? { start: chunk.start, end: chunk.end } : null
+      */
     } catch (error) {
       console.error('[SM] Failed to get transcript chunk:', error)
       return null
@@ -1543,25 +1559,79 @@ export class VideoAgentStateMachine {
     })
   }
   
+  /**
+   * Extract transcript text for a specific time range
+   */
+  private async getTranscriptSegmentText(videoId: string, startTime: number, endTime: number): Promise<string> {
+    try {
+      const response = await fetch(`/api/transcription/${videoId}`)
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch transcript: ${response.status}`)
+      }
+
+      const data = await response.json()
+
+      if (!data.success || !data.hasTranscript || !data.transcript) {
+        return `No transcript available for segment ${this.formatTime(startTime)} - ${this.formatTime(endTime)}`
+      }
+
+      // If we have segments, extract text for the time range
+      if (data.transcript.segments && Array.isArray(data.transcript.segments)) {
+        const relevantSegments = data.transcript.segments.filter((segment: any) => {
+          // Include segment if it overlaps with [startTime, endTime]
+          return segment.start < endTime && segment.end > startTime
+        })
+
+        if (relevantSegments.length > 0) {
+          // Sort by start time and extract text
+          relevantSegments.sort((a: any, b: any) => a.start - b.start)
+          const text = relevantSegments.map((segment: any) => segment.text.trim()).join(' ').trim()
+          return text || `Segment ${this.formatTime(startTime)} - ${this.formatTime(endTime)}`
+        }
+      }
+
+      // Fallback to full transcript text with time info
+      return `Transcript segment ${this.formatTime(startTime)} - ${this.formatTime(endTime)}: ${data.transcript.text?.substring(0, 200) || 'No content available'}...`
+    } catch (error) {
+      console.error('Failed to get transcript segment text:', error)
+      throw error
+    }
+  }
+
   private async handleSendSegmentToChat() {
     const { inPoint, outPoint, isComplete } = this.context.segmentState
-    
+
     if (!isComplete || inPoint === null || outPoint === null) {
       console.error('[SM] Cannot send incomplete segment to chat')
       return
     }
-    
-    
+
+    // Extract transcript text for the selected segment
+    let transcriptText = ''
+    if (this.videoId) {
+      try {
+        transcriptText = await this.getTranscriptSegmentText(this.videoId, inPoint, outPoint)
+      } catch (error) {
+        console.error('[SM] Failed to extract transcript segment:', error)
+        transcriptText = `Segment ${this.formatTime(inPoint)} - ${this.formatTime(outPoint)}`
+      }
+    }
+
+    console.log(`[SM] Sending segment to chat: ${this.formatTime(inPoint)} - ${this.formatTime(outPoint)}`)
+    console.log(`[SM] Transcript text: "${transcriptText.substring(0, 100)}..."`)
+
     // NUCLEAR PRINCIPLE: Mark segment as sent to chat (as context, not message)
     // The segment stays active as context for the next message
     this.updateContext({
       ...this.context,
       segmentState: {
         ...this.context.segmentState,
-        sentToChat: true  // Mark as sent but keep the segment active
+        sentToChat: true,  // Mark as sent but keep the segment active
+        transcriptText: transcriptText // Store the extracted text
       }
     })
-    
+
   }
 
   private async handleReflectionSubmit(payload: { type: string, data: any }) {

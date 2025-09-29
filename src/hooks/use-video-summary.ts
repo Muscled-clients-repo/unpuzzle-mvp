@@ -15,29 +15,13 @@ export function useVideoSummary(videoId: string | null) {
   return useQuery({
     queryKey: ['video-summary', videoId],
     queryFn: async (): Promise<VideoSummary | null> => {
-      if (!videoId) return null
-
-      const supabase = createClient()
-
-      const { data, error } = await supabase
-        .from('videos')
-        .select('ai_summary')
-        .eq('id', videoId)
-        .single()
-
-      if (error) {
-        console.error('Error fetching video summary:', error)
-        return null
-      }
-
-      if (!data?.ai_summary) {
-        return null
-      }
-
-      return data.ai_summary as VideoSummary
+      // DISABLED: AI summary feature not needed for now
+      // Prevents 400 error from trying to select non-existent ai_summary column
+      console.log('[VIDEO SUMMARY] Feature disabled - ai_summary column not available')
+      return null
     },
-    enabled: !!videoId,
-    staleTime: 1000 * 60 * 60, // 1 hour - summaries don't change often
-    cacheTime: 1000 * 60 * 60 * 24, // 24 hours
+    enabled: false, // Completely disable the query
+    staleTime: 1000 * 60 * 60,
+    cacheTime: 1000 * 60 * 60 * 24,
   })
 }

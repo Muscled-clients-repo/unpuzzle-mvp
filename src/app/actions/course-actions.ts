@@ -222,21 +222,32 @@ export async function publishCourseAction(courseId: string): Promise<ActionResul
       .from('courses')
       .select(`
         *,
-        videos (id)
+        course_chapters (
+          id,
+          course_chapter_media (
+            id,
+            media_files (id)
+          )
+        )
       `)
       .eq('id', courseId)
       .eq('instructor_id', user.id)
       .single()
-    
+
     if (fetchError) throw fetchError
     if (!course) throw new Error('Course not found')
-    
+
     if (!course.title || !course.description) {
       throw new Error('Course must have title and description')
     }
-    
-    if (!course.videos || course.videos.length === 0) {
-      throw new Error('Course must have at least one video')
+
+    // Check if course has at least one chapter with media
+    const hasMedia = course.course_chapters?.some(chapter =>
+      chapter.course_chapter_media && chapter.course_chapter_media.length > 0
+    )
+
+    if (!hasMedia) {
+      throw new Error('Course must have at least one media file in a chapter')
     }
     
     const { data: publishedCourse, error } = await supabase

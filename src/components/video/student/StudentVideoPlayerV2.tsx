@@ -87,11 +87,19 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
   
   // Connect video ref to state machine with retry logic
   useEffect(() => {
+    // Only try to connect if we have a signed URL
+    if (!signedUrl.url) {
+      console.log('[V2] Waiting for signed URL before connecting video ref')
+      return
+    }
+
     const connectVideoRef = () => {
       if (videoPlayerRef.current) {
+        console.log('[V2] Successfully connected video ref')
         setVideoRef(videoPlayerRef.current)
         return true
       } else {
+        console.log('[V2] Video ref not available yet, retrying...')
         return false
       }
     }
@@ -106,19 +114,22 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
       if (connectVideoRef()) {
         clearInterval(retryInterval)
       }
-    }, 100)
+    }, 200) // Increased interval
 
-    // Clean up after 5 seconds
+    // Clean up after 10 seconds (increased timeout)
     const timeout = setTimeout(() => {
       clearInterval(retryInterval)
-      console.warn('[V2] Failed to connect video ref after 5 seconds')
-    }, 5000)
+      console.warn('[V2] Failed to connect video ref after 10 seconds', {
+        hasSignedUrl: !!signedUrl.url,
+        hasVideoRef: !!videoPlayerRef.current
+      })
+    }, 10000)
 
     return () => {
       clearInterval(retryInterval)
       clearTimeout(timeout)
     }
-  }, [setVideoRef])
+  }, [setVideoRef, signedUrl.url]) // Added signedUrl.url dependency
 
   // Set video ID and course ID for AI agent context
   useEffect(() => {

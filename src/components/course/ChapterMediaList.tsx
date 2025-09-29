@@ -27,6 +27,7 @@ interface ChapterMediaListProps {
   media: ChapterMedia[]
   onMediaUnlink: (junctionId: string) => void
   onMediaPreview?: (media: ChapterMedia) => void
+  onTranscriptUpload?: (media: ChapterMedia) => void
   onMediaReorder?: (newOrder: Array<{ junctionId: string, newPosition: number }>) => void
   onTitleUpdate?: (junctionId: string, customTitle: string) => void
   onPendingChangesUpdate?: (hasChanges: boolean, changeCount: number, saveFunction: () => void, isSaving?: boolean) => void
@@ -39,6 +40,7 @@ export function ChapterMediaList({
   media,
   onMediaUnlink,
   onMediaPreview,
+  onTranscriptUpload,
   onMediaReorder,
   onTitleUpdate,
   onPendingChangesUpdate,
@@ -79,10 +81,11 @@ export function ChapterMediaList({
       return <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0" />
     }
 
-    // Show icon based on file type
-    if (mediaItem.file_type.startsWith('video/')) {
+    // Show icon based on file type (handle both file_type and type properties)
+    const fileType = mediaItem.file_type || (mediaItem as any).type || ''
+    if (fileType === 'video' || (fileType && fileType.startsWith('video/'))) {
       return <FileVideo className="h-4 w-4 text-primary flex-shrink-0" />
-    } else if (mediaItem.file_type.startsWith('audio/')) {
+    } else if (fileType === 'audio' || (fileType && fileType.startsWith('audio/'))) {
       return <FileText className="h-4 w-4 text-blue-500 flex-shrink-0" />
     } else {
       return <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
@@ -330,21 +333,32 @@ export function ChapterMediaList({
                   onClick={() => onMediaPreview(mediaItem)}
                   disabled={isDeletionPending}
                   className="h-8 w-8 p-0"
+                  title="Preview video"
                 >
                   <Eye className="h-3 w-3" />
                 </Button>
               )}
 
-              {/* Edit Button */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleStartEdit(mediaItem)}
-                disabled={isDeletionPending}
-                className="h-8 w-8 p-0"
-              >
-                <Edit2 className="h-3 w-3" />
-              </Button>
+              {/* Transcript Upload Button */}
+              {(() => {
+                const fileType = mediaItem.file_type || (mediaItem as any).type || ''
+                return (fileType === 'video' || (fileType && fileType.startsWith('video/'))) && onTranscriptUpload
+              })() && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    console.log('Transcript upload clicked for:', mediaItem.name, mediaItem.file_type || (mediaItem as any).type)
+                    onTranscriptUpload(mediaItem)
+                  }}
+                  disabled={isDeletionPending}
+                  className="h-8 w-8 p-0"
+                  title="Upload transcript"
+                >
+                  <Upload className="h-3 w-3" />
+                </Button>
+              )}
+
 
               {/* Unlink Button */}
               <Button

@@ -18,7 +18,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useAppStore } from "@/stores/app-store"
-import { getCourseWithChaptersAndVideos } from '@/app/actions/student-course-actions'
+import { getStudentCourseDetails } from '@/app/actions/student-course-actions-junction'
 import { CourseThumbnail } from '@/components/ui/course-thumbnail'
 import { useState, useEffect } from 'react'
 import { PageHeaderSkeleton, Skeleton } from "@/components/common/universal-skeleton"
@@ -56,8 +56,8 @@ export default function StudentCoursePage() {
 
   // 🎯 ARCHITECTURE-COMPLIANT: TanStack Query for server state
   const { data: courseResult, isLoading, error } = useQuery({
-    queryKey: ['course-content', courseId, user?.id],
-    queryFn: () => getCourseWithChaptersAndVideos(courseId),
+    queryKey: ['student-course-details-junction', courseId, user?.id],
+    queryFn: () => getStudentCourseDetails(courseId),
     enabled: !!(courseId && (user?.id || profile?.id)),
     staleTime: 1000 * 60 * 5, // 5 minutes cache for better performance
     retry: 2
@@ -66,7 +66,7 @@ export default function StudentCoursePage() {
   // 🎯 ARCHITECTURE-COMPLIANT: Zustand for UI state
   const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set())
 
-  const course = courseResult?.success ? courseResult.data : null
+  const course = courseResult || null
 
   // Expand all chapters by default when course data loads
   useEffect(() => {
@@ -75,8 +75,8 @@ export default function StudentCoursePage() {
     }
   }, [course?.chapters])
 
-  // Loading state - show skeleton while loading OR while processing data
-  if (isLoading || !courseResult) {
+  // Loading state - show skeleton while loading
+  if (isLoading) {
     return (
       <ErrorBoundary>
         <div className="flex-1 p-6 max-w-6xl mx-auto">
@@ -132,12 +132,12 @@ export default function StudentCoursePage() {
   }
 
   // Error state
-  if (error || (courseResult && !courseResult.success)) {
-    return <ErrorFallback error={error || new Error(courseResult?.error)} />
+  if (error) {
+    return <ErrorFallback error={error} />
   }
 
   // Not found state - only show if not loading and course is null
-  if (!isLoading && courseResult && !course) {
+  if (!isLoading && !course) {
     return (
       <ErrorBoundary>
         <div className="flex min-h-screen flex-col">

@@ -26,7 +26,7 @@ import {
 import Link from "next/link"
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getUserCoursesAction } from '@/app/actions/course-actions'
-import { getNextVideoForCourse, getCourseProgress } from '@/app/actions/student-course-actions'
+import { getStudentCoursesWithJunctionTable } from '@/app/actions/student-course-actions-junction'
 import { useWebSocketConnection } from '@/hooks/use-websocket-connection'
 import { courseEventObserver, STUDENT_EVENTS, COURSE_GOAL_EVENTS } from '@/lib/course-event-observer'
 import { CourseThumbnail } from '@/components/ui/course-thumbnail'
@@ -38,13 +38,15 @@ export default function MyCoursesPage() {
   // Get authenticated user ID
   const userId = user?.id || profile?.id
 
+  console.log('[Student Courses] User state:', { user: user?.id, profile: profile?.id, userId })
+
   // WebSocket connection for real-time updates
   useWebSocketConnection(userId || '')
 
   // ARCHITECTURE-COMPLIANT: TanStack Query for server state
   const { data: coursesResult, isLoading, error } = useQuery({
-    queryKey: ['user-courses', userId],
-    queryFn: getUserCoursesAction,
+    queryKey: ['student-courses-junction', userId],
+    queryFn: getStudentCoursesWithJunctionTable,
     enabled: !!userId,
     staleTime: 1000 * 60 * 5, // Cache for 5 minutes
   })
@@ -59,7 +61,7 @@ export default function MyCoursesPage() {
         // Only invalidate if this event is for the current user
         if (event.data.userId === userId) {
           console.log('🔄 [WEBSOCKET] Goal reassignment detected, invalidating user courses cache')
-          queryClient.invalidateQueries({ queryKey: ['user-courses', userId] })
+          queryClient.invalidateQueries({ queryKey: ['student-courses-junction', userId] })
         }
       }
     )
@@ -69,7 +71,7 @@ export default function MyCoursesPage() {
       (event) => {
         // Invalidate for all students since course-goal assignments affect course visibility
         console.log('🔄 [WEBSOCKET] Course-goal assignment changed, invalidating user courses cache')
-        queryClient.invalidateQueries({ queryKey: ['user-courses', userId] })
+        queryClient.invalidateQueries({ queryKey: ['student-courses-junction', userId] })
       }
     )
 
@@ -79,8 +81,8 @@ export default function MyCoursesPage() {
     }
   }, [userId, queryClient])
 
-  // Extract courses from server action result
-  const courses = coursesResult?.success ? coursesResult.data : []
+  // Extract courses from junction table action (returns courses directly)
+  const courses = coursesResult || []
 
   // Get real course progress and next videos for each course
   const { data: coursesWithProgress } = useQuery({

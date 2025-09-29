@@ -24,6 +24,7 @@ interface ChatInterfaceProps {
     outPoint: number | null
     isComplete: boolean
     sentToChat: boolean
+    transcriptText?: string  // Pre-extracted transcript text from StateMachine
   }
   onClearSegmentContext?: () => void
   onUpdateSegmentContext?: (inPoint: number, outPoint: number) => void
@@ -98,6 +99,16 @@ export function ChatInterface({
 
   // Get transcript text and actual boundaries between two timestamps
   const getTranscriptDataBetween = (startTime: number, endTime: number): { text: string; actualStart: number; actualEnd: number } => {
+    // If we have pre-extracted transcript text from StateMachine, use it
+    if (segmentContext?.transcriptText) {
+      return {
+        text: segmentContext.transcriptText,
+        actualStart: startTime,
+        actualEnd: endTime
+      }
+    }
+
+    // Fallback to extracting from transcript segments (existing logic)
     if (!transcriptData?.hasTranscript || !transcriptData.transcript?.segments) {
       return { text: '', actualStart: startTime, actualEnd: endTime }
     }
