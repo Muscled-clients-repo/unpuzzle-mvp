@@ -4,7 +4,7 @@ import { Course, CourseProgress } from '@/types/domain'
 import { studentCourseService } from '@/services/student-course-service'
 
 export interface StudentCourseState {
-  enrolledCourses: Course[]
+  coursesWithActiveGoals: Course[]
   recommendedCourses: Course[]
   currentCourse: Course | null
   courseProgress: CourseProgress | null
@@ -13,12 +13,12 @@ export interface StudentCourseState {
 }
 
 export interface StudentCourseActions {
-  loadEnrolledCourses: (userId: string) => Promise<void>
+  loadCoursesWithActiveGoals: (userId: string) => Promise<void>
   loadRecommendedCourses: (userId: string) => Promise<void>
   loadAllCourses: () => Promise<void>
   loadCourseById: (courseId: string) => Promise<void>
   loadCourseProgress: (userId: string, courseId: string) => Promise<void>
-  enrollInCourse: (userId: string, courseId: string) => Promise<void>
+  assignCourseGoal: (userId: string, courseId: string) => Promise<void>
   setCurrentCourse: (course: Course | null) => void
   calculateProgress: (courseId: string) => number
 }
@@ -26,7 +26,7 @@ export interface StudentCourseActions {
 export interface StudentCourseSlice extends StudentCourseState, StudentCourseActions {}
 
 const initialState: StudentCourseState = {
-  enrolledCourses: [],
+  coursesWithActiveGoals: [],
   recommendedCourses: [],
   currentCourse: null,
   courseProgress: null,
@@ -37,15 +37,15 @@ const initialState: StudentCourseState = {
 export const createStudentCourseSlice: StateCreator<StudentCourseSlice> = (set, get) => ({
   ...initialState,
 
-  loadEnrolledCourses: async (userId: string) => {
+  loadCoursesWithActiveGoals: async (userId: string) => {
     set({ loading: true, error: null })
-    
-    const result = await studentCourseService.getEnrolledCourses(userId)
-    
+
+    const result = await studentCourseService.getCoursesWithActiveGoals(userId)
+
     if (result.error) {
       set({ loading: false, error: result.error })
     } else {
-      set({ loading: false, enrolledCourses: result.data || [], error: null })
+      set({ loading: false, coursesWithActiveGoals: result.data || [], error: null })
     }
   },
 
@@ -97,20 +97,20 @@ export const createStudentCourseSlice: StateCreator<StudentCourseSlice> = (set, 
     }
   },
 
-  enrollInCourse: async (userId: string, courseId: string) => {
+  assignCourseGoal: async (userId: string, courseId: string) => {
     set({ loading: true, error: null })
-    
-    const result = await studentCourseService.enrollInCourse(userId, courseId)
-    
+
+    const result = await studentCourseService.assignCourseGoal(userId, courseId)
+
     if (result.error) {
       set({ loading: false, error: result.error })
     } else if (result.data?.success) {
-      // Reload enrolled courses after successful enrollment
-      const coursesResult = await studentCourseService.getEnrolledCourses(userId)
-      set({ 
-        loading: false, 
-        enrolledCourses: coursesResult.data || [],
-        error: null 
+      // Reload student courses after successful goal assignment
+      const coursesResult = await studentCourseService.getCoursesWithActiveGoals(userId)
+      set({
+        loading: false,
+        coursesWithActiveGoals: coursesResult.data || [],
+        error: null
       })
     }
   },

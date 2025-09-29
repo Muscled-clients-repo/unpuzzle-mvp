@@ -39,6 +39,7 @@ export type Database = {
   }
   public: {
     Tables: {
+      // GHOST SCHEMA: ai_interactions table manually deleted but types auto-generated
       ai_interactions: {
         Row: {
           concepts_discussed: string[] | null
@@ -567,6 +568,8 @@ export type Database = {
         }
         Relationships: []
       }
+      // GHOST SCHEMA: enrollments table manually deleted but types auto-generated
+      // TODO: Clean up after running migration 102_cleanup_enrollment_ghosts.sql
       enrollments: {
         Row: {
           ai_interactions_count: number | null

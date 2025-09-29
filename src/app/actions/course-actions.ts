@@ -570,7 +570,7 @@ export async function deleteCourse(courseId: string): Promise<DeleteCourseResult
       // Continue with deletion even if video fetch fails
     }
     
-    // 2. Delete course from database (cascades to videos, enrollments, and other relations)
+    // 2. Delete course from database (cascades to videos, progress, and other relations)
     // Note: The database triggers have been fixed to properly handle DELETE operations
     const { error: deleteError } = await serviceClient
       .from('courses')

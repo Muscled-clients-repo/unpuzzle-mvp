@@ -35,18 +35,18 @@ const USE_DATABASE = false // Set to true to use real database
 export default function MyCoursesPageEnhanced() {
   const {
     // Original store methods (for mock data)
-    enrolledCourses,
+    coursesWithActiveGoals,
     courseProgress,
-    
+
     // Enhanced store methods (for database)
-    enrolledCoursesWithAnalytics,
+    coursesWithActiveGoalsAnalytics,
     userStats,
     loadStudentLearningData,
     
     // Common
     loading,
     error,
-    loadEnrolledCourses,
+    loadCoursesWithActiveGoals,
     loadCourseProgress,
     
     // Auth
@@ -66,23 +66,23 @@ export default function MyCoursesPageEnhanced() {
       loadStudentLearningData(userId)
     } else {
       // Use original mock data methods
-      loadEnrolledCourses(userId)
+      loadCoursesWithActiveGoals(userId)
     }
-  }, [userId, loadEnrolledCourses, loadStudentLearningData])
+  }, [userId, loadCoursesWithActiveGoals, loadStudentLearningData])
   
   useEffect(() => {
-    // Load progress for each enrolled course (only for mock data)
+    // Load progress for each course with active goals (only for mock data)
     if (!USE_DATABASE) {
-      (enrolledCourses || []).forEach(course => {
+      (coursesWithActiveGoals || []).forEach(course => {
         loadCourseProgress(userId, course.id)
       })
     }
-  }, [enrolledCourses, userId, loadCourseProgress])
+  }, [coursesWithActiveGoals, userId, loadCourseProgress])
   
   // Prepare data based on source
-  const coursesData = USE_DATABASE 
-    ? enrolledCoursesWithAnalytics || []
-    : enrolledCourses || []
+  const coursesData = USE_DATABASE
+    ? coursesWithActiveGoalsAnalytics || []
+    : coursesWithActiveGoals || []
   
   // Mock progress data for non-database mode
   const mockProgressData = {
@@ -178,7 +178,7 @@ export default function MyCoursesPageEnhanced() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
                 <Card>
                   <CardContent className="p-4">
-                    <div className="text-2xl font-bold">{userStats.totalCoursesEnrolled}</div>
+                    <div className="text-2xl font-bold">{userStats.totalCoursesWithGoals}</div>
                     <p className="text-xs text-muted-foreground">Total Courses</p>
                   </CardContent>
                 </Card>

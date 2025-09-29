@@ -8,15 +8,14 @@
  * Keep them false to continue using mock data.
  * 
  * MIGRATION PLAN:
- * Phase 1: Enable USE_DB_FOR_ENROLLMENT (current)
- * Phase 2: Enable USE_DB_FOR_PROGRESS
- * Phase 3: Enable USE_DB_FOR_ANALYTICS
- * Phase 4: Enable USE_DB_FOR_AI_INTERACTIONS
- * Phase 5: Remove mock data completely
+ * Phase 1: Enable USE_DB_FOR_PROGRESS (current)
+ * Phase 2: Enable USE_DB_FOR_ANALYTICS
+ * Phase 3: Enable USE_DB_FOR_AI_INTERACTIONS
+ * Phase 4: Remove mock data completely
  */
 export const FEATURE_FLAGS = {
   // Core features
-  USE_DB_FOR_ENROLLMENT: false,    // Student course enrollment data
+  // NOTE: Enrollment system removed - access is now goal-based
   USE_DB_FOR_PROGRESS: false,      // Video progress tracking
   USE_DB_FOR_ANALYTICS: false,     // Learning analytics (struggles, milestones)
   USE_DB_FOR_AI_INTERACTIONS: false, // AI chat and interactions
@@ -52,7 +51,7 @@ export const getDataSourceLabel = () => {
 // Environment-based overrides
 if (process.env.NODE_ENV === 'production') {
   // In production, you might want to force certain features
-  // FEATURE_FLAGS.USE_DB_FOR_ENROLLMENT = true
+  // FEATURE_FLAGS.USE_DB_FOR_PROGRESS = true
 }
 
 // Allow runtime override from localStorage (for testing)

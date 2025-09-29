@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     }
 
     // For development: Allow authenticated users to upload transcripts
-    // TODO: Fix enrollment/authorization logic
+    // TODO: Fix goal-based authorization logic
     const hasInstructorAccess = video.courses.instructor_id === user.id
     if (!hasInstructorAccess) {
       console.log('Transcript Upload: Using development bypass for student user')

@@ -67,7 +67,7 @@ export class InstructorCourseService {
   }
 
   async getCourseAnalytics(courseId: string): Promise<ServiceResult<{
-    enrollments: number
+    totalStudents: number
     completionRate: number
     avgProgress: number
     revenueTotal: number
@@ -93,7 +93,7 @@ export class InstructorCourseService {
     if (useMockData) {
       return {
         data: {
-          enrollments: 234,
+          totalStudents: 234,
           completionRate: 0.68,
           avgProgress: 0.45,
           revenueTotal: 18420,
@@ -151,7 +151,7 @@ export class InstructorCourseService {
         difficulty: course.difficulty || 'beginner',
         tags: course.tags || [],
         videos: [],
-        enrollmentCount: 0,
+        studentCount: 0,
         rating: 0,
         isPublished: false,
         isFree: course.isFree || false,

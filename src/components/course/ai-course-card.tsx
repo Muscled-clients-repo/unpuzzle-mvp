@@ -156,7 +156,7 @@ export function AICourseCard({
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
           <div className="flex items-center gap-1">
             <Users className="h-3 w-3" />
-            <span>{(course.enrollmentCount || 0).toLocaleString()}</span>
+            <span>{(course.studentCount || 0).toLocaleString()}</span>
           </div>
           <div className="flex items-center gap-1">
             <Clock className="h-3 w-3" />

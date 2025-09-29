@@ -48,7 +48,7 @@ export interface LessonAnalytics {
     count: number
     topic: string
   }>
-  conversionRate: number // to course enrollment
+  conversionRate: number // to course goal assignment
   shareCount: number
 }
 

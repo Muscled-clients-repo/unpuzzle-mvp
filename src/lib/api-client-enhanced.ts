@@ -1,12 +1,13 @@
 // src/lib/api-client-enhanced.ts
-// Step 5: Enhanced API Client with Database Toggle
+// Enhanced API Client with Database Toggle
 // Allows gradual migration from mock to database data
+// NOTE: Enrollment system removed - access is now goal-based
 
 import { apiClient as baseApiClient } from './api-client'
 
 // Feature flags for gradual migration
+// NOTE: Enrollment system removed - access is now goal-based
 export const DATABASE_FEATURES = {
-  USE_DB_FOR_ENROLLMENTS: false,  // Set to true to use database
   USE_DB_FOR_PROGRESS: false,     // Set to true to use database
   USE_DB_FOR_ANALYTICS: false,    // Set to true to use database
   USE_DB_FOR_AI: false,           // Set to true to use database
@@ -27,32 +28,24 @@ export const shouldUseMockData = (feature: keyof typeof DATABASE_FEATURES): bool
 export const apiClientEnhanced = {
   ...baseApiClient,
   
-  // Override for student courses to use database when ready
+  // Student courses now use goal-based access instead of enrollments
   async getStudentCourses(userId: string) {
-    if (shouldUseMockData('USE_DB_FOR_ENROLLMENTS')) {
+    if (shouldUseMockData('USE_DB_FOR_PROGRESS')) {
       // Use mock data
       return baseApiClient.get(`/api/student/courses`)
     }
-    
-    // Use database through new service
-    const { studentLearningService } = await import('@/services/student-learning.service')
-    const result = await studentLearningService.getStudentCoursesWithAnalytics(userId)
-    
+
+    // Use database through goal-based service
+    const { studentCourseService } = await import('@/services/student-course-service')
+    const result = await studentCourseService.getCoursesWithActiveGoals(userId)
+
     if (result.error) {
       return { error: result.error, data: null }
     }
-    
-    // Transform to API response format
-    return { 
-      data: result.data?.map(enrollment => ({
-        ...enrollment.course,
-        progress: enrollment.progress,
-        lastAccessed: enrollment.lastAccessed,
-        currentLesson: enrollment.currentLesson,
-        aiInteractionsUsed: enrollment.aiInteractionsUsed,
-        strugglingTopics: enrollment.strugglingTopics,
-        nextMilestone: enrollment.nextMilestone
-      }))
+
+    // Return goal-based course access data
+    return {
+      data: result.data
     }
   }
 }

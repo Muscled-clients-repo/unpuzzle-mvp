@@ -106,15 +106,15 @@ export const testStoreWithMockData = async () => {
       subscription: mockUsers.learners[0].subscription
     })
     
-    // Enroll in courses
-    mockUsers.learners[0].enrolledCourses.forEach(courseId => {
-      store.enrollInCourse(courseId)
+    // Assign course goals
+    mockUsers.learners[0].coursesWithActiveGoals.forEach(courseId => {
+      store.assignCourseGoal(courseId)
     })
     
     console.log('Mock data loaded:')
     console.log('- Courses loaded:', store.courses.length)
     console.log('- User set:', store.profile?.name)
-    console.log('- Enrolled courses:', store.enrolledCourses.length)
+    console.log('- Courses with goals:', store.coursesWithActiveGoals.length)
     console.log('- First course title:', store.courses[0]?.title)
     
     console.log('✅ Mock data integration test complete!')

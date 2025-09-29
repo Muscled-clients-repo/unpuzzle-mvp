@@ -11,7 +11,7 @@ import {
 import { mockCourses } from '@/data/mock/courses'
 
 export class StudentCourseService {
-  async getEnrolledCourses(userId: string): Promise<ServiceResult<Course[]>> {
+  async getCoursesWithActiveGoals(userId: string): Promise<ServiceResult<Course[]>> {
     if (useMockData) {
       // Transform mock courses to match domain Course type
       const transformedCourses: Course[] = mockCourses.slice(0, 2).map(course => ({
@@ -42,7 +42,7 @@ export class StudentCourseService {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         })),
-        enrollmentCount: course.students,
+        studentCount: course.students,
         rating: course.rating,
         isPublished: true,
         isFree: false,
@@ -57,10 +57,10 @@ export class StudentCourseService {
 
     // When not using mock data, use server action
     try {
-      const { getEnrolledCourses } = await import('@/app/actions/student-course-actions')
-      const courses = await getEnrolledCourses()
-      
-      console.log('Enrolled courses found via server action:', courses?.length || 0)
+      const { getCoursesWithActiveGoals } = await import('@/app/actions/student-course-actions')
+      const courses = await getCoursesWithActiveGoals()
+
+      console.log('Courses with active goals found via server action:', courses?.length || 0)
       
       return {
         success: true,
@@ -126,7 +126,7 @@ export class StudentCourseService {
       : { data: response.data }
   }
 
-  async enrollInCourse(
+  async assignCourseGoal(
     userId: string,
     courseId: string
   ): Promise<ServiceResult<{ success: boolean; message: string }>> {
@@ -134,13 +134,13 @@ export class StudentCourseService {
       return {
         data: {
           success: true,
-          message: 'Successfully enrolled in course'
+          message: 'Successfully assigned course goal'
         }
       }
     }
 
     const response = await apiClient.post(
-      `/api/student/courses/${courseId}/enroll`,
+      `/api/student/courses/${courseId}/assign-goal`,
       { userId }
     )
     return response.error
@@ -179,7 +179,7 @@ export class StudentCourseService {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         })),
-        enrollmentCount: course.students,
+        studentCount: course.students,
         rating: course.rating,
         isPublished: true,
         isFree: false,
@@ -229,7 +229,7 @@ export class StudentCourseService {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         })),
-        enrollmentCount: course.students,
+        studentCount: course.students,
         rating: course.rating,
         isPublished: true,
         isFree: false,
@@ -282,7 +282,7 @@ export class StudentCourseService {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         })),
-        enrollmentCount: course.students,
+        studentCount: course.students,
         rating: course.rating,
         isPublished: true,
         isFree: false,

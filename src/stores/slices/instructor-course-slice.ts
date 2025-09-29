@@ -7,7 +7,7 @@ export interface InstructorCourseState {
   instructorCourses: InstructorCourse[]
   currentCourse: InstructorCourse | null
   currentCourseAnalytics: {
-    enrollments: number
+    totalStudents: number
     completionRate: number
     avgProgress: number
     revenueTotal: number

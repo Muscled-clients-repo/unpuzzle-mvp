@@ -8,7 +8,7 @@ import { broadcastWebSocketMessage } from '@/lib/websocket-operations'
  * Get accessible courses for a student based on goal matching (community model)
  * Enhanced version of getUserCoursesAction with video relationships
  */
-export async function getEnrolledCourses(): Promise<Course[]> {
+export async function getCoursesWithActiveGoals(): Promise<Course[]> {
   const supabase = await createClient()
 
   try {
@@ -18,7 +18,7 @@ export async function getEnrolledCourses(): Promise<Course[]> {
       throw new Error('Not authenticated')
     }
 
-    console.log('[Server Action] Fetching accessible courses for user:', user.id)
+    console.log('[Server Action] Fetching courses with active goals for user:', user.id)
 
     // First check if user has a goal assigned
     const { data: profile } = await supabase
@@ -135,7 +135,7 @@ export async function getEnrolledCourses(): Promise<Course[]> {
         difficulty: courseData.difficulty || 'beginner',
         videos: transformedVideos,
         tags: [],
-        enrollmentCount: 0,
+        studentCount: 0,
         rating: 4.5,
         isPublished: true,
         isFree: courseData.price === 0,
@@ -249,7 +249,7 @@ export async function getCourseProgress(courseId: string): Promise<CourseProgres
   }
 }
 
-// Note: Enrollment system removed - access is now based on goal matching
+// Note: Enrollment system removed - access is now goal-based via course_goal_assignments
 
 /**
  * Get next video for a student in a course with smart resume logic (Phase 2 enhancement)
@@ -692,7 +692,7 @@ export async function getCourseById(courseId: string): Promise<Course | null> {
       difficulty: 'beginner',
       videos: transformedVideos,
       tags: courseData.tags || [],
-      enrollmentCount: courseData.students || 0,
+      studentCount: courseData.students || 0,
       rating: courseData.rating || 4.5,
       isPublished: courseData.status === 'published',
       isFree: courseData.is_free || courseData.price === 0,

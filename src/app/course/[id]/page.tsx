@@ -127,12 +127,12 @@ export default function CoursePreviewPage() {
                     <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                     <span className="font-medium">{course.rating || 4.5}</span>
                     <span className="text-muted-foreground">
-                      ({Math.floor((course.enrollmentCount || 0) * 0.8)} ratings)
+                      ({Math.floor((course.studentCount || 0) * 0.8)} ratings)
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4" />
-                    <span>{(course.enrollmentCount || 0).toLocaleString()} students</span>
+                    <span>{(course.studentCount || 0).toLocaleString()} students</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4" />

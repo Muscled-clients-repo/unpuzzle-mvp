@@ -1,7 +1,8 @@
 # ACTUAL DATABASE SCHEMA REFERENCE
-**Date**: 2025-09-28
+**Date**: 2025-09-29 (Updated)
 **Purpose**: Document the actual current database schema for junction table architecture
 **Source**: Direct SQL queries from production database
+**Last Updated**: After ghost function cleanup and enrollment system removal
 
 ## 📊 TABLE OVERVIEW
 - ✅ `courses` - Course basic information
@@ -36,6 +37,26 @@
 - ❌ NO `difficulty` column (was dropped in migration 072)
 - ✅ Has `price`, `status`, `total_videos`, `total_duration_minutes`
 - ✅ Standard course metadata structure
+
+### 🛡️ COURSES RLS POLICIES
+| Policy Name | Command | Condition |
+|-------------|---------|-----------|
+| "Admins can view all courses" | SELECT | User role = 'admin' |
+| "Authenticated users can view published courses" | SELECT | Course status = 'published' AND user authenticated |
+| "Instructors can manage their own courses" | ALL | instructor_id = auth.uid() |
+
+### 🔗 COURSES FOREIGN KEY DEPENDENCIES
+**Tables that reference courses.id:**
+- `reflections.course_id` - Student reflections
+- `course_chapters.course_id` - Chapter structure
+- ❌ `enrollments.course_id` - **GHOST REFERENCE** (table deleted)
+- `media_usage.course_id` - Media usage tracking
+- `course_goal_assignments.course_id` - Goal-based access (NEW SYSTEM)
+- `learning_activities.course_id` - Course activities
+- `quiz_attempts.course_id` - Quiz attempts
+
+**⚠️ Course Deletion Impact:**
+Deleting a course will CASCADE affect all dependent tables above.
 
 ## 📋 COURSE_CHAPTERS TABLE
 
@@ -125,19 +146,24 @@ media_files (id: uuid)
 - `course_chapter_media.chapter_id` → `course_chapters.id` (added in migration 095)
 - `course_chapter_media.media_file_id` → `media_files.id`
 
-## ⚠️ SCHEMA MISMATCHES IDENTIFIED
+## ⚠️ SCHEMA CLEANUP STATUS
 
-### 1. Code Expects `difficulty` Column
-**Error**: `column courses.difficulty does not exist`
-**Fix Required**: Remove `difficulty` from all SELECT queries
+### ✅ COMPLETED CLEANUPS (2025-09-29)
+- **Ghost Functions**: Removed all functions referencing deleted tables (`videos`, `enrollments`, `ai_interactions`)
+- **Enrollment Terminology**: Renamed to goal-based access throughout application code
+- **Mock Data**: Cleaned up enrollment-related mock data structures
+- **Store Interfaces**: Updated to use goal-based terminology (`coursesWithActiveGoals`, `assignCourseGoal`)
 
-### 2. Code References Deleted `videos` Table
-**Error**: `Could not find the table 'public.videos'`
-**Fix Required**: Remove ALL videos table references
+### 🚨 REMAINING GHOST REFERENCES
+- **Foreign Key**: `enrollments.course_id` still appears in schema (table was manually deleted)
+- **TypeScript Types**: `database.types.ts` contains ghost schema definitions
+- **Solution**: Regenerate types after database stabilizes
 
-### 3. TypeScript Interface Mismatches
-**Issue**: Interfaces expect old data structure
-**Fix Required**: Update all interfaces to match actual schema
+### 🎯 CURRENT ARCHITECTURE
+- **Access Control**: Goal-based via `course_goal_assignments` table
+- **Media System**: Junction table pattern via `course_chapter_media`
+- **Progress Tracking**: Uses `media_files` and goal assignments (not enrollment)
+- **Course Structure**: Courses → Chapters → Media (many-to-many)
 
 ## 📊 DATA STRUCTURE MAPPING
 

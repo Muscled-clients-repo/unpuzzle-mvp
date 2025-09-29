@@ -15,7 +15,7 @@ export interface User {
 }
 
 export interface LearnerProfile extends User {
-  enrolledCourses: string[]
+  coursesWithActiveGoals: string[]
   completedCourses: string[]
   reflections: Reflection[]
   metrics: LearningMetrics
@@ -78,7 +78,7 @@ export const mockUsers: {
         dailyAiInteractions: 3,  // Hit daily limit!
         lastResetDate: new Date().toDateString(),
       },
-      enrolledCourses: ["course-1", "course-2"],
+      coursesWithActiveGoals: ["course-1", "course-2"],
       completedCourses: [],
       reflections: [
         {
