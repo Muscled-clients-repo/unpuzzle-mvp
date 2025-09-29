@@ -19,9 +19,10 @@ interface TranscriptPanelProps {
   videoId: string
   onClose: () => void
   onSeek: (time: number) => void
+  onUpdateSegment?: (inPoint: number, outPoint: number) => void
 }
 
-export function TranscriptPanel({ currentTime, videoId, onClose, onSeek }: TranscriptPanelProps) {
+export function TranscriptPanel({ currentTime, videoId, onClose, onSeek, onUpdateSegment }: TranscriptPanelProps) {
   const transcriptRef = useRef<HTMLDivElement>(null)
 
   // TanStack Query for server data (Layer 1: Server State)
@@ -84,72 +85,104 @@ export function TranscriptPanel({ currentTime, videoId, onClose, onSeek }: Trans
   }, [activeSegmentIndex, highlightedSegmentIndex, setHighlightedSegmentIndex])
 
   const handleTranscriptSelection = () => {
-    console.log('🎯 handleTranscriptSelection called!')
-    
+    console.log('🎯 [SM] handleTranscriptSelection called!')
+
     const selection = window.getSelection()
-    
+
     if (!selection || selection.rangeCount === 0) {
-      console.log('❌ No selection or no ranges')
+      console.log('❌ [SM] No selection or no ranges')
       return
     }
 
     const selectedText = selection.toString().trim()
-    console.log('📋 Selected text:', `"${selectedText}"`)
-    
+    console.log('📋 [SM] Selected text:', `"${selectedText}"`)
+
     if (!selectedText) {
-      console.log('❌ No selected text')
+      console.log('❌ [SM] No selected text')
       return
     }
 
-    // Get fresh store state
-    const store = useAppStore.getState()
-    const currentPlayheadTime = store.currentTime
-    console.log('⏰ Current playhead time:', currentPlayheadTime)
+    // Clean the selected text to remove timestamps and get actual words
+    const cleanedText = selectedText
+      .replace(/\d+:\d+/g, '') // Remove timestamps like "0:03"
+      .replace(/\n+/g, ' ') // Replace newlines with spaces
+      .trim()
 
-    // Find which segments contain the selection
+    const selectedWords = cleanedText.split(/\s+/).filter(word => word.length > 0)
+    console.log('🧹 [SM] Cleaned selected words:', selectedWords)
+
+    if (selectedWords.length === 0) {
+      console.log('❌ [SM] No valid words found after cleaning')
+      return
+    }
+
+    const firstWord = selectedWords[0]
+    const lastWord = selectedWords[selectedWords.length - 1]
+    console.log('🔍 [SM] Looking for first word:', firstWord, 'and last word:', lastWord)
+
+    // Find start and end times for the selected text
     let startTime = null
+    let endTime = null
     let foundStart = false
+    let foundEnd = false
 
     // Try to find exact match in a single segment first
     for (const segment of transcriptSegments) {
       if (segment.text.includes(selectedText)) {
-        const index = segment.text.indexOf(selectedText)
-        const startProgress = index / segment.text.length
+        const startIndex = segment.text.indexOf(selectedText)
+        const endIndex = startIndex + selectedText.length
+
+        const startProgress = startIndex / segment.text.length
+        const endProgress = endIndex / segment.text.length
+
         startTime = segment.start + (startProgress * (segment.end - segment.start))
+        endTime = segment.start + (endProgress * (segment.end - segment.start))
+
         foundStart = true
-        console.log('✅ Found text in segment:', segment.timestamp, 'startTime:', startTime)
+        foundEnd = true
+        console.log('✅ [SM] Found text in single segment:', segment.timestamp, 'start:', startTime, 'end:', endTime)
         break
       }
     }
 
-    // If not found in single segment, check for cross-segment selection
+    // If not found in single segment, find start and end across segments
     if (!foundStart) {
-      const selectedWords = selectedText.split(/\s+/)
-      const firstWord = selectedWords[0]
-
+      // Find start time from first word
       for (const segment of transcriptSegments) {
-        if (segment.text.includes(firstWord)) {
-          const index = segment.text.indexOf(firstWord)
+        if (segment.text.toLowerCase().includes(firstWord.toLowerCase())) {
+          const index = segment.text.toLowerCase().indexOf(firstWord.toLowerCase())
           const progress = index / segment.text.length
           startTime = segment.start + (progress * (segment.end - segment.start))
           foundStart = true
-          console.log('✅ Found first word in segment:', segment.timestamp, 'startTime:', startTime)
+          console.log('✅ [SM] Found first word in segment:', segment.timestamp, 'startTime:', startTime)
+          break
+        }
+      }
+
+      // Find end time from last word (search backwards for better accuracy)
+      for (let i = transcriptSegments.length - 1; i >= 0; i--) {
+        const segment = transcriptSegments[i]
+        if (segment.text.toLowerCase().includes(lastWord.toLowerCase())) {
+          const index = segment.text.toLowerCase().lastIndexOf(lastWord.toLowerCase())
+          const endIndex = index + lastWord.length
+          const progress = endIndex / segment.text.length
+          endTime = segment.start + (progress * (segment.end - segment.start))
+          foundEnd = true
+          console.log('✅ [SM] Found last word in segment:', segment.timestamp, 'endTime:', endTime)
           break
         }
       }
     }
 
-    if (startTime !== null) {
-      console.log('🎯 Setting in/out points:', startTime, 'to', currentPlayheadTime)
-      
-      // Call store method directly
-      store.setInOutPoints(startTime, currentPlayheadTime)
-      store.setSelectedTranscriptText(selectedText)
-      store.setSelectedTimeRange(startTime, currentPlayheadTime)
-      
-      console.log('✅ Store updated successfully')
+    if (startTime !== null && endTime !== null && onUpdateSegment) {
+      console.log('🎯 [SM] Dispatching UPDATE_SEGMENT action:', { startTime, endTime })
+
+      // Use state machine approach - single atomic action
+      onUpdateSegment(startTime, endTime)
+
+      console.log('✅ [SM] Segment update dispatched successfully!')
     } else {
-      console.log('❌ Could not determine start time for selection')
+      console.log('❌ [SM] Could not determine start/end times or handler not available')
     }
   }
 
@@ -160,7 +193,7 @@ export function TranscriptPanel({ currentTime, videoId, onClose, onSeek }: Trans
         text: selectedTranscriptText,
         startTime: selectedStartTime,
         endTime: selectedEndTime,
-        videoId: videoUrl,
+        videoId: videoId,
       })
     }
   }

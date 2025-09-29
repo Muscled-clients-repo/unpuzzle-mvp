@@ -510,6 +510,7 @@ export function StudentVideoPlayerV2(props: StudentVideoPlayerV2Props) {
             onSetOutPoint={handleSetOutPoint}
             onSendToChat={handleSendSegmentToChat}
             onClearSelection={handleClearSegment}
+            onUpdateSegment={handleUpdateSegmentContext}
             inPoint={context.segmentState.inPoint}
             outPoint={context.segmentState.outPoint}
           />

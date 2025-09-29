@@ -35,6 +35,7 @@ interface StudentVideoPlayerProps {
   onSetOutPoint?: () => void
   onSendToChat?: () => void
   onClearSelection?: () => void
+  onUpdateSegment?: (inPoint: number, outPoint: number) => void
   inPoint?: number | null
   outPoint?: number | null
 }
@@ -57,6 +58,7 @@ export const StudentVideoPlayer = forwardRef<
   onSetOutPoint: onSetOutPointProp,
   onSendToChat: onSendToChatProp,
   onClearSelection: onClearSelectionProp,
+  onUpdateSegment: onUpdateSegmentProp,
   inPoint: inPointProp,
   outPoint: outPointProp,
 }, ref) => {
@@ -487,6 +489,7 @@ export const StudentVideoPlayer = forwardRef<
           videoId={videoId || 'unknown'}
           onClose={() => setShowLiveTranscript(false)}
           onSeek={handleSeek}
+          onUpdateSegment={onUpdateSegmentProp}
         />
       )}
     </div>
