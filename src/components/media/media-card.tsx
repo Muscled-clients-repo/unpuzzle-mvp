@@ -1,8 +1,9 @@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { CheckSquare, MoreHorizontal, Play, Info, Trash2, FileVideo, Image, File } from "lucide-react"
+import { CheckSquare, MoreHorizontal, Play, Info, Trash2, FileVideo, Image, File, Clock, HardDrive } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { formatDuration, formatFileSize } from "@/lib/format-utils"
 
 interface MediaFile {
   id: string
@@ -12,6 +13,9 @@ interface MediaFile {
   type: string
   usage: string
   tags?: string[] | null
+  // Raw database fields
+  file_size: number | null
+  duration_seconds: number | null
 }
 
 interface MediaCardProps {
@@ -43,6 +47,7 @@ export function MediaCard({
   onDelete,
   renderTagBadges
 }: MediaCardProps) {
+
   const getTypeIcon = (type: string) => {
     switch (type) {
       case 'video': return <FileVideo className="h-4 w-4" />
@@ -92,17 +97,29 @@ export function MediaCard({
         {/* Content */}
         <div className="p-3">
           <h4 className="font-medium truncate mb-1">{item.name}</h4>
-          <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
-            <span>{item.size}</span>
-            <span>{item.uploadedAt}</span>
+
+          {/* File info with icons */}
+          <div className="space-y-1 mb-2">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <HardDrive className="h-3 w-3" />
+              <span>{formatFileSize(item.file_size)}</span>
+            </div>
+            {item.type === 'video' && item.duration_seconds && (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Clock className="h-3 w-3" />
+                <span>{formatDuration(item.duration_seconds)}</span>
+              </div>
+            )}
           </div>
+
           <div className="flex items-center justify-between mb-2">
-            <Badge 
+            <Badge
               variant={item.usage === 'Unused' ? 'secondary' : 'outline'}
               className="text-xs"
             >
               {item.usage}
             </Badge>
+            <span className="text-xs text-muted-foreground">{item.uploadedAt}</span>
           </div>
           <div className="mt-2">
             {renderTagBadges(item.tags, 2)}
@@ -188,7 +205,19 @@ export function MediaCard({
       </div>
       <div className="flex-1 min-w-0">
         <h4 className="font-medium truncate">{item.name}</h4>
-        <p className="text-sm text-muted-foreground">{item.size} • {item.uploadedAt}</p>
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <div className="flex items-center gap-1">
+            <HardDrive className="h-3 w-3" />
+            <span>{formatFileSize(item.file_size)}</span>
+          </div>
+          {item.type === 'video' && item.duration_seconds && (
+            <div className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              <span>{formatDuration(item.duration_seconds)}</span>
+            </div>
+          )}
+          <span>{item.uploadedAt}</span>
+        </div>
         <div className="mt-1">
           {renderTagBadges(item.tags, 4)}
         </div>

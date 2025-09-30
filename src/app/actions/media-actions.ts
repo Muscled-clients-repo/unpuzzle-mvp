@@ -320,6 +320,9 @@ export async function getMediaFilesAction() {
       thumbnail: file.thumbnail_url,
       tags: file.tags, // Include tags from database
       media_usage: file.media_usage, // Include course usage data
+      // Raw database fields for UI formatting
+      file_size: file.file_size,
+      duration_seconds: file.duration_seconds,
       // Include minimal data needed for preview functionality only
       backblaze_file_id: file.backblaze_file_id,
       backblaze_url: file.backblaze_url,

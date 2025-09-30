@@ -40,12 +40,19 @@ class DurationWorker extends BaseWorker {
       }
 
       console.log(`📍 Media file found: ${mediaFile.name}`)
-      console.log(`🔗 Video URL: ${mediaFile.backblaze_url}`)
 
-      // Extract duration using FFprobe
-      const videoUrl = mediaFile.backblaze_url
+      // Use CDN URL if available, otherwise use backblaze URL
+      const videoUrl = mediaFile.cdn_url || mediaFile.backblaze_url
+
+      console.log(`🔗 Video URL: ${videoUrl}`)
+
       if (!videoUrl) {
         throw new Error('No video URL available')
+      }
+
+      // Check if URL is a private Backblaze format
+      if (videoUrl && videoUrl.startsWith('private:')) {
+        throw new Error('Video URL is in private format and cannot be accessed directly. CDN URL is required.')
       }
 
       await this.updateJobStatus(job.id, 25, 'processing')

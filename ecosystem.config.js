@@ -1,3 +1,6 @@
+// Load environment variables from .env.local
+require('dotenv').config({ path: '.env.local' });
+
 module.exports = {
   apps: [
     {
@@ -98,8 +101,8 @@ module.exports = {
         WORKER_TYPE: 'duration',
         WEBSOCKET_SERVER_URL: 'http://localhost:8080',
         // FFprobe configuration
-        FFPROBE_PATH: '/usr/local/bin/ffprobe',
-        // Database
+        FFPROBE_PATH: '/opt/homebrew/bin/ffprobe',
+        // Database - now reading from environment
         NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
         SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY
       },

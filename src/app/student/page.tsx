@@ -14,10 +14,10 @@ import { getStudentTrackAssignments, getStudentPreferences, getFilteredCourses }
 import Link from "next/link"
 
 export default function LearnDashboard() {
-  const learner = mockUsers.learners[0]
+  const learner = mockUsers.learners?.[0]
   const { studentData, loadStudentData } = useAppStore()
-  const enrolledCourses = mockCourses.filter(course => 
-    learner.enrolledCourses.includes(course.id)
+  const enrolledCourses = mockCourses.filter(course =>
+    learner?.coursesWithActiveGoals?.includes(course.id) || false
   )
   
   // Get track assignments

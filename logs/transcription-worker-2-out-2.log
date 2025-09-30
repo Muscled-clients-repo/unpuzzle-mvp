@@ -1,8 +1,0 @@
-2025-09-27T02:34:39: 🎬 Starting Transcription Worker...
-2025-09-27T02:34:39: 🆔 Worker ID: worker-2
-2025-09-27T02:34:39: 🌐 WebSocket Server: http://localhost:8080
-2025-09-27T02:34:39: 🎤 Whisper Path: ./whisper.cpp/main
-2025-09-27T02:34:39: 📁 Temp Directory: /tmp/transcriptions
-2025-09-27T02:34:39: 🚀 Transcription Worker worker-2 started
-2025-09-27T02:34:39: 📁 Created temp directory: /tmp/transcriptions
-2025-09-27T02:34:39: ⏱️ Polling for jobs every 5 seconds

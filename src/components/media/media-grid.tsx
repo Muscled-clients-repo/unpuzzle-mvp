@@ -9,6 +9,9 @@ interface MediaFile {
   type: string
   usage: string
   tags?: string[] | null
+  // Raw database fields for UI formatting
+  file_size: number | null
+  duration_seconds: number | null
 }
 
 interface DragRectangle {

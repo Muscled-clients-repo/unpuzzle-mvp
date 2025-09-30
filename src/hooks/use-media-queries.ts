@@ -16,6 +16,9 @@ export interface MediaFile {
   uploadedAt: string
   thumbnail: string | null
   tags?: string[] | null // Database tags field
+  // Raw database fields
+  file_size: number | null
+  duration_seconds: number | null
   media_usage?: Array<{
     course_id: string
     resource_type: string

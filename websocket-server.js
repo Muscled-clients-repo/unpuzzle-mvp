@@ -41,6 +41,26 @@ const server = http.createServer((req, res) => {
       try {
         const message = JSON.parse(body)
         console.log('📤 HTTP broadcast request:', message.type)
+
+        // Handle duration job creation
+        if (message.type === 'create-duration-job' && message.data) {
+          const jobId = generateJobId()
+          const job = {
+            id: jobId,
+            jobType: 'duration',
+            videoId: message.data.videoId,
+            operationId: message.operationId,
+            status: 'queued',
+            progress: 0,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          }
+
+          // Add to job queue for workers to pick up
+          jobQueue.push(job)
+          console.log(`⏱️ Duration job created: ${jobId} for video ${message.data.videoId}`)
+        }
+
         broadcast(message)
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ success: true }))
@@ -61,14 +81,14 @@ const server = http.createServer((req, res) => {
     })
     req.on('end', () => {
       try {
-        const { workerId } = JSON.parse(body)
-        const job = getNextJob()
+        const { workerId, workerType } = JSON.parse(body)
+        const job = getNextJobForWorkerType(workerType)
 
         if (job) {
           markJobActive(job.id, workerId)
           job.status = 'processing'
           job.workerId = workerId
-          console.log(`🔄 Job ${job.id} assigned to worker ${workerId}`)
+          console.log(`🔄 Job ${job.id} (${job.jobType || 'transcription'}) assigned to ${workerType} worker ${workerId}`)
         }
 
         res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -296,6 +316,26 @@ function updateJobProgress(jobId, progress, status, error = null) {
 
 function getNextJob() {
   return jobQueue.shift() // FIFO queue
+}
+
+function getNextJobForWorkerType(workerType) {
+  // Find the first job matching the worker type
+  const index = jobQueue.findIndex(job => {
+    // Transcription workers handle jobs without jobType or with jobType='transcription'
+    if (workerType === 'transcription') {
+      return !job.jobType || job.jobType === 'transcription'
+    }
+    // Other workers (like duration) match by jobType
+    return job.jobType === workerType
+  })
+
+  if (index !== -1) {
+    // Remove and return the job
+    const job = jobQueue.splice(index, 1)[0]
+    return job
+  }
+
+  return null
 }
 
 function markJobActive(jobId, workerId) {
