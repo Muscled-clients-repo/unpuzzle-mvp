@@ -260,10 +260,10 @@ export function InlineMessageComposer({
               }
             }}
             className={cn(
-              'min-h-[100px] resize-none transition-all duration-200',
+              'min-h-[100px] resize-none transition-all duration-200 border-2',
               isDragOver
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/50'
-                : ''
+                : 'border-gray-300 dark:border-gray-500 focus:border-blue-500 dark:focus:border-blue-400'
             )}
             disabled={isLoading}
           />

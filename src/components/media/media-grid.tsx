@@ -41,6 +41,7 @@ interface MediaGridProps {
   handlePreview: (item: MediaFile) => void
   setDetailsFile: (item: MediaFile) => void
   handleDelete: (id: string) => void
+  handleEditTags: (fileId: string) => void
   renderTagBadges: (tags: string[] | null | undefined, maxVisible: number) => React.ReactNode
 }
 
@@ -64,6 +65,7 @@ export function MediaGrid({
   handlePreview,
   setDetailsFile,
   handleDelete,
+  handleEditTags,
   renderTagBadges
 }: MediaGridProps) {
   // Empty state
@@ -114,6 +116,7 @@ export function MediaGrid({
                 onPreview={handlePreview}
                 onShowDetails={setDetailsFile}
                 onDelete={handleDelete}
+                onEditTags={handleEditTags}
                 renderTagBadges={renderTagBadges}
               />
             )
@@ -139,6 +142,7 @@ export function MediaGrid({
                 onPreview={handlePreview}
                 onShowDetails={setDetailsFile}
                 onDelete={handleDelete}
+                onEditTags={handleEditTags}
                 renderTagBadges={renderTagBadges}
               />
             )

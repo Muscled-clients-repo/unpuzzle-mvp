@@ -1,9 +1,9 @@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { CheckSquare, MoreHorizontal, Play, Info, Trash2, FileVideo, Image, File, Clock, HardDrive } from "lucide-react"
+import { CheckSquare, MoreHorizontal, Play, Info, Trash2, FileVideo, Image, File, Tag } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { formatDuration, formatFileSize } from "@/lib/format-utils"
+import { formatDuration, formatRelativeDate } from "@/lib/format-utils"
 
 interface MediaFile {
   id: string
@@ -28,6 +28,7 @@ interface MediaCardProps {
   onPreview: (item: MediaFile) => void
   onShowDetails: (item: MediaFile) => void
   onDelete: (id: string) => void
+  onEditTags: (fileId: string) => void
   renderTagBadges: (tags: string[] | null | undefined, maxVisible: number) => React.ReactNode
 }
 
@@ -45,6 +46,7 @@ export function MediaCard({
   onPreview,
   onShowDetails,
   onDelete,
+  onEditTags,
   renderTagBadges
 }: MediaCardProps) {
 
@@ -61,6 +63,28 @@ export function MediaCard({
     if (!isDeleting && isSelectionMode) {
       onItemSelection(item.id, e)
     }
+  }
+
+  // Custom tag rendering with clickable "No tags" for adding tags
+  const renderClickableTags = (maxVisible: number) => {
+    if (!item.tags || item.tags.length === 0) {
+      return (
+        <div
+          className="flex items-center gap-1 cursor-pointer hover:opacity-70 transition-opacity"
+          onClick={(e) => {
+            e.stopPropagation()
+            onEditTags(item.id)
+          }}
+        >
+          <Tag className="h-3 w-3 text-muted-foreground/50" />
+          <Badge variant="outline" className="text-xs opacity-50 border-dashed">
+            No tags
+          </Badge>
+        </div>
+      )
+    }
+
+    return renderTagBadges(item.tags, maxVisible)
   }
 
   if (viewMode === 'grid') {
@@ -90,27 +114,25 @@ export function MediaCard({
         )}
         
         {/* Thumbnail/Preview */}
-        <div className="aspect-video bg-muted flex items-center justify-center">
+        <div
+          className="aspect-video bg-muted flex items-center justify-center relative cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation()
+            onPreview(item)
+          }}
+        >
           {getTypeIcon(item.type)}
+          {/* Duration overlay for videos */}
+          {item.type === 'video' && item.duration_seconds && (
+            <div className="absolute bottom-2 right-2 bg-black/75 text-white text-xs px-1.5 py-0.5 rounded">
+              {formatDuration(item.duration_seconds)}
+            </div>
+          )}
         </div>
 
         {/* Content */}
         <div className="p-3">
           <h4 className="font-medium truncate mb-1">{item.name}</h4>
-
-          {/* File info with icons */}
-          <div className="space-y-1 mb-2">
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <HardDrive className="h-3 w-3" />
-              <span>{formatFileSize(item.file_size)}</span>
-            </div>
-            {item.type === 'video' && item.duration_seconds && (
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Clock className="h-3 w-3" />
-                <span>{formatDuration(item.duration_seconds)}</span>
-              </div>
-            )}
-          </div>
 
           <div className="flex items-center justify-between mb-2">
             <Badge
@@ -119,10 +141,10 @@ export function MediaCard({
             >
               {item.usage}
             </Badge>
-            <span className="text-xs text-muted-foreground">{item.uploadedAt}</span>
+            <span className="text-xs text-muted-foreground">{formatRelativeDate(item.uploadedAt)}</span>
           </div>
           <div className="mt-2">
-            {renderTagBadges(item.tags, 2)}
+            {renderClickableTags(2)}
           </div>
         </div>
 
@@ -206,20 +228,13 @@ export function MediaCard({
       <div className="flex-1 min-w-0">
         <h4 className="font-medium truncate">{item.name}</h4>
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
-          <div className="flex items-center gap-1">
-            <HardDrive className="h-3 w-3" />
-            <span>{formatFileSize(item.file_size)}</span>
-          </div>
           {item.type === 'video' && item.duration_seconds && (
-            <div className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              <span>{formatDuration(item.duration_seconds)}</span>
-            </div>
+            <span>{formatDuration(item.duration_seconds)}</span>
           )}
-          <span>{item.uploadedAt}</span>
+          <span>{formatRelativeDate(item.uploadedAt)}</span>
         </div>
         <div className="mt-1">
-          {renderTagBadges(item.tags, 4)}
+          {renderClickableTags(4)}
         </div>
       </div>
       <Badge variant={item.usage === 'Unused' ? 'secondary' : 'outline'}>

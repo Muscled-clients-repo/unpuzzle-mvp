@@ -440,7 +440,7 @@ export function SuccessProofSection({ userRole }: SuccessProofSectionProps) {
           <p className="text-gray-600 mb-4">
             Join hundreds of students sharing their wins, revenue screenshots, and milestone achievements.
           </p>
-          <button className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors">
+          <button className="bg-green-600 dark:bg-green-500 text-white px-6 py-2 rounded-lg hover:bg-green-700 dark:hover:bg-green-600 transition-colors">
             Start Your Journey - $97/month
           </button>
         </div>

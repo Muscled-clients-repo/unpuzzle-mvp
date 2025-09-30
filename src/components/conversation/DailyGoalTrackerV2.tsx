@@ -362,7 +362,7 @@ export function DailyGoalTrackerV2({
                   </p>
                   <Button
                     onClick={() => window.location.href = '/student/track-selection/questionnaire'}
-                    className="bg-orange-600 hover:bg-orange-700 text-white"
+                    className="bg-orange-600 dark:bg-orange-500 hover:bg-orange-700 dark:hover:bg-orange-600 text-white"
                   >
                     Complete Questionnaire
                   </Button>
@@ -707,7 +707,7 @@ export function DailyGoalTrackerV2({
                       {!showAddMore ? (
                         <Button
                           onClick={handleAddMore}
-                          className="bg-gray-900 hover:bg-gray-800"
+                          className="bg-gray-900 dark:bg-gray-100 hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-gray-900"
                         >
                           <Plus className="h-4 w-4 mr-2" />
                           Start Today's Entry
@@ -861,7 +861,7 @@ export function DailyGoalTrackerV2({
                                     })
                                   }}
                                   disabled={!messageForm.messageText.trim() || updateMessageMutation.isPending}
-                                  className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                                  className="px-3 py-1 text-xs bg-green-600 dark:bg-green-500 text-white rounded hover:bg-green-700 dark:hover:bg-green-600 disabled:opacity-50"
                                 >
                                   {updateMessageMutation.isPending ? 'Saving...' : 'Save'}
                                 </button>
@@ -967,14 +967,6 @@ export function DailyGoalTrackerV2({
                     />
                   )}
 
-                  {/* Empty state for entries with no content */}
-                  {entry.studentNotes.length === 0 && entry.activities.length === 0 && entry.instructorResponses.length === 0 && (
-                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <p className="text-yellow-700 text-xs italic">
-                        {entry.day === currentDay ? 'Pending progress update for today...' : 'No activity recorded for this day'}
-                      </p>
-                    </div>
-                  )}
                 </div>
 
                 {/* Timeline connector */}

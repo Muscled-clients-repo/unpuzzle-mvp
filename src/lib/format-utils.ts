@@ -70,3 +70,36 @@ export function formatPlayerDuration(seconds: number | null): string {
 
   return `${minutes}:${secs.toString().padStart(2, '0')}`
 }
+
+/**
+ * Format date to relative time string
+ * @param dateString - ISO date string
+ * @returns Relative time string (e.g. "today", "yesterday", "3 days ago", or actual date)
+ */
+export function formatRelativeDate(dateString: string): string {
+  const date = new Date(dateString)
+  const now = new Date()
+
+  // Reset time to midnight for accurate day comparison
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+
+  const diffTime = today.getTime() - compareDate.getTime()
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+
+  if (diffDays === 0) return 'today'
+  if (diffDays === 1) return 'yesterday'
+  if (diffDays === 2) return '2 days ago'
+  if (diffDays === 3) return '3 days ago'
+  if (diffDays === 4) return '4 days ago'
+  if (diffDays === 5) return '5 days ago'
+  if (diffDays === 6) return '6 days ago'
+  if (diffDays === 7) return 'a week ago'
+
+  // More than a week: show actual date
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: now.getFullYear() !== date.getFullYear() ? 'numeric' : undefined
+  })
+}

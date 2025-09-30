@@ -219,7 +219,6 @@ export default function LearnDashboard() {
               learnRate={learner.metrics.learnRate}
               executionRate={learner.metrics.executionRate}
               executionPace={learner.metrics.executionPace}
-              totalWatchTime={learner.metrics.totalWatchTime}
             />
           </div>
 

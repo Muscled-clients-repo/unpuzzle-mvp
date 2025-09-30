@@ -14,6 +14,7 @@ import { useQuery } from "@tanstack/react-query"
 import { SimpleVideoPreview } from "@/components/ui/SimpleVideoPreview"
 import { FileDetailsModal } from "@/components/media/FileDetailsModal"
 import { BulkSelectionToolbar } from "@/components/media/BulkSelectionToolbar"
+import { BulkTagModal } from "@/components/media/BulkTagModal"
 import { MediaPageContentHeader } from "@/components/media/media-page-content-header"
 import { MediaFiltersSection } from "@/components/media/media-filters-section"
 import { MediaGrid } from "@/components/media/media-grid"
@@ -60,6 +61,8 @@ export default function MediaPage() {
   const [showTagSuggestions, setShowTagSuggestions] = useState(false)
   const [previewingFile, setPreviewingFile] = useState<any>(null)
   const [detailsFile, setDetailsFile] = useState<any>(null)
+  const [showSingleTagModal, setShowSingleTagModal] = useState(false)
+  const [singleTagFileId, setSingleTagFileId] = useState<string | null>(null)
   
   // State for tracking files being deleted (for animation)
   const [deletingFiles, setDeletingFiles] = useState<Set<string>>(new Set())
@@ -169,14 +172,14 @@ export default function MediaPage() {
 
   const handlePreview = (item: any) => {
     console.log('[MEDIA PREVIEW] Item data:', item)
-    
+
     // Generate private URL format for signed URL system if we have the data
     let privateUrl = null
     if (item.backblaze_file_id && item.file_name) {
       privateUrl = `private:${item.backblaze_file_id}:${item.file_name}`
       console.log('[MEDIA PREVIEW] Generated private URL:', privateUrl)
     }
-    
+
     const videoForPreview = {
       id: item.id,
       name: item.name,
@@ -186,6 +189,11 @@ export default function MediaPage() {
     }
     console.log('[MEDIA PREVIEW] Video for preview:', videoForPreview)
     setPreviewingFile(videoForPreview)
+  }
+
+  const handleEditTags = (fileId: string) => {
+    setSingleTagFileId(fileId)
+    setShowSingleTagModal(true)
   }
 
   const getTypeIcon = (type: string) => {
@@ -404,6 +412,7 @@ export default function MediaPage() {
         handlePreview={handlePreview}
         setDetailsFile={setDetailsFile}
         handleDelete={handleDelete}
+        handleEditTags={handleEditTags}
         renderTagBadges={renderTagBadges}
       />
 
@@ -432,6 +441,17 @@ export default function MediaPage() {
           onClose={clearModals}
         />
       )}
+
+      {/* Single File Tag Edit Modal */}
+      <BulkTagModal
+        isOpen={showSingleTagModal}
+        onClose={() => {
+          setShowSingleTagModal(false)
+          setSingleTagFileId(null)
+        }}
+        selectedFileIds={singleTagFileId ? [singleTagFileId] : []}
+        selectedFileCount={1}
+      />
 
       {/* Floating Upload Panel - Google Drive style */}
       <FloatingUploadPanel

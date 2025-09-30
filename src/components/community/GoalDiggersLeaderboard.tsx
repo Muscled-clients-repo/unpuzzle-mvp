@@ -353,7 +353,7 @@ export function GoalDiggersLeaderboard({ userRole, goalDiggers }: GoalDiggersLea
           <p className="text-gray-600 mb-4">
             Compete with top entrepreneurs and track your progress on the leaderboard.
           </p>
-          <button className="bg-yellow-600 text-white px-6 py-2 rounded-lg hover:bg-yellow-700 transition-colors">
+          <button className="bg-yellow-600 dark:bg-yellow-500 text-white dark:text-gray-900 px-6 py-2 rounded-lg hover:bg-yellow-700 dark:hover:bg-yellow-600 transition-colors">
             Start Your Goal Journey - $97/month
           </button>
         </div>

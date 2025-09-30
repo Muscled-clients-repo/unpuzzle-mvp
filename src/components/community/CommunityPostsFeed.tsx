@@ -164,7 +164,7 @@ export function CommunityPostsFeed({ posts, userRole = 'student' }: CommunityPos
             <button
               onClick={handleSubmitPost}
               disabled={!newPost.trim()}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg hover:bg-black dark:hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Send className="h-4 w-4" />
               Post
@@ -306,7 +306,7 @@ export function CommunityPostsFeed({ posts, userRole = 'student' }: CommunityPos
                       <button
                         onClick={() => handleSubmitReply(post.id)}
                         disabled={!replyContent.trim()}
-                        className="px-3 py-1 bg-gray-900 text-white text-sm rounded hover:bg-black transition-colors disabled:opacity-50"
+                        className="px-3 py-1 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-sm rounded hover:bg-black dark:hover:bg-gray-200 transition-colors disabled:opacity-50"
                       >
                         Reply
                       </button>

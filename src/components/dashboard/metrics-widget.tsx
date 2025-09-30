@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { TrendingUp, TrendingDown, Minus, Clock, Target, Zap } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { TrendingUp, TrendingDown, Minus, Clock, Target, Zap, Info } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface MetricWidgetProps {
@@ -13,6 +14,7 @@ interface MetricWidgetProps {
   progress?: number
   progressLabel?: string
   variant?: "default" | "success" | "warning" | "danger"
+  tooltipText?: string
 }
 
 const variantStyles = {
@@ -32,6 +34,7 @@ export function MetricWidget({
   progress,
   progressLabel,
   variant = "default",
+  tooltipText,
 }: MetricWidgetProps) {
   const getTrendIcon = () => {
     if (change === undefined) return null
@@ -50,7 +53,21 @@ export function MetricWidget({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <div className="flex items-center gap-1.5">
+          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+          {tooltipText && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs max-w-xs">{tooltipText}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
         {icon}
       </CardHeader>
       <CardContent>
@@ -93,17 +110,15 @@ interface LearningMetricsProps {
   learnRate: number
   executionRate: number
   executionPace: number
-  totalWatchTime: number
 }
 
 export function LearningMetrics({
   learnRate,
   executionRate,
   executionPace,
-  totalWatchTime,
 }: LearningMetricsProps) {
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       <MetricWidget
         title="Learn Rate"
         value={`${learnRate} min/hr`}
@@ -112,8 +127,9 @@ export function LearningMetrics({
         changeLabel="vs last week"
         icon={<Clock className="h-4 w-4 text-muted-foreground" />}
         variant={learnRate >= 30 ? "success" : "warning"}
+        tooltipText="This stat populates as you watch content"
       />
-      
+
       <MetricWidget
         title="Execution Rate"
         value={`${executionRate}%`}
@@ -122,8 +138,9 @@ export function LearningMetrics({
         progressLabel="Target: 80%"
         icon={<Target className="h-4 w-4 text-muted-foreground" />}
         variant={executionRate >= 80 ? "success" : "default"}
+        tooltipText="This stat populates as you complete activities"
       />
-      
+
       <MetricWidget
         title="Execution Pace"
         value={`${executionPace}s`}
@@ -132,13 +149,7 @@ export function LearningMetrics({
         changeLabel="faster"
         icon={<Zap className="h-4 w-4 text-muted-foreground" />}
         variant={executionPace <= 60 ? "success" : "warning"}
-      />
-      
-      <MetricWidget
-        title="Total Watch Time"
-        value={`${Math.floor(totalWatchTime / 60)}h ${totalWatchTime % 60}m`}
-        description="Lifetime learning"
-        icon={<Clock className="h-4 w-4 text-muted-foreground" />}
+        tooltipText="This stat populates as you interact with lessons"
       />
     </div>
   )
