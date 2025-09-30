@@ -2,6 +2,8 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { broadcastWebSocketMessage } from '@/lib/websocket-operations'
+import { TRACK_REQUEST_EVENTS } from '@/lib/course-event-observer'
 
 export interface CreateRequestParams {
   request_type: 'bug_report' | 'feature_request' | 'track_change' | 'refund'
@@ -141,7 +143,8 @@ export async function getAllRequests() {
       profiles!user_id (
         id,
         full_name,
-        email
+        email,
+        track_assignment_count
       )
     `)
     .order('created_at', { ascending: false })
@@ -337,17 +340,31 @@ export async function markTrackChangeCompleted(requestId: string) {
   return { success: true }
 }
 
-export async function createTrackChangeRequestWithQuestionnaire({
-  currentTrackName,
-  desiredTrackName,
-  questionnaire,
-  trackType
-}: {
-  currentTrackName: string
-  desiredTrackName: string
+export async function checkPendingTrackRequest() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return null
+  }
+
+  const { data: existingRequest } = await supabase
+    .from('requests')
+    .select('id, status, created_at, metadata')
+    .eq('user_id', user.id)
+    .eq('request_type', 'track_change')
+    .in('status', ['pending', 'in_review'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
+
+  return existingRequest
+}
+
+export async function createTrackChangeRequestWithQuestionnaire(
+  trackType: 'agency' | 'saas',
   questionnaire: any
-  trackType: 'agency' | 'saas'
-}) {
+) {
   const supabase = await createClient()
 
   // Get current user
@@ -356,19 +373,22 @@ export async function createTrackChangeRequestWithQuestionnaire({
     throw new Error('Unauthorized')
   }
 
+  // Get user's current track info
+  const currentTrackData = await getUserCurrentTrack()
+  const currentTrackName = currentTrackData?.track_name || 'No Track'
+  const desiredTrackName = trackType === 'agency' ? 'Agency Track' : 'SaaS Track'
+
   // Check for existing pending track change request
   const { data: existingRequest } = await supabase
     .from('requests')
     .select('id, status')
     .eq('user_id', user.id)
     .eq('request_type', 'track_change')
-    .in('status', ['pending', 'in_review', 'approved'])
+    .in('status', ['pending', 'in_review'])
     .limit(1)
 
   if (existingRequest && existingRequest.length > 0) {
-    const status = existingRequest[0].status
-    const statusText = status === 'approved' ? 'approved and awaiting goal assignment' : 'pending instructor review'
-    throw new Error(`You already have a track change request that is ${statusText}. Please wait for it to be completed before submitting a new request.`)
+    throw new Error(`You already have a track change request pending instructor review. Please wait for it to be completed before submitting a new request.`)
   }
 
   // Create track change request with questionnaire data
@@ -378,7 +398,7 @@ export async function createTrackChangeRequestWithQuestionnaire({
       user_id: user.id,
       request_type: 'track_change',
       title: `Request to switch to ${desiredTrackName}`,
-      description: `I would like to switch from my current track "${currentTrackName}" to "${desiredTrackName}". I have completed the questionnaire for the new track.`,
+      description: `I would like to switch from "${currentTrackName}" to "${desiredTrackName}". I have completed the questionnaire for the new track.`,
       metadata: {
         current_track: currentTrackName,
         desired_track: desiredTrackName,
@@ -396,6 +416,19 @@ export async function createTrackChangeRequestWithQuestionnaire({
     console.error('Failed to create track change request:', error)
     throw new Error('Failed to create track change request')
   }
+
+  // Broadcast websocket event for real-time notification
+  await broadcastWebSocketMessage({
+    type: TRACK_REQUEST_EVENTS.REQUEST_SUBMITTED,
+    data: {
+      requestId: request.id,
+      userId: user.id,
+      trackType,
+      trackName: desiredTrackName,
+      status: 'pending',
+      timestamp: new Date().toISOString()
+    }
+  })
 
   revalidatePath('/instructor/requests')
   revalidatePath('/instructor/requests/track-assignments')
@@ -546,19 +579,29 @@ export async function acceptTrackChangeRequest(requestId: string, goalId?: strin
     profileUpdateData.goal_assigned_at = new Date().toISOString()
   }
 
+  // First get current count
+  const { data: currentProfile } = await supabase
+    .from('profiles')
+    .select('track_assignment_count')
+    .eq('id', request.user_id)
+    .single()
+
+  // Increment track assignment count (for New Signups vs Track Changes filtering)
   const { error: profileUpdateError } = await supabase
     .from('profiles')
-    .update(profileUpdateData)
+    .update({
+      ...profileUpdateData,
+      track_assignment_count: (currentProfile?.track_assignment_count || 0) + 1
+    })
     .eq('id', request.user_id)
 
   if (profileUpdateError) {
     console.error('Failed to update student profile track:', profileUpdateError)
-    // Clean up the conversation if profile update fails
     await supabase.from('goal_conversations').delete().eq('id', conversation.id)
     throw new Error('Failed to update student track assignment')
   }
 
-  // Update request status to approved and mark conversation created
+  // Update request status to approved (track and goal assigned together)
   const { error: updateError } = await supabase
     .from('requests')
     .update({
@@ -570,9 +613,10 @@ export async function acceptTrackChangeRequest(requestId: string, goalId?: strin
         approved_at: new Date().toISOString(),
         approved_by: user.id,
         conversation_id: conversation.id,
-        next_step: 'goal_assignment',
         track_changed_to: desiredTrack.id,
-        track_changed_at: new Date().toISOString()
+        track_changed_at: new Date().toISOString(),
+        goal_assigned: true,
+        goal_assigned_at: new Date().toISOString()
       }
     })
     .eq('id', requestId)
@@ -585,6 +629,33 @@ export async function acceptTrackChangeRequest(requestId: string, goalId?: strin
     // it's probably safer to leave the track changed and let the instructor handle it manually
     throw new Error('Failed to update request status')
   }
+
+  // Get goal name if goalId exists
+  let goalName: string | undefined
+  if (goalId) {
+    const { data: goal } = await supabase
+      .from('track_goals')
+      .select('name')
+      .eq('id', goalId)
+      .single()
+    goalName = goal?.name
+  }
+
+  // Broadcast websocket event for real-time notification
+  await broadcastWebSocketMessage({
+    type: TRACK_REQUEST_EVENTS.REQUEST_APPROVED,
+    data: {
+      requestId: request.id,
+      userId: request.user_id,
+      trackType: metadata.desired_track_type,
+      trackName: metadata.desired_track || desiredTrack.name,
+      goalId: goalId || '',
+      goalName,
+      instructorId: user.id,
+      status: 'approved',
+      timestamp: new Date().toISOString()
+    }
+  })
 
   // Invalidate relevant paths
   revalidatePath('/instructor/requests')

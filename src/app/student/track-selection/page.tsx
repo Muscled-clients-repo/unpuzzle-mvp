@@ -1,13 +1,16 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { CheckCircle, ArrowUpDown, Loader2, Clock } from 'lucide-react'
+import { CheckCircle, ArrowUpDown, Loader2, Clock, Sparkles, BookOpen } from 'lucide-react'
 import { getUserCurrentTrack, getAllTracks, createRequest, getStudentTrackChangeStatus } from '@/lib/actions/request-actions'
 import { toast } from 'sonner'
+import { useAppStore } from '@/stores/app-store'
+import { useTrackRequestWebSocket } from '@/hooks/use-track-request-websocket'
 
 interface Track {
   id: string
@@ -16,7 +19,14 @@ interface Track {
 }
 
 export default function TrackSelectionPage() {
+  const router = useRouter()
   const queryClient = useQueryClient()
+
+  // Select user directly from store (correct pattern)
+  const user = useAppStore((state) => state.user)
+
+  // Setup websocket for real-time track request updates
+  useTrackRequestWebSocket(user?.id || '', 'student')
 
   // Get user's current track
   const { data: currentTrack, isLoading: currentTrackLoading } = useQuery({
@@ -99,21 +109,57 @@ export default function TrackSelectionPage() {
       </div>
 
       <div className="space-y-6">
-        {/* Current Track */}
-        {currentTrack && (
+        {/* Approved Track Assignment - Success Card */}
+        {pendingRequest && pendingRequest.status === 'approved' && (
           <Card className="border-green-200 bg-green-50 dark:bg-green-900/20 dark:border-green-800">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-green-600" />
+                Track & Goal Assigned Successfully!
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <p className="text-green-700 dark:text-green-200">
+                  Your track and goal have been assigned. You can now access your courses and start chatting with your instructor in Goal Digger!
+                </p>
+                <div className="flex gap-3">
+                  <Button
+                    onClick={() => router.push('/student/courses')}
+                    className="flex items-center gap-2"
+                  >
+                    <BookOpen className="h-4 w-4" />
+                    View Your Courses
+                  </Button>
+                  <Button
+                    onClick={() => router.push('/student/goals')}
+                    variant="outline"
+                    className="flex items-center gap-2"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Say Hi in Goal Digger
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Current Track */}
+        {currentTrack && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5" />
                 Current Track
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                <h3 className="text-xl font-semibold text-green-900 dark:text-green-100">
+                <h3 className="text-xl font-semibold">
                   {currentTrack.name}
                 </h3>
-                <p className="text-green-700 dark:text-green-200">
+                <p className="text-muted-foreground">
                   {currentTrack.description}
                 </p>
               </div>
@@ -122,7 +168,7 @@ export default function TrackSelectionPage() {
         )}
 
         {/* Pending Track Change Request */}
-        {pendingRequest && pendingRequest.status !== 'completed' && (
+        {pendingRequest && (pendingRequest.status === 'pending' || pendingRequest.status === 'in_review') && (
           <Card className="border-orange-200 bg-orange-50 dark:bg-orange-900/20 dark:border-orange-800">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -168,12 +214,12 @@ export default function TrackSelectionPage() {
         )}
 
         {/* Other Available Track */}
-        {otherTrack && !pendingRequest && (
+        {otherTrack && (!pendingRequest || pendingRequest.status === 'approved') && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ArrowUpDown className="h-5 w-5" />
-                Other Available Track
+                Switch to Another Track
               </CardTitle>
             </CardHeader>
             <CardContent>

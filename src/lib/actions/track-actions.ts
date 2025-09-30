@@ -49,6 +49,11 @@ export interface StudentPreferences {
   notification_preferences: Record<string, boolean>
   completed_questionnaire: boolean
   questionnaire_completed_at: string | null
+  monthly_income_goal?: number
+  approach_preference?: 'direct' | 'patient'
+  questionnaire_data?: any
+  questionnaire_version?: string
+  questionnaire_track_id?: string
   created_at: string
   updated_at: string
 }
@@ -228,7 +233,7 @@ export async function getStudentTrackAssignments(): Promise<StudentTrackAssignme
       track:tracks (*)
     `)
     .eq('student_id', user.id)
-    .eq('is_active', true)
+    .eq('status', 'active')
     .order('assigned_at', { ascending: false })
 
   if (error) {
@@ -241,16 +246,10 @@ export async function getStudentTrackAssignments(): Promise<StudentTrackAssignme
 // Assign track to student
 export async function assignTrackToStudent({
   trackId,
-  assignmentType = 'primary',
-  confidenceScore = 100,
-  source = 'manual',
-  reasoning
+  goalId
 }: {
   trackId: string
-  assignmentType?: 'primary' | 'secondary'
-  confidenceScore?: number
-  source?: 'manual' | 'questionnaire' | 'recommendation'
-  reasoning?: string
+  goalId?: string
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -265,19 +264,32 @@ export async function assignTrackToStudent({
     .select('id')
     .eq('student_id', user.id)
     .eq('track_id', trackId)
-    .eq('assignment_type', assignmentType)
+    .eq('status', 'active')
     .single()
+
+  // If no goal provided, get the default goal for this track
+  let actualGoalId = goalId
+  if (!actualGoalId) {
+    const { data: defaultGoal } = await supabase
+      .from('track_goals')
+      .select('id')
+      .eq('track_id', trackId)
+      .eq('is_default', true)
+      .single()
+
+    if (defaultGoal) {
+      actualGoalId = defaultGoal.id
+    }
+  }
 
   if (existing) {
     // Update existing assignment
     const { data, error } = await supabase
       .from('student_track_assignments')
       .update({
-        confidence_score: confidenceScore,
-        assignment_source: source,
-        assignment_reasoning: reasoning,
-        is_active: true,
-        assigned_at: new Date().toISOString()
+        assigned_at: new Date().toISOString(),
+        status: 'active',
+        goal_id: actualGoalId || null
       })
       .eq('id', existing.id)
       .select()
@@ -285,6 +297,17 @@ export async function assignTrackToStudent({
 
     if (error) {
       throw new Error('Failed to update track assignment')
+    }
+
+    // Update the user's profile with the current goal AND track
+    if (actualGoalId) {
+      await supabase
+        .from('profiles')
+        .update({
+          current_goal_id: actualGoalId,
+          current_track_id: trackId
+        })
+        .eq('id', user.id)
     }
 
     revalidatePath('/student/dashboard')
@@ -297,16 +320,26 @@ export async function assignTrackToStudent({
       .insert({
         student_id: user.id,
         track_id: trackId,
-        assignment_type: assignmentType,
-        confidence_score: confidenceScore,
-        assignment_source: source,
-        assignment_reasoning: reasoning
+        goal_id: actualGoalId || null,
+        status: 'active',
+        assigned_at: new Date().toISOString()
       })
       .select()
       .single()
 
     if (error) {
       throw new Error('Failed to assign track to student')
+    }
+
+    // Update the user's profile with the current goal AND track
+    if (actualGoalId) {
+      await supabase
+        .from('profiles')
+        .update({
+          current_goal_id: actualGoalId,
+          current_track_id: trackId
+        })
+        .eq('id', user.id)
     }
 
     revalidatePath('/student/dashboard')
@@ -326,7 +359,7 @@ export async function removeTrackAssignment(assignmentId: string) {
 
   const { error } = await supabase
     .from('student_track_assignments')
-    .update({ is_active: false })
+    .update({ status: 'abandoned' })
     .eq('id', assignmentId)
     .eq('student_id', user.id)
 
@@ -360,9 +393,8 @@ export async function getStudentPreferences(): Promise<StudentPreferences | null
   return data
 }
 
-// Update student preferences
-// Submit questionnaire and create conversation for instructor review
-export async function submitQuestionnaire(questionnaireResponses: any, trackType: 'agency' | 'saas', changeRequestId?: string) {
+// Submit questionnaire and create request for instructor review
+export async function submitQuestionnaire(trackType: 'agency' | 'saas', questionnaireResponses: any) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -370,62 +402,60 @@ export async function submitQuestionnaire(questionnaireResponses: any, trackType
     throw new Error('User not authenticated')
   }
 
-  // Create conversation with pending status
-  const conversationData: any = {
-    student_id: user.id,
-    track_type: trackType,
-    status: 'pending_instructor_review'
-  }
-
-  // If this is for a track change request, add metadata
-  if (changeRequestId) {
-    conversationData.metadata = {
-      track_change_request_id: changeRequestId,
-      transition_type: 'track_change'
-    }
-  }
-
-  const { data: conversation, error: conversationError } = await supabase
-    .from('goal_conversations')
-    .insert(conversationData)
-    .select()
+  // Get user profile for name
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name')
+    .eq('id', user.id)
     .single()
 
-  if (conversationError) {
-    throw new Error('Failed to create conversation')
-  }
-
-  // Create questionnaire response message
-  const { data: message, error: messageError } = await supabase
-    .from('conversation_messages')
+  // Create a track change request with questionnaire data in metadata
+  const { data: request, error: requestError } = await supabase
+    .from('requests')
     .insert({
-      conversation_id: conversation.id,
-      sender_id: user.id,
-      message_type: 'questionnaire_response',
-      content: 'Student completed onboarding questionnaire',
+      user_id: user.id,
+      request_type: 'track_change',
+      title: `Track Selection: ${trackType === 'agency' ? 'Agency' : 'SaaS'} Track`,
+      description: `${profile?.full_name || 'Student'} has completed the questionnaire and selected the ${trackType === 'agency' ? 'Agency' : 'SaaS'} track.`,
+      status: 'pending',
+      priority: 'medium',
       metadata: {
-        questionnaire_responses: questionnaireResponses,
         track_type: trackType,
-        submitted_at: new Date().toISOString()
+        questionnaire_responses: questionnaireResponses,
+        submitted_at: new Date().toISOString(),
+        requires_goal_assignment: true
       }
     })
     .select()
     .single()
 
-  if (messageError) {
-    throw new Error('Failed to save questionnaire responses')
+  if (requestError) {
+    console.error('Request creation error:', requestError)
+    throw new Error('Failed to submit questionnaire for review')
   }
 
-  // Update student preferences to mark questionnaire as completed
+  // Get track ID for storing with questionnaire
+  const { data: track } = await supabase
+    .from('tracks')
+    .select('id')
+    .eq('name', trackType === 'agency' ? 'Agency Track' : 'SaaS Track')
+    .single()
+
+  // Update student preferences with questionnaire data
   await updateStudentPreferences({
-    time_commitment_hours: questionnaireResponses.timeCommitment,
+    time_commitment_hours: questionnaireResponses.timeCommitment || null,
+    monthly_income_goal: questionnaireResponses.monthlyIncomeGoal || null,
+    approach_preference: questionnaireResponses.approachPreference || null,
     completed_questionnaire: true,
-    questionnaire_completed_at: new Date().toISOString()
+    questionnaire_completed_at: new Date().toISOString(),
+    questionnaire_data: questionnaireResponses,
+    questionnaire_version: '1.0', // You can version your questionnaires
+    questionnaire_track_id: track?.id || null
   })
 
   revalidatePath('/student/track-selection')
-  revalidatePath('/student/goals')
-  return { conversation, message }
+  revalidatePath('/student/dashboard')
+  return request
 }
 
 export async function updateStudentPreferences(preferences: Partial<StudentPreferences>) {
@@ -449,7 +479,8 @@ export async function updateStudentPreferences(preferences: Partial<StudentPrefe
       .single()
 
     if (error) {
-      throw new Error('Failed to update student preferences')
+      console.error('Error updating preferences:', error)
+      throw new Error(`Failed to update student preferences: ${error.message}`)
     }
 
     revalidatePath('/student/track-selection')
@@ -466,7 +497,8 @@ export async function updateStudentPreferences(preferences: Partial<StudentPrefe
       .single()
 
     if (error) {
-      throw new Error('Failed to create student preferences')
+      console.error('Error creating preferences:', error)
+      throw new Error(`Failed to create student preferences: ${error.message}`)
     }
 
     revalidatePath('/student/track-selection')

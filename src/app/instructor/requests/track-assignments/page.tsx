@@ -23,6 +23,8 @@ import { getInstructorPendingReviews, assignGoalToStudent } from '@/lib/actions/
 import { getAllRequests, acceptTrackChangeRequest } from '@/lib/actions/request-actions'
 import { toast } from 'sonner'
 import AcceptTrackChangeModal from '@/components/instructor/AcceptTrackChangeModal'
+import { useAppStore } from '@/stores/app-store'
+import { useTrackRequestWebSocket } from '@/hooks/use-track-request-websocket'
 
 export default function TrackAssignmentsPage() {
   const [selectedTab, setSelectedTab] = useState('new-signups')
@@ -30,19 +32,40 @@ export default function TrackAssignmentsPage() {
   const [selectedRequest, setSelectedRequest] = useState<any>(null)
   const queryClient = useQueryClient()
 
+  // Select user directly from store (correct pattern)
+  const user = useAppStore((state) => state.user)
+
+  // Setup websocket for real-time track request updates
+  useTrackRequestWebSocket(user?.id || '', 'instructor')
+
   // TanStack Query: Server-related state ownership
   const { data: pendingReviews, isLoading: reviewsLoading } = useQuery({
     queryKey: ['instructor-pending-reviews'],
     queryFn: getInstructorPendingReviews
   })
 
+  // New Signups - first-time track assignments (track_assignment_count === 0)
+  const { data: newSignupRequests, isLoading: signupsLoading } = useQuery({
+    queryKey: ['new-signup-requests'],
+    queryFn: async () => {
+      const allRequests = await getAllRequests()
+      return allRequests.filter(req =>
+        req.request_type === 'track_change' &&
+        (req.status === 'pending' || req.status === 'in_review') &&
+        req.profiles?.track_assignment_count === 0 // First-time users only
+      )
+    }
+  })
+
+  // Track Changes - existing users switching tracks (track_assignment_count >= 1)
   const { data: trackChangeRequests, isLoading: requestsLoading } = useQuery({
     queryKey: ['track-change-requests'],
     queryFn: async () => {
       const allRequests = await getAllRequests()
       return allRequests.filter(req =>
         req.request_type === 'track_change' &&
-        (req.status === 'pending' || req.status === 'approved')
+        (req.status === 'pending' || req.status === 'in_review') &&
+        (req.profiles?.track_assignment_count || 0) >= 1 // Existing users only
       )
     }
   })
@@ -56,6 +79,7 @@ export default function TrackAssignmentsPage() {
     }) => assignGoalToStudent(studentId, goalId, trackType),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['instructor-pending-reviews'] })
+      queryClient.invalidateQueries({ queryKey: ['new-signup-requests'] })
       queryClient.invalidateQueries({ queryKey: ['track-change-requests'] })
       toast.success('Goal assigned successfully!')
     },
@@ -71,6 +95,7 @@ export default function TrackAssignmentsPage() {
       acceptTrackChangeRequest(requestId, goalId),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['instructor-pending-reviews'] })
+      queryClient.invalidateQueries({ queryKey: ['new-signup-requests'] })
       queryClient.invalidateQueries({ queryKey: ['track-change-requests'] })
 
       // Update the request with the conversation ID for direct linking
@@ -104,7 +129,7 @@ export default function TrackAssignmentsPage() {
     acceptTrackChangeMutation.mutate({ requestId, goalId })
   }
 
-  if (reviewsLoading || requestsLoading) {
+  if (signupsLoading || requestsLoading) {
     return (
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-center py-12">
@@ -117,7 +142,7 @@ export default function TrackAssignmentsPage() {
     )
   }
 
-  const newSignups = pendingReviews || []
+  const newSignups = newSignupRequests || []
   const trackChanges = trackChangeRequests || []
 
   return (

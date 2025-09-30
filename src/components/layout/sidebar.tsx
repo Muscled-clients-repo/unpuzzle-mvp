@@ -52,7 +52,7 @@ const learnerNavItems: NavItem[] = [
     label: "Goals",
     icon: Target,
     submenu: [
-      { href: "/student/goals", label: "Current Goal", icon: Target },
+      { href: "/student/goals", label: "Goal Digger", icon: Target },
       { href: "/student/goals/history", label: "Track History", icon: History },
     ]
   },

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { courseEventObserver, COURSE_EVENTS, MEDIA_EVENTS, CONVERSATION_EVENTS, STUDENT_EVENTS, COURSE_GOAL_EVENTS } from '@/lib/course-event-observer'
+import { courseEventObserver, COURSE_EVENTS, MEDIA_EVENTS, CONVERSATION_EVENTS, STUDENT_EVENTS, COURSE_GOAL_EVENTS, TRACK_REQUEST_EVENTS } from '@/lib/course-event-observer'
 
 interface WebSocketMessage {
   type: string
@@ -125,12 +125,15 @@ export function useWebSocketConnection(userId: string) {
             // Course goal events
             'course-goal-assignment-changed': 'course-goal-assignment-changed',
             // Course status events
-            'course-status-changed': COURSE_EVENTS.STATUS_CHANGED
+            'course-status-changed': COURSE_EVENTS.STATUS_CHANGED,
+            // Track request events
+            'track-request-submitted': TRACK_REQUEST_EVENTS.REQUEST_SUBMITTED,
+            'track-request-approved': TRACK_REQUEST_EVENTS.REQUEST_APPROVED
           }
           
           const observerEventType = eventTypeMapping[message.type]
           if (observerEventType) {
-            // Course events and media-linked need courseId, other media events need userId, conversation events need studentId, goal events need userId, course-goal events are global
+            // Course events and media-linked need courseId, other media events need userId, conversation events need studentId, goal events need userId, course-goal events are global, track request events need userId
             const isCourseEvent = message.type.startsWith('upload-') || message.type.startsWith('video-') || message.type.startsWith('chapter-') || message.type === 'media-linked' || message.type === 'course-status-changed'
             const isMediaEvent = message.type.startsWith('media-') && message.type !== 'media-linked'
             const isBulkEvent = message.type.startsWith('bulk-')
@@ -138,6 +141,7 @@ export function useWebSocketConnection(userId: string) {
             const isGoalEvent = message.type === 'goal-reassignment'
             const isStudentProgressEvent = message.type.startsWith('student-')
             const isCourseGoalEvent = message.type === 'course-goal-assignment-changed'
+            const isTrackRequestEvent = message.type.startsWith('track-request-')
 
             const hasRequiredId = isCourseEvent ? message.courseId :
                                  (isMediaEvent || isBulkEvent) ? message.data?.userId :
@@ -145,6 +149,7 @@ export function useWebSocketConnection(userId: string) {
                                  isGoalEvent ? message.data?.userId :
                                  isStudentProgressEvent ? message.data?.studentId :
                                  isCourseGoalEvent ? message.data?.courseId :
+                                 isTrackRequestEvent ? message.data?.userId :
                                  message.data?.courseId
             const eventId = isCourseEvent ? message.courseId :
                            (isMediaEvent || isBulkEvent) ? message.data?.userId :
@@ -152,6 +157,7 @@ export function useWebSocketConnection(userId: string) {
                            isGoalEvent ? message.data?.userId :
                            isStudentProgressEvent ? message.data?.studentId :
                            isCourseGoalEvent ? message.data?.courseId :
+                           isTrackRequestEvent ? message.data?.userId :
                            message.data?.courseId
             
             // Debug message validation
@@ -172,12 +178,14 @@ export function useWebSocketConnection(userId: string) {
                 isMediaEvent,
                 isBulkEvent,
                 isConversationEvent,
+                isTrackRequestEvent,
                 hasRequiredId,
                 expectedField: isCourseEvent ? 'courseId' :
                               (isMediaEvent || isBulkEvent) ? 'userId' :
                               isConversationEvent ? 'studentId' :
                               isGoalEvent ? 'userId' :
-                              isStudentProgressEvent ? 'studentId' : 'courseId',
+                              isStudentProgressEvent ? 'studentId' :
+                              isTrackRequestEvent ? 'userId' : 'courseId',
                 data: message.data
               })
             }

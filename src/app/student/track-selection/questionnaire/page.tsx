@@ -7,7 +7,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -15,9 +14,11 @@ import { Slider } from '@/components/ui/slider'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ChevronLeft, ChevronRight, Target, Clock, Zap, BookOpen, Lightbulb, Palette, Code } from 'lucide-react'
-import { updateStudentPreferences, assignTrackToStudent, submitQuestionnaire } from '@/lib/actions/track-actions'
-import { createTrackChangeRequestWithQuestionnaire, getUserCurrentTrack } from '@/lib/actions/request-actions'
+import { submitQuestionnaire } from '@/lib/actions/track-actions'
+import { assignTrackByType } from '@/lib/actions/track-helpers'
+import { createTrackChangeRequestWithQuestionnaire, getUserCurrentTrack, checkPendingTrackRequest } from '@/lib/actions/request-actions'
 import { toast } from 'sonner'
+import { useEffect } from 'react'
 
 interface QuestionnaireData {
   // Agency track fields
@@ -36,7 +37,6 @@ interface QuestionnaireData {
   technicalSkillLevel?: number
   businessSkillLevel?: number
   productIdea?: string
-  productIdeaDescription?: string
 
   // Common fields
   trackChoiceReason?: string[]
@@ -149,15 +149,6 @@ const saasQuestions = [
     options: ['Yes', 'No', 'Multiple ideas'],
     icon: Lightbulb,
     description: 'Do you know what you want to build?'
-  },
-  {
-    id: 'productIdeaDescription',
-    title: 'Describe your product idea(s)',
-    type: 'textarea',
-    icon: Lightbulb,
-    description: 'Brief description of what you want to build',
-    showIf: (data: QuestionnaireData) => data.productIdea === 'Yes' || data.productIdea === 'Multiple ideas',
-    optional: true
   }
 ]
 
@@ -210,7 +201,7 @@ function QuestionnaireContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const selectedTrack = searchParams.get('track')
-  const isChangeRequest = searchParams.get('changeRequest') === 'true'
+  const isChangeRequest = searchParams.get('track_change') === 'true' || searchParams.get('changeRequest') === 'true'
   const queryClient = useQueryClient()
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
@@ -219,12 +210,42 @@ function QuestionnaireContent() {
     timeCommitment: 20,
     approachPreference: 'direct'
   })
+  const [touchedSliders, setTouchedSliders] = useState<Set<string>>(new Set())
+  const [checkingPending, setCheckingPending] = useState(true)
+
+  // Check for existing pending request
+  useEffect(() => {
+    const checkForPendingRequest = async () => {
+      try {
+        const pendingRequest = await checkPendingTrackRequest()
+
+        if (pendingRequest) {
+          // User has a pending request, redirect to dashboard
+          toast.info('You already have a track change request pending review. Please wait for instructor approval.')
+          router.push('/student/dashboard')
+        } else {
+          // No pending request, allow questionnaire
+          setCheckingPending(false)
+        }
+      } catch (error) {
+        console.error('Error checking pending requests:', error)
+        setCheckingPending(false)
+      }
+    }
+
+    // Only check for pending request if this is a change request
+    if (isChangeRequest) {
+      checkForPendingRequest()
+    } else {
+      setCheckingPending(false)
+    }
+  }, [isChangeRequest, router])
 
   // Get current track if this is a change request
   const { data: currentTrackData } = useQuery({
     queryKey: ['currentTrack'],
     queryFn: getUserCurrentTrack,
-    enabled: isChangeRequest
+    enabled: isChangeRequest && !checkingPending
   })
 
   const questions = selectedTrack === 'agency'
@@ -239,7 +260,6 @@ function QuestionnaireContent() {
   })
 
   const currentQuestion = visibleQuestions[currentQuestionIndex]
-  const progress = ((currentQuestionIndex + 1) / visibleQuestions.length) * 100
 
   const submitMutation = useMutation({
     mutationFn: async () => {
@@ -255,18 +275,13 @@ function QuestionnaireContent() {
       } else {
         // Direct assignment for new users
         await submitQuestionnaire(selectedTrack as 'agency' | 'saas', formData)
-        await assignTrackToStudent(selectedTrack as 'agency' | 'saas')
-        await updateStudentPreferences({
-          approach_preference: formData.approachPreference,
-          time_commitment_hours: formData.timeCommitment,
-          monthly_income_goal: formData.monthlyIncomeGoal
-        })
-        toast.success('Track assigned successfully!')
+        await assignTrackByType(selectedTrack as 'agency' | 'saas')
+        toast.success('Track selection submitted for review!')
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['studentProfile'] })
-      router.push('/student/dashboard')
+      router.push('/student/track-selection')
     },
     onError: (error) => {
       console.error('Error submitting questionnaire:', error)
@@ -320,11 +335,24 @@ function QuestionnaireContent() {
     )
   }
 
+  // Show loading while checking for pending requests
+  if (checkingPending) {
+    return (
+      <div className="container mx-auto p-4 max-w-2xl">
+        <Card>
+          <CardContent className="p-8 text-center">
+            <p className="text-lg text-muted-foreground">Checking for existing requests...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   const QuestionIcon = currentQuestion?.icon || Target
 
   return (
     <div className="container mx-auto p-4 max-w-2xl">
-      <Card className="min-h-[600px]">
+      <Card>
         <CardHeader>
           <div className="flex items-center justify-between mb-4">
             <Badge variant="secondary" className="text-sm">
@@ -336,9 +364,8 @@ function QuestionnaireContent() {
               </Badge>
             )}
           </div>
-          <CardTitle className="text-2xl">Track Questionnaire</CardTitle>
-          <Progress value={progress} className="mt-4" />
-          <p className="text-sm text-muted-foreground mt-2">
+          <CardTitle className="text-2xl">Answer these questions to help me choose the right goal for you</CardTitle>
+          <p className="text-sm text-muted-foreground mt-4">
             Question {currentQuestionIndex + 1} of {visibleQuestions.length}
           </p>
         </CardHeader>
@@ -361,34 +388,50 @@ function QuestionnaireContent() {
                     value={formData[currentQuestion.id as keyof QuestionnaireData] as string}
                     onValueChange={(value) => handleInputChange(value, currentQuestion.id)}
                   >
-                    {Array.isArray(currentQuestion.options) && currentQuestion.options.map((option) => (
-                      <div key={typeof option === 'string' ? option : option.value} className="flex items-center space-x-2 p-3 rounded-lg hover:bg-accent">
-                        <RadioGroupItem value={typeof option === 'string' ? option : option.value} />
-                        <Label className="cursor-pointer flex-1">
-                          {typeof option === 'string' ? option : option.label}
+                    {Array.isArray(currentQuestion.options) && currentQuestion.options.map((option) => {
+                      const optionValue = typeof option === 'string' ? option : option.value
+                      const optionId = `radio-${currentQuestion.id}-${optionValue}`
+                      return (
+                        <Label
+                          key={optionValue}
+                          htmlFor={optionId}
+                          className="flex items-center space-x-2 p-3 rounded-lg hover:bg-accent cursor-pointer"
+                        >
+                          <RadioGroupItem value={optionValue} id={optionId} />
+                          <span className="flex-1">
+                            {typeof option === 'string' ? option : option.label}
+                          </span>
                         </Label>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </RadioGroup>
                 )}
 
                 {currentQuestion.type === 'checkbox' && (
                   <div className="space-y-2">
-                    {currentQuestion.options?.map((option) => (
-                      <div key={option} className="flex items-center space-x-2 p-3 rounded-lg hover:bg-accent">
-                        <Checkbox
-                          checked={(formData[currentQuestion.id as keyof QuestionnaireData] as string[] || []).includes(option)}
-                          onCheckedChange={(checked) => {
-                            const currentValues = (formData[currentQuestion.id as keyof QuestionnaireData] as string[]) || []
-                            const newValues = checked
-                              ? [...currentValues, option]
-                              : currentValues.filter(v => v !== option)
-                            handleInputChange(newValues, currentQuestion.id)
-                          }}
-                        />
-                        <Label className="cursor-pointer flex-1">{option}</Label>
-                      </div>
-                    ))}
+                    {currentQuestion.options?.map((option) => {
+                      const checkboxId = `checkbox-${currentQuestion.id}-${option}`
+                      return (
+                        <Label
+                          key={option}
+                          htmlFor={checkboxId}
+                          className="flex items-center space-x-2 p-3 rounded-lg hover:bg-accent cursor-pointer"
+                        >
+                          <Checkbox
+                            id={checkboxId}
+                            checked={(formData[currentQuestion.id as keyof QuestionnaireData] as string[] || []).includes(option)}
+                            onCheckedChange={(checked) => {
+                              const currentValues = (formData[currentQuestion.id as keyof QuestionnaireData] as string[]) || []
+                              const newValues = checked
+                                ? [...currentValues, option]
+                                : currentValues.filter(v => v !== option)
+                              handleInputChange(newValues, currentQuestion.id)
+                            }}
+                          />
+                          <span className="flex-1">{option}</span>
+                        </Label>
+                      )
+                    })}
                   </div>
                 )}
 
@@ -396,7 +439,10 @@ function QuestionnaireContent() {
                   <div className="space-y-4">
                     <Slider
                       value={[formData[currentQuestion.id as keyof QuestionnaireData] as number || currentQuestion.min || 0]}
-                      onValueChange={(value) => handleInputChange(value[0], currentQuestion.id)}
+                      onValueChange={(value) => {
+                        handleInputChange(value[0], currentQuestion.id)
+                        setTouchedSliders(prev => new Set(prev).add(currentQuestion.id))
+                      }}
                       min={currentQuestion.min}
                       max={currentQuestion.max}
                       step={1}
@@ -404,9 +450,11 @@ function QuestionnaireContent() {
                     />
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>{currentQuestion.min}</span>
-                      <span className="font-medium text-foreground">
-                        {formData[currentQuestion.id as keyof QuestionnaireData] || currentQuestion.min || 0}
-                      </span>
+                      {touchedSliders.has(currentQuestion.id) && (
+                        <span className="font-medium text-foreground">
+                          {formData[currentQuestion.id as keyof QuestionnaireData] || currentQuestion.min || 0}
+                        </span>
+                      )}
                       <span>{currentQuestion.max}</span>
                     </div>
                   </div>
@@ -478,7 +526,7 @@ export default function QuestionnairePage() {
   return (
     <Suspense fallback={
       <div className="container mx-auto p-4 max-w-2xl">
-        <Card className="min-h-[600px] flex items-center justify-center">
+        <Card className="flex items-center justify-center py-8">
           <CardContent>
             <p className="text-muted-foreground">Loading questionnaire...</p>
           </CardContent>
