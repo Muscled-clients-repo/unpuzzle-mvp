@@ -31,6 +31,20 @@ export function useDraftQueries() {
     select: (data) => data.drafts || []
   })
 
+  const dailyNoteDraftsQuery = useQuery({
+    queryKey: draftKeys.list('daily_note'),
+    queryFn: () => getDrafts('daily_note'),
+    enabled: !!user?.id,
+    select: (data) => data.drafts || []
+  })
+
+  const instructorResponseDraftsQuery = useQuery({
+    queryKey: draftKeys.list('instructor_response'),
+    queryFn: () => getDrafts('instructor_response'),
+    enabled: !!user?.id,
+    select: (data) => data.drafts || []
+  })
+
   const allDraftsQuery = useQuery({
     queryKey: draftKeys.list(),
     queryFn: () => getDrafts(),
@@ -41,9 +55,13 @@ export function useDraftQueries() {
   return {
     bugDrafts: bugDraftsQuery.data || [],
     featureDrafts: featureDraftsQuery.data || [],
+    dailyNoteDrafts: dailyNoteDraftsQuery.data || [],
+    instructorResponseDrafts: instructorResponseDraftsQuery.data || [],
     allDrafts: allDraftsQuery.data || [],
     isLoadingBugDrafts: bugDraftsQuery.isLoading,
     isLoadingFeatureDrafts: featureDraftsQuery.isLoading,
+    isLoadingDailyNoteDrafts: dailyNoteDraftsQuery.isLoading,
+    isLoadingInstructorResponseDrafts: instructorResponseDraftsQuery.isLoading,
     isLoadingAllDrafts: allDraftsQuery.isLoading
   }
 }

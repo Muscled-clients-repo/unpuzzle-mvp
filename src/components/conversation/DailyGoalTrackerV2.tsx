@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { Target, Calendar, MessageCircle, Plus, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -17,6 +17,7 @@ import { LoadingSpinner, ErrorFallback } from '@/components/common'
 import { DailyNoteImage } from '@/app/student/goals/components/DailyNoteImage'
 import { DailyNoteImageViewer } from '@/app/student/goals/components/DailyNoteImageViewer'
 import { useUITransitionStore } from '@/stores/ui-transition-store'
+import { useDraftQueries, useDraftMutations } from '@/hooks/use-draft-websocket'
 import { formatDate } from '@/lib/utils'
 import { QuestionnaireReview } from '@/components/instructor/QuestionnaireReview'
 
@@ -67,6 +68,14 @@ export function DailyGoalTrackerV2({
     dailyEntry: null,
     initialIndex: 0
   })
+
+  // Draft management
+  const [currentDraftId, setCurrentDraftId] = useState<string | undefined>()
+  const [instructorDraftId, setInstructorDraftId] = useState<string | undefined>()
+
+  // Draft system hooks
+  const { dailyNoteDrafts, instructorResponseDrafts } = useDraftQueries()
+  const { deleteDraft } = useDraftMutations()
 
   // UI Transition Store (Zustand layer for UI state)
   const { setImageTransition, clearImageTransition } = useUITransitionStore()
@@ -285,6 +294,28 @@ export function DailyGoalTrackerV2({
       initialIndex: Math.max(0, initialIndex)
     })
   }
+
+  // Auto-load draft on mount for today's entry
+  useEffect(() => {
+    if (!isInstructorView && dailyNoteDrafts.length > 0) {
+      const today = new Date().toISOString().split('T')[0]
+      const todayDraft = dailyNoteDrafts.find(draft =>
+        draft.metadata?.targetDate === today
+      )
+
+      if (todayDraft && todayDraft.description) {
+        console.log('[DRAFT AUTO-LOAD] Found draft for today:', todayDraft)
+        // Auto-show composer with draft loaded
+        setShowAddMore(true)
+        setCurrentDraftId(todayDraft.id)
+        messageForm.setMessageType('daily_note')
+        messageForm.setTargetDate(today)
+        messageForm.setMessageText(todayDraft.description)
+      } else {
+        console.log('[DRAFT AUTO-LOAD] No draft found for today. Total drafts:', dailyNoteDrafts.length)
+      }
+    }
+  }, [dailyNoteDrafts.length, isInstructorView, messageForm])
 
   const handleAddMore = () => {
     setShowAddMore(true)
@@ -569,6 +600,8 @@ export function DailyGoalTrackerV2({
                           isEditMode={true}
                           originalMessageText={editingStudentNote.originalContent}
                           originalAttachments={editingStudentNote.originalAttachments}
+                          messageType="daily_note"
+                          targetDate={entry.date}
                           onCancel={() => {
                             setEditingStudentNote(null)
                             messageForm.resetForm()
@@ -722,9 +755,14 @@ export function DailyGoalTrackerV2({
                           existingAttachments={messageForm.existingAttachments}
                           onRemoveExistingAttachment={messageForm.removeExistingAttachment}
                           placeholder="What did you accomplish today to get closer to your goal..."
+                          messageType="daily_note"
+                          targetDate={entry.date}
+                          currentDraftId={currentDraftId}
+                          onDraftIdChange={setCurrentDraftId}
                           onCancel={() => {
                             setShowAddMore(false)
                             messageForm.resetForm()
+                            setCurrentDraftId(undefined)
                           }}
                           onSend={async () => {
                             if (!messageForm.isValid) return
@@ -752,9 +790,15 @@ export function DailyGoalTrackerV2({
                                 attachments: formData
                               })
 
+                              // Delete draft after successful send
+                              if (currentDraftId) {
+                                deleteDraft(currentDraftId)
+                              }
+
                               // Reset form on success
                               messageForm.resetForm()
                               setShowAddMore(false)
+                              setCurrentDraftId(undefined)
 
                             } catch (error) {
                               console.error('Failed to send message:', error)
@@ -921,9 +965,14 @@ export function DailyGoalTrackerV2({
                       existingAttachments={messageForm.existingAttachments}
                       onRemoveExistingAttachment={messageForm.removeExistingAttachment}
                       placeholder="Provide feedback, encouragement, or assign tasks..."
+                      messageType="instructor_response"
+                      targetDate={entry.date}
+                      currentDraftId={instructorDraftId}
+                      onDraftIdChange={setInstructorDraftId}
                       onCancel={() => {
                         setRespondingToDay(null)
                         messageForm.resetForm()
+                        setInstructorDraftId(undefined)
                       }}
                       onSend={async () => {
                         if (!messageForm.isValid) return
@@ -951,9 +1000,15 @@ export function DailyGoalTrackerV2({
                             attachments: formData
                           })
 
+                          // Delete draft after successful send
+                          if (instructorDraftId) {
+                            deleteDraft(instructorDraftId)
+                          }
+
                           // Reset form on success
                           messageForm.resetForm()
                           setRespondingToDay(null)
+                          setInstructorDraftId(undefined)
 
                         } catch (error) {
                           console.error('Failed to send instructor response:', error)

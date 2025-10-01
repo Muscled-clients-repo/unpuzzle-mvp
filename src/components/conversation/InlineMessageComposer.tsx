@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useState, useEffect } from 'react'
+import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
@@ -8,13 +8,15 @@ import {
   Send,
   Paperclip,
   X,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Check
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { DailyNoteImage } from '@/app/student/goals/components/DailyNoteImage'
 import { DailyNoteImageViewer } from '@/app/student/goals/components/DailyNoteImageViewer'
 import { UploadProgress } from '@/components/ui/UploadProgress'
 import { useUITransitionStore } from '@/stores/ui-transition-store'
+import { useDraftMutations } from '@/hooks/use-draft-websocket'
 import type { ExistingAttachment } from '@/hooks/use-message-form'
 
 interface InlineMessageComposerProps {
@@ -36,6 +38,10 @@ interface InlineMessageComposerProps {
   isEditMode?: boolean
   originalMessageText?: string
   originalAttachments?: ExistingAttachment[]
+  messageType: 'daily_note' | 'instructor_response'
+  targetDate: string
+  currentDraftId?: string
+  onDraftIdChange?: (draftId: string | undefined) => void
 }
 
 /**
@@ -60,12 +66,24 @@ export function InlineMessageComposer({
   onDragOver,
   isEditMode = false,
   originalMessageText = '',
-  originalAttachments = []
+  originalAttachments = [],
+  messageType,
+  targetDate,
+  currentDraftId,
+  onDraftIdChange
 }: InlineMessageComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // UI Transition Store for file-based image transitions (architecture compliant)
   const { getTransitionByFile, setImageTransition } = useUITransitionStore()
+
+  // Draft system
+  const { performAutoSave, isAutoSaving, deleteDraft } = useDraftMutations()
+  const [showDraftSaved, setShowDraftSaved] = useState(false)
+  const [lastSavedValues, setLastSavedValues] = useState({
+    messageText: '',
+    fileCount: 0
+  })
 
   // Image viewer state
   const [imageViewer, setImageViewer] = useState<{
@@ -124,6 +142,55 @@ export function InlineMessageComposer({
       })
     }
   }, [])
+
+  // Auto-save functionality (skip for edit mode)
+  const performSimpleAutoSave = useCallback(async () => {
+    if (!isEditMode && messageText.trim()) {
+      const draftData = {
+        id: currentDraftId,
+        type: messageType,
+        title: `${messageType === 'daily_note' ? 'Daily Note' : 'Instructor Response'} - ${targetDate}`,
+        description: messageText,
+        metadata: {
+          targetDate,
+          fileNames: attachedFiles.map(f => f.name)
+        }
+      }
+
+      try {
+        const result = await performAutoSave(draftData)
+        if (result?.success && result.draft?.id) {
+          if (!currentDraftId && onDraftIdChange) {
+            onDraftIdChange(result.draft.id)
+          }
+        }
+        setShowDraftSaved(true)
+        setTimeout(() => setShowDraftSaved(false), 2000)
+      } catch (error) {
+        console.error('Auto-save failed:', error)
+      }
+    }
+  }, [messageText, attachedFiles, messageType, targetDate, currentDraftId, performAutoSave, onDraftIdChange, isEditMode])
+
+  // Auto-save when content changes (skip for edit mode)
+  useEffect(() => {
+    if (!isEditMode) {
+      const hasChanged =
+        messageText !== lastSavedValues.messageText ||
+        attachedFiles.length !== lastSavedValues.fileCount
+
+      if (hasChanged && messageText.trim()) {
+        const timer = setTimeout(async () => {
+          await performSimpleAutoSave()
+          setLastSavedValues({
+            messageText,
+            fileCount: attachedFiles.length
+          })
+        }, 1500) // 1.5 seconds debounce
+        return () => clearTimeout(timer)
+      }
+    }
+  }, [messageText, attachedFiles.length, lastSavedValues, performSimpleAutoSave, isEditMode])
 
   // Change detection for edit mode
   const hasContentChanged = isEditMode ? messageText.trim() !== originalMessageText.trim() : false
@@ -282,13 +349,19 @@ export function InlineMessageComposer({
         {/* Character count, validation, and file attach button */}
         <div className="flex justify-between items-center text-xs">
           <div className="flex items-center gap-3">
-            <span className="text-gray-500">{messageText.length} characters</span>
+            <span className="text-gray-500 dark:text-gray-400">{messageText.length} characters</span>
+            {!isEditMode && (showDraftSaved || isAutoSaving) && (
+              <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                <Check className="h-3 w-3" />
+                {isAutoSaving ? 'Saving...' : 'Draft saved'}
+              </div>
+            )}
             <Button
               variant="ghost"
               size="sm"
               onClick={() => fileInputRef.current?.click()}
               disabled={isLoading}
-              className="h-6 px-2 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800"
+              className="h-6 px-2 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
             >
               <Paperclip className="w-3 h-3 mr-1" />
               Attach

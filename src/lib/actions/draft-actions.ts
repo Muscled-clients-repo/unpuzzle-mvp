@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache'
 
 export interface DraftData {
   id?: string
-  type: 'bug_report' | 'feature_request'
+  type: 'bug_report' | 'feature_request' | 'daily_note' | 'instructor_response'
   title?: string
   description?: string
   metadata?: any
@@ -66,7 +66,7 @@ export async function saveDraft(draftData: DraftData) {
   }
 }
 
-export async function getDrafts(type?: 'bug_report' | 'feature_request') {
+export async function getDrafts(type?: 'bug_report' | 'feature_request' | 'daily_note' | 'instructor_response') {
   const supabase = await createClient()
 
   try {
