@@ -147,6 +147,13 @@ export function useUpdateMessage() {
       // Snapshot the previous value
       const previousData = queryClient.getQueriesData({ queryKey: ['conversation'] })
 
+      // Transform camelCase updates to snake_case for cache (database uses snake_case)
+      const cacheUpdates = { ...updates }
+      if (updates.draftContent !== undefined) {
+        cacheUpdates.draft_content = updates.draftContent
+        delete cacheUpdates.draftContent
+      }
+
       // Optimistically update all conversation queries containing this message
       queryClient.setQueriesData({ queryKey: ['conversation'] }, (oldData: any) => {
         if (!oldData?.messages) return oldData
@@ -155,7 +162,7 @@ export function useUpdateMessage() {
           ...oldData,
           messages: oldData.messages.map((msg: any) =>
             msg.id === messageId
-              ? { ...msg, ...updates, updated_at: new Date().toISOString() }
+              ? { ...msg, ...cacheUpdates, updated_at: new Date().toISOString() }
               : msg
           )
         }
@@ -173,8 +180,65 @@ export function useUpdateMessage() {
       toast.error('Failed to update message')
     },
     onSuccess: (data, variables) => {
-      // WebSocket will handle real-time updates, just show success
+      // Invalidate conversation queries to ensure fresh data (WebSocket backup)
+      queryClient.invalidateQueries({ queryKey: ['conversation'] })
+
       toast.success('Message updated successfully!')
+    }
+  })
+}
+
+/**
+ * Hook for publishing draft edits with optimistic updates
+ */
+export function usePublishDraftEdit() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ messageId, newContent }: { messageId: string; newContent: string }) => {
+      const { publishDraftEdit } = await import('@/lib/actions/conversation-actions')
+      return publishDraftEdit(messageId)
+    },
+    onMutate: async ({ messageId, newContent }) => {
+      // Cancel any outgoing refetches for conversation data
+      await queryClient.cancelQueries({ queryKey: ['conversation'] })
+
+      // Snapshot the previous value
+      const previousData = queryClient.getQueriesData({ queryKey: ['conversation'] })
+
+      // Optimistically update all conversation queries containing this message
+      queryClient.setQueriesData({ queryKey: ['conversation'] }, (oldData: any) => {
+        if (!oldData?.messages) return oldData
+
+        return {
+          ...oldData,
+          messages: oldData.messages.map((msg: any) =>
+            msg.id === messageId
+              ? {
+                  ...msg,
+                  content: newContent, // Use the new content passed in
+                  draft_content: null, // Clear draft_content
+                  updated_at: new Date().toISOString()
+                }
+              : msg
+          )
+        }
+      })
+
+      return { previousData }
+    },
+    onError: (err, variables, context) => {
+      // Rollback optimistic updates
+      if (context?.previousData) {
+        context.previousData.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+      toast.error('Failed to publish draft edit')
+    },
+    onSuccess: () => {
+      // WebSocket will handle real-time updates, just show success
+      toast.success('Changes published successfully!')
     }
   })
 }

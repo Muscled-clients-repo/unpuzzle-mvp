@@ -47,7 +47,7 @@ export function CommunityPostsFeed({ posts, userRole = 'student' }: CommunityPos
     {
       id: '1',
       author: { name: 'Mahtab', role: 'instructor', goal: 'Goal: $500K Agency Empire' },
-      content: '🎉 Welcome to our founding students! This week we\'re focusing on setting up your first Claude Code project. Don\'t forget to join tomorrow\'s live Q&A at 3 PM EST.',
+      content: '🎉 Welcome to our founding students! This week we\'re focusing on setting up your first Claude Code project. Don\'t forget to join tomorrow\'s live Q&A at 3 PM PST.',
       timestamp: '2 hours ago',
       isPinned: true,
       likes: 12,

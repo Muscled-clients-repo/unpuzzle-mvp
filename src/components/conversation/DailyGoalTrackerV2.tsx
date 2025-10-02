@@ -5,8 +5,8 @@ import { Target, Calendar, MessageCircle, Plus, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { useConversationData, useCreateMessageWithAttachments, useUpdateMessage, useUploadMessageAttachments, useDeleteMessageAttachment } from '@/hooks/use-conversation-data'
-import { useQueryClient } from '@tanstack/react-query'
+import { useConversationData, useCreateMessageWithAttachments, useUpdateMessage, useUploadMessageAttachments, useDeleteMessageAttachment, usePublishDraftEdit } from '@/hooks/use-conversation-data'
+import { updateMessage } from '@/lib/actions/conversation-actions'
 import { useMessageForm, type ExistingAttachment } from '@/hooks/use-message-form'
 import { useConversationUI } from '@/hooks/use-conversation-ui'
 import { useConversationWebSocket } from '@/hooks/use-conversation-websocket'
@@ -17,7 +17,7 @@ import { LoadingSpinner, ErrorFallback } from '@/components/common'
 import { DailyNoteImage } from '@/app/student/goals/components/DailyNoteImage'
 import { DailyNoteImageViewer } from '@/app/student/goals/components/DailyNoteImageViewer'
 import { useUITransitionStore } from '@/stores/ui-transition-store'
-import { useDraftQueries, useDraftMutations } from '@/hooks/use-draft-websocket'
+import { useConversationDrafts } from '@/hooks/use-conversation-drafts'
 import { formatDate } from '@/lib/utils'
 import { QuestionnaireReview } from '@/components/instructor/QuestionnaireReview'
 
@@ -58,7 +58,7 @@ export function DailyGoalTrackerV2({
 }: DailyGoalTrackerV2Props) {
   const [respondingToDay, setRespondingToDay] = useState<number | null>(null)
   const [editingNote, setEditingNote] = useState<string | null>(null)
-  const [editingResponse, setEditingResponse] = useState<{ messageId: string; day: number } | null>(null)
+  const [editingResponse, setEditingResponse] = useState<{ messageId: string; day: number; originalContent: string } | null>(null)
   const [imageViewer, setImageViewer] = useState<{
     isOpen: boolean
     dailyEntry: DailyEntry | null
@@ -73,14 +73,12 @@ export function DailyGoalTrackerV2({
   const [currentDraftId, setCurrentDraftId] = useState<string | undefined>()
   const [instructorDraftId, setInstructorDraftId] = useState<string | undefined>()
 
-  // Draft system hooks
-  const { dailyNoteDrafts, instructorResponseDrafts } = useDraftQueries()
-  const { deleteDraft } = useDraftMutations()
+  // Note: Auto-save is disabled in edit mode, using manual Save Draft button instead
 
   // UI Transition Store (Zustand layer for UI state)
   const { setImageTransition, clearImageTransition } = useUITransitionStore()
 
-  // Get conversation data
+  // Get conversation data (must come before draft hooks that depend on conversationData)
   const {
     data: conversationData,
     isLoading,
@@ -90,6 +88,11 @@ export function DailyGoalTrackerV2({
     startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days ago
     instructorId
   })
+
+  // Conversation draft system hooks (depends on conversationData)
+  const { drafts: conversationDrafts, isLoading: isDraftsLoading } = useConversationDrafts(
+    conversationData?.conversation?.id
+  )
 
 
   // Form and UI state for message composer
@@ -104,6 +107,7 @@ export function DailyGoalTrackerV2({
   const updateMessageMutation = useUpdateMessage()
   const uploadAttachmentsMutation = useUploadMessageAttachments()
   const deleteAttachmentMutation = useDeleteMessageAttachment()
+  const publishDraftEditMutation = usePublishDraftEdit()
 
   // Get current user for WebSocket connection
   const { user } = useAppStore()
@@ -243,7 +247,7 @@ export function DailyGoalTrackerV2({
     messageForm.setAttachedFiles([])
   }
 
-  const handleEditStudentNote = (noteId: string, currentContent: string, targetDate: string, day: number, attachments: any[] = []) => {
+  const handleEditStudentNote = (noteId: string, currentContent: string, targetDate: string, day: number, attachments: any[] = [], draftContent?: string | null) => {
     // Pre-populate existing attachments
     const existingAttachments = attachments.map(att => ({
       id: att.id,
@@ -253,6 +257,9 @@ export function DailyGoalTrackerV2({
       mimeType: att.mime_type
     }))
 
+    // Use draft_content if it exists, otherwise use published content
+    const contentToEdit = draftContent || currentContent
+
     setEditingStudentNote({
       messageId: noteId,
       day,
@@ -260,17 +267,26 @@ export function DailyGoalTrackerV2({
       originalAttachments: existingAttachments
     })
     setShowAddMore(false) // Make sure add more is cleared
-    messageForm.setMessageText(currentContent)
+    setCurrentDraftId(undefined) // Clear draft ID to prevent auto-save conflicts in edit mode
+    messageForm.setMessageText(contentToEdit)
     messageForm.setMessageType('daily_note')
     messageForm.setTargetDate(targetDate)
     messageForm.setAttachedFiles([])
     messageForm.setExistingAttachments(existingAttachments)
   }
 
-  const handleEditResponse = (responseId: string, currentContent: string, targetDate: string, day: number) => {
-    setEditingResponse({ messageId: responseId, day })
+  const handleEditResponse = (responseId: string, currentContent: string, targetDate: string, day: number, draftContent?: string | null) => {
+    // Use draft_content if it exists, otherwise use published content
+    const contentToEdit = draftContent || currentContent
+
+    setEditingResponse({
+      messageId: responseId,
+      day,
+      originalContent: currentContent
+    })
     setRespondingToDay(null) // Make sure responding is cleared
-    messageForm.setMessageText(currentContent)
+    setInstructorDraftId(undefined) // Clear draft ID to prevent auto-save conflicts in edit mode
+    messageForm.setMessageText(contentToEdit)
     messageForm.setMessageType('instructor_response')
     messageForm.setTargetDate(targetDate)
     messageForm.setAttachedFiles([])
@@ -295,27 +311,79 @@ export function DailyGoalTrackerV2({
     })
   }
 
-  // Auto-load draft on mount for today's entry
+  // Auto-restore edit mode for messages with pending draft edits
   useEffect(() => {
-    if (!isInstructorView && dailyNoteDrafts.length > 0) {
-      const today = new Date().toISOString().split('T')[0]
-      const todayDraft = dailyNoteDrafts.find(draft =>
-        draft.metadata?.targetDate === today
+    if (!conversationData?.messages || editingStudentNote || editingResponse) return
+
+    const messages = conversationData.messages
+
+    // Find first message with draft_content for current user
+    if (!isInstructorView) {
+      // Student view: check student notes for draft_content
+      const noteWithDraft = messages.find(msg =>
+        msg.message_type === 'daily_note' &&
+        msg.draft_content &&
+        msg.sender_id === user?.id
       )
 
-      if (todayDraft && todayDraft.description) {
+      if (noteWithDraft) {
+        console.log('[DRAFT EDIT RESTORE] Auto-restoring edit mode for student note:', noteWithDraft.id)
+        handleEditStudentNote(
+          noteWithDraft.id,
+          noteWithDraft.content,
+          noteWithDraft.target_date || new Date().toISOString().split('T')[0],
+          0, // day number doesn't matter for this
+          noteWithDraft.attachments || [],
+          noteWithDraft.draft_content
+        )
+        return
+      }
+    } else {
+      // Instructor view: check instructor responses for draft_content
+      const responseWithDraft = messages.find(msg =>
+        msg.message_type === 'instructor_response' &&
+        msg.draft_content &&
+        msg.sender_id === user?.id
+      )
+
+      if (responseWithDraft) {
+        console.log('[DRAFT EDIT RESTORE] Auto-restoring edit mode for instructor response:', responseWithDraft.id)
+        handleEditResponse(
+          responseWithDraft.id,
+          responseWithDraft.content,
+          responseWithDraft.target_date || new Date().toISOString().split('T')[0],
+          0, // day number doesn't matter for this
+          responseWithDraft.draft_content
+        )
+        return
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationData?.messages?.length, isInstructorView, user?.id])
+
+  // Auto-load draft on mount for today's entry (using conversation drafts)
+  // Only run once on initial mount, not on every draft update
+  useEffect(() => {
+    if (!isInstructorView && conversationDrafts.length > 0 && !showAddMore && !editingStudentNote) {
+      const today = new Date().toISOString().split('T')[0]
+      const todayDraft = conversationDrafts.find(draft =>
+        draft.message_type === 'daily_note' && draft.target_date === today
+      )
+
+      if (todayDraft && todayDraft.content && !currentDraftId) {
         console.log('[DRAFT AUTO-LOAD] Found draft for today:', todayDraft)
         // Auto-show composer with draft loaded
         setShowAddMore(true)
         setCurrentDraftId(todayDraft.id)
         messageForm.setMessageType('daily_note')
         messageForm.setTargetDate(today)
-        messageForm.setMessageText(todayDraft.description)
+        messageForm.setMessageText(todayDraft.content)
       } else {
-        console.log('[DRAFT AUTO-LOAD] No draft found for today. Total drafts:', dailyNoteDrafts.length)
+        console.log('[DRAFT AUTO-LOAD] No draft found for today. Total drafts:', conversationDrafts.length)
       }
     }
-  }, [dailyNoteDrafts.length, isInstructorView, messageForm])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationDrafts.length, isInstructorView, showAddMore, editingStudentNote, currentDraftId])
 
   const handleAddMore = () => {
     setShowAddMore(true)
@@ -566,6 +634,11 @@ export function DailyGoalTrackerV2({
                               hour12: true
                             })}
                           </span>
+                          {entry.studentNotes[0].draft_content && !isInstructorView && (
+                            <Badge variant="outline" className="text-xs px-2 py-0 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700">
+                              Unsaved edits
+                            </Badge>
+                          )}
                           {!isInstructorView && (
                             <button
                               onClick={(e) => {
@@ -576,7 +649,8 @@ export function DailyGoalTrackerV2({
                                   entry.studentNotes[0].content,
                                   entry.studentNotes[0].target_date || entry.date,
                                   entry.day,
-                                  entry.studentNotes[0].attachments || []
+                                  entry.studentNotes[0].attachments || [],
+                                  entry.studentNotes[0].draft_content
                                 )
                               }}
                               className="text-xs text-blue-600 hover:text-blue-700 font-medium"
@@ -588,110 +662,130 @@ export function DailyGoalTrackerV2({
                       </div>
 
                       {editingStudentNote?.messageId === entry.studentNotes[0].id ? (
-                        <InlineMessageComposer
-                          messageText={messageForm.messageText}
-                          onMessageChange={messageForm.setMessageText}
-                          attachedFiles={messageForm.attachedFiles}
-                          onAddFiles={messageForm.addFiles}
-                          onRemoveFile={messageForm.removeFile}
-                          existingAttachments={messageForm.existingAttachments}
-                          onRemoveExistingAttachment={messageForm.removeExistingAttachment}
-                          placeholder="What did you accomplish today to get closer to your goal..."
-                          isEditMode={true}
-                          originalMessageText={editingStudentNote.originalContent}
-                          originalAttachments={editingStudentNote.originalAttachments}
-                          messageType="daily_note"
-                          targetDate={entry.date}
-                          onCancel={() => {
-                            setEditingStudentNote(null)
-                            messageForm.resetForm()
-                          }}
-                          onSend={async () => {
-                            if (!messageForm.isValid) return
+                        <div className="space-y-3">
+                          {/* Show published message above edit area */}
+                          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-xs font-medium text-blue-700 dark:text-blue-300">Published message:</span>
+                              <Badge variant="outline" className="text-xs px-2 py-0 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700">
+                                Read-only
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                              {editingStudentNote.originalContent}
+                            </p>
+                          </div>
 
-                            const messageId = editingStudentNote.messageId
-                            const currentMessage = entry.studentNotes[0]
-                            const newContent = messageForm.messageText
-
-                            // Check if anything actually changed
-                            const originalAttachmentIds = (currentMessage.attachments || []).map(att => att.id).sort()
-                            const currentAttachmentIds = messageForm.existingAttachments.map(att => att.id).sort()
-                            const hasNewFiles = messageForm.attachedFiles.length > 0
-                            const contentChanged = newContent !== currentMessage.content
-                            const attachmentsChanged = JSON.stringify(originalAttachmentIds) !== JSON.stringify(currentAttachmentIds)
-
-                            // If nothing changed, just exit edit mode
-                            if (!contentChanged && !attachmentsChanged && !hasNewFiles) {
+                          {/* Edit composer */}
+                          <InlineMessageComposer
+                            messageText={messageForm.messageText}
+                            onMessageChange={messageForm.setMessageText}
+                            attachedFiles={messageForm.attachedFiles}
+                            onAddFiles={messageForm.addFiles}
+                            onRemoveFile={messageForm.removeFile}
+                            existingAttachments={messageForm.existingAttachments}
+                            onRemoveExistingAttachment={messageForm.removeExistingAttachment}
+                            placeholder="Edit your message..."
+                            isEditMode={true}
+                            editingMessageId={editingStudentNote.messageId}
+                            originalMessageText={editingStudentNote.originalContent}
+                            originalAttachments={editingStudentNote.originalAttachments}
+                            messageType="daily_note"
+                            targetDate={entry.date}
+                            conversationId={conversationData?.conversation?.id}
+                            onSaveDraft={async () => {
+                              // Manual save to draft_content immediately
+                              if (editingStudentNote.messageId && messageForm.messageText.trim()) {
+                                await updateMessage(editingStudentNote.messageId, {
+                                  draftContent: messageForm.messageText
+                                })
+                              }
+                            }}
+                            onCancel={() => {
                               setEditingStudentNote(null)
                               messageForm.resetForm()
-                              return
-                            }
+                            }}
+                            onSend={async () => {
+                              if (!messageForm.isValid) return
 
-                            try {
-                              // Handle removed attachments first (mutations handle optimistic updates)
-                              if (attachmentsChanged) {
-                                const removedAttachmentIds = originalAttachmentIds.filter(id =>
-                                  !currentAttachmentIds.includes(id)
-                                )
+                              const messageId = editingStudentNote.messageId
+                              const newContent = messageForm.messageText
 
-                                // Delete removed attachments - mutation handles optimistic updates
-                                for (const attachmentId of removedAttachmentIds) {
-                                  console.log('Deleting attachment:', attachmentId)
-                                  deleteAttachmentMutation.mutate(attachmentId)
-                                }
+                              // Check if anything actually changed
+                              const originalAttachmentIds = editingStudentNote.originalAttachments.map(att => att.id).sort()
+                              const currentAttachmentIds = messageForm.existingAttachments.map(att => att.id).sort()
+                              const hasNewFiles = messageForm.attachedFiles.length > 0
+                              const contentChanged = newContent.trim() !== editingStudentNote.originalContent.trim()
+                              const attachmentsChanged = JSON.stringify(originalAttachmentIds) !== JSON.stringify(currentAttachmentIds)
+
+                              // If nothing changed, just exit edit mode
+                              if (!contentChanged && !attachmentsChanged && !hasNewFiles) {
+                                setEditingStudentNote(null)
+                                messageForm.resetForm()
+                                return
                               }
 
-                              // Handle file attachments if any
-                              if (hasNewFiles) {
-                                // Upload new files as attachments to existing message
-                                const formData = new FormData()
-                                messageForm.attachedFiles.forEach((file, index) => {
-                                  formData.append(`file_${index}`, file)
-                                })
+                              try {
+                                // Handle removed attachments first
+                                if (attachmentsChanged) {
+                                  const removedAttachmentIds = originalAttachmentIds.filter(id =>
+                                    !currentAttachmentIds.includes(id)
+                                  )
 
-                                // First update the message content
-                                if (contentChanged) {
+                                  for (const attachmentId of removedAttachmentIds) {
+                                    deleteAttachmentMutation.mutate(attachmentId)
+                                  }
+                                }
+
+                                // Handle file attachments if any
+                                if (hasNewFiles) {
+                                  const formData = new FormData()
+                                  messageForm.attachedFiles.forEach((file, index) => {
+                                    formData.append(`file_${index}`, file)
+                                  })
+
+                                  // Publish content directly (bypass draft system)
+                                  if (contentChanged) {
+                                    await updateMessageMutation.mutateAsync({
+                                      messageId,
+                                      updates: {
+                                        content: newContent,
+                                        draft_content: null // Clear draft
+                                      }
+                                    })
+                                  }
+
+                                  // Then add the new attachments
+                                  await uploadAttachmentsMutation.mutateAsync({
+                                    messageId,
+                                    files: formData
+                                  })
+                                } else if (contentChanged) {
+                                  // Publish content directly (bypass draft system)
                                   await updateMessageMutation.mutateAsync({
                                     messageId,
                                     updates: {
                                       content: newContent,
-                                      metadata: messageForm.metadata
+                                      draftContent: null // Clear draft (camelCase for server action)
                                     }
                                   })
                                 }
 
-                                // Then add the new attachments - optimistic updates in mutation handle transitions
-                                await uploadAttachmentsMutation.mutateAsync({
-                                  messageId,
-                                  files: formData
-                                })
-                              } else if (contentChanged) {
-                                // Update just the content if no new files but content changed
-                                await updateMessageMutation.mutateAsync({
-                                  messageId,
-                                  updates: {
-                                    content: newContent,
-                                    metadata: messageForm.metadata
-                                  }
-                                })
+                                // Exit edit mode and reset form
+                                setEditingStudentNote(null)
+                                messageForm.resetForm()
+
+                              } catch (error) {
+                                console.error('Failed to update student note:', error)
                               }
-
-                              // Exit edit mode and reset form after successful operations
-                              setEditingStudentNote(null)
-                              messageForm.resetForm()
-
-                            } catch (error) {
-                              console.error('Failed to update student note:', error)
-                              // Keep edit mode on error so user can retry
-                              // Don't need to revert - edit mode is still active
-                            }
-                          }}
+                            }}
                           isLoading={updateMessageMutation.isPending || uploadAttachmentsMutation.isPending}
                           isDirty={messageForm.isDirty}
                           isValid={messageForm.isValid}
                           isDragOver={ui.fileUpload.isDragOver}
                           onDragOver={ui.setDragOver}
                         />
+                        </div>
                       ) : (
                         <>
                           <p className="text-gray-800 dark:text-gray-100 text-sm leading-relaxed whitespace-pre-line">
@@ -759,6 +853,7 @@ export function DailyGoalTrackerV2({
                           targetDate={entry.date}
                           currentDraftId={currentDraftId}
                           onDraftIdChange={setCurrentDraftId}
+                          conversationId={conversationData?.conversation?.id}
                           onCancel={() => {
                             setShowAddMore(false)
                             messageForm.resetForm()
@@ -852,13 +947,18 @@ export function DailyGoalTrackerV2({
                                   minute: '2-digit'
                                 })}
                               </span>
+                              {response.draft_content && isInstructorView && (
+                                <Badge variant="outline" className="text-xs px-2 py-0 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700">
+                                  Unsaved edits
+                                </Badge>
+                              )}
                             </div>
                             {isInstructorView && (
                               <button
                                 onClick={(e) => {
                                   e.preventDefault()
                                   e.stopPropagation()
-                                  handleEditResponse(response.id, response.content, response.target_date || entry.date, entry.day)
+                                  handleEditResponse(response.id, response.content, response.target_date || entry.date, entry.day, response.draft_content)
                                 }}
                                 className="text-xs text-green-600 hover:text-green-700 font-medium"
                               >
@@ -867,48 +967,71 @@ export function DailyGoalTrackerV2({
                             )}
                           </div>
                           {editingResponse?.messageId === response.id ? (
-                            <div className="space-y-2">
-                              <textarea
-                                value={messageForm.messageText}
-                                onChange={(e) => messageForm.setMessageText(e.target.value)}
-                                className="w-full p-2 text-sm bg-white dark:bg-green-800 border border-green-300 dark:border-green-600 rounded resize-none min-h-[60px]"
-                                placeholder="Edit your response..."
-                              />
-                              <div className="flex justify-end gap-2">
-                                <button
-                                  onClick={() => {
-                                    setEditingResponse(null)
-                                    messageForm.resetForm()
-                                  }}
-                                  className="px-3 py-1 text-xs text-green-600 hover:text-green-700"
-                                >
-                                  Cancel
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    if (!messageForm.messageText.trim()) return
+                            <div className="space-y-3">
+                              {/* Show published message above edit area */}
+                              <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="text-xs font-medium text-green-700 dark:text-green-300">Published message:</span>
+                                  <Badge variant="outline" className="text-xs px-2 py-0 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700">
+                                    Read-only
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                                  {editingResponse.originalContent}
+                                </p>
+                              </div>
 
-                                    const newContent = messageForm.messageText
-                                    const messageId = editingResponse.messageId
+                              {/* Edit textarea */}
+                              <div className="space-y-2">
+                                <textarea
+                                  value={messageForm.messageText}
+                                  onChange={(e) => messageForm.setMessageText(e.target.value)}
+                                  className="w-full p-2 text-sm bg-white dark:bg-green-800 border border-green-300 dark:border-green-600 rounded resize-none min-h-[60px]"
+                                  placeholder="Edit your response..."
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setEditingResponse(null)
+                                      messageForm.resetForm()
+                                    }}
+                                    className="px-3 py-1 text-xs text-green-600 hover:text-green-700"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      if (!messageForm.messageText.trim()) return
 
-                                    // Exit edit mode immediately - optimistic update handled by mutation
-                                    setEditingResponse(null)
-                                    messageForm.resetForm()
+                                      const messageId = editingResponse.messageId
+                                      const newContent = messageForm.messageText
 
-                                    // Update with optimistic cache update built into the hook
-                                    updateMessageMutation.mutate({
-                                      messageId,
-                                      updates: {
-                                        content: newContent,
-                                        metadata: messageForm.metadata
+                                      // Check if content actually changed
+                                      const contentChanged = newContent.trim() !== editingResponse.originalContent.trim()
+
+                                      if (!contentChanged) {
+                                        // No changes, just exit edit mode
+                                        setEditingResponse(null)
+                                        messageForm.resetForm()
+                                        return
                                       }
-                                    })
-                                  }}
-                                  disabled={!messageForm.messageText.trim() || updateMessageMutation.isPending}
-                                  className="px-3 py-1 text-xs bg-green-600 dark:bg-green-500 text-white rounded hover:bg-green-700 dark:hover:bg-green-600 disabled:opacity-50"
-                                >
-                                  {updateMessageMutation.isPending ? 'Saving...' : 'Save'}
-                                </button>
+
+                                      // Instructor responses use plain textarea (no auto-save), so update directly
+                                      await updateMessageMutation.mutateAsync({
+                                        messageId,
+                                        updates: { content: newContent }
+                                      })
+
+                                      // Exit edit mode after save
+                                      setEditingResponse(null)
+                                      messageForm.resetForm()
+                                    }}
+                                    disabled={!messageForm.messageText.trim() || updateMessageMutation.isPending}
+                                    className="px-3 py-1 text-xs bg-green-600 dark:bg-green-500 text-white rounded hover:bg-green-700 dark:hover:bg-green-600 disabled:opacity-50"
+                                  >
+                                    {updateMessageMutation.isPending ? 'Saving...' : 'Save'}
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           ) : (
@@ -969,6 +1092,7 @@ export function DailyGoalTrackerV2({
                       targetDate={entry.date}
                       currentDraftId={instructorDraftId}
                       onDraftIdChange={setInstructorDraftId}
+                      conversationId={conversationData?.conversation?.id}
                       onCancel={() => {
                         setRespondingToDay(null)
                         messageForm.resetForm()

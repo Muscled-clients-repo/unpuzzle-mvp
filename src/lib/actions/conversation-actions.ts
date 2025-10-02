@@ -43,6 +43,8 @@ export interface CreateMessageData {
   targetDate?: string
   replyToId?: string
   metadata?: Record<string, any>
+  isDraft?: boolean // For saving as draft
+  visibility?: 'private' | 'shared' // For private vs shared notes
 }
 
 export interface ConversationData {
@@ -137,36 +139,15 @@ export async function getConversationData(studentId: string, options: {
   // Verify user has access to this conversation
   console.log('[CONVERSATION] Checking access for user:', user.id, 'studentId:', studentId)
 
-  let conversationQuery = (serviceClient as any)
+  // Single optimized query: prioritize pending questionnaire reviews, fallback to most recent
+  // Using CASE in ORDER BY to sort pending_instructor_review first
+  const { data: conversation, error: convError } = await (serviceClient as any)
     .from('goal_conversations')
     .select('*')
     .eq('student_id', studentId)
-
-  // For instructors viewing student goals, prioritize pending questionnaire reviews
-  // First try to find pending questionnaire review
-  const { data: pendingConversation } = await (serviceClient as any)
-    .from('goal_conversations')
-    .select('*')
-    .eq('student_id', studentId)
-    .eq('status', 'pending_instructor_review')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
-
-  if (pendingConversation) {
-    console.log('[CONVERSATION] Found pending questionnaire review:', pendingConversation.id)
-    conversationQuery = (serviceClient as any)
-      .from('goal_conversations')
-      .select('*')
-      .eq('id', pendingConversation.id)
-  } else {
-    // Fallback to most recent active conversation
-    conversationQuery = conversationQuery
-      .order('created_at', { ascending: false })
-      .limit(1)
-  }
-
-  const { data: conversation, error: convError } = await conversationQuery.single()
 
   console.log('[CONVERSATION] Query result:', { conversation, convError })
 
@@ -243,6 +224,7 @@ export async function getConversationData(studentId: string, options: {
       .from('conversation_messages')
       .select('*')
       .eq('conversation_id', conversation.id)
+      .eq('is_draft', false)  // Exclude drafts
       .order('created_at', { ascending: true })
 
     if (directError) {
@@ -275,56 +257,12 @@ export async function getConversationData(studentId: string, options: {
       }) || []
     }
   } else {
-    // DEBUG: First check if messages exist in the raw table
-    const { data: rawMessages, error: rawError } = await (serviceClient as any)
-      .from('conversation_messages')
-      .select('id, content, message_type, target_date, created_at')
-      .eq('conversation_id', conversation.id)
-      .limit(5)
-
-    console.log('[CONVERSATION] DEBUG - Raw messages in conversation_messages table:', {
-      rawCount: rawMessages?.length || 0,
-      rawError: rawError?.message || null,
-      rawMessages: rawMessages || []
-    })
-
-    // DEBUG: Also test direct query with manual joins to bypass view issues
-    const { data: debugMessages, error: debugError } = await (serviceClient as any)
-      .from('conversation_messages')
-      .select(`
-        id,
-        conversation_id,
-        sender_id,
-        message_type,
-        content,
-        target_date,
-        created_at,
-        profiles!sender_id (
-          full_name,
-          role,
-          avatar_url
-        )
-      `)
-      .eq('conversation_id', conversation.id)
-      .limit(5)
-
-    console.log('[CONVERSATION] DEBUG - Direct message query with profiles:', {
-      debugCount: debugMessages?.length || 0,
-      debugError: debugError?.message || null,
-      debugMessages: debugMessages?.map(m => ({
-        id: m.id,
-        content: m.content?.substring(0, 30),
-        target_date: m.target_date,
-        hasProfile: !!m.profiles,
-        profileName: m.profiles?.full_name || 'MISSING'
-      })) || []
-    })
-
     // Use conversation_timeline view for regular conversations
     let query = (serviceClient as any)
       .from('conversation_timeline')
       .select('*')
       .eq('conversation_id', conversation.id)
+      .eq('is_draft', false)  // CRITICAL: Exclude draft messages from timeline
 
     console.log('[CONVERSATION] Querying conversation_timeline for conversation:', conversation.id)
     console.log('[CONVERSATION] Query options:', { options, startDate: options.startDate, endDate: options.endDate, limit: options.limit })
@@ -462,7 +400,9 @@ export async function createMessage(data: CreateMessageData) {
       content: data.content,
       target_date: data.targetDate,
       reply_to_id: data.replyToId,
-      metadata: data.metadata || {}
+      metadata: data.metadata || {},
+      is_draft: data.isDraft || false,
+      visibility: data.visibility || 'shared'
     })
     .select()
     .single()
@@ -500,7 +440,10 @@ export async function createMessage(data: CreateMessageData) {
  */
 export async function updateMessage(messageId: string, updates: {
   content?: string
+  draftContent?: string  // For saving draft edits of published messages
   metadata?: Record<string, any>
+  isDraft?: boolean
+  visibility?: 'private' | 'shared'
 }) {
   const user = await requireAuth()
   const serviceClient = createServiceClient()
@@ -508,7 +451,7 @@ export async function updateMessage(messageId: string, updates: {
   // Verify user owns this message
   const { data: message, error: fetchError } = await (serviceClient as any)
     .from('conversation_messages')
-    .select('sender_id, conversation_id')
+    .select('sender_id, conversation_id, is_draft')
     .eq('id', messageId)
     .eq('sender_id', user.id)
     .single()
@@ -518,12 +461,19 @@ export async function updateMessage(messageId: string, updates: {
   }
 
   // Update the message
+  const updateData: any = {
+    updated_at: new Date().toISOString()
+  }
+
+  if (updates.content !== undefined) updateData.content = updates.content
+  if (updates.draftContent !== undefined) updateData.draft_content = updates.draftContent
+  if (updates.metadata !== undefined) updateData.metadata = updates.metadata
+  if (updates.isDraft !== undefined) updateData.is_draft = updates.isDraft
+  if (updates.visibility !== undefined) updateData.visibility = updates.visibility
+
   const { data: updatedMessage, error } = await (serviceClient as any)
     .from('conversation_messages')
-    .update({
-      ...updates,
-      updated_at: new Date().toISOString()
-    })
+    .update(updateData)
     .eq('id', messageId)
     .eq('sender_id', user.id)
     .select()
@@ -608,6 +558,245 @@ export async function getMessagesForDate(studentId: string, targetDate: string) 
   })
 
   return conversationData.messages.filter(msg => msg.target_date === targetDate)
+}
+
+/**
+ * Get draft messages for a conversation
+ */
+export async function getDraftMessages(conversationId: string) {
+  const user = await requireAuth()
+  const serviceClient = createServiceClient()
+
+  const { data: drafts, error } = await (serviceClient as any)
+    .from('conversation_messages')
+    .select('*')
+    .eq('conversation_id', conversationId)
+    .eq('sender_id', user.id)
+    .eq('is_draft', true)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    throw new Error(`Failed to get drafts: ${error.message}`)
+  }
+
+  return drafts || []
+}
+
+/**
+ * Create or update a draft message
+ */
+export async function saveDraft(data: {
+  draftId?: string
+  conversationId?: string
+  studentId?: string
+  messageType: 'daily_note' | 'instructor_response'
+  content: string
+  targetDate?: string
+  visibility?: 'private' | 'shared'
+  metadata?: Record<string, any>
+}) {
+  const user = await requireAuth()
+  const serviceClient = createServiceClient()
+
+  // If draftId exists, update existing draft
+  if (data.draftId) {
+    const { data: updatedDraft, error } = await (serviceClient as any)
+      .from('conversation_messages')
+      .update({
+        content: data.content,
+        metadata: data.metadata || {},
+        visibility: data.visibility || 'shared',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', data.draftId)
+      .eq('sender_id', user.id)
+      .eq('is_draft', true)
+      .select()
+      .single()
+
+    if (error) {
+      throw new Error(`Failed to update draft: ${error.message}`)
+    }
+
+    return { success: true, draft: updatedDraft }
+  }
+
+  // Create new draft
+  let conversationId = data.conversationId
+
+  if (!conversationId && data.studentId) {
+    const conversation = await getOrCreateConversation(data.studentId)
+    conversationId = conversation.id
+  }
+
+  if (!conversationId) {
+    throw new Error('Conversation ID or student ID required')
+  }
+
+  const { data: newDraft, error } = await (serviceClient as any)
+    .from('conversation_messages')
+    .insert({
+      conversation_id: conversationId,
+      sender_id: user.id,
+      message_type: data.messageType,
+      content: data.content,
+      target_date: data.targetDate,
+      metadata: data.metadata || {},
+      is_draft: true,
+      visibility: data.visibility || 'shared'
+    })
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to create draft: ${error.message}`)
+  }
+
+  return { success: true, draft: newDraft }
+}
+
+/**
+ * Publish a draft (convert to regular message)
+ */
+export async function publishDraft(draftId: string) {
+  const user = await requireAuth()
+  const serviceClient = createServiceClient()
+
+  const { data: publishedMessage, error } = await (serviceClient as any)
+    .from('conversation_messages')
+    .update({
+      is_draft: false,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', draftId)
+    .eq('sender_id', user.id)
+    .eq('is_draft', true)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to publish draft: ${error.message}`)
+  }
+
+  // Get conversation details for WebSocket broadcast
+  const { data: conversation } = await (serviceClient as any)
+    .from('goal_conversations')
+    .select('student_id')
+    .eq('id', publishedMessage.conversation_id)
+    .single()
+
+  // Broadcast WebSocket event
+  if (conversation) {
+    await broadcastWebSocketMessage({
+      type: CONVERSATION_EVENTS.MESSAGE_CREATED,
+      data: {
+        messageId: publishedMessage.id,
+        conversationId: publishedMessage.conversation_id,
+        studentId: conversation.student_id,
+        messageType: publishedMessage.message_type,
+        senderId: user.id,
+        content: publishedMessage.content,
+        targetDate: publishedMessage.target_date
+      }
+    })
+  }
+
+  // Revalidate relevant paths
+  revalidatePath('/instructor/student-goals')
+  revalidatePath('/student/goals')
+
+  return { success: true, message: publishedMessage }
+}
+
+/**
+ * Delete a draft message
+ */
+export async function deleteDraftMessage(draftId: string) {
+  const user = await requireAuth()
+  const serviceClient = createServiceClient()
+
+  const { error } = await (serviceClient as any)
+    .from('conversation_messages')
+    .delete()
+    .eq('id', draftId)
+    .eq('sender_id', user.id)
+    .eq('is_draft', true)
+
+  if (error) {
+    throw new Error(`Failed to delete draft: ${error.message}`)
+  }
+
+  return { success: true }
+}
+
+/**
+ * Publish draft edits (copy draft_content to content, clear draft_content)
+ */
+export async function publishDraftEdit(messageId: string) {
+  const user = await requireAuth()
+  const serviceClient = createServiceClient()
+
+  // Get current message
+  const { data: message, error: fetchError } = await (serviceClient as any)
+    .from('conversation_messages')
+    .select('draft_content, sender_id, conversation_id')
+    .eq('id', messageId)
+    .eq('sender_id', user.id)
+    .single()
+
+  if (fetchError || !message) {
+    throw new Error('Message not found or access denied')
+  }
+
+  if (!message.draft_content) {
+    throw new Error('No draft edits to publish')
+  }
+
+  // Publish: copy draft_content to content, clear draft_content
+  const { data: publishedMessage, error } = await (serviceClient as any)
+    .from('conversation_messages')
+    .update({
+      content: message.draft_content,
+      draft_content: null,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', messageId)
+    .eq('sender_id', user.id)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to publish draft edits: ${error.message}`)
+  }
+
+  // Revalidate paths
+  revalidatePath('/instructor/student-goals')
+  revalidatePath('/student/goals')
+
+  return { success: true, message: publishedMessage }
+}
+
+/**
+ * Discard draft edits (clear draft_content)
+ */
+export async function discardDraftEdit(messageId: string) {
+  const user = await requireAuth()
+  const serviceClient = createServiceClient()
+
+  const { error } = await (serviceClient as any)
+    .from('conversation_messages')
+    .update({
+      draft_content: null,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', messageId)
+    .eq('sender_id', user.id)
+
+  if (error) {
+    throw new Error(`Failed to discard draft edits: ${error.message}`)
+  }
+
+  return { success: true }
 }
 
 /**

@@ -16,7 +16,8 @@ import { DailyNoteImage } from '@/app/student/goals/components/DailyNoteImage'
 import { DailyNoteImageViewer } from '@/app/student/goals/components/DailyNoteImageViewer'
 import { UploadProgress } from '@/components/ui/UploadProgress'
 import { useUITransitionStore } from '@/stores/ui-transition-store'
-import { useDraftMutations } from '@/hooks/use-draft-websocket'
+import { useConversationDraftMutations } from '@/hooks/use-conversation-drafts'
+import { updateMessage } from '@/lib/actions/conversation-actions'
 import type { ExistingAttachment } from '@/hooks/use-message-form'
 
 interface InlineMessageComposerProps {
@@ -30,18 +31,23 @@ interface InlineMessageComposerProps {
   placeholder?: string
   onCancel: () => void
   onSend: () => void
+  onSaveDraft?: () => void // Manual save draft callback
   isLoading: boolean
   isDirty: boolean
   isValid: boolean
   isDragOver: boolean
   onDragOver: (isDragOver: boolean) => void
   isEditMode?: boolean
+  editingMessageId?: string // Message ID when editing published message
   originalMessageText?: string
   originalAttachments?: ExistingAttachment[]
   messageType: 'daily_note' | 'instructor_response'
   targetDate: string
   currentDraftId?: string
   onDraftIdChange?: (draftId: string | undefined) => void
+  conversationId?: string // For draft auto-save
+  visibility?: 'private' | 'shared' // For private notes
+  onAutoSavingChange?: (isAutoSaving: boolean) => void // Callback to notify parent of auto-save state
 }
 
 /**
@@ -59,31 +65,49 @@ export function InlineMessageComposer({
   placeholder = "Write your message...",
   onCancel,
   onSend,
+  onSaveDraft,
   isLoading,
   isDirty,
   isValid,
   isDragOver,
   onDragOver,
   isEditMode = false,
+  editingMessageId,
   originalMessageText = '',
   originalAttachments = [],
   messageType,
   targetDate,
   currentDraftId,
-  onDraftIdChange
+  onDraftIdChange,
+  conversationId,
+  visibility = 'shared',
+  onAutoSavingChange
 }: InlineMessageComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const hasInitializedRef = useRef(false)
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // UI Transition Store for file-based image transitions (architecture compliant)
   const { getTransitionByFile, setImageTransition } = useUITransitionStore()
 
-  // Draft system
-  const { performAutoSave, isAutoSaving, deleteDraft } = useDraftMutations()
+  // Draft system (using conversation drafts)
+  const { performAutoSave, isAutoSaving: isDraftAutoSaving, deleteDraft } = useConversationDraftMutations(conversationId)
   const [showDraftSaved, setShowDraftSaved] = useState(false)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [lastSavedValues, setLastSavedValues] = useState({
     messageText: '',
     fileCount: 0
   })
+
+  // Auto-saving state (only used for new messages, not edit mode)
+  const isAutoSaving = isDraftAutoSaving
+
+  // Notify parent of auto-saving state changes (only for new messages, not edit mode)
+  useEffect(() => {
+    if (onAutoSavingChange && !isEditMode) {
+      onAutoSavingChange(isAutoSaving)
+    }
+  }, [isAutoSaving, onAutoSavingChange, isEditMode])
 
   // Image viewer state
   const [imageViewer, setImageViewer] = useState<{
@@ -143,16 +167,35 @@ export function InlineMessageComposer({
     }
   }, [])
 
-  // Auto-save functionality (skip for edit mode)
+  // Initialize lastSavedValues when message text is first loaded (prevents auto-save on mount)
+  useEffect(() => {
+    if (!hasInitializedRef.current && messageText) {
+      console.log('[AUTO-SAVE] Initializing lastSavedValues to prevent auto-save on mount:', messageText)
+      setLastSavedValues({
+        messageText,
+        fileCount: attachedFiles.length
+      })
+      hasInitializedRef.current = true
+    }
+  }, [messageText, attachedFiles.length])
+
+  // Auto-save functionality (ONLY for new messages, edit mode uses manual Save Draft button)
   const performSimpleAutoSave = useCallback(async () => {
-    if (!isEditMode && messageText.trim()) {
+    // Should never be called in edit mode, but add guard just in case
+    if (isEditMode) {
+      console.warn('[AUTO-SAVE] Called in edit mode, skipping')
+      return
+    }
+
+    if (messageText.trim()) {
+      // NEW MESSAGE: Save as draft (is_draft=true)
       const draftData = {
-        id: currentDraftId,
-        type: messageType,
-        title: `${messageType === 'daily_note' ? 'Daily Note' : 'Instructor Response'} - ${targetDate}`,
-        description: messageText,
+        draftId: currentDraftId,
+        messageType,
+        content: messageText,
+        targetDate,
+        visibility,
         metadata: {
-          targetDate,
           fileNames: attachedFiles.map(f => f.name)
         }
       }
@@ -163,34 +206,78 @@ export function InlineMessageComposer({
           if (!currentDraftId && onDraftIdChange) {
             onDraftIdChange(result.draft.id)
           }
+          // Only show "Draft saved" after successful save
+          setShowDraftSaved(true)
+          setTimeout(() => setShowDraftSaved(false), 2000)
         }
-        setShowDraftSaved(true)
-        setTimeout(() => setShowDraftSaved(false), 2000)
       } catch (error) {
         console.error('Auto-save failed:', error)
       }
     }
-  }, [messageText, attachedFiles, messageType, targetDate, currentDraftId, performAutoSave, onDraftIdChange, isEditMode])
+  }, [messageText, attachedFiles, messageType, targetDate, visibility, currentDraftId, performAutoSave, onDraftIdChange, isEditMode])
 
-  // Auto-save when content changes (skip for edit mode)
+  // Track unsaved changes in edit mode (simple tracking, no auto-save)
   useEffect(() => {
-    if (!isEditMode) {
-      const hasChanged =
-        messageText !== lastSavedValues.messageText ||
-        attachedFiles.length !== lastSavedValues.fileCount
+    if (isEditMode && originalMessageText) {
+      const contentChanged = messageText.trim() !== originalMessageText.trim()
+      setHasUnsavedChanges(contentChanged)
+    }
+  }, [messageText, originalMessageText, isEditMode])
 
-      if (hasChanged && messageText.trim()) {
-        const timer = setTimeout(async () => {
-          await performSimpleAutoSave()
-          setLastSavedValues({
-            messageText,
-            fileCount: attachedFiles.length
-          })
-        }, 1500) // 1.5 seconds debounce
-        return () => clearTimeout(timer)
+  // Function to cancel pending auto-save timer
+  const cancelAutoSaveTimer = useCallback(() => {
+    if (autoSaveTimerRef.current) {
+      console.log('[AUTO-SAVE] Cancelling pending auto-save timer')
+      clearTimeout(autoSaveTimerRef.current)
+      autoSaveTimerRef.current = null
+    }
+  }, [])
+
+  // Auto-save when content changes (ONLY for new messages, NOT for edit mode)
+  useEffect(() => {
+    // Skip auto-save entirely in edit mode - use manual Save Draft button instead
+    if (isEditMode) {
+      console.log('[AUTO-SAVE] Skipping auto-save in edit mode')
+      return
+    }
+
+    const hasChanged =
+      messageText !== lastSavedValues.messageText ||
+      attachedFiles.length !== lastSavedValues.fileCount
+
+    console.log('[AUTO-SAVE CHECK]', {
+      hasChanged,
+      messageText,
+      lastSavedMessageText: lastSavedValues.messageText,
+      messageTextTrimmed: messageText.trim(),
+      currentDraftId,
+      isEditMode
+    })
+
+    if (hasChanged && messageText.trim()) {
+      console.log('[AUTO-SAVE] Setting 1.5s timer for auto-save')
+      // Clear any existing timer
+      cancelAutoSaveTimer()
+
+      // Set new timer and store reference
+      autoSaveTimerRef.current = setTimeout(async () => {
+        console.log('[AUTO-SAVE] Timer fired, calling performSimpleAutoSave')
+        await performSimpleAutoSave()
+        setLastSavedValues({
+          messageText,
+          fileCount: attachedFiles.length
+        })
+        autoSaveTimerRef.current = null
+      }, 1500) // 1.5 seconds debounce
+
+      return () => {
+        if (autoSaveTimerRef.current) {
+          clearTimeout(autoSaveTimerRef.current)
+          autoSaveTimerRef.current = null
+        }
       }
     }
-  }, [messageText, attachedFiles.length, lastSavedValues, performSimpleAutoSave, isEditMode])
+  }, [messageText, attachedFiles.length, lastSavedValues, performSimpleAutoSave, isEditMode, currentDraftId, cancelAutoSaveTimer])
 
   // Change detection for edit mode
   const hasContentChanged = isEditMode ? messageText.trim() !== originalMessageText.trim() : false
@@ -350,6 +437,7 @@ export function InlineMessageComposer({
         <div className="flex justify-between items-center text-xs">
           <div className="flex items-center gap-3">
             <span className="text-gray-500 dark:text-gray-400">{messageText.length} characters</span>
+            {/* Only show auto-save indicators for new messages, not edit mode */}
             {!isEditMode && (showDraftSaved || isAutoSaving) && (
               <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
                 <Check className="h-3 w-3" />
@@ -517,7 +605,7 @@ export function InlineMessageComposer({
       )}
 
       {/* Action Buttons */}
-      <div className="flex items-center justify-between pt-2">
+      <div className="flex items-center justify-end gap-2 pt-2">
         <Button
           type="button"
           variant="ghost"
@@ -530,10 +618,35 @@ export function InlineMessageComposer({
           Cancel
         </Button>
 
+        {isEditMode && onSaveDraft && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={async (e) => {
+              e.preventDefault()
+              // Save draft immediately (no auto-save in edit mode)
+              await onSaveDraft()
+              // Mark as saved
+              setHasUnsavedChanges(false)
+            }}
+            disabled={!hasUnsavedChanges || isLoading}
+          >
+            Save Draft
+          </Button>
+        )}
+
         <Button
           type="button"
           onClick={(e) => {
             e.preventDefault()
+            if (isEditMode) {
+              // In edit mode: just reset state and publish
+              setHasUnsavedChanges(false)
+            } else {
+              // In new message mode: cancel auto-save timer before sending
+              cancelAutoSaveTimer()
+            }
+            // Call the send/save handler
             onSend()
           }}
           disabled={!isValidForSave || isLoading}

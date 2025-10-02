@@ -86,7 +86,7 @@ export function StudentGoalDashboard() {
   })
 
   // Show loading if no user yet
-  if (!user?.id || goalLoading) {
+  if (!user?.id) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 flex items-center justify-center">
         <div className="text-center">
@@ -97,7 +97,7 @@ export function StudentGoalDashboard() {
     )
   }
 
-  // Production unified conversation system
+  // Production unified conversation system - render immediately to parallelize queries
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4">
       <ConversationIntegrationV2
