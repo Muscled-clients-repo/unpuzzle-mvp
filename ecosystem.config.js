@@ -102,6 +102,8 @@ module.exports = {
         WEBSOCKET_SERVER_URL: 'http://localhost:8080',
         // FFprobe configuration
         FFPROBE_PATH: '/opt/homebrew/bin/ffprobe',
+        // CDN HMAC authentication
+        HMAC_SECRET: process.env.CDN_AUTH_SECRET || process.env.AUTH_SECRET,
         // Database - now reading from environment
         NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
         SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY

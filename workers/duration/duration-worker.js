@@ -1,12 +1,13 @@
 /**
  * Duration Extraction Worker
  *
- * Extracts video duration from Backblaze B2 videos using FFprobe
+ * Extracts video duration from Backblaze B2 videos using FFprobe with HMAC authentication
  */
 
 const BaseWorker = require('../shared/base-worker')
 const { spawn } = require('child_process')
 const { createClient } = require('@supabase/supabase-js')
+const crypto = require('crypto')
 
 class DurationWorker extends BaseWorker {
   constructor(workerId) {
@@ -15,6 +16,14 @@ class DurationWorker extends BaseWorker {
     // FFprobe configuration
     this.ffprobePath = process.env.FFPROBE_PATH || 'ffprobe'
 
+    // CDN configuration
+    this.cdnBaseUrl = 'https://cdn.unpuzzle.co'
+    this.hmacSecret = process.env.HMAC_SECRET
+
+    if (!this.hmacSecret) {
+      throw new Error('HMAC_SECRET environment variable is required for CDN authentication')
+    }
+
     // Supabase client
     this.supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -22,6 +31,62 @@ class DurationWorker extends BaseWorker {
     )
 
     console.log(`🎬 FFprobe Path: ${this.ffprobePath}`)
+    console.log(`🔐 HMAC authentication enabled for CDN`)
+  }
+
+  /**
+   * Extract file path from private URL format
+   * Format: "private:fileId:fileName"
+   */
+  extractFilePathFromPrivateUrl(privateUrl) {
+    const parts = privateUrl.split(':')
+    if (parts.length !== 3 || parts[0] !== 'private') {
+      throw new Error('Invalid private URL format')
+    }
+
+    const fileName = parts[2]
+    return fileName.startsWith('/') ? fileName : `/${fileName}`
+  }
+
+  /**
+   * Generate HMAC token for CDN authentication
+   */
+  generateHMACToken(filePath) {
+    const timestamp = Date.now().toString()
+
+    // Create the message to sign
+    const message = `${timestamp}.${filePath}`
+
+    // Generate HMAC signature
+    const signature = crypto
+      .createHmac('sha256', this.hmacSecret)
+      .update(message)
+      .digest('base64')
+      .replace(/\+/g, '-')  // URL-safe base64
+      .replace(/\//g, '_')  // URL-safe base64
+      .replace(/=/g, '')    // Remove padding
+
+    return `${timestamp}.${signature}`
+  }
+
+  /**
+   * Generate CDN URL with HMAC token
+   */
+  generateCDNUrlWithToken(privateUrl) {
+    // Extract filename from private URL
+    const filePath = this.extractFilePathFromPrivateUrl(privateUrl)
+
+    // URL-encode the path to handle spaces and special characters
+    const pathParts = filePath.split('/')
+    const encodedPath = pathParts.map((part, index) =>
+      index === 0 ? part : encodeURIComponent(part)
+    ).join('/')
+
+    // Generate token for the encoded path
+    const token = this.generateHMACToken(encodedPath)
+
+    // Build CDN URL with the encoded path and token
+    return `${this.cdnBaseUrl}${encodedPath}?token=${token}`
   }
 
   async executeJob(job) {
@@ -31,7 +96,7 @@ class DurationWorker extends BaseWorker {
       // Get media file from database
       const { data: mediaFile, error: mediaError } = await this.supabase
         .from('media_files')
-        .select('id, name, original_name, backblaze_url, cdn_url, file_type')
+        .select('id, name, original_name, backblaze_url, cdn_url, file_type, uploaded_by')
         .eq('id', job.videoId)
         .single()
 
@@ -41,18 +106,25 @@ class DurationWorker extends BaseWorker {
 
       console.log(`📍 Media file found: ${mediaFile.name}`)
 
-      // Use CDN URL if available, otherwise use backblaze URL
-      const videoUrl = mediaFile.cdn_url || mediaFile.backblaze_url
+      // Use cdn_url or backblaze_url (both should be in private: format)
+      const privateUrl = mediaFile.cdn_url || mediaFile.backblaze_url
 
-      console.log(`🔗 Video URL: ${videoUrl}`)
-
-      if (!videoUrl) {
-        throw new Error('No video URL available')
+      if (!privateUrl) {
+        throw new Error('No storage URL available')
       }
 
-      // Check if URL is a private Backblaze format
-      if (videoUrl && videoUrl.startsWith('private:')) {
-        throw new Error('Video URL is in private format and cannot be accessed directly. CDN URL is required.')
+      console.log(`🔗 Private URL: ${privateUrl.substring(0, 50)}...`)
+
+      // Check if URL is in private format
+      if (!privateUrl.startsWith('private:')) {
+        // If it's already a public URL, use it directly
+        console.log(`✅ Using public URL directly`)
+        var videoUrl = privateUrl
+      } else {
+        // Generate fresh HMAC token for CDN access
+        console.log(`🔐 Generating fresh HMAC token for CDN access...`)
+        var videoUrl = this.generateCDNUrlWithToken(privateUrl)
+        console.log(`✅ CDN URL with token generated: ${videoUrl.split('?')[0]}`)
       }
 
       await this.updateJobStatus(job.id, 25, 'processing')
@@ -77,8 +149,8 @@ class DurationWorker extends BaseWorker {
 
       console.log(`✅ Duration updated in database: ${Math.round(duration)}s`)
 
-      // Broadcast update via WebSocket
-      await this.broadcastDurationUpdate(job.videoId, Math.round(duration), 'media-file')
+      // Broadcast update via WebSocket (include userId from mediaFile)
+      await this.broadcastDurationUpdate(job.videoId, Math.round(duration), mediaFile.uploaded_by, 'media-file')
 
     } catch (error) {
       console.error(`❌ Duration extraction failed for ${job.videoId}:`, error.message)
@@ -129,7 +201,7 @@ class DurationWorker extends BaseWorker {
     })
   }
 
-  async broadcastDurationUpdate(mediaFileId, duration, type = 'video') {
+  async broadcastDurationUpdate(mediaFileId, duration, userId, type = 'video') {
     try {
       const response = await fetch(`${this.websocketServerUrl}/broadcast`, {
         method: 'POST',
@@ -137,6 +209,7 @@ class DurationWorker extends BaseWorker {
         body: JSON.stringify({
           type: 'media-duration-updated',
           data: {
+            userId,  // Required for WebSocket routing
             mediaFileId,
             duration,
             type,
@@ -146,7 +219,7 @@ class DurationWorker extends BaseWorker {
       })
 
       if (response.ok) {
-        console.log(`📡 Duration update broadcasted for media file ${mediaFileId}`)
+        console.log(`📡 Duration update broadcasted for media file ${mediaFileId} (userId: ${userId})`)
       } else {
         console.warn(`⚠️ Failed to broadcast duration update: ${response.status}`)
       }

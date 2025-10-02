@@ -139,8 +139,23 @@ export function DailyGoalTrackerV2({
   const dailyEntries = useMemo(() => {
     const entriesMap = new Map<string, DailyEntry>()
     const startDate = new Date(currentGoal.startDate)
+    const today = new Date().toISOString().split('T')[0]
 
-    // Process existing messages first (including optimistic messages)
+    // Create entries for ALL days from start to today
+    const daysSinceStart = Math.floor((new Date(today).getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
+
+    for (let dayNum = 1; dayNum <= daysSinceStart; dayNum++) {
+      const date = new Date(startDate.getTime() + (dayNum - 1) * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      entriesMap.set(date, {
+        day: dayNum,
+        date,
+        studentNotes: [],
+        instructorResponses: [],
+        activities: []
+      })
+    }
+
+    // Process existing messages to populate entries
     if (conversationData?.messages && conversationData.messages.length > 0) {
       console.log('🔍 DEBUG: Raw conversation data with', conversationData.messages.length, 'messages')
       if (conversationData.messages.length > 0) {
@@ -151,7 +166,6 @@ export function DailyGoalTrackerV2({
 
       conversationData.messages.forEach(message => {
         const date = message.target_date || message.created_at.split('T')[0]
-        const daysSinceStart = Math.floor((new Date(date).getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
 
         console.log('🔍 DEBUG Processing message:')
         console.log('  messageId:', message.id)
@@ -159,19 +173,10 @@ export function DailyGoalTrackerV2({
         console.log('  targetDate:', message.target_date)
         console.log('  createdAt:', message.created_at)
         console.log('  calculatedDate:', date)
-        console.log('  daysSinceStart:', daysSinceStart)
 
-        if (!entriesMap.has(date)) {
-          entriesMap.set(date, {
-            day: daysSinceStart,
-            date,
-            studentNotes: [],
-            instructorResponses: [],
-            activities: []
-          })
-        }
-
-        const entry = entriesMap.get(date)!
+        // Get or create entry for this date
+        const entry = entriesMap.get(date)
+        if (!entry) return // Skip messages outside our date range
 
         switch (message.message_type) {
           case 'daily_note':
@@ -201,27 +206,13 @@ export function DailyGoalTrackerV2({
       })
     }
 
-    // Always ensure today's entry exists (for new daily progress)
-    const today = new Date().toISOString().split('T')[0]
     console.log('🔍 DEBUG Daily Entry Creation:', {
       today,
       startDate: currentGoal.startDate,
-      hasToday: entriesMap.has(today),
+      totalDays: daysSinceStart,
       existingDates: Array.from(entriesMap.keys()),
       existingDays: Array.from(entriesMap.values()).map(e => ({ date: e.date, day: e.day }))
     })
-
-    if (!entriesMap.has(today)) {
-      const todaysSinceStart = Math.floor((new Date(today).getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
-      console.log('🔍 DEBUG Creating today entry:', { today, todaysSinceStart, calculatedFromStart: startDate })
-      entriesMap.set(today, {
-        day: todaysSinceStart,
-        date: today,
-        studentNotes: [],
-        instructorResponses: [],
-        activities: []
-      })
-    }
 
     // Convert to array and sort by day descending
     return Array.from(entriesMap.values()).sort((a, b) => b.day - a.day)
@@ -822,6 +813,15 @@ export function DailyGoalTrackerV2({
                           )}
                         </>
                       )}
+                    </div>
+                  )}
+
+                  {/* No Activity Message for past days */}
+                  {entry.studentNotes.length === 0 && entry.instructorResponses.length === 0 && entry.activities.length === 0 && entry.day !== currentDay && (
+                    <div className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                      <p className="text-gray-500 dark:text-gray-400 text-sm text-center">
+                        No activity
+                      </p>
                     </div>
                   )}
 

@@ -6,6 +6,9 @@ import { ArrowLeft, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { useAppStore } from '@/stores/app-store'
+import { CompactGoalSelector } from '@/components/instructor/CompactGoalSelector'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { createClient } from '@/lib/supabase/client'
 
 interface PageProps {
   params: Promise<{
@@ -27,21 +30,54 @@ const getStudentInfo = (studentId: string) => {
 
 export default function InstructorStudentGoalsPage({ params }: PageProps) {
   const { studentId } = use(params)
-  
+  const queryClient = useQueryClient()
+
   // Get real student data from app store
-  const { 
-    studentInsights, 
+  const {
+    studentInsights,
     topLearners,
     loadInstructorData,
     user
   } = useAppStore()
-  
+
   useEffect(() => {
     if (user?.id) {
       loadInstructorData(user.id)
     }
   }, [loadInstructorData, user?.id])
-  
+
+  // Fetch student's current goal
+  const { data: goalData } = useQuery({
+    queryKey: ['instructor-student-goal', studentId],
+    queryFn: async () => {
+      if (!studentId) return null
+
+      const supabase = createClient()
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select(`
+          current_goal_id,
+          track_goals (
+            id,
+            name
+          )
+        `)
+        .eq('id', studentId)
+        .single()
+
+      if (profileError || !profile?.current_goal_id) {
+        return null
+      }
+
+      return {
+        id: profile.track_goals.id,
+        name: profile.track_goals.name
+      }
+    },
+    enabled: !!studentId
+  })
+
   // Find the real student data
   const student = React.useMemo(() => {
     const studentInsight = studentInsights.find(s => s.studentId === studentId)
@@ -112,10 +148,14 @@ export default function InstructorStudentGoalsPage({ params }: PageProps) {
                 </div>
               </div>
             </div>
-            
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              Instructor View
-            </div>
+
+            <CompactGoalSelector
+              studentId={studentId}
+              currentGoal={goalData}
+              onGoalChanged={() => {
+                queryClient.invalidateQueries({ queryKey: ['instructor-student-goal', studentId] })
+              }}
+            />
           </div>
         </div>
       </div>

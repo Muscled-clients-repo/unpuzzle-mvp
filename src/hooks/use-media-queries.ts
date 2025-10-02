@@ -103,19 +103,28 @@ export function useUploadMediaFile() {
     
     const handleComplete = (event: any) => {
       console.log('[MEDIA UPLOAD COMPLETE] Received event:', event)
-      
+
       // Invalidate cache to fetch real data (same pattern as Video system)
       queryClient.invalidateQueries({ queryKey: ['media-files'] })
     }
-    
+
+    const handleDurationUpdate = (event: any) => {
+      console.log('[MEDIA DURATION UPDATE] Received event:', event)
+
+      // Invalidate cache to refresh media files with updated duration
+      queryClient.invalidateQueries({ queryKey: ['media-files'] })
+    }
+
     // CRITICAL FIX: Subscribe to MEDIA_EVENTS (WebSocket emits media-upload-progress)
     // The logs show WebSocket emits 'media-upload-progress' events
     const unsubscribeProgress = courseEventObserver.subscribe(MEDIA_EVENTS.MEDIA_UPLOAD_PROGRESS, handleProgress)
     const unsubscribeComplete = courseEventObserver.subscribe(MEDIA_EVENTS.MEDIA_UPLOAD_COMPLETE, handleComplete)
-    
+    const unsubscribeDuration = courseEventObserver.subscribe(MEDIA_EVENTS.MEDIA_DURATION_UPDATED, handleDurationUpdate)
+
     return () => {
       unsubscribeProgress()
       unsubscribeComplete()
+      unsubscribeDuration()
     }
   }, [queryClient])
   

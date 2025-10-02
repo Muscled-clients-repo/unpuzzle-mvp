@@ -2,8 +2,7 @@
 
 import React from 'react'
 import { ConversationIntegrationV2 } from '@/components/conversation/ConversationIntegrationV2'
-import { GoalReassignmentPanel } from '@/components/instructor/GoalReassignmentPanel'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
 import { LoadingSpinner } from '@/components/common'
 
@@ -16,7 +15,6 @@ export function InstructorStudentGoalTracker({
   studentId,
   instructorId
 }: InstructorStudentGoalTrackerProps) {
-  const queryClient = useQueryClient()
   // Fetch the same real goal data that student view uses
   const { data: goalData, isLoading: goalLoading } = useQuery({
     queryKey: ['instructor-student-goal', studentId],
@@ -93,36 +91,13 @@ export function InstructorStudentGoalTracker({
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Main conversation area */}
-        <div className="lg:col-span-3">
-          <ConversationIntegrationV2
-            studentId={studentId}
-            instructorId={instructorId}
-            isInstructorView={true}
-            enableUnifiedSystem={true}
-            goalProgress={goalData} // Now pass the real goal data
-          />
-        </div>
-
-        {/* Goal management sidebar */}
-        <div className="lg:col-span-1">
-          <GoalReassignmentPanel
-            studentId={studentId}
-            currentGoal={goalData ? {
-              id: goalData.id,
-              name: goalData.title,
-              description: goalData.description,
-              targetAmount: goalData.targetAmount,
-              trackName: goalData.trackName || 'Unknown Track'
-            } : undefined}
-            onGoalChanged={() => {
-              // Force refetch of goal data
-              queryClient.invalidateQueries({ queryKey: ['instructor-student-goal', studentId] })
-            }}
-          />
-        </div>
-      </div>
+      <ConversationIntegrationV2
+        studentId={studentId}
+        instructorId={instructorId}
+        isInstructorView={true}
+        enableUnifiedSystem={true}
+        goalProgress={goalData} // Now pass the real goal data
+      />
     </div>
   )
 }
