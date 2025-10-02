@@ -2,7 +2,12 @@
 
 **Purpose**: Comprehensive index of all architectural patterns with problem-to-solution mapping
 **For Claude Code**: Read this file FIRST to identify relevant patterns before implementation
-**Last Updated**: September 16, 2025
+**Last Updated**: October 2, 2025
+
+**Latest Changes**:
+- Added Pattern 23 with shared HMAC utilities documentation
+- Added CDN & Security issues quick reference section
+- Indexed Patterns 18-23 (AI, State Machines, CDN, HMAC)
 
 ---
 
@@ -47,6 +52,16 @@
 - **14-Error-Boundary-Pattern** - Error handling and recovery strategies
 - **15-Bulk-Operations-Selection-Pattern** - Selection UI and bulk operations
 
+### **AI & State Machine Patterns**
+- **18-ai-agent-transcript-integration** - AI agent transcript integration patterns
+- **19-state-machine-3layer-ssot-integration** - State machine integration with 3-layer architecture
+- **20-CDN-Token-Media-Architecture-Pattern** - CloudFlare Worker CDN with HMAC tokens for media viewing
+- **20A-Architecture-Principles-And-Design-Concepts** - Additional architecture principles
+- **20B-State-Machine-3Layer-SSOT-Implementation-Analysis** - Deep-dive state machine implementation
+- **21-Conversation-Attachments-CDN-Architecture** - CDN architecture for conversation attachments
+- **22-Video-State-Machine-Architecture-Guide** - Video player state machine patterns
+- **23-cdn-hmac-authentication-pattern** - **HMAC token generation, CDN authentication, shared utilities**
+
 ---
 
 ## 🚨 Problem → Pattern Quick Reference
@@ -58,6 +73,15 @@
 | Video upload progress tracking | **02, 10, 16** | Complete video upload system with WebSocket progress |
 | Batch file uploads | **16, 16A** | Multiple file upload management with queuing |
 | Upload system architecture | **10** | Complete file map of upload infrastructure |
+
+### **CDN & Security Issues**
+| Problem | Pattern | Description |
+|---------|---------|-------------|
+| HMAC token generation for CDN | **23** | **Shared utilities for HMAC tokens, prevents code duplication** |
+| Private URL to CDN conversion | **23** | Token generation for private storage URLs |
+| Media viewing with CDN authentication | **20** | CloudFlare Worker CDN with HMAC token patterns |
+| Conversation attachment CDN | **21** | CDN architecture for message attachments |
+| Worker CDN access (FFmpeg/FFprobe) | **23** | Background worker utilities for CDN access |
 
 ### **State Management Issues**
 | Problem | Pattern | Description |
@@ -156,21 +180,27 @@ Performance? → Pattern 11 (Concurrent loading)
 ## 🔍 Advanced Pattern Search
 
 ### **By Technology:**
-- **TanStack Query**: Patterns 01, 11, 17
+- **TanStack Query**: Patterns 01, 11, 17, 20
 - **Zustand**: Patterns 00, 06, 15, 16
-- **Server Actions**: Patterns 02, 05, 10
+- **Server Actions**: Patterns 02, 05, 10, 20, 21, 23
 - **WebSocket**: Patterns 02, 10, 16, 17
 - **Form Management**: Patterns 09, 17
+- **CDN & HMAC**: Patterns 20, 21, 23
+- **State Machines**: Patterns 19, 22
+- **Background Workers**: Pattern 23
 
 ### **By Complexity:**
-- **Foundation** (Essential): 00, 01, 03, 08
-- **Intermediate** (Feature-specific): 02, 09, 13, 14
-- **Advanced** (Complex scenarios): 10, 11, 15, 16, 17
+- **Foundation** (Essential): 00, 01, 03, 08, 23
+- **Intermediate** (Feature-specific): 02, 09, 13, 14, 20, 21, 22
+- **Advanced** (Complex scenarios): 10, 11, 15, 16, 17, 18, 19
 
 ### **By Use Case:**
 - **Course Management**: 02, 08, 10, 12, 16
-- **Student Experience**: 09, 13, 17
+- **Student Experience**: 09, 13, 17, 22
 - **Instructor Tools**: 15, 16
 - **Real-time Features**: 02, 10, 17
+- **Media & CDN**: 20, 21, 23
+- **Background Processing**: 23
+- **AI Integration**: 18, 19
 
 This directory ensures efficient pattern discovery and prevents architectural inconsistencies across the codebase.

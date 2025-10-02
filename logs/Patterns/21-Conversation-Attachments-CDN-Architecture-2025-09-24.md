@@ -224,3 +224,13 @@ This pattern establishes conversation attachments as **first-class citizens** in
 3. **Performance optimization** through CDN
 4. **Architecture compliance** with 001 principles
 5. **Comprehensive error handling** and validation
+
+---
+
+## Related Patterns
+
+**See Pattern 23** for:
+- Shared HMAC utility libraries (both TypeScript and CommonJS)
+- Complete HMAC token generation documentation
+- Worker integration patterns for CDN access
+- Best practices to avoid code duplication

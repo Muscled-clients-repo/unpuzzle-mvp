@@ -37,18 +37,27 @@ export interface MediaFile {
   status?: 'uploading' | 'processing' | 'ready' | 'error'
 }
 
-export function useMediaFiles() {
+export function useMediaFiles(options?: { page?: number; limit?: number }) {
+  const page = options?.page || 1
+  const limit = options?.limit || 30
+
   return useQuery({
-    queryKey: ['media-files'],
+    queryKey: ['media-files', page, limit],
     queryFn: async () => {
-      const result = await getMediaFilesAction()
+      const result = await getMediaFilesAction({ page, limit })
       if (!result.success) {
         throw new Error(result.error || 'Failed to fetch media files')
       }
-      return result.media
+      return {
+        media: result.media,
+        hasMore: result.hasMore || false,
+        totalCount: result.totalCount || 0,
+        currentPage: result.currentPage || page
+      }
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: false,
+    keepPreviousData: true, // Keep previous page data while loading next page
   })
 }
 
@@ -115,16 +124,25 @@ export function useUploadMediaFile() {
       queryClient.invalidateQueries({ queryKey: ['media-files'] })
     }
 
+    const handleThumbnailUpdate = (event: any) => {
+      console.log('[MEDIA THUMBNAIL UPDATE] Received event:', event)
+
+      // Invalidate cache to refresh media files with updated thumbnail
+      queryClient.invalidateQueries({ queryKey: ['media-files'] })
+    }
+
     // CRITICAL FIX: Subscribe to MEDIA_EVENTS (WebSocket emits media-upload-progress)
     // The logs show WebSocket emits 'media-upload-progress' events
     const unsubscribeProgress = courseEventObserver.subscribe(MEDIA_EVENTS.MEDIA_UPLOAD_PROGRESS, handleProgress)
     const unsubscribeComplete = courseEventObserver.subscribe(MEDIA_EVENTS.MEDIA_UPLOAD_COMPLETE, handleComplete)
     const unsubscribeDuration = courseEventObserver.subscribe(MEDIA_EVENTS.MEDIA_DURATION_UPDATED, handleDurationUpdate)
+    const unsubscribeThumbnail = courseEventObserver.subscribe(MEDIA_EVENTS.MEDIA_THUMBNAIL_UPDATED, handleThumbnailUpdate)
 
     return () => {
       unsubscribeProgress()
       unsubscribeComplete()
       unsubscribeDuration()
+      unsubscribeThumbnail()
     }
   }, [queryClient])
   

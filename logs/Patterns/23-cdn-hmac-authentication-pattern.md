@@ -141,6 +141,107 @@ This ensures tokens work properly in URL query parameters.
 4. **Parallel Processing**: Multiple workers can use different tokens
 5. **Rate Limiting**: CDN can enforce access limits
 
+## Shared Utility Libraries
+
+To eliminate code duplication and ensure consistency, HMAC token generation has been consolidated into shared utility modules.
+
+### For Frontend/Server Actions (TypeScript)
+**Location**: `/src/services/security/hmac-token-service.ts`
+
+```typescript
+import {
+  generateCDNUrlWithToken,
+  extractFilePathFromPrivateUrl,
+  generateHMACToken
+} from '@/services/security/hmac-token-service'
+
+// Generate CDN URL from private URL
+const cdnUrl = generateCDNUrlWithToken(
+  'https://cdn.unpuzzle.co',
+  '/video.mp4',
+  process.env.HMAC_SECRET
+)
+
+// Extract filename from private URL format
+const filePath = extractFilePathFromPrivateUrl('private:fileId:fileName')
+```
+
+### For Workers (CommonJS)
+**Location**: `/workers/shared/cdn-utils.js`
+
+```javascript
+const {
+  generateCDNUrlFromPrivateUrl,
+  extractFilePathFromPrivateUrl,
+  generateHMACToken,
+  generateCDNUrlWithToken
+} = require('../shared/cdn-utils')
+
+// Generate CDN URL directly from private URL
+const cdnUrl = generateCDNUrlFromPrivateUrl(
+  privateUrl,
+  'https://cdn.unpuzzle.co',
+  process.env.HMAC_SECRET
+)
+```
+
+### Implementation Locations
+
+**Using the shared utilities**:
+1. **Duration Worker** (`workers/duration/duration-worker.js`)
+   - Imports `generateCDNUrlFromPrivateUrl` from `cdn-utils.js`
+   - Generates CDN URLs for FFprobe video processing
+
+2. **Thumbnail Worker** (`workers/thumbnail/thumbnail-worker.js`)
+   - Imports `generateCDNUrlFromPrivateUrl` from `cdn-utils.js`
+   - Generates CDN URLs for FFmpeg frame extraction
+
+3. **Media Actions** (`src/app/actions/media-actions.ts`)
+   - Imports from `hmac-token-service.ts`
+   - Generates CDN URLs for frontend display
+
+### Benefits of Shared Utilities
+
+1. **Single Source of Truth**: One implementation for HMAC generation
+2. **Consistency**: Same token format across all services
+3. **Maintainability**: Fix bugs in one place
+4. **Testability**: Test once, verify everywhere
+5. **Type Safety**: TypeScript definitions for frontend usage
+6. **Documentation**: Centralized reference for HMAC logic
+
+### When to Use Which Utility
+
+| Environment | Import From | Use Case |
+|-------------|-------------|----------|
+| Server Actions (Next.js) | `hmac-token-service.ts` | Frontend display, API endpoints |
+| Workers (Node.js) | `cdn-utils.js` | Background processing, batch operations |
+| Scripts | `cdn-utils.js` | One-off migrations, data processing |
+
+### Example Usage Patterns
+
+**Worker Pattern**:
+```javascript
+// Workers can directly convert private URLs to CDN URLs
+const privateUrl = 'private:fileId:/video.mp4'
+const cdnUrl = generateCDNUrlFromPrivateUrl(
+  privateUrl,
+  this.cdnBaseUrl,
+  this.hmacSecret
+)
+// Use cdnUrl with FFmpeg/FFprobe
+```
+
+**Server Action Pattern**:
+```typescript
+// Server actions convert for frontend consumption
+function generateCDNUrlWithToken(privateUrl: string | null): string | null {
+  if (!privateUrl?.startsWith('private:')) return privateUrl
+
+  const filePath = extractFilePathFromPrivateUrl(privateUrl)
+  return generateCDNUrl(cdnBaseUrl, filePath, hmacSecret)
+}
+```
+
 ## Maintenance Considerations
 
 - Token expiration should align with processing windows
@@ -148,3 +249,5 @@ This ensures tokens work properly in URL query parameters.
 - Monitor for failed authentications
 - Keep processing and token generation coupled
 - Document token format for debugging
+- **Use shared utilities to maintain consistency across all HMAC implementations**
+- Update both TypeScript and CommonJS utilities when changing token format

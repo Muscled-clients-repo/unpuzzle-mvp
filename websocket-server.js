@@ -61,6 +61,25 @@ const server = http.createServer((req, res) => {
           console.log(`⏱️ Duration job created: ${jobId} for video ${message.data.videoId}`)
         }
 
+        // Handle thumbnail job creation
+        if (message.type === 'create-thumbnail-job' && message.data) {
+          const jobId = generateJobId()
+          const job = {
+            id: jobId,
+            jobType: 'thumbnail',
+            videoId: message.data.videoId,
+            operationId: message.operationId,
+            status: 'queued',
+            progress: 0,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          }
+
+          // Add to job queue for workers to pick up
+          jobQueue.push(job)
+          console.log(`🖼️ Thumbnail job created: ${jobId} for video ${message.data.videoId}`)
+        }
+
         broadcast(message)
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ success: true }))

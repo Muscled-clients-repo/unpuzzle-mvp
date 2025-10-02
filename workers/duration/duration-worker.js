@@ -7,7 +7,7 @@
 const BaseWorker = require('../shared/base-worker')
 const { spawn } = require('child_process')
 const { createClient } = require('@supabase/supabase-js')
-const crypto = require('crypto')
+const { generateCDNUrlFromPrivateUrl } = require('../shared/cdn-utils')
 
 class DurationWorker extends BaseWorker {
   constructor(workerId) {
@@ -32,61 +32,6 @@ class DurationWorker extends BaseWorker {
 
     console.log(`🎬 FFprobe Path: ${this.ffprobePath}`)
     console.log(`🔐 HMAC authentication enabled for CDN`)
-  }
-
-  /**
-   * Extract file path from private URL format
-   * Format: "private:fileId:fileName"
-   */
-  extractFilePathFromPrivateUrl(privateUrl) {
-    const parts = privateUrl.split(':')
-    if (parts.length !== 3 || parts[0] !== 'private') {
-      throw new Error('Invalid private URL format')
-    }
-
-    const fileName = parts[2]
-    return fileName.startsWith('/') ? fileName : `/${fileName}`
-  }
-
-  /**
-   * Generate HMAC token for CDN authentication
-   */
-  generateHMACToken(filePath) {
-    const timestamp = Date.now().toString()
-
-    // Create the message to sign
-    const message = `${timestamp}.${filePath}`
-
-    // Generate HMAC signature
-    const signature = crypto
-      .createHmac('sha256', this.hmacSecret)
-      .update(message)
-      .digest('base64')
-      .replace(/\+/g, '-')  // URL-safe base64
-      .replace(/\//g, '_')  // URL-safe base64
-      .replace(/=/g, '')    // Remove padding
-
-    return `${timestamp}.${signature}`
-  }
-
-  /**
-   * Generate CDN URL with HMAC token
-   */
-  generateCDNUrlWithToken(privateUrl) {
-    // Extract filename from private URL
-    const filePath = this.extractFilePathFromPrivateUrl(privateUrl)
-
-    // URL-encode the path to handle spaces and special characters
-    const pathParts = filePath.split('/')
-    const encodedPath = pathParts.map((part, index) =>
-      index === 0 ? part : encodeURIComponent(part)
-    ).join('/')
-
-    // Generate token for the encoded path
-    const token = this.generateHMACToken(encodedPath)
-
-    // Build CDN URL with the encoded path and token
-    return `${this.cdnBaseUrl}${encodedPath}?token=${token}`
   }
 
   async executeJob(job) {
@@ -123,7 +68,7 @@ class DurationWorker extends BaseWorker {
       } else {
         // Generate fresh HMAC token for CDN access
         console.log(`🔐 Generating fresh HMAC token for CDN access...`)
-        var videoUrl = this.generateCDNUrlWithToken(privateUrl)
+        var videoUrl = generateCDNUrlFromPrivateUrl(privateUrl, this.cdnBaseUrl, this.hmacSecret)
         console.log(`✅ CDN URL with token generated: ${videoUrl.split('?')[0]}`)
       }
 

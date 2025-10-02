@@ -12,6 +12,7 @@ interface MediaFile {
   uploadedAt: string
   type: string
   usage: string
+  thumbnail: string | null
   tags?: string[] | null
   // Raw database fields
   file_size: number | null
@@ -115,13 +116,21 @@ export function MediaCard({
         
         {/* Thumbnail/Preview */}
         <div
-          className="aspect-video bg-muted flex items-center justify-center relative cursor-pointer"
+          className="aspect-video bg-muted flex items-center justify-center relative cursor-pointer overflow-hidden"
           onClick={(e) => {
             e.stopPropagation()
             onPreview(item)
           }}
         >
-          {getTypeIcon(item.type)}
+          {item.thumbnail ? (
+            <img
+              src={item.thumbnail}
+              alt={item.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            getTypeIcon(item.type)
+          )}
           {/* Duration overlay for videos */}
           {item.type === 'video' && item.duration_seconds && (
             <div className="absolute bottom-2 right-2 bg-black/75 text-white text-xs px-1.5 py-0.5 rounded">

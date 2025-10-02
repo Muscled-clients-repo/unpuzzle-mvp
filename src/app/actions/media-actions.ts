@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client"
 import { cookies } from "next/headers"
 import { createServerClient } from "@supabase/ssr"
 import type { Database } from "@/types/supabase"
+import { generateCDNUrlWithToken as generateCDNUrl, extractFilePathFromPrivateUrl } from "@/services/security/hmac-token-service"
 
 export interface MediaUploadResult {
   success: boolean
@@ -52,6 +53,29 @@ function getFileType(mimeType: string): string {
   if (mimeType.startsWith('image/')) return 'image'
   if (mimeType.startsWith('audio/')) return 'audio'
   return 'document'
+}
+
+// Generate CDN URL with HMAC token for private files
+function generateCDNUrlWithToken(privateUrl: string | null): string | null {
+  if (!privateUrl || !privateUrl.startsWith('private:')) {
+    return privateUrl // Return as-is if not private format
+  }
+
+  const cdnBaseUrl = 'https://cdn.unpuzzle.co'
+  const hmacSecret = process.env.CDN_AUTH_SECRET || process.env.AUTH_SECRET
+
+  if (!hmacSecret) {
+    console.warn('⚠️ HMAC secret not configured, cannot generate CDN URL')
+    return null
+  }
+
+  try {
+    const filePath = extractFilePathFromPrivateUrl(privateUrl)
+    return generateCDNUrl(cdnBaseUrl, filePath, hmacSecret)
+  } catch (error) {
+    console.error('❌ Error generating CDN URL:', error)
+    return null
+  }
 }
 
 // WebSocket broadcasting function for Media Manager
@@ -196,7 +220,7 @@ export async function uploadMediaFileAction(
 
     console.log('💾 Media file saved to database:', savedFile.id)
 
-    // Create duration extraction job for video files
+    // Create duration and thumbnail extraction jobs for video files
     if (getFileType(file.type) === 'video') {
       try {
         console.log('🎬 Creating duration extraction job for video:', savedFile.id)
@@ -214,8 +238,24 @@ export async function uploadMediaFileAction(
         })
 
         console.log('✅ Duration extraction job created for video:', savedFile.id)
+
+        // Create thumbnail extraction job (runs in parallel with duration)
+        console.log('🖼️ Creating thumbnail extraction job for video:', savedFile.id)
+
+        await broadcastWebSocketMessage({
+          type: 'create-thumbnail-job',
+          operationId: `thumbnail_${savedFile.id}_${Date.now()}`,
+          data: {
+            jobType: 'thumbnail',
+            videoId: savedFile.id,
+            fileName: file.name,
+            userId: user.id
+          }
+        })
+
+        console.log('✅ Thumbnail extraction job created for video:', savedFile.id)
       } catch (jobError) {
-        console.warn('⚠️ Failed to create duration extraction job:', jobError)
+        console.warn('⚠️ Failed to create processing jobs:', jobError)
         // Don't fail the upload if job creation fails
       }
     }
@@ -271,53 +311,77 @@ export async function uploadMediaFileAction(
   }
 }
 
-export async function getMediaFilesAction() {
+export async function getMediaFilesAction(options?: { page?: number; limit?: number }) {
   try {
     const supabase = await createSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
-    
+
     if (!user) {
       return {
         success: false,
         error: 'User not authenticated',
-        media: []
+        media: [],
+        hasMore: false,
+        totalCount: 0
       }
     }
 
-    const { data: mediaFiles, error } = await supabase
+    // Pagination parameters
+    const page = options?.page || 1
+    const limit = options?.limit || 30
+    const from = (page - 1) * limit
+    const to = from + limit - 1
+
+    // Optimized query - select only needed columns
+    const { data: mediaFiles, error, count } = await supabase
       .from('media_files')
       .select(`
-        *,
-        media_usage(
+        id,
+        name,
+        file_type,
+        file_size,
+        created_at,
+        thumbnail_url,
+        tags,
+        duration_seconds,
+        backblaze_file_id,
+        backblaze_url,
+        usage_count,
+        media_usage!left(
           course_id,
           resource_type,
           resource_id,
-          courses(title)
+          courses!inner(title)
         )
-      `)
+      `, { count: 'exact' })
       .eq('uploaded_by', user.id)
       .eq('status', 'active')
       .order('created_at', { ascending: false })
+      .range(from, to)
 
     if (error) {
       console.error('❌ Failed to fetch media files:', error)
       return {
         success: false,
         error: error.message,
-        media: []
+        media: [],
+        hasMore: false,
+        totalCount: 0
       }
     }
 
+    const totalCount = count || 0
+    const hasMore = (from + (mediaFiles?.length || 0)) < totalCount
 
     // Transform database records to match the expected MediaFile interface
-    const transformedFiles = mediaFiles.map(file => ({
+    const transformedFiles = (mediaFiles || []).map(file => ({
       id: file.id,
       name: file.name,
       type: file.file_type,
       size: formatFileSize(file.file_size),
       usage: file.usage_count ? `${file.usage_count} uses` : 'Unused',
       uploadedAt: new Date(file.created_at).toLocaleDateString(),
-      thumbnail: file.thumbnail_url,
+      thumbnail: generateCDNUrlWithToken(file.thumbnail_url),
       tags: file.tags, // Include tags from database
       media_usage: file.media_usage, // Include course usage data
       // Raw database fields for UI formatting
@@ -329,13 +393,21 @@ export async function getMediaFilesAction() {
       file_name: file.name
     }))
 
-    return { success: true, media: transformedFiles }
+    return {
+      success: true,
+      media: transformedFiles,
+      hasMore,
+      totalCount,
+      currentPage: page
+    }
   } catch (error) {
     console.error('❌ Failed to fetch media files:', error)
-    return { 
-      success: false, 
+    return {
+      success: false,
       error: error instanceof Error ? error.message : 'Failed to fetch media',
-      media: []
+      media: [],
+      hasMore: false,
+      totalCount: 0
     }
   }
 }

@@ -112,6 +112,39 @@ module.exports = {
       out_file: './logs/duration-worker-out.log',
       log_file: './logs/duration-worker-combined.log',
       time: true
+    },
+
+    // Thumbnail Worker - Extracts video thumbnails using FFmpeg
+    {
+      name: 'unpuzzle-thumbnail-worker',
+      script: 'workers/thumbnail/thumbnail-worker.js',
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '500M',
+      max_restarts: 5,
+      min_uptime: '10s',
+      env: {
+        WORKER_ID: 'thumbnail-1',
+        WORKER_TYPE: 'thumbnail',
+        WEBSOCKET_SERVER_URL: 'http://localhost:8080',
+        // FFmpeg configuration
+        FFMPEG_PATH: '/opt/homebrew/bin/ffmpeg',
+        // CDN HMAC authentication
+        HMAC_SECRET: process.env.CDN_AUTH_SECRET || process.env.AUTH_SECRET,
+        // Backblaze B2 credentials
+        BACKBLAZE_APPLICATION_KEY_ID: process.env.BACKBLAZE_APPLICATION_KEY_ID,
+        BACKBLAZE_APPLICATION_KEY: process.env.BACKBLAZE_APPLICATION_KEY,
+        BACKBLAZE_BUCKET_ID: process.env.BACKBLAZE_BUCKET_ID,
+        // Database
+        NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+        SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY
+      },
+      error_file: './logs/thumbnail-worker-error.log',
+      out_file: './logs/thumbnail-worker-out.log',
+      log_file: './logs/thumbnail-worker-combined.log',
+      time: true
     }
   ]
 }

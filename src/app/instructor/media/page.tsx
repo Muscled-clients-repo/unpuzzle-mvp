@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -58,18 +58,32 @@ import { cn } from "@/lib/utils"
 export default function MediaPage() {
   // ARCHITECTURE-COMPLIANT: Form state in useState
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [showTagSuggestions, setShowTagSuggestions] = useState(false)
   const [previewingFile, setPreviewingFile] = useState<any>(null)
   const [detailsFile, setDetailsFile] = useState<any>(null)
   const [showSingleTagModal, setShowSingleTagModal] = useState(false)
   const [singleTagFileId, setSingleTagFileId] = useState<string | null>(null)
-  
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [allLoadedMedia, setAllLoadedMedia] = useState<any[]>([])
+
   // State for tracking files being deleted (for animation)
   const [deletingFiles, setDeletingFiles] = useState<Set<string>>(new Set())
   const [hiddenFiles, setHiddenFiles] = useState<Set<string>>(new Set())
-  
+
   // Selection mode state
   const [isSelectionMode, setIsSelectionMode] = useState(false)
+
+  // Debounce search query (300ms delay)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery)
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [searchQuery])
   
   // Container ref for drag selection
   const containerRef = useRef<HTMLDivElement>(null)
@@ -92,11 +106,35 @@ export default function MediaPage() {
   } = useMediaStore()
   
   // ARCHITECTURE-COMPLIANT: Server state in TanStack Query
-  const { data: mediaFiles = [], isLoading, error } = useMediaFiles()
+  const { data: mediaData, isLoading, error, isFetching } = useMediaFiles({
+    page: currentPage,
+    limit: 30
+  })
+
   const { data: existingTags = [] } = useExistingTags()
   const deleteMutation = useDeleteMediaFile()
   const uploadMutation = useUploadMediaFile()
   const bulkDeleteMutation = useBulkDeleteFiles()
+
+  // Accumulate all loaded media across pages
+  useEffect(() => {
+    if (mediaData?.media) {
+      setAllLoadedMedia(prev => {
+        // If it's page 1, replace all
+        if (currentPage === 1) {
+          return mediaData.media
+        }
+        // Otherwise, append new media
+        const existingIds = new Set(prev.map(m => m.id))
+        const newMedia = mediaData.media.filter(m => !existingIds.has(m.id))
+        return [...prev, ...newMedia]
+      })
+    }
+  }, [mediaData, currentPage])
+
+  const mediaFiles = allLoadedMedia
+  const hasMore = mediaData?.hasMore || false
+  const totalCount = mediaData?.totalCount || 0
 
   // Course selection state from app store
   const { 
@@ -246,27 +284,30 @@ export default function MediaPage() {
   }
 
 
-  const filteredMedia = mediaFiles.filter(item => {
-    const searchLower = searchQuery.toLowerCase()
-    const matchesName = item.name.toLowerCase().includes(searchLower)
-    const matchesTags = item.tags?.some(tag => 
-      tag.toLowerCase().includes(searchLower)
-    ) || false
-    const matchesSearch = matchesName || matchesTags
-    const matchesFilter = filterType === 'all' || item.type === filterType
-    
-    // Course filtering logic
-    let matchesCourse = true
-    if (selectedInstructorCourse === 'unused') {
-      // Show only files not used in any course
-      matchesCourse = !item.media_usage || item.media_usage.length === 0
-    } else if (selectedInstructorCourse !== 'all') {
-      // Show only files used in the selected course
-      matchesCourse = item.media_usage?.some(usage => usage.course_id === selectedInstructorCourse) || false
-    }
-    
-    return matchesSearch && matchesFilter && matchesCourse
-  })
+  // Memoized filtering - only recalculates when dependencies change
+  const filteredMedia = useMemo(() => {
+    return mediaFiles.filter(item => {
+      const searchLower = debouncedSearchQuery.toLowerCase()
+      const matchesName = item.name.toLowerCase().includes(searchLower)
+      const matchesTags = item.tags?.some(tag =>
+        tag.toLowerCase().includes(searchLower)
+      ) || false
+      const matchesSearch = matchesName || matchesTags
+      const matchesFilter = filterType === 'all' || item.type === filterType
+
+      // Course filtering logic
+      let matchesCourse = true
+      if (selectedInstructorCourse === 'unused') {
+        // Show only files not used in any course
+        matchesCourse = !item.media_usage || item.media_usage.length === 0
+      } else if (selectedInstructorCourse !== 'all') {
+        // Show only files used in the selected course
+        matchesCourse = item.media_usage?.some(usage => usage.course_id === selectedInstructorCourse) || false
+      }
+
+      return matchesSearch && matchesFilter && matchesCourse
+    })
+  }, [mediaFiles, debouncedSearchQuery, filterType, selectedInstructorCourse])
 
   // Filter tags for autocomplete suggestions
   const tagSuggestions = existingTags.filter(tag =>
@@ -415,6 +456,37 @@ export default function MediaPage() {
         handleEditTags={handleEditTags}
         renderTagBadges={renderTagBadges}
       />
+
+      {/* Load More Button */}
+      {hasMore && !isLoading && (
+        <div className="flex justify-center mt-8 mb-8">
+          <Button
+            onClick={() => setCurrentPage(prev => prev + 1)}
+            disabled={isFetching}
+            variant="outline"
+            size="lg"
+            className="min-w-[200px]"
+          >
+            {isFetching ? (
+              <>
+                <span className="animate-spin mr-2">⏳</span>
+                Loading...
+              </>
+            ) : (
+              <>
+                Load More ({totalCount - allLoadedMedia.length} remaining)
+              </>
+            )}
+          </Button>
+        </div>
+      )}
+
+      {/* Showing count indicator */}
+      {!isLoading && mediaFiles.length > 0 && (
+        <div className="text-center text-sm text-muted-foreground mb-4">
+          Showing {allLoadedMedia.length} of {totalCount} files
+        </div>
+      )}
 
       {/* Bulk Selection Toolbar */}
       <BulkSelectionToolbar 

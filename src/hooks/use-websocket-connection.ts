@@ -112,6 +112,7 @@ export function useWebSocketConnection(userId: string) {
             'bulk-delete-complete': MEDIA_EVENTS.MEDIA_BULK_DELETE_COMPLETE,
             'media-linked': MEDIA_EVENTS.MEDIA_LINKED,
             'media-duration-updated': MEDIA_EVENTS.MEDIA_DURATION_UPDATED,
+            'media-thumbnail-updated': MEDIA_EVENTS.MEDIA_THUMBNAIL_UPDATED,
             // Conversation events
             'conversation-message-created': CONVERSATION_EVENTS.MESSAGE_CREATED,
             'conversation-message-updated': CONVERSATION_EVENTS.MESSAGE_UPDATED,

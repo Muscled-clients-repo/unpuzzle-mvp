@@ -88,6 +88,7 @@ export async function generateAttachmentCDNUrl(
     .single()
 
   // 3. Generate CDN URL with HMAC token
+  // Uses shared HMAC utility (see Pattern 23 for details)
   const { backblazeService } = await import('@/services/video/backblaze-service')
   const result = await backblazeService.getSignedUrlFromPrivate(
     attachment.cdn_url,
@@ -97,6 +98,15 @@ export async function generateAttachmentCDNUrl(
   return result
 }
 ```
+
+**Note**: For direct HMAC token generation without BackblazeService, use the shared utility:
+```typescript
+import { generateCDNUrlWithToken, extractFilePathFromPrivateUrl } from '@/services/security/hmac-token-service'
+
+const filePath = extractFilePathFromPrivateUrl(privateUrl)
+const cdnUrl = generateCDNUrlWithToken('https://cdn.unpuzzle.co', filePath, process.env.HMAC_SECRET)
+```
+See **Pattern 23** for complete HMAC utility documentation.
 
 ### 5. Media Component Pattern
 ```typescript
@@ -358,3 +368,14 @@ const mediaQueries = useQueries({
 ---
 
 **Result**: Secure, scalable media system with CloudFlare Worker CDN, HMAC token authentication, and 6-hour cached URLs. This pattern ensures consistent media handling across all features while maintaining security and performance.
+
+---
+
+## Related Patterns
+
+**See Pattern 23 (CDN HMAC Authentication)** for:
+- **Shared HMAC utility libraries** (TypeScript and CommonJS versions)
+- Low-level HMAC token generation implementation details
+- Worker integration patterns (duration, thumbnail extraction)
+- Direct CDN URL generation without BackblazeService wrapper
+- Best practices to avoid code duplication across workers and server actions

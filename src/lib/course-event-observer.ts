@@ -359,7 +359,8 @@ export const MEDIA_EVENTS = {
   MEDIA_BULK_MOVE_PROGRESS: 'media-bulk-move-progress',
   MEDIA_BULK_MOVE_COMPLETE: 'media-bulk-move-complete',
   MEDIA_LINKED: 'media-linked',
-  MEDIA_DURATION_UPDATED: 'media-duration-updated'
+  MEDIA_DURATION_UPDATED: 'media-duration-updated',
+  MEDIA_THUMBNAIL_UPDATED: 'media-thumbnail-updated'
 } as const
 
 // Conversation events (real-time communication)
