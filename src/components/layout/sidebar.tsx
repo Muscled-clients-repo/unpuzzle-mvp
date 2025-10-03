@@ -52,7 +52,7 @@ const learnerNavItems: NavItem[] = [
     label: "Goals",
     icon: Target,
     submenu: [
-      { href: "/student/goals", label: "Goal Digger", icon: Target },
+      { href: "/student/goals", label: "Private Mentorship", icon: Target },
       { href: "/student/goals/history", label: "Track History", icon: History },
     ]
   },
@@ -62,9 +62,8 @@ const learnerNavItems: NavItem[] = [
 const instructorNavItems: NavItem[] = [
   { href: "/instructor", label: "Dashboard", icon: Home },
   { href: "/instructor/courses", label: "My Courses", icon: BookOpen },
-  { href: "/instructor/lessons", label: "My Lessons", icon: PlayCircle },
   { href: "/instructor/media", label: "Media", icon: Upload },
-  { href: "/instructor/confusions", label: "Confusions", icon: MessageSquare },
+  { href: "/instructor/studio", label: "Studio", icon: PlayCircle },
   {
     href: "/instructor/requests",
     label: "Requests",
@@ -102,7 +101,7 @@ const adminNavItems: NavItem[] = [
 export function Sidebar({ role = "learner" }: SidebarProps) {
   const pathname = usePathname()
   const profile = useAppStore((state) => state.profile)
-  const { pendingConfusions, instructorStats } = useAppStore()
+  const { instructorStats } = useAppStore()
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set([
     '/instructor/requests',
     '/student/goals',
@@ -225,9 +224,6 @@ export function Sidebar({ role = "learner" }: SidebarProps) {
             if (role === "instructor") {
               if (item.href === "/instructor/courses" && instructorStats) {
                 badgeContent = instructorStats.totalCourses
-              } else if (item.href === "/instructor/confusions" && pendingConfusions) {
-                badgeContent = pendingConfusions.length
-                badgeVariant = "destructive"
               }
             }
 

@@ -5,8 +5,8 @@ import { UserSlice, createUserSlice } from './slices/user-slice'
 import { AISlice, createAISlice } from './slices/ai-slice'
 import { InstructorSlice, createInstructorSlice } from './slices/instructor-slice'
 // DEPRECATED: import { CourseCreationSlice, createCourseCreationSlice } from './slices/course-creation-slice'
-import { LessonSlice, createLessonSlice } from './slices/lesson-slice'
-import { BlogSlice, createBlogSlice } from './slices/blog-slice'
+// DEPRECATED: import { LessonSlice, createLessonSlice } from './slices/lesson-slice'
+// DEPRECATED: import { BlogSlice, createBlogSlice } from './slices/blog-slice'
 // DEPRECATED: Normalized state slice (parallel to existing state)
 // import { NormalizedCourseSlice, createNormalizedCourseSlice } from './slices/normalized-course-slice'
 // New role-specific slices
@@ -19,15 +19,15 @@ import { UISlice, createUISlice } from './slices/ui-slice'
 import { isDevelopment } from '@/config/env'
 
 // Clean architecture with role-specific stores
-export interface AppStore extends 
+export interface AppStore extends
   AuthSlice,
-  UserSlice, 
-  AISlice, 
-  InstructorSlice, 
+  UserSlice,
+  AISlice,
+  InstructorSlice,
   // DEPRECATED: CourseCreationSlice,     // MIGRATED TO TanStack Query
   // DEPRECATED: NormalizedCourseSlice,   // MIGRATED TO TanStack Query
-  LessonSlice, 
-  BlogSlice,
+  // DEPRECATED: LessonSlice,             // REMOVED - not needed for MVP
+  // DEPRECATED: BlogSlice,               // REMOVED - not needed for MVP
   StudentCourseSlice,    // NEW - role-specific
   // StudentLearningSlice,  // NEW - enhanced with database analytics - DISABLED to avoid conflicts
   // InstructorCourseSlice, // NEW - role-specific - temporarily disabled
@@ -46,8 +46,8 @@ export const useAppStore = create<AppStore>()(
         ...createInstructorSlice(...args),
         // DEPRECATED: ...createCourseCreationSlice(...args),  // MIGRATED TO TanStack Query
         // DEPRECATED: ...createNormalizedCourseSlice(...args), // MIGRATED TO TanStack Query
-        ...createLessonSlice(...args),
-        ...createBlogSlice(...args),
+        // DEPRECATED: ...createLessonSlice(...args),          // REMOVED - not needed for MVP
+        // DEPRECATED: ...createBlogSlice(...args),            // REMOVED - not needed for MVP
         // New role-specific slices
         ...createStudentCourseSlice(...args),
         // TODO: Enable when ready to switch to database

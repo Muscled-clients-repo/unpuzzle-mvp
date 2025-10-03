@@ -1,12 +1,14 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useAppStore } from "@/stores/app-store"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { DateRangePicker } from "@/components/instructor/date-range-picker"
+import { getInstructorDashboardStats, type InstructorDashboardStats } from "@/lib/actions/instructor-dashboard-actions"
+import { useQuery } from "@tanstack/react-query"
 import {
   LineChart,
   Line,
@@ -23,11 +25,11 @@ import {
   ReferenceLine,
   ComposedChart,
 } from "recharts"
-import { 
-  DollarSign, 
-  Users, 
-  Clock, 
-  TrendingUp, 
+import {
+  DollarSign,
+  Users,
+  Clock,
+  TrendingUp,
   ArrowUpRight,
   ArrowDownRight,
   Activity,
@@ -35,7 +37,8 @@ import {
   MoreVertical,
   Download,
   Calendar,
-  RefreshCw
+  RefreshCw,
+  AlertCircle
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { PageContainer } from "@/components/layout/page-container"
@@ -43,8 +46,8 @@ import { PageContentHeader } from "@/components/layout/page-content-header"
 import { StatsGrid } from "@/components/layout/stats-grid"
 
 export default function InstructorDashboard() {
-  const { 
-    instructorStats, 
+  const {
+    instructorStats,
     courseAnalytics,
     selectedInstructorCourse,
     dateRange,
@@ -55,6 +58,13 @@ export default function InstructorDashboard() {
     loadChartData,
     calculateMetricChange
   } = useAppStore()
+
+  // Fetch dashboard stats based on date range
+  const { data: dashboardStats, isLoading: isLoadingStats } = useQuery({
+    queryKey: ['instructor-dashboard-stats', dateRange.from, dateRange.to],
+    queryFn: () => getInstructorDashboardStats(dateRange.from, dateRange.to),
+    staleTime: 60000, // 1 minute
+  })
 
   useEffect(() => {
     loadInstructorData()
@@ -162,100 +172,100 @@ export default function InstructorDashboard() {
       </PageContentHeader>
 
       {/* Key Metrics Cards */}
-      <StatsGrid columns={4}>
+      <StatsGrid columns={3}>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${(periodTotals.revenue || 0).toLocaleString()}</div>
-            <div className="flex items-center text-xs mt-2">
-              {changes.revenue > 0 ? (
-                <>
-                  <ArrowUpRight className="h-3 w-3 text-green-500 mr-1" />
-                  <span className="text-green-500">{changes.revenue}%</span>
-                </>
-              ) : (
-                <>
-                  <ArrowDownRight className="h-3 w-3 text-red-500 mr-1" />
-                  <span className="text-red-500">{Math.abs(changes.revenue)}%</span>
-                </>
-              )}
-              <span className="text-muted-foreground ml-1">vs previous period</span>
-            </div>
+            {isLoadingStats ? (
+              <div className="text-2xl font-bold">Loading...</div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">${(dashboardStats?.totalRevenue || 0).toLocaleString()}</div>
+                <div className="flex items-center text-xs mt-2">
+                  {(dashboardStats?.revenueChange || 0) > 0 ? (
+                    <>
+                      <ArrowUpRight className="h-3 w-3 text-green-500 mr-1" />
+                      <span className="text-green-500">{dashboardStats?.revenueChange}%</span>
+                    </>
+                  ) : (dashboardStats?.revenueChange || 0) < 0 ? (
+                    <>
+                      <ArrowDownRight className="h-3 w-3 text-red-500 mr-1" />
+                      <span className="text-red-500">{Math.abs(dashboardStats?.revenueChange || 0)}%</span>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">No change</span>
+                  )}
+                  <span className="text-muted-foreground ml-1">vs previous period</span>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">New Students</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Students</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{(periodTotals.students || 0).toLocaleString()}</div>
-            <div className="flex items-center text-xs mt-2">
-              {changes.students > 0 ? (
-                <>
-                  <ArrowUpRight className="h-3 w-3 text-green-500 mr-1" />
-                  <span className="text-green-500">{changes.students}%</span>
-                </>
-              ) : (
-                <>
-                  <ArrowDownRight className="h-3 w-3 text-red-500 mr-1" />
-                  <span className="text-red-500">{Math.abs(changes.students)}%</span>
-                </>
-              )}
-              <span className="text-muted-foreground ml-1">vs previous period</span>
-            </div>
+            {isLoadingStats ? (
+              <div className="text-2xl font-bold">Loading...</div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{(dashboardStats?.totalStudents || 0).toLocaleString()}</div>
+                <div className="flex items-center text-xs mt-2">
+                  {(dashboardStats?.studentsChange || 0) > 0 ? (
+                    <>
+                      <ArrowUpRight className="h-3 w-3 text-green-500 mr-1" />
+                      <span className="text-green-500">{dashboardStats?.studentsChange}%</span>
+                    </>
+                  ) : (dashboardStats?.studentsChange || 0) < 0 ? (
+                    <>
+                      <ArrowDownRight className="h-3 w-3 text-red-500 mr-1" />
+                      <span className="text-red-500">{Math.abs(dashboardStats?.studentsChange || 0)}%</span>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">No change</span>
+                  )}
+                  <span className="text-muted-foreground ml-1">vs previous period</span>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Learn Rate</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Total Requests</CardTitle>
+            <AlertCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{periodTotals.avgLearnRate.toFixed(1)} min/hr</div>
-            <div className="flex items-center text-xs mt-2">
-              {changes.learnRate > 0 ? (
-                <>
-                  <ArrowUpRight className="h-3 w-3 text-green-500 mr-1" />
-                  <span className="text-green-500">{changes.learnRate}%</span>
-                </>
-              ) : (
-                <>
-                  <ArrowDownRight className="h-3 w-3 text-red-500 mr-1" />
-                  <span className="text-red-500">{Math.abs(changes.learnRate)}%</span>
-                </>
-              )}
-              <span className="text-muted-foreground ml-1">improvement</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Execution Pace</CardTitle>
-            <Zap className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{periodTotals.avgExecutionPace.toFixed(1)}%</div>
-            <div className="flex items-center text-xs mt-2">
-              {changes.executionPace > 0 ? (
-                <>
-                  <ArrowUpRight className="h-3 w-3 text-green-500 mr-1" />
-                  <span className="text-green-500">{changes.executionPace}%</span>
-                </>
-              ) : (
-                <>
-                  <ArrowDownRight className="h-3 w-3 text-red-500 mr-1" />
-                  <span className="text-red-500">{Math.abs(changes.executionPace)}%</span>
-                </>
-              )}
-              <span className="text-muted-foreground ml-1">vs previous period</span>
-            </div>
+            {isLoadingStats ? (
+              <div className="text-2xl font-bold">Loading...</div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{(dashboardStats?.totalRequests || 0).toLocaleString()}</div>
+                <div className="flex items-center text-xs mt-2">
+                  {(dashboardStats?.requestsChange || 0) > 0 ? (
+                    <>
+                      <ArrowUpRight className="h-3 w-3 text-green-500 mr-1" />
+                      <span className="text-green-500">{dashboardStats?.requestsChange}%</span>
+                    </>
+                  ) : (dashboardStats?.requestsChange || 0) < 0 ? (
+                    <>
+                      <ArrowDownRight className="h-3 w-3 text-red-500 mr-1" />
+                      <span className="text-red-500">{Math.abs(dashboardStats?.requestsChange || 0)}%</span>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">No change</span>
+                  )}
+                  <span className="text-muted-foreground ml-1">vs previous period</span>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </StatsGrid>
