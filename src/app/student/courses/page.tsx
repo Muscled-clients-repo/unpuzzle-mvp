@@ -30,15 +30,47 @@ import { getStudentCoursesWithJunctionTable } from '@/app/actions/student-course
 import { useWebSocketConnection } from '@/hooks/use-websocket-connection'
 import { courseEventObserver, STUDENT_EVENTS, COURSE_GOAL_EVENTS } from '@/lib/course-event-observer'
 import { CourseThumbnail } from '@/components/ui/course-thumbnail'
+import { EmailVerificationModal } from '@/components/auth/EmailVerificationModal'
+import { createClient } from '@/lib/supabase/client'
 
 export default function MyCoursesPage() {
-  const { user, profile } = useAppStore()
+  const { user, profile, authLoading } = useAppStore()
   const queryClient = useQueryClient()
+  const [emailVerified, setEmailVerified] = useState<boolean | null>(null)
 
   // Get authenticated user ID
   const userId = user?.id || profile?.id
 
-  console.log('[Student Courses] User state:', { user: user?.id, profile: profile?.id, userId })
+  console.log('[Student Courses] User state:', { user: user?.id, profile: profile?.id, userId, authLoading })
+
+  // Check email verification status
+  useEffect(() => {
+    const checkEmailVerification = async () => {
+      if (!userId) return
+
+      const supabase = createClient()
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+
+      if (authUser) {
+        setEmailVerified(authUser.email_confirmed_at !== null)
+      }
+    }
+
+    checkEmailVerification()
+  }, [userId])
+
+  // Resend verification email
+  const handleResendEmail = async () => {
+    const supabase = createClient()
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: user?.email || profile?.email || ''
+    })
+
+    if (error) {
+      throw error
+    }
+  }
 
   // WebSocket connection for real-time updates
   useWebSocketConnection(userId || '')
@@ -128,8 +160,9 @@ export default function MyCoursesPage() {
 
   // Use courses with progress data, fallback to basic courses
   const displayCourses = coursesWithProgress || courses
-  
-  if (isLoading) return <LoadingSpinner />
+
+  // Show loading spinner while auth is initializing OR while courses are loading
+  if (authLoading || (isLoading && userId)) return <LoadingSpinner />
 
   if (error) return <ErrorFallback error={error} />
 
@@ -231,6 +264,13 @@ export default function MyCoursesPage() {
             </div>
 
       </div>
+
+      {/* Email Verification Modal */}
+      <EmailVerificationModal
+        isOpen={emailVerified === false}
+        email={user?.email || profile?.email}
+        onResendEmail={handleResendEmail}
+      />
     </ErrorBoundary>
   )
 }

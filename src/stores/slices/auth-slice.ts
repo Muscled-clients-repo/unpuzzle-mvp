@@ -115,8 +115,19 @@ export const createAuthSlice: StateCreator<AuthSlice> = (set, get) => ({
   },
 
   signUp: async (email: string, password: string, fullName: string) => {
-    // TODO: Implement server-side signup
-    throw new Error('Signup not yet implemented with server-side auth')
+    const response = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, fullName })
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to sign up')
+    }
+
+    return data
   },
 
   signIn: async (email: string, password: string) => {
