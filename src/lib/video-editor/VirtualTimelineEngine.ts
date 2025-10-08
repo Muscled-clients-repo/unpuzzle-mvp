@@ -1,9 +1,10 @@
 import { FPS } from './types'
+import { SimpleCanvasRenderer } from './SimpleCanvasRenderer'
 
 export interface TimelineSegment {
   id: string
   startFrame: number        // Position on timeline
-  endFrame: number          // End position on timeline  
+  endFrame: number          // End position on timeline
   sourceUrl: string         // Video file URL
   sourceInFrame: number     // Start frame within source video
   sourceOutFrame: number    // End frame within source video
@@ -21,12 +22,12 @@ export class VirtualTimelineEngine {
   private animationFrameId: number | null = null
   private lastFrameTime: number = 0
 
-  // DUAL VIDEO ARCHITECTURE
+  // CANVAS + HIDDEN VIDEO ARCHITECTURE (Canva approach)
+  private renderer: SimpleCanvasRenderer | null = null
   private primaryVideo: HTMLVideoElement | null = null
   private bufferVideo: HTMLVideoElement | null = null
   private activeVideo: HTMLVideoElement | null = null
   private currentSegment: TimelineSegment | null = null
-  private isPreparingTransition: boolean = false // Prevent multiple simultaneous transitions
 
   // SEEK THROTTLING - Prevent seek thrashing
   private isSeeking: boolean = false
@@ -39,16 +40,16 @@ export class VirtualTimelineEngine {
     this.playbackLoop = this.playbackLoop.bind(this)
   }
 
-  // Set dual video elements
+  // Set canvas for rendering
+  setCanvas(canvas: HTMLCanvasElement) {
+    this.renderer = new SimpleCanvasRenderer(canvas)
+  }
+
+  // Set hidden video elements (sources for canvas rendering)
   setVideoElements(primary: HTMLVideoElement, buffer: HTMLVideoElement) {
     this.primaryVideo = primary
     this.bufferVideo = buffer
     this.activeVideo = primary // Start with primary as active
-
-    // Hide buffer initially
-    if (this.bufferVideo) {
-      this.bufferVideo.style.display = 'none'
-    }
   }
 
   // Legacy support - use primary if only one video provided
@@ -70,21 +71,12 @@ export class VirtualTimelineEngine {
     return this.primaryVideo
   }
 
-  // Switch which video is active
+  // Switch which video is active (no longer changes visibility - just tracking)
   private switchActiveVideo() {
     const inactive = this.getInactiveVideo()
     if (!inactive) return
 
-    console.log('🔄 Switching active video element')
-
-    // Hide current active
-    if (this.activeVideo) {
-      this.activeVideo.style.display = 'none'
-    }
-
-    // Show and activate the other one
     this.activeVideo = inactive
-    this.activeVideo.style.display = 'block'
   }
 
   // Set callbacks
@@ -136,10 +128,15 @@ export class VirtualTimelineEngine {
     
     // Sync video to timeline position
     this.syncVideoToTimeline()
-    
+
+    // Render current video frame to canvas
+    if (this.renderer && this.videoElement) {
+      this.renderer.renderVideoFrame(this.videoElement)
+    }
+
     // Notify frame update - keep fractional frames for smooth movement
     this.onFrameUpdate?.(this.currentFrame)
-    
+
     // Continue loop
     this.lastFrameTime = timestamp
     this.animationFrameId = requestAnimationFrame(this.playbackLoop)
@@ -148,20 +145,11 @@ export class VirtualTimelineEngine {
   // Sync video element to show correct content for current frame
   private syncVideoToTimeline() {
     if (!this.videoElement) {
-      console.log('❌ No video element available')
       return
     }
 
     const currentFrameFloored = Math.floor(this.currentFrame)
     const targetSegment = this.findSegmentAtFrame(currentFrameFloored)
-
-    // Debug: Log segment search
-    if (!targetSegment) {
-      console.log('⚠️ No segment found at frame:', currentFrameFloored, 'Available segments:',
-        this.segments.map(s => `${s.id}: ${s.startFrame}-${s.endFrame}`))
-    } else {
-      console.log('✅ Found segment:', targetSegment.id, 'for frame:', currentFrameFloored, 'URL:', targetSegment.sourceUrl?.substring(0, 50) + '...')
-    }
 
     // Handle gaps (no segment)
     if (!targetSegment) {
@@ -191,21 +179,20 @@ export class VirtualTimelineEngine {
     if (isNewSegment || isDifferentVideo) {
       if (isDifferentVideo) {
         // Different video file - use dual video architecture
-        console.log('📹 Loading new video segment:', targetSegment.id)
+        // CRITICAL: Set currentSegment IMMEDIATELY to prevent repeated loads
+        this.currentSegment = targetSegment
+
         this.loadSegmentWithDualVideo(targetSegment, targetTime)
         return
       }
 
       // Same video but different segment or coming from gap
       if (comingFromGap) {
-        console.log('📹 Entering segment from gap:', targetSegment.id)
-
         // CRITICAL: Set currentSegment IMMEDIATELY to prevent repeated transitions
         this.currentSegment = targetSegment
 
         // THROTTLED SEEK: Don't seek if already seeking
         if (this.isSeeking) {
-          console.log('⏳ Seek in progress, waiting for completion')
           return
         }
 
@@ -224,7 +211,6 @@ export class VirtualTimelineEngine {
 
       // THROTTLED SEEK: Don't seek if already seeking
       if (this.isSeeking) {
-        console.log('⏳ Seek in progress, waiting for completion')
         return
       }
 
@@ -310,7 +296,11 @@ export class VirtualTimelineEngine {
       return
     }
 
-    console.log('🎬 Starting non-blocking load for segment:', segment.id)
+    // If active video is empty (first load), load it directly
+    if (!this.videoElement || !this.videoElement.src || this.videoElement.src === '') {
+      this.loadSegment(segment, targetTime)
+      return
+    }
 
     // Load and seek the inactive video in the background (non-blocking)
     const prepareVideo = async () => {
@@ -357,8 +347,6 @@ export class VirtualTimelineEngine {
           inactiveVideo.addEventListener('seeked', onSeeked, { once: true })
         })
 
-        console.log('✅ Buffer video ready at', targetTime.toFixed(2))
-
         // Switch videos NOW (this might be after playhead has moved past, but that's OK)
         this.switchActiveVideo()
         this.currentSegment = segment
@@ -391,28 +379,22 @@ export class VirtualTimelineEngine {
   // Legacy single video load (fallback)
   private loadSegment(segment: TimelineSegment, targetTime: number) {
     if (!this.videoElement) {
-      console.log('❌ loadSegment: No video element')
       return
     }
-
-    console.log('📼 Loading segment:', segment.id, 'URL:', segment.sourceUrl?.substring(0, 50) + '...', 'at time:', targetTime.toFixed(2))
 
     this.currentSegment = segment
 
     // Load new video if needed
     if (this.videoElement.src !== segment.sourceUrl) {
-      console.log('🔄 Setting new video source')
       this.videoElement.src = segment.sourceUrl
 
       // When video loads, seek to correct position
       this.videoElement.onloadedmetadata = () => {
         if (!this.videoElement || !this.currentSegment) return
 
-        console.log('✅ Video loaded, seeking to:', targetTime.toFixed(2))
         this.videoElement.currentTime = targetTime
 
         if (this.isPlaying) {
-          console.log('▶️ Starting playback')
           this.videoElement.play().catch((err) => {
             console.error('Play error:', err)
           })
@@ -422,9 +404,11 @@ export class VirtualTimelineEngine {
       this.videoElement.onerror = (err) => {
         console.error('❌ Video load error:', err)
       }
+
+      // Force load
+      this.videoElement.load()
     } else {
       // Same video already loaded - just seek
-      console.log('⏩ Same video, seeking to:', targetTime.toFixed(2))
       this.videoElement.currentTime = targetTime
 
       if (this.isPlaying && this.videoElement.paused) {
@@ -490,8 +474,6 @@ export class VirtualTimelineEngine {
     // This allows scrubber to move in empty timeline regions
     this.currentFrame = Math.max(0, frame)
 
-    console.log('🎯 Seeking to frame:', frame, 'Time:', (frame / this.fps).toFixed(2) + 's', 'isPlaying:', this.isPlaying)
-
     // Reset end flag if seeking before the end
     if (frame < this.totalFrames) {
       this.hasReachedEnd = false
@@ -501,8 +483,13 @@ export class VirtualTimelineEngine {
     // If paused, sync immediately
     if (!this.isPlaying) {
       this.syncVideoToTimeline()
+
+      // Render current frame to canvas
+      if (this.renderer && this.videoElement) {
+        this.renderer.renderVideoFrame(this.videoElement)
+      }
+
       this.onFrameUpdate?.(this.currentFrame)
-      console.log('📍 Synced - Video currentTime:', this.videoElement?.currentTime?.toFixed(2), 'Segment:', this.currentSegment?.id)
     }
   }
 

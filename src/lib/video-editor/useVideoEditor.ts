@@ -22,9 +22,9 @@ export function useVideoEditor() {
   const [totalFrames, setTotalFrames] = useState(0)
   
   // Refs
-  // Dual video refs for seamless transitions
-  const videoRef = useRef<HTMLVideoElement>(null) // Primary video
-  const bufferVideoRef = useRef<HTMLVideoElement>(null) // Buffer video for preloading
+  const canvasRef = useRef<HTMLCanvasElement>(null) // Canvas for preview rendering
+  const videoRef = useRef<HTMLVideoElement>(null) // Hidden video source (primary)
+  const bufferVideoRef = useRef<HTMLVideoElement>(null) // Hidden video source (buffer)
   const engineRef = useRef<VirtualTimelineEngine | null>(null)
   const lastVisualUpdateRef = useRef<number>(0)
   const historyRef = useRef<HistoryManager>(new HistoryManager())
@@ -54,12 +54,12 @@ export function useVideoEditor() {
   useEffect(() => {
     if (!engineRef.current) {
       engineRef.current = new VirtualTimelineEngine()
-      
+
       // Set callbacks
       engineRef.current.setCallbacks({
         onFrameUpdate: (frame) => {
           setCurrentFrame(frame) // Always update precise frame
-          
+
           // Throttle visual updates to 30 FPS (33ms)
           const now = Date.now()
           if (now - lastVisualUpdateRef.current >= 33) {
@@ -70,20 +70,28 @@ export function useVideoEditor() {
         onPlayStateChange: (playing) => setIsPlaying(playing)
       })
     }
-    
-    // Set dual video elements if both are available
-    if (videoRef.current && bufferVideoRef.current) {
-      console.log('🎬 Initializing dual video architecture')
-      engineRef.current.setVideoElements(videoRef.current, bufferVideoRef.current)
-    } else if (videoRef.current) {
-      // Fallback to single video
-      console.log('📹 Using single video element (dual video not available)')
-      engineRef.current.setVideoElement(videoRef.current)
-    }
-    
+
     return () => {
       engineRef.current?.destroy()
       engineRef.current = null
+    }
+  }, [])
+
+  // Set canvas when it becomes available
+  useEffect(() => {
+    if (canvasRef.current && engineRef.current) {
+      engineRef.current.setCanvas(canvasRef.current)
+    }
+  }, [])
+
+  // Set video elements when they become available
+  useEffect(() => {
+    if (!engineRef.current) return
+
+    if (videoRef.current && bufferVideoRef.current) {
+      engineRef.current.setVideoElements(videoRef.current, bufferVideoRef.current)
+    } else if (videoRef.current) {
+      engineRef.current.setVideoElement(videoRef.current)
     }
   }, [])
   
@@ -105,14 +113,6 @@ export function useVideoEditor() {
       sourceInFrame: clip.sourceInFrame ?? 0,  // Use trim points if available
       sourceOutFrame: clip.sourceOutFrame ?? (clip.originalDurationFrames ?? clip.durationFrames)
     }))
-
-    console.log('🔄 Syncing clips to timeline engine:', segments.map(s => ({
-      id: s.id,
-      startFrame: s.startFrame,
-      endFrame: s.endFrame,
-      sourceInFrame: s.sourceInFrame,
-      sourceOutFrame: s.sourceOutFrame
-    })))
 
     engineRef.current.setSegments(segments)
   }, [clips])
@@ -298,8 +298,6 @@ export function useVideoEditor() {
       sourceInFrame: 0,
       sourceOutFrame: durationFrames
     }
-
-    console.log(`📥 Adding clip from URL: ${name || url}`)
 
     // Add clip to timeline
     setClipsWithRef(prev => {
@@ -715,8 +713,9 @@ export function useVideoEditor() {
     isPlaying,
     isRecording,
     totalFrames,
-    videoRef,
-    bufferVideoRef,  // For dual video architecture
+    canvasRef,       // Canvas for rendering
+    videoRef,        // Hidden video source (primary)
+    bufferVideoRef,  // Hidden video source (buffer)
     
     // Actions
     loadTimeline,

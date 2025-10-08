@@ -283,8 +283,6 @@ export function VideoStudio() {
     type: 'video' | 'audio' | 'image'
     durationSeconds?: number
   }) => {
-    console.log('📥 Importing media from library:', mediaFile.name)
-
     // Calculate duration in frames
     const durationFrames = mediaFile.durationSeconds
       ? Math.floor(mediaFile.durationSeconds * FPS)
@@ -359,21 +357,20 @@ export function VideoStudio() {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
   }, [])
   
-  // Handle dual video element positioning based on view mode
+  // Handle canvas positioning based on view mode
   useEffect(() => {
-    const primaryVideo = editor.videoRef.current
-    const bufferVideo = editor.bufferVideoRef.current
-    if (!primaryVideo) return
+    const canvas = editor.canvasRef.current
+    if (!canvas) return
 
-    const updateVideoPosition = (videoElement: HTMLVideoElement) => {
+    const updateCanvasPosition = () => {
       if (viewMode === 'normal' || viewMode === 'fullScreen') {
-        // Both normal and fullScreen modes - keep video in preview container
+        // Both normal and fullScreen modes - keep canvas in preview container
         const previewContainer = document.getElementById('video-preview-container')
         if (previewContainer) {
           if (viewMode === 'fullScreen') {
-            // In fullscreen, make video fill the entire container
-            videoElement.className = `${editor.clips.length > 0 ? 'block' : 'hidden'} w-full h-full object-contain`
-            videoElement.style.cssText = `
+            // In fullscreen, make canvas fill the entire container
+            canvas.className = `${editor.clips.length > 0 ? 'block' : 'hidden'} w-full h-full object-contain`
+            canvas.style.cssText = `
               position: absolute;
               inset: 0;
               width: 100%;
@@ -384,8 +381,8 @@ export function VideoStudio() {
             `
           } else {
             // Normal mode - centered in container
-            videoElement.className = `${editor.clips.length > 0 ? 'block' : 'hidden'} max-w-full max-h-full object-contain`
-            videoElement.style.cssText = `
+            canvas.className = `${editor.clips.length > 0 ? 'block' : 'hidden'} max-w-full max-h-full object-contain`
+            canvas.style.cssText = `
               position: relative;
               inset: auto;
               width: auto;
@@ -394,17 +391,16 @@ export function VideoStudio() {
               z-index: auto;
             `
           }
-          videoElement.controls = false
 
           // Always move to preview container for these modes
-          if (videoElement.parentNode !== previewContainer) {
-            previewContainer.appendChild(videoElement)
+          if (canvas.parentNode !== previewContainer) {
+            previewContainer.appendChild(canvas)
           }
         }
       } else {
-        // fullTab mode - Move video to document body for fixed positioning
-        videoElement.className = `${editor.clips.length > 0 ? 'block' : 'hidden'} fixed object-contain`
-        videoElement.style.cssText = `
+        // fullTab mode - Move canvas to document body for fixed positioning
+        canvas.className = `${editor.clips.length > 0 ? 'block' : 'hidden'} fixed object-contain`
+        canvas.style.cssText = `
           position: fixed;
           top: 0;
           left: 0;
@@ -416,69 +412,53 @@ export function VideoStudio() {
           z-index: 30;
           object-fit: contain;
         `
-        videoElement.controls = false
 
-        if (videoElement.parentNode !== document.body) {
-          document.body.appendChild(videoElement)
+        if (canvas.parentNode !== document.body) {
+          document.body.appendChild(canvas)
         }
       }
     }
 
-    // Position both video elements
-    updateVideoPosition(primaryVideo)
-    if (bufferVideo) {
-      updateVideoPosition(bufferVideo)
-    }
+    // Position canvas
+    updateCanvasPosition()
 
-    // Run immediately and with small delay for DOM updates
-    const timer = setTimeout(() => {
-      updateVideoPosition(primaryVideo)
-      if (bufferVideo) {
-        updateVideoPosition(bufferVideo)
-      }
-    }, 50)
+    // Run with small delay for DOM updates
+    const timer = setTimeout(updateCanvasPosition, 50)
 
     return () => clearTimeout(timer)
-  }, [viewMode, editor.clips.length, editor.videoRef, editor.bufferVideoRef])
+  }, [viewMode, editor.clips.length, editor.canvasRef])
   
-  // Additional effect to ensure dual videos are properly positioned when first clip is added
+  // Ensure canvas is properly positioned when first clip is added
   useEffect(() => {
     if (editor.clips.length > 0 && viewMode === 'normal') {
-      const primaryVideo = editor.videoRef.current
-      const bufferVideo = editor.bufferVideoRef.current
+      const canvas = editor.canvasRef.current
+      const previewContainer = document.getElementById('video-preview-container')
 
-      const positionVideo = (videoElement: HTMLVideoElement) => {
-        const previewContainer = document.getElementById('video-preview-container')
-        if (previewContainer && videoElement.parentNode !== previewContainer) {
-          setTimeout(() => {
-            videoElement.className = 'block max-w-full max-h-full object-contain'
-            videoElement.style.cssText = `
-              position: relative;
-              inset: auto;
-              width: auto;
-              height: auto;
-              transform: none;
-              z-index: auto;
-            `
-            videoElement.controls = false
-            previewContainer.appendChild(videoElement)
-          }, 100)
-        }
+      if (canvas && previewContainer && canvas.parentNode !== previewContainer) {
+        setTimeout(() => {
+          canvas.className = 'block max-w-full max-h-full object-contain'
+          canvas.style.cssText = `
+            position: relative;
+            inset: auto;
+            width: auto;
+            height: auto;
+            transform: none;
+            z-index: auto;
+          `
+          previewContainer.appendChild(canvas)
+        }, 100)
       }
-
-      if (primaryVideo) positionVideo(primaryVideo)
-      if (bufferVideo) positionVideo(bufferVideo)
     }
-  }, [editor.clips.length, editor.videoRef, editor.bufferVideoRef])
+  }, [editor.clips.length, editor.canvasRef])
   
-  // Cleanup: ensure video element returns to normal container on unmount
+  // Cleanup: ensure canvas returns to normal container on unmount
   useEffect(() => {
     return () => {
-      const videoElement = editor.videoRef.current
-      if (videoElement && videoElement.parentNode === document.body) {
+      const canvas = editor.canvasRef.current
+      if (canvas && canvas.parentNode === document.body) {
         const previewContainer = document.getElementById('video-preview-container')
         if (previewContainer) {
-          previewContainer.appendChild(videoElement)
+          previewContainer.appendChild(canvas)
         }
       }
     }
@@ -535,16 +515,26 @@ export function VideoStudio() {
   
   return (
     <div className="h-screen flex flex-col bg-gray-900 text-white">
-      {/* Dual video elements for seamless transitions - positioned by useEffect */}
+      {/* Canvas for preview rendering (Canva approach) */}
+      <canvas
+        ref={editor.canvasRef}
+        className="hidden"
+      />
+
+      {/* Hidden video elements - sources for canvas rendering */}
       <video
         ref={editor.videoRef}
         className="hidden"
         crossOrigin="anonymous"
+        muted
+        playsInline
       />
       <video
         ref={editor.bufferVideoRef}
         className="hidden"
         crossOrigin="anonymous"
+        muted
+        playsInline
       />
 
       {/* Full Tab View Controls (outside preview container) */}
