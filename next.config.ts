@@ -20,6 +20,27 @@ const nextConfig: NextConfig = {
       bodySizeLimit: '1gb', // Allow up to 1GB for video uploads
     },
   },
+  // Headers for FFmpeg.wasm (SharedArrayBuffer support)
+  // Commented out because it breaks CDN video playback
+  // FFmpeg will fall back to non-SharedArrayBuffer mode (slower but works)
+  // To enable: Configure CDN to send Cross-Origin-Resource-Policy: cross-origin
+  // async headers() {
+  //   return [
+  //     {
+  //       source: '/instructor/studio',
+  //       headers: [
+  //         {
+  //           key: 'Cross-Origin-Embedder-Policy',
+  //           value: 'require-corp',
+  //         },
+  //         {
+  //           key: 'Cross-Origin-Opener-Policy',
+  //           value: 'same-origin',
+  //         },
+  //       ],
+  //     },
+  //   ]
+  // },
   // Skip TypeScript and ESLint checks during build
   typescript: {
     // Dangerously allow production builds to successfully complete even if

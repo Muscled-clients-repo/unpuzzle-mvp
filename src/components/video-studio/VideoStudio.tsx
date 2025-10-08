@@ -4,15 +4,17 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useVideoEditor } from '@/lib/video-editor/useVideoEditor'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ArrowLeft, Play, Pause, Circle, Square, Undo2, Redo2, X, Maximize, Save, Loader2 } from 'lucide-react'
+import { ArrowLeft, Play, Pause, Circle, Square, Undo2, Redo2, X, Maximize, Save, Loader2, Download } from 'lucide-react'
 import Link from 'next/link'
 import { Timeline } from './Timeline'
 import { MediaAssetBrowser } from './MediaAssetBrowser'
 import { useKeyboardShortcuts } from '@/lib/video-editor/useKeyboardShortcuts'
 import { formatFrame } from './formatters'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { useSaveStudioProject, useStudioProject, useSaveRecording } from '@/hooks/use-studio-queries'
+import { useSaveStudioProject, useStudioProject, useSaveRecording, useExportTimeline } from '@/hooks/use-studio-queries'
 import { FPS } from '@/lib/video-editor/types'
+import { useFFmpegExport } from '@/lib/video-editor/useFFmpegExport'
+import { ExportDialog, ExportSettings } from './ExportDialog'
 
 export function VideoStudio() {
   const editor = useVideoEditor()
@@ -27,6 +29,13 @@ export function VideoStudio() {
   const { data: project, isLoading: isLoadingProject } = useStudioProject(projectId)
   const { mutate: saveProject, isPending: isSaving } = useSaveStudioProject()
   const { mutate: saveRecording, isPending: isSavingRecording } = useSaveRecording()
+  const { mutate: exportTimeline } = useExportTimeline()
+
+  // FFmpeg export hook
+  const { exportTimeline: exportWithFFmpeg, isExporting, progress: exportProgress } = useFFmpegExport()
+
+  // Export dialog state
+  const [showExportDialog, setShowExportDialog] = useState(false)
 
   // Project metadata state
   const [projectTitle, setProjectTitle] = useState('Untitled Project')
@@ -296,6 +305,56 @@ export function VideoStudio() {
       name: mediaFile.name
     })
   }, [editor])
+
+  // Handle export
+  const handleExport = useCallback(async (settings: ExportSettings) => {
+    if (editor.clips.length === 0) {
+      return
+    }
+
+    try {
+      // Quality to bitrate/preset mapping
+      const qualityPresets = {
+        high: { bitrate: '10M', preset: 'slow' as const },
+        medium: { bitrate: '5M', preset: 'medium' as const },
+        low: { bitrate: '2M', preset: 'fast' as const },
+      }
+
+      const { bitrate, preset } = qualityPresets[settings.quality]
+
+      // Export timeline using FFmpeg
+      const blob = await exportWithFFmpeg(editor.clips, {
+        resolution: settings.resolution,
+        fps: settings.fps,
+        bitrate,
+        preset,
+        codec: 'libx264'
+      })
+
+      if (!blob) {
+        console.log('Export cancelled')
+        return
+      }
+
+      // Save to media library
+      exportTimeline({
+        blob,
+        metadata: {
+          title: settings.title,
+          description: settings.description,
+          project_id: projectId || undefined,
+          export_settings: {
+            resolution: settings.resolution,
+            fps: settings.fps,
+            codec: 'h264'
+          }
+        }
+      })
+
+    } catch (error) {
+      console.error('Export error:', error)
+    }
+  }, [editor.clips, exportWithFFmpeg, exportTimeline, projectId])
 
   // Handle view mode changes
   const handleFullTab = useCallback(() => {
@@ -691,7 +750,24 @@ export function VideoStudio() {
               </>
             )}
           </Button>
-          <Button size="sm" className="bg-blue-600 hover:bg-blue-700">Export</Button>
+          <Button
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700"
+            onClick={() => setShowExportDialog(true)}
+            disabled={editor.clips.length === 0 || isExporting}
+          >
+            {isExporting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                Exporting...
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4 mr-1" />
+                Export
+              </>
+            )}
+          </Button>
         </div>
       </div>
       )}
@@ -897,6 +973,20 @@ export function VideoStudio() {
         </div>
       </div>
       )}
+
+      {/* Export Dialog */}
+      <ExportDialog
+        open={showExportDialog}
+        onOpenChange={setShowExportDialog}
+        onExport={handleExport}
+        isExporting={isExporting}
+        progress={exportProgress}
+        projectTitle={projectTitle}
+        clipCount={editor.clips.length}
+        totalDurationSeconds={editor.clips.reduce((total, clip) => {
+          return total + (clip.durationFrames / FPS)
+        }, 0)}
+      />
     </div>
   )
 }
