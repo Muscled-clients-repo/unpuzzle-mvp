@@ -374,24 +374,47 @@ export async function getMediaFilesAction(options?: { page?: number; limit?: num
     const hasMore = (from + (mediaFiles?.length || 0)) < totalCount
 
     // Transform database records to match the expected MediaFile interface
-    const transformedFiles = (mediaFiles || []).map(file => ({
-      id: file.id,
-      name: file.name,
-      type: file.file_type,
-      size: formatFileSize(file.file_size),
-      usage: file.usage_count ? `${file.usage_count} uses` : 'Unused',
-      uploadedAt: new Date(file.created_at).toLocaleDateString(),
-      thumbnail: generateCDNUrlWithToken(file.thumbnail_url),
-      tags: file.tags, // Include tags from database
-      media_usage: file.media_usage, // Include course usage data
-      // Raw database fields for UI formatting
-      file_size: file.file_size,
-      duration_seconds: file.duration_seconds,
-      // Include minimal data needed for preview functionality only
-      backblaze_file_id: file.backblaze_file_id,
-      backblaze_url: file.backblaze_url,
-      file_name: file.name
-    }))
+    const transformedFiles = (mediaFiles || []).map(file => {
+      // Generate CDN URL with HMAC token for the main file
+      // Use the file.name directly (the actual filename stored in DB)
+      let cdnUrl: string | null = null
+
+      if (file.backblaze_url && file.name) {
+        try {
+          const cdnBaseUrl = 'https://cdn.unpuzzle.co'
+          const hmacSecret = process.env.CDN_AUTH_SECRET || process.env.AUTH_SECRET
+
+          if (hmacSecret) {
+            // Use the actual filename from the database (not from URL)
+            // This matches how recordings are saved with timestamp-based names
+            cdnUrl = generateCDNUrl(cdnBaseUrl, `/${file.name}`, hmacSecret)
+          }
+        } catch (err) {
+          console.warn('Failed to generate CDN URL for', file.name, err)
+        }
+      }
+
+      return {
+        id: file.id,
+        name: file.name,
+        type: file.file_type,
+        size: formatFileSize(file.file_size),
+        usage: file.usage_count ? `${file.usage_count} uses` : 'Unused',
+        uploadedAt: new Date(file.created_at).toLocaleDateString(),
+        thumbnail: generateCDNUrlWithToken(file.thumbnail_url),
+        tags: file.tags, // Include tags from database
+        media_usage: file.media_usage, // Include course usage data
+        // Raw database fields for UI formatting
+        file_size: file.file_size,
+        duration_seconds: file.duration_seconds,
+        // Include minimal data needed for preview functionality only
+        backblaze_file_id: file.backblaze_file_id,
+        backblaze_url: file.backblaze_url,
+        file_name: file.name,
+        // CDN URL with HMAC token for secure access
+        cdn_url: cdnUrl
+      }
+    })
 
     return {
       success: true,

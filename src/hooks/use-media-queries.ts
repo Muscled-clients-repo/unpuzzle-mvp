@@ -29,7 +29,8 @@ export interface MediaFile {
   backblaze_file_id?: string
   backblaze_url?: string
   file_name?: string
-  
+  cdn_url?: string | null // CDN URL with HMAC token
+
   // ARCHITECTURE-COMPLIANT: Upload progress fields (TanStack managed)
   uploadProgress?: number // 0-100
   uploadStartTime?: number // timestamp

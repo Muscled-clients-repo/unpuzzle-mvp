@@ -221,12 +221,7 @@ function HeaderActions({ user, userRole, userDatabaseRole, onSignOut }: HeaderAc
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>
-                <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">{user.name}</p>
-                  <p className="text-xs leading-none text-muted-foreground">
-                    {user.email}
-                  </p>
-                </div>
+                <p className="text-sm font-medium leading-none">{user.name}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               

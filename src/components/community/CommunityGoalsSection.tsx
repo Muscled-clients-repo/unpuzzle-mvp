@@ -13,14 +13,13 @@ interface Goal {
   progress: number
   startDate: string
   completedDate?: string
-  milestones: Milestone[]
   metrics?: GoalMetrics
   actions?: Action[]
 }
 
 interface GoalMetrics {
   learnRate: number // minutes of video content consumed per hour of session time
-  executionRate: number // percentage of milestones hit on time
+  executionRate: number // percentage of actions completed on time
   executionPace: 'fast' | 'steady' | 'slow'
   ranking: number // ranking by speed (days to complete)
   daysToComplete?: number
@@ -28,18 +27,10 @@ interface GoalMetrics {
 
 interface Action {
   id: string
-  type: 'course' | 'lesson' | 'quiz' | 'reflection' | 'milestone' | 'content' | 'call'
+  type: 'course' | 'lesson' | 'quiz' | 'reflection' | 'content' | 'call'
   title: string
   date: string
   details?: string
-}
-
-interface Milestone {
-  id: string
-  title: string
-  targetAmount: string
-  completed: boolean
-  completedDate?: string
 }
 
 interface Course {
@@ -52,7 +43,7 @@ interface Course {
 
 interface ExecutionMetrics {
   learningRate: number // courses completed per month
-  executionRate: number // milestones hit on time percentage
+  executionRate: number // actions completed on time percentage
   executionPace: 'fast' | 'steady' | 'slow'
   consistency: number // percentage of weeks with activity
 }
@@ -85,13 +76,9 @@ export function CommunityGoalsSection({
       status: 'active',
       progress: 75,
       startDate: '2024-07-01',
-      milestones: [
-        { id: '1', title: 'Optimize Operations', targetAmount: '$4K', completed: true, completedDate: '2024-08-15' },
-        { id: '2', title: 'Hit $5K Monthly', targetAmount: '$5K', completed: false }
-      ],
       actions: [
         { id: '1', type: 'course', title: 'Advanced Shopify Development', date: '2024-07-05', details: 'Completed 8/10 modules' },
-        { id: '2', type: 'milestone', title: 'Hired first developer', date: '2024-07-15', details: 'Found via Upwork, $15/hr' },
+        { id: '2', type: 'content', title: 'Hired first developer', date: '2024-07-15', details: 'Found via Upwork, $15/hr' },
         { id: '3', type: 'reflection', title: 'Weekly reflection #8', date: '2024-08-20', details: 'Focused on scaling challenges' },
         { id: '4', type: 'call', title: 'Client discovery call', date: '2024-08-22', details: '$2K project potential' },
         { id: '5', type: 'quiz', title: 'Quiz at 15:30 - Scaling Strategies', date: '2024-08-25', details: 'Advanced Shopify Development course' }
@@ -107,10 +94,6 @@ export function CommunityGoalsSection({
       progress: 100,
       startDate: '2024-04-01',
       completedDate: '2024-06-30',
-      milestones: [
-        { id: '1', title: 'Streamline Process', targetAmount: '$2.5K', completed: true, completedDate: '2024-05-15' },
-        { id: '2', title: 'Hit $3K Monthly', targetAmount: '$3K', completed: true, completedDate: '2024-06-30' }
-      ],
       metrics: {
         learnRate: 42,
         executionRate: 94,
@@ -120,10 +103,10 @@ export function CommunityGoalsSection({
       },
       actions: [
         { id: '1', type: 'course', title: 'Client Acquisition Mastery', date: '2024-04-05', details: 'Completed all modules' },
-        { id: '2', type: 'milestone', title: 'Created Shopify portfolio', date: '2024-04-12', details: '5 example stores built' },
-        { id: '3', type: 'milestone', title: 'Hired UX/UI designer', date: '2024-04-20', details: 'Full-time contractor at $1/hr' },
+        { id: '2', type: 'content', title: 'Created Shopify portfolio', date: '2024-04-12', details: '5 example stores built' },
+        { id: '3', type: 'content', title: 'Hired UX/UI designer', date: '2024-04-20', details: 'Full-time contractor at $1/hr' },
         { id: '4', type: 'call', title: 'First sales call', date: '2024-04-25', details: 'Potential $1.5K project' },
-        { id: '5', type: 'milestone', title: 'Closed first deal', date: '2024-05-02', details: '$1.8K Shopify store redesign' },
+        { id: '5', type: 'content', title: 'Closed first deal', date: '2024-05-02', details: '$1.8K Shopify store redesign' },
         { id: '6', type: 'reflection', title: 'Monthly reflection - Apr', date: '2024-05-01', details: 'Process optimization insights' },
         { id: '7', type: 'content', title: 'Created sales funnel template', date: '2024-05-10', details: 'Reusable for client onboarding' },
         { id: '8', type: 'quiz', title: 'Quiz at 8:45 - Advanced Funnels', date: '2024-05-12', details: 'Client Acquisition Mastery course' }
@@ -138,11 +121,7 @@ export function CommunityGoalsSection({
       status: 'completed',
       progress: 100,
       startDate: '2024-01-15',
-      completedDate: '2024-03-30',
-      milestones: [
-        { id: '1', title: 'Get Second Client', targetAmount: '$1.5K', completed: true, completedDate: '2024-02-20' },
-        { id: '2', title: 'Hit $2K Monthly', targetAmount: '$2K', completed: true, completedDate: '2024-03-30' }
-      ]
+      completedDate: '2024-03-30'
     },
     {
       id: '4',
@@ -153,11 +132,7 @@ export function CommunityGoalsSection({
       status: 'completed',
       progress: 100,
       startDate: '2023-10-01',
-      completedDate: '2024-01-10',
-      milestones: [
-        { id: '1', title: 'First Client', targetAmount: '$500', completed: true, completedDate: '2023-11-15' },
-        { id: '2', title: 'Consistent $1K', targetAmount: '$1K', completed: true, completedDate: '2024-01-10' }
-      ]
+      completedDate: '2024-01-10'
     }
   ]
 
@@ -177,7 +152,6 @@ export function CommunityGoalsSection({
 
   const currentGoal = mockGoals.find(g => g.status === 'active')
   const completedGoals = mockGoals.filter(g => g.status === 'completed')
-  const allMilestones = mockGoals.flatMap(g => g.milestones.filter(m => m.completed))
   const completedCourses = mockCourses.filter(c => c.completed)
 
   const getDisplayName = () => {
@@ -371,7 +345,6 @@ export function CommunityGoalsSection({
                               <div key={`action-${goal.id}-${action.id}`} className="flex items-start gap-3 py-2 px-3 bg-white border border-gray-100 rounded text-sm">
                                 <div className={`w-2 h-2 rounded-full mt-1.5 ${
                                   action.type === 'course' ? 'bg-blue-500' :
-                                  action.type === 'milestone' ? 'bg-green-500' :
                                   action.type === 'quiz' ? 'bg-purple-500' :
                                   action.type === 'reflection' ? 'bg-orange-500' :
                                   action.type === 'call' ? 'bg-red-500' :
@@ -389,27 +362,6 @@ export function CommunityGoalsSection({
                         </div>
                       )}
 
-                      {/* Guest view - show milestones */}
-                      {isRestricted && (
-                        <div className="mt-3 ml-2">
-                          <div className="space-y-2">
-                            {goal.milestones.map((milestone, milestoneIndex) => (
-                              <div key={`milestone-${goal.id}-${milestone.id}`} className="flex items-center gap-3 py-2 px-3 bg-gray-50 rounded">
-                                <div className={`w-1.5 h-1.5 rounded-full ${
-                                  milestone.completed ? 'bg-gray-900' : 'bg-gray-300'
-                                }`} />
-                                <div className="flex-1">
-                                  <div className={`text-sm ${
-                                    milestone.completed ? 'text-gray-900' : 'text-gray-500'
-                                  }`}>
-                                    Milestone {milestoneIndex + 1}
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>

@@ -1,14 +1,11 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, Play, Pause, ArrowRight, Users, Crown, Star, BookOpen, Target, VideoIcon, Home, GraduationCap, FileText, Trophy, TrendingUp, DollarSign } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Play, Pause, ArrowRight, BookOpen, Target, VideoIcon, Home, GraduationCap, FileText } from 'lucide-react'
 import { CommunityPostsFeed } from './CommunityPostsFeed'
 import { CommunityGoalsSection } from './CommunityGoalsSection'
-import { GoalDiggersLeaderboard } from './GoalDiggersLeaderboard'
 import { CommunityCoursesSection } from './CommunityCoursesSection'
 import { CommunityResourcesSection } from './CommunityResourcesSection'
-import { SuccessProofSection } from './SuccessProofSection'
-import { AffiliatesSection } from './AffiliatesSection'
 
 interface CommunityHeaderProps {
   communityPosts?: any[]
@@ -16,14 +13,12 @@ interface CommunityHeaderProps {
   goalData?: {
     similarStudents?: Array<{ name: string; progress: number; days: number }>
     recentlyCompletedStudents?: Array<{ name: string; goal: string; days: number; rank: number }>
-    recentActivities?: Array<{ id: number; user: string; action: string; time: string; type: string }>
   }
-  goalDiggers?: any[]
   hiddenTabs?: string[]
   coursesByGoal?: any[]
 }
 
-export function CommunityHeader({ communityPosts, userRole = 'student', goalData, goalDiggers, hiddenTabs = [], coursesByGoal }: CommunityHeaderProps) {
+export function CommunityHeader({ communityPosts, userRole = 'student', goalData, hiddenTabs = [], coursesByGoal }: CommunityHeaderProps) {
   const [currentSlide, setCurrentSlide] = useState(0)
   const [isVideoPlaying, setIsVideoPlaying] = useState(false)
   const [currentActivity, setCurrentActivity] = useState(0)
@@ -33,53 +28,12 @@ export function CommunityHeader({ communityPosts, userRole = 'student', goalData
   const allNavigationTabs = [
     { id: 'community', label: 'Community', icon: Home },
     { id: 'goals', label: 'Goals', icon: Target },
-    { id: 'goal-diggers', label: 'Goal Diggers', icon: Trophy },
-    { id: 'success-proof', label: 'Success Proof', icon: TrendingUp },
-    { id: 'affiliates', label: 'Affiliates', icon: DollarSign },
     { id: 'courses', label: 'Courses', icon: GraduationCap },
     { id: 'resources', label: 'Resources', icon: FileText }
   ]
   
   const navigationTabs = allNavigationTabs.filter(tab => !hiddenTabs.includes(tab.id))
-  
-  const recentActivities = [
-    {
-      id: 1,
-      user: 'Sarah M.',
-      action: 'completed "Building Your First Shopify App"',
-      time: '2 mins ago',
-      type: 'course'
-    },
-    {
-      id: 2,
-      user: 'John D.',
-      action: 'reached $5k milestone',
-      time: '5 mins ago',
-      type: 'goal'
-    },
-    {
-      id: 3,
-      user: 'Lisa K.',
-      action: 'shared a new resource: "Claude Code Cheat Sheet"',
-      time: '12 mins ago',
-      type: 'resource'
-    },
-    {
-      id: 4,
-      user: 'Mike R.',
-      action: 'joined the AI Software Agency track',
-      time: '18 mins ago',
-      type: 'member'
-    },
-    {
-      id: 5,
-      user: 'Jenny L.',
-      action: 'completed reflection for Week 3',
-      time: '25 mins ago',
-      type: 'course'
-    }
-  ]
-  
+
   const liveActivities = [
     {
       id: 1,
@@ -174,7 +128,7 @@ export function CommunityHeader({ communityPosts, userRole = 'student', goalData
     setCurrentSlide((prev) => (prev - 1 + galleryItems.length) % galleryItems.length)
   }
 
-  const goToSlide = (index) => {
+  const goToSlide = (index: number) => {
     setCurrentSlide(index)
   }
 
@@ -412,11 +366,11 @@ export function CommunityHeader({ communityPosts, userRole = 'student', goalData
           </div>
         </div>
         
-        {/* Community Navigation & Recent Activity */}
+        {/* Community Navigation */}
         <div className="max-w-7xl mx-auto px-4 py-12">
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            {/* Left Column - Navigation + Recent Activity */}
-            <div className="lg:col-span-1 space-y-8">
+            {/* Left Column - Navigation */}
+            <div className="lg:col-span-1">
               {/* Navigation */}
               <div>
                 <nav className="space-y-2">
@@ -439,51 +393,19 @@ export function CommunityHeader({ communityPosts, userRole = 'student', goalData
                   })}
                 </nav>
               </div>
-
-              {/* Recent Activity */}
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Recent Activity</h3>
-                <div className="space-y-3">
-                  {(goalData?.recentActivities || recentActivities).slice(0, 4).map((activity) => (
-                    <div key={activity.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                      <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
-                        activity.type === 'course' ? 'bg-blue-500' :
-                        activity.type === 'goal' ? 'bg-green-500' :
-                        activity.type === 'resource' ? 'bg-purple-500' :
-                        'bg-gray-500'
-                      }`} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-900">
-                          <span className="font-medium">{activity.user}</span> {activity.action}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">{activity.time}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
 
             {/* Right Content Area - Tab-specific content */}
             <div className="lg:col-span-3">
               {activeTab === 'community' && <CommunityPostsFeed posts={communityPosts} userRole={userRole} />}
               {activeTab === 'goals' && (
-                <CommunityGoalsSection 
-                  userRole={userRole} 
+                <CommunityGoalsSection
+                  userRole={userRole}
                   memberName="John D."
                   isOwnProfile={true}
                   similarStudents={goalData?.similarStudents}
                   recentlyCompletedStudents={goalData?.recentlyCompletedStudents}
                 />
-              )}
-              {activeTab === 'goal-diggers' && (
-                <GoalDiggersLeaderboard userRole={userRole} goalDiggers={goalDiggers} />
-              )}
-              {activeTab === 'success-proof' && (
-                <SuccessProofSection userRole="guest" />
-              )}
-              {activeTab === 'affiliates' && (
-                <AffiliatesSection userRole="student" isAffiliate={true} />
               )}
               {activeTab === 'courses' && (
                 <CommunityCoursesSection 

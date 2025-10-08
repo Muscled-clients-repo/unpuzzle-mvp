@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { ArrowLeft, Play, Pause, Circle, Square, Undo2, Redo2, X, Maximize, Save, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { Timeline } from './Timeline'
+import { MediaAssetBrowser } from './MediaAssetBrowser'
 import { useKeyboardShortcuts } from '@/lib/video-editor/useKeyboardShortcuts'
 import { formatFrame } from './formatters'
 import { useSearchParams, useRouter } from 'next/navigation'
@@ -17,7 +18,10 @@ export function VideoStudio() {
   const editor = useVideoEditor()
   const searchParams = useSearchParams()
   const router = useRouter()
-  const projectId = searchParams.get('projectId')
+  const urlProjectId = searchParams.get('projectId')
+
+  // Use local state to track projectId so it updates when we change the URL
+  const [projectId, setProjectId] = useState<string | null>(urlProjectId)
 
   // TanStack Query hooks
   const { data: project, isLoading: isLoadingProject } = useStudioProject(projectId)
@@ -36,6 +40,7 @@ export function VideoStudio() {
   const isDraggingHorizontalRef = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const videoPreviewRef = useRef<HTMLDivElement>(null)
+  const hasLoadedProjectRef = useRef(false) // Track if we've loaded the project from DB
   
   // Handle vertical resizing (between preview and bottom panels)
   const handleVerticalResizeMouseDown = (e: React.MouseEvent) => {
@@ -117,10 +122,15 @@ export function VideoStudio() {
     }
   }, [editor.isRecording])
 
-  // Load project from database when it's fetched
+  // Load project from database ONLY on initial mount when projectId changes
   useEffect(() => {
-    if (project?.timeline_state) {
-      console.log('📂 Loading project from database:', project.title)
+    // Reset the flag when projectId changes (new project loaded)
+    hasLoadedProjectRef.current = false
+  }, [projectId])
+
+  useEffect(() => {
+    if (project?.timeline_state && !hasLoadedProjectRef.current) {
+      console.log('📂 Loading project from database (initial load):', project.title)
 
       editor.loadTimeline(
         project.timeline_state.clips,
@@ -129,6 +139,7 @@ export function VideoStudio() {
       )
 
       setProjectTitle(project.title)
+      hasLoadedProjectRef.current = true // Mark as loaded, don't reload on refetches
     }
   }, [project, editor.loadTimeline])
 
@@ -184,14 +195,19 @@ export function VideoStudio() {
                     is_draft: true // Auto-save as draft
                   },
                   {
-                    onSuccess: (saveResult) => {
-                      console.log('✅ Project auto-saved with CDN URL')
+                    onSuccess: (project) => {
+                      console.log('✅ Project auto-saved with CDN URL', {
+                        currentProjectId: projectId,
+                        savedProjectId: project?.id,
+                        willUpdateUrl: !projectId && project?.id
+                      })
                       setLastSavedAt(Date.now())
 
                       // If this was a new project, update URL with projectId
-                      if (!projectId && saveResult.project?.id) {
-                        console.log('✅ New project created during recording save, updating URL')
-                        router.push(`/instructor/studio?projectId=${saveResult.project.id}`)
+                      if (!projectId && project?.id) {
+                        console.log('✅ New project created during auto-save, updating URL:', project.id)
+                        setProjectId(project.id)
+                        window.history.replaceState(null, '', `/instructor/studio?projectId=${project.id}`)
                       }
                     }
                   }
@@ -228,13 +244,15 @@ export function VideoStudio() {
         is_draft: false // Manual saves are not drafts
       },
       {
-        onSuccess: (result) => {
+        onSuccess: (project) => {
           setLastSavedAt(Date.now())
 
           // If this was a new project (no projectId), update URL with the new project ID
-          if (!projectId && result.project?.id) {
-            console.log('✅ New project created, updating URL with projectId:', result.project.id)
-            router.push(`/instructor/studio?projectId=${result.project.id}`)
+          if (!projectId && project?.id) {
+            console.log('✅ New project created, updating URL with projectId:', project.id)
+            setProjectId(project.id)
+            // Use replace to avoid adding history entry and enable shallow routing
+            window.history.replaceState(null, '', `/instructor/studio?projectId=${project.id}`)
           }
         }
       }
@@ -256,7 +274,31 @@ export function VideoStudio() {
     const secs = seconds % 60
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
-  
+
+  // Handle importing media from library
+  const handleImportMedia = useCallback((mediaFile: {
+    id: string
+    name: string
+    url: string
+    type: 'video' | 'audio' | 'image'
+    durationSeconds?: number
+  }) => {
+    console.log('📥 Importing media from library:', mediaFile.name)
+
+    // Calculate duration in frames
+    const durationFrames = mediaFile.durationSeconds
+      ? Math.floor(mediaFile.durationSeconds * FPS)
+      : FPS * 10 // Default to 10 seconds if duration unknown
+
+    // Add to timeline
+    editor.addClipFromUrl({
+      url: mediaFile.url,
+      trackIndex: 0, // Add to video track
+      durationFrames: durationFrames,
+      name: mediaFile.name
+    })
+  }, [editor])
+
   // Handle view mode changes
   const handleFullTab = useCallback(() => {
     setViewMode(prev => prev === 'fullTab' ? 'normal' : 'fullTab')
@@ -317,12 +359,13 @@ export function VideoStudio() {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
   }, [])
   
-  // Handle video element positioning based on view mode
+  // Handle dual video element positioning based on view mode
   useEffect(() => {
-    const videoElement = editor.videoRef.current
-    if (!videoElement) return
-    
-    const updateVideoPosition = () => {
+    const primaryVideo = editor.videoRef.current
+    const bufferVideo = editor.bufferVideoRef.current
+    if (!primaryVideo) return
+
+    const updateVideoPosition = (videoElement: HTMLVideoElement) => {
       if (viewMode === 'normal' || viewMode === 'fullScreen') {
         // Both normal and fullScreen modes - keep video in preview container
         const previewContainer = document.getElementById('video-preview-container')
@@ -352,7 +395,7 @@ export function VideoStudio() {
             `
           }
           videoElement.controls = false
-          
+
           // Always move to preview container for these modes
           if (videoElement.parentNode !== previewContainer) {
             previewContainer.appendChild(videoElement)
@@ -374,25 +417,37 @@ export function VideoStudio() {
           object-fit: contain;
         `
         videoElement.controls = false
-        
+
         if (videoElement.parentNode !== document.body) {
           document.body.appendChild(videoElement)
         }
       }
     }
-    
+
+    // Position both video elements
+    updateVideoPosition(primaryVideo)
+    if (bufferVideo) {
+      updateVideoPosition(bufferVideo)
+    }
+
     // Run immediately and with small delay for DOM updates
-    updateVideoPosition()
-    const timer = setTimeout(updateVideoPosition, 50)
-    
+    const timer = setTimeout(() => {
+      updateVideoPosition(primaryVideo)
+      if (bufferVideo) {
+        updateVideoPosition(bufferVideo)
+      }
+    }, 50)
+
     return () => clearTimeout(timer)
-  }, [viewMode, editor.clips.length, editor.videoRef])
+  }, [viewMode, editor.clips.length, editor.videoRef, editor.bufferVideoRef])
   
-  // Additional effect to ensure video is properly positioned when first clip is added
+  // Additional effect to ensure dual videos are properly positioned when first clip is added
   useEffect(() => {
     if (editor.clips.length > 0 && viewMode === 'normal') {
-      const videoElement = editor.videoRef.current
-      if (videoElement) {
+      const primaryVideo = editor.videoRef.current
+      const bufferVideo = editor.bufferVideoRef.current
+
+      const positionVideo = (videoElement: HTMLVideoElement) => {
         const previewContainer = document.getElementById('video-preview-container')
         if (previewContainer && videoElement.parentNode !== previewContainer) {
           setTimeout(() => {
@@ -410,8 +465,11 @@ export function VideoStudio() {
           }, 100)
         }
       }
+
+      if (primaryVideo) positionVideo(primaryVideo)
+      if (bufferVideo) positionVideo(bufferVideo)
     }
-  }, [editor.clips.length, editor.videoRef])
+  }, [editor.clips.length, editor.videoRef, editor.bufferVideoRef])
   
   // Cleanup: ensure video element returns to normal container on unmount
   useEffect(() => {
@@ -477,9 +535,14 @@ export function VideoStudio() {
   
   return (
     <div className="h-screen flex flex-col bg-gray-900 text-white">
-      {/* Video element will be positioned by useEffect - start hidden */}
+      {/* Dual video elements for seamless transitions - positioned by useEffect */}
       <video
         ref={editor.videoRef}
+        className="hidden"
+        crossOrigin="anonymous"
+      />
+      <video
+        ref={editor.bufferVideoRef}
         className="hidden"
         crossOrigin="anonymous"
       />
@@ -801,28 +864,9 @@ export function VideoStudio() {
         
         {/* Bottom Section - Dynamic height (Assets + Timeline) */}
         <div className="flex flex-1" style={{ height: `${100 - topSectionHeight}%` }}>
-          {/* Assets Panel - Dynamic width */}
-          <div className="bg-gray-800 overflow-auto" style={{ width: `${leftPanelWidth}%` }}>
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-gray-300">Assets</h3>
-                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs">
-                  Import
-                </Button>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {editor.clips.map((clip, index) => (
-                  <div key={clip.id} className="aspect-video bg-gray-900 rounded flex items-center justify-center text-xs text-gray-400">
-                    Clip {index + 1}
-                  </div>
-                ))}
-                <div className="aspect-video bg-gray-900 rounded flex items-center justify-center">
-                  <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                </div>
-              </div>
-            </div>
+          {/* Assets Panel - Media Library Browser */}
+          <div className="overflow-hidden" style={{ width: `${leftPanelWidth}%` }}>
+            <MediaAssetBrowser onImportMedia={handleImportMedia} />
           </div>
           
           {/* Horizontal Resize Handle (for bottom section) */}

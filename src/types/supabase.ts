@@ -1,3 +1,6 @@
+npm warn exec The following package was not found and will be installed: supabase@2.48.3
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+Initialising login role...
 export type Json =
   | string
   | number
@@ -754,7 +757,9 @@ export type Database = {
           mime_type: string
           name: string
           original_name: string
+          source_type: string | null
           status: string | null
+          studio_metadata: Json | null
           tags: string[] | null
           thumbnail_url: string | null
           updated_at: string
@@ -777,7 +782,9 @@ export type Database = {
           mime_type: string
           name: string
           original_name: string
+          source_type?: string | null
           status?: string | null
+          studio_metadata?: Json | null
           tags?: string[] | null
           thumbnail_url?: string | null
           updated_at?: string
@@ -800,7 +807,9 @@ export type Database = {
           mime_type?: string
           name?: string
           original_name?: string
+          source_type?: string | null
           status?: string | null
+          studio_metadata?: Json | null
           tags?: string[] | null
           thumbnail_url?: string | null
           updated_at?: string
@@ -1350,6 +1359,60 @@ export type Database = {
             columns: ["student_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_projects: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          instructor_id: string
+          is_draft: boolean | null
+          last_export_id: string | null
+          last_exported_at: string | null
+          timeline_state: Json
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          instructor_id: string
+          is_draft?: boolean | null
+          last_export_id?: string | null
+          last_exported_at?: string | null
+          timeline_state: Json
+          title?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          instructor_id?: string
+          is_draft?: boolean | null
+          last_export_id?: string | null
+          last_exported_at?: string | null
+          timeline_state?: Json
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_projects_instructor_id_fkey"
+            columns: ["instructor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_projects_last_export_id_fkey"
+            columns: ["last_export_id"]
+            isOneToOne: false
+            referencedRelation: "media_files"
             referencedColumns: ["id"]
           },
         ]

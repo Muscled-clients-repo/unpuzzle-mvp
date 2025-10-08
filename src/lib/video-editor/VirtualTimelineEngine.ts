@@ -16,13 +16,21 @@ export class VirtualTimelineEngine {
   private isPlaying: boolean = false
   private fps: number = FPS
   private hasReachedEnd: boolean = false  // Track if we've naturally reached the end
-  
+
   // Playback loop variables
   private animationFrameId: number | null = null
   private lastFrameTime: number = 0
-  private videoElement: HTMLVideoElement | null = null
+
+  // DUAL VIDEO ARCHITECTURE
+  private primaryVideo: HTMLVideoElement | null = null
+  private bufferVideo: HTMLVideoElement | null = null
+  private activeVideo: HTMLVideoElement | null = null
   private currentSegment: TimelineSegment | null = null
-  
+  private isPreparingTransition: boolean = false // Prevent multiple simultaneous transitions
+
+  // SEEK THROTTLING - Prevent seek thrashing
+  private isSeeking: boolean = false
+
   // Callbacks
   private onFrameUpdate?: (frame: number) => void
   private onPlayStateChange?: (isPlaying: boolean) => void
@@ -31,9 +39,52 @@ export class VirtualTimelineEngine {
     this.playbackLoop = this.playbackLoop.bind(this)
   }
 
-  // Set the video element to control
+  // Set dual video elements
+  setVideoElements(primary: HTMLVideoElement, buffer: HTMLVideoElement) {
+    this.primaryVideo = primary
+    this.bufferVideo = buffer
+    this.activeVideo = primary // Start with primary as active
+
+    // Hide buffer initially
+    if (this.bufferVideo) {
+      this.bufferVideo.style.display = 'none'
+    }
+  }
+
+  // Legacy support - use primary if only one video provided
   setVideoElement(video: HTMLVideoElement) {
-    this.videoElement = video
+    this.primaryVideo = video
+    this.activeVideo = video
+  }
+
+  // Get the currently active video element
+  private get videoElement(): HTMLVideoElement | null {
+    return this.activeVideo
+  }
+
+  // Get the inactive (buffer) video element
+  private getInactiveVideo(): HTMLVideoElement | null {
+    if (this.activeVideo === this.primaryVideo) {
+      return this.bufferVideo
+    }
+    return this.primaryVideo
+  }
+
+  // Switch which video is active
+  private switchActiveVideo() {
+    const inactive = this.getInactiveVideo()
+    if (!inactive) return
+
+    console.log('🔄 Switching active video element')
+
+    // Hide current active
+    if (this.activeVideo) {
+      this.activeVideo.style.display = 'none'
+    }
+
+    // Show and activate the other one
+    this.activeVideo = inactive
+    this.activeVideo.style.display = 'block'
   }
 
   // Set callbacks
@@ -96,49 +147,101 @@ export class VirtualTimelineEngine {
 
   // Sync video element to show correct content for current frame
   private syncVideoToTimeline() {
-    if (!this.videoElement) return
-    
-    const targetSegment = this.findSegmentAtFrame(Math.floor(this.currentFrame))
-    
+    if (!this.videoElement) {
+      console.log('❌ No video element available')
+      return
+    }
+
+    const currentFrameFloored = Math.floor(this.currentFrame)
+    const targetSegment = this.findSegmentAtFrame(currentFrameFloored)
+
+    // Debug: Log segment search
+    if (!targetSegment) {
+      console.log('⚠️ No segment found at frame:', currentFrameFloored, 'Available segments:',
+        this.segments.map(s => `${s.id}: ${s.startFrame}-${s.endFrame}`))
+    } else {
+      console.log('✅ Found segment:', targetSegment.id, 'for frame:', currentFrameFloored, 'URL:', targetSegment.sourceUrl?.substring(0, 50) + '...')
+    }
+
     // Handle gaps (no segment)
     if (!targetSegment) {
       if (this.currentSegment) {
-        const pausePromise = this.videoElement.pause()
+        const pausePromise = this.videoElement?.pause()
         if (pausePromise) {
           pausePromise.catch(() => {
             // Ignore pause errors
           })
         }
-        // Clear the video display
-        this.videoElement.src = ''
+        // Keep video loaded but paused
         this.currentSegment = null
       }
       return
     }
-    
+
     // Check if we need to switch segments
-    // Compare by ID to handle trim updates without reloading
     const isNewSegment = !this.currentSegment || this.currentSegment.id !== targetSegment.id
     const isDifferentVideo = !this.currentSegment || this.currentSegment.sourceUrl !== targetSegment.sourceUrl
-    
-    if (isNewSegment || isDifferentVideo) {
-      if (isDifferentVideo) {
-        // Different video file - need to load it
-        this.loadSegment(targetSegment)
-        return
-      }
-      // Same video file but different segment - just update reference
-      this.currentSegment = targetSegment
-    } else {
-      // Same segment ID - just update the reference to get new boundaries
-      // This handles trim operations without any video reload
-      this.currentSegment = targetSegment
-    }
-    
-    // Calculate the actual frame we want to show in the source video
+    const comingFromGap = !this.currentSegment
+
+    // Calculate position in segment
     const frameInSegment = this.currentFrame - targetSegment.startFrame
     const sourceFrame = targetSegment.sourceInFrame + frameInSegment
-    
+    const targetTime = sourceFrame / this.fps
+
+    if (isNewSegment || isDifferentVideo) {
+      if (isDifferentVideo) {
+        // Different video file - use dual video architecture
+        console.log('📹 Loading new video segment:', targetSegment.id)
+        this.loadSegmentWithDualVideo(targetSegment, targetTime)
+        return
+      }
+
+      // Same video but different segment or coming from gap
+      if (comingFromGap) {
+        console.log('📹 Entering segment from gap:', targetSegment.id)
+
+        // CRITICAL: Set currentSegment IMMEDIATELY to prevent repeated transitions
+        this.currentSegment = targetSegment
+
+        // THROTTLED SEEK: Don't seek if already seeking
+        if (this.isSeeking) {
+          console.log('⏳ Seek in progress, waiting for completion')
+          return
+        }
+
+        // For same video file, just seek directly (it's already loaded!)
+        if (this.videoElement) {
+          this.performThrottledSeek(targetTime)
+          if (this.isPlaying && this.videoElement.paused) {
+            this.videoElement.play().catch(() => {})
+          }
+        }
+        return
+      }
+
+      // Same video, just different segment (no gap) - can seek directly
+      this.currentSegment = targetSegment
+
+      // THROTTLED SEEK: Don't seek if already seeking
+      if (this.isSeeking) {
+        console.log('⏳ Seek in progress, waiting for completion')
+        return
+      }
+
+      if (this.videoElement) {
+        this.performThrottledSeek(targetTime)
+        if (this.isPlaying && this.videoElement.paused) {
+          this.videoElement.play().catch(() => {})
+        }
+      }
+      return
+    }
+
+    // Same segment - just update reference to get new boundaries (for trims)
+    this.currentSegment = targetSegment
+
+    // Reuse frameInSegment, sourceFrame, targetTime already calculated above (lines 178-180)
+
     // Check if we've exceeded the segment's logical out point (for playback control)
     if (this.isPlaying && sourceFrame >= targetSegment.sourceOutFrame) {
       // Move to next segment or pause
@@ -150,19 +253,21 @@ export class VirtualTimelineEngine {
       }
       return
     }
-    
+
     // Always show the exact frame requested (no boundary restrictions for preview)
     // This allows smooth scrubbing when extending edges
-    const targetTime = sourceFrame / this.fps
-    const currentTime = this.videoElement.currentTime
+    // targetTime already calculated above
+    const currentTime = this.videoElement?.currentTime || 0
     const drift = Math.abs(currentTime - targetTime)
-    
-    // Always seek immediately when paused (for trimming preview)
-    // Only use threshold when playing to avoid stuttering
+
+    // Force seek when paused OR when drift is large
     if (!this.isPlaying || drift > 0.1) {
-      this.videoElement.currentTime = targetTime
+      // THROTTLED SEEK: Don't seek if already seeking
+      if (!this.isSeeking) {
+        this.performThrottledSeek(targetTime)
+      }
     }
-    
+
     // Ensure video is playing if we should be playing
     if (this.isPlaying && this.videoElement.paused) {
       this.videoElement.play().catch(() => {
@@ -171,50 +276,159 @@ export class VirtualTimelineEngine {
     }
   }
 
-  // Load a new segment into the video element
-  private loadSegment(segment: TimelineSegment) {
-    if (!this.videoElement) return
-    
+  // Throttled seek helper - prevents seek thrashing
+  private performThrottledSeek(targetTime: number) {
+    if (!this.videoElement || this.isSeeking) return
+
+    this.isSeeking = true
+    this.videoElement.currentTime = targetTime
+
+    // Wait for seek to complete
+    const onSeeked = () => {
+      this.isSeeking = false
+      this.videoElement?.removeEventListener('seeked', onSeeked)
+      this.videoElement?.removeEventListener('error', onError)
+    }
+
+    const onError = () => {
+      this.isSeeking = false
+      this.videoElement?.removeEventListener('seeked', onSeeked)
+      this.videoElement?.removeEventListener('error', onError)
+    }
+
+    this.videoElement.addEventListener('seeked', onSeeked)
+    this.videoElement.addEventListener('error', onError)
+  }
+
+  // Load segment using dual video architecture - NON-BLOCKING approach
+  private loadSegmentWithDualVideo(segment: TimelineSegment, targetTime: number) {
+    const inactiveVideo = this.getInactiveVideo()
+
+    // If no dual video setup, fall back to single video
+    if (!inactiveVideo) {
+      this.loadSegment(segment, targetTime)
+      return
+    }
+
+    console.log('🎬 Starting non-blocking load for segment:', segment.id)
+
+    // Load and seek the inactive video in the background (non-blocking)
+    const prepareVideo = async () => {
+      try {
+        // Load video if needed
+        if (inactiveVideo.src !== segment.sourceUrl) {
+          inactiveVideo.src = segment.sourceUrl
+          await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              inactiveVideo.removeEventListener('loadedmetadata', onLoaded)
+              inactiveVideo.removeEventListener('error', onError)
+              reject(new Error('Video load timeout'))
+            }, 5000) // 5 second timeout
+
+            const onLoaded = () => {
+              clearTimeout(timeout)
+              inactiveVideo.removeEventListener('loadedmetadata', onLoaded)
+              inactiveVideo.removeEventListener('error', onError)
+              resolve()
+            }
+            const onError = (e: Event) => {
+              clearTimeout(timeout)
+              inactiveVideo.removeEventListener('loadedmetadata', onLoaded)
+              inactiveVideo.removeEventListener('error', onError)
+              reject(new Error(`Video load error: ${(e as ErrorEvent).message || 'Unknown error'}`))
+            }
+            inactiveVideo.addEventListener('loadedmetadata', onLoaded)
+            inactiveVideo.addEventListener('error', onError)
+          })
+        }
+
+        // Seek to position with timeout
+        inactiveVideo.currentTime = targetTime
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            inactiveVideo.removeEventListener('seeked', onSeeked)
+            reject(new Error('Seek timeout'))
+          }, 2000) // 2 second timeout
+
+          const onSeeked = () => {
+            clearTimeout(timeout)
+            resolve()
+          }
+          inactiveVideo.addEventListener('seeked', onSeeked, { once: true })
+        })
+
+        console.log('✅ Buffer video ready at', targetTime.toFixed(2))
+
+        // Switch videos NOW (this might be after playhead has moved past, but that's OK)
+        this.switchActiveVideo()
+        this.currentSegment = segment
+
+        // Start playing if we should be
+        if (this.isPlaying && this.videoElement) {
+          this.videoElement.play().catch(() => {})
+        }
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error'
+        console.warn('⚠️ Buffer video prep failed:', errorMsg, '- falling back to direct load')
+        // Fall back to direct load on active video
+        this.loadSegment(segment, targetTime)
+      }
+    }
+
+    // Start preparation in background (don't await - let playback continue)
+    prepareVideo()
+
+    // Meanwhile, show current active video at best position possible
+    // This prevents black screen while buffer loads
+    if (this.videoElement && this.videoElement.src === segment.sourceUrl) {
+      this.videoElement.currentTime = targetTime
+      if (this.isPlaying) {
+        this.videoElement.play().catch(() => {})
+      }
+    }
+  }
+
+  // Legacy single video load (fallback)
+  private loadSegment(segment: TimelineSegment, targetTime: number) {
+    if (!this.videoElement) {
+      console.log('❌ loadSegment: No video element')
+      return
+    }
+
+    console.log('📼 Loading segment:', segment.id, 'URL:', segment.sourceUrl?.substring(0, 50) + '...', 'at time:', targetTime.toFixed(2))
+
     this.currentSegment = segment
-    
-    // Load new video if needed - keep full video loaded, not just trimmed portion
+
+    // Load new video if needed
     if (this.videoElement.src !== segment.sourceUrl) {
+      console.log('🔄 Setting new video source')
       this.videoElement.src = segment.sourceUrl
-      
+
       // When video loads, seek to correct position
       this.videoElement.onloadedmetadata = () => {
         if (!this.videoElement || !this.currentSegment) return
-        
-        // Calculate where we should be in the source video
-        const frameInSegment = this.currentFrame - this.currentSegment.startFrame
-        const sourceFrame = this.currentSegment.sourceInFrame + frameInSegment
-        const sourceTime = sourceFrame / this.fps
-        
-        // Seek to the calculated position
-        this.videoElement.currentTime = sourceTime
-        
+
+        console.log('✅ Video loaded, seeking to:', targetTime.toFixed(2))
+        this.videoElement.currentTime = targetTime
+
         if (this.isPlaying) {
-          this.videoElement.play().catch(() => {
-            // Ignore play errors
+          console.log('▶️ Starting playback')
+          this.videoElement.play().catch((err) => {
+            console.error('Play error:', err)
           })
         }
       }
+
+      this.videoElement.onerror = (err) => {
+        console.error('❌ Video load error:', err)
+      }
     } else {
-      // Same video already loaded - just seek to the right position
-      // This is the key: we always keep the full video loaded
-      // and just seek within it based on the logical trim boundaries
-      
-      const frameInSegment = this.currentFrame - segment.startFrame
-      const sourceFrame = segment.sourceInFrame + frameInSegment
-      const sourceTime = sourceFrame / this.fps
-      
-      // Direct seek - the video has the full content buffered
-      this.videoElement.currentTime = sourceTime
-      
+      // Same video already loaded - just seek
+      console.log('⏩ Same video, seeking to:', targetTime.toFixed(2))
+      this.videoElement.currentTime = targetTime
+
       if (this.isPlaying && this.videoElement.paused) {
-        this.videoElement.play().catch(() => {
-          // Ignore play errors
-        })
+        this.videoElement.play().catch(() => {})
       }
     }
   }
@@ -307,7 +521,10 @@ export class VirtualTimelineEngine {
   // Cleanup
   destroy() {
     this.pause()
-    this.videoElement = null
+    // Clean up dual video references
+    this.primaryVideo = null
+    this.bufferVideo = null
+    this.activeVideo = null
     this.segments = []
     this.currentSegment = null
   }

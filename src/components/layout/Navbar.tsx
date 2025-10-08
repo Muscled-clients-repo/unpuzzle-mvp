@@ -44,7 +44,7 @@ export function Navbar() {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuItem disabled>
                   <div className="flex flex-col">
-                    <span className="text-sm font-medium">{user.email}</span>
+                    <span className="text-sm font-medium">{user.user_metadata?.full_name || 'User'}</span>
                     <span className="text-xs text-muted-foreground">
                       ID: {user.id.slice(0, 8)}...
                     </span>

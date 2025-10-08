@@ -22,7 +22,9 @@ export function useVideoEditor() {
   const [totalFrames, setTotalFrames] = useState(0)
   
   // Refs
-  const videoRef = useRef<HTMLVideoElement>(null)
+  // Dual video refs for seamless transitions
+  const videoRef = useRef<HTMLVideoElement>(null) // Primary video
+  const bufferVideoRef = useRef<HTMLVideoElement>(null) // Buffer video for preloading
   const engineRef = useRef<VirtualTimelineEngine | null>(null)
   const lastVisualUpdateRef = useRef<number>(0)
   const historyRef = useRef<HistoryManager>(new HistoryManager())
@@ -69,8 +71,13 @@ export function useVideoEditor() {
       })
     }
     
-    // Set video element
-    if (videoRef.current) {
+    // Set dual video elements if both are available
+    if (videoRef.current && bufferVideoRef.current) {
+      console.log('🎬 Initializing dual video architecture')
+      engineRef.current.setVideoElements(videoRef.current, bufferVideoRef.current)
+    } else if (videoRef.current) {
+      // Fallback to single video
+      console.log('📹 Using single video element (dual video not available)')
       engineRef.current.setVideoElement(videoRef.current)
     }
     
@@ -88,7 +95,7 @@ export function useVideoEditor() {
   // Convert clips to segments whenever clips change
   useEffect(() => {
     if (!engineRef.current) return
-    
+
     // Convert clips to timeline segments
     const segments: TimelineSegment[] = clips.map(clip => ({
       id: clip.id,
@@ -98,7 +105,15 @@ export function useVideoEditor() {
       sourceInFrame: clip.sourceInFrame ?? 0,  // Use trim points if available
       sourceOutFrame: clip.sourceOutFrame ?? (clip.originalDurationFrames ?? clip.durationFrames)
     }))
-    
+
+    console.log('🔄 Syncing clips to timeline engine:', segments.map(s => ({
+      id: s.id,
+      startFrame: s.startFrame,
+      endFrame: s.endFrame,
+      sourceInFrame: s.sourceInFrame,
+      sourceOutFrame: s.sourceOutFrame
+    })))
+
     engineRef.current.setSegments(segments)
   }, [clips])
   
@@ -263,34 +278,81 @@ export function useVideoEditor() {
     return data
   }, [])
 
+  // Add clip from URL (for importing media from library)
+  const addClipFromUrl = useCallback((params: {
+    url: string
+    trackIndex: number
+    durationFrames: number
+    name?: string
+  }) => {
+    const { url, trackIndex, durationFrames, name } = params
+
+    // Create clip at the end of the timeline
+    const newClip: Clip = {
+      id: `clip-${Date.now()}`,
+      url,
+      trackIndex,
+      startFrame: totalFramesRef.current, // Add at end
+      durationFrames,
+      originalDurationFrames: durationFrames,
+      sourceInFrame: 0,
+      sourceOutFrame: durationFrames
+    }
+
+    console.log(`📥 Adding clip from URL: ${name || url}`)
+
+    // Add clip to timeline
+    setClipsWithRef(prev => {
+      const newClips = [...prev, newClip]
+      historyRef.current.saveState(
+        newClips,
+        Math.max(totalFramesRef.current, newClip.startFrame + newClip.durationFrames),
+        `Import ${name || 'media'}`
+      )
+      return newClips
+    })
+
+    // Update total frames
+    setTotalFramesWithRef(prev => Math.max(prev, newClip.startFrame + newClip.durationFrames))
+
+    return newClip
+  }, [])
+
   // Trim the start of a clip (live update during drag)
   const trimClipStart = useCallback((clipId: string, newStartOffset: number) => {
     setClipsWithRef(prevClips => {
       const clipIndex = prevClips.findIndex(c => c.id === clipId)
       if (clipIndex === -1) return prevClips
-      
+
       const clip = prevClips[clipIndex]
       const originalDuration = clip.originalDurationFrames ?? clip.durationFrames
-      
+
       // Ensure we don't trim beyond the clip's end
       const maxTrim = originalDuration - 1 // Keep at least 1 frame
       const clampedOffset = Math.max(0, Math.min(maxTrim, newStartOffset))
-      
+
       // Calculate new values
       const newSourceInFrame = clampedOffset === 0 ? undefined : clampedOffset
       const newDurationFrames = (clip.sourceOutFrame ?? originalDuration) - clampedOffset
-      
-      // Keep the clip at its current position - trim only affects content, not position
+      const newStartFrame = clip.startFrame + clampedOffset - (clip.sourceInFrame ?? 0)
+
+      // When trimming start, move the clip forward on timeline to match the trimmed content
       const updatedClip = {
         ...clip,
+        startFrame: newStartFrame,
         sourceInFrame: newSourceInFrame,
         durationFrames: newDurationFrames
-        // startFrame stays the same - position doesn't change
       }
-      
+
+      console.log('🔧 Trimming clip start:', {
+        clipId,
+        before: { startFrame: clip.startFrame, sourceInFrame: clip.sourceInFrame, durationFrames: clip.durationFrames },
+        after: { startFrame: newStartFrame, sourceInFrame: newSourceInFrame, durationFrames: newDurationFrames }
+      })
+
       const newClips = [...prevClips]
       newClips[clipIndex] = updatedClip
-      
+
       return newClips
     })
   }, [])
@@ -654,6 +716,7 @@ export function useVideoEditor() {
     isRecording,
     totalFrames,
     videoRef,
+    bufferVideoRef,  // For dual video architecture
     
     // Actions
     loadTimeline,
@@ -674,6 +737,7 @@ export function useVideoEditor() {
     deleteClip,
     updateClipUrl,
     getLatestRecording,
+    addClipFromUrl,
     
     // Track management
     addTrack,
