@@ -63,7 +63,7 @@ const instructorNavItems: NavItem[] = [
   { href: "/instructor", label: "Dashboard", icon: Home },
   { href: "/instructor/courses", label: "My Courses", icon: BookOpen },
   { href: "/instructor/media", label: "Media", icon: Upload },
-  { href: "/instructor/studio", label: "Studio", icon: PlayCircle },
+  { href: "/instructor/studio/projects", label: "Studio", icon: PlayCircle },
   {
     href: "/instructor/requests",
     label: "Requests",
