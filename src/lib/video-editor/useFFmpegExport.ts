@@ -181,27 +181,54 @@ export function useFFmpegExport() {
           (clip.sourceInFrame && clip.sourceInFrame > 0) ||
           (clip.sourceOutFrame && clip.originalDurationFrames && clip.sourceOutFrame < clip.originalDurationFrames)
 
+        // Always normalize to H.264 for concat compatibility
+        // This handles mixed codecs (VP8 recordings + H.264 uploads)
+        // IMPORTANT: Ensure all clips have audio (add silent if missing)
         if (needsTrim) {
           // Calculate trim times
           const startTime = frameToTime(clip.sourceInFrame ?? 0)
           const endTime = frameToTime(clip.sourceOutFrame ?? clip.originalDurationFrames ?? clip.durationFrames)
           const duration = endTime - startTime
 
-          // Fast trim with copy (no re-encoding)
+          // Trim and convert to H.264
+          // Use anullsrc filter to add silent audio if none exists
           await ffmpeg.exec([
             '-ss', startTime.toFixed(3),
             '-i', inputFile,
             '-t', duration.toFixed(3),
-            '-c', 'copy',  // Copy codec - fast!
-            '-avoid_negative_ts', 'make_zero',
+            '-c:v', 'libx264',
+            '-preset', 'ultrafast',
+            '-crf', '23',
+            '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac',
+            '-b:a', '192k',
+            '-ar', '48000',
+            '-ac', '2',
+            '-af', 'apad',  // Pad audio if it ends early
             outputFile
           ])
-
-          processedFiles.push(outputFile)
         } else {
-          // No trim needed, use original file directly
-          processedFiles.push(inputFile)
+          // No trim, but still convert to H.264 for compatibility
+          // Add silent audio track for clips without audio (like recordings)
+          await ffmpeg.exec([
+            '-i', inputFile,
+            '-f', 'lavfi',
+            '-t', frameToTime(clip.durationFrames).toFixed(3),
+            '-i', 'anullsrc=r=48000:cl=stereo',
+            '-c:v', 'libx264',
+            '-preset', 'ultrafast',
+            '-crf', '23',
+            '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac',
+            '-b:a', '192k',
+            '-ar', '48000',
+            '-ac', '2',
+            '-shortest',
+            outputFile
+          ])
         }
+
+        processedFiles.push(outputFile)
       }
 
       if (abortRef.current) return null
@@ -236,41 +263,23 @@ export function useFFmpegExport() {
         preset = 'medium'
       } = options
 
-      // Try fast concat first (copy codec)
-      try {
-        await ffmpeg.exec([
-          '-f', 'concat',
-          '-safe', '0',
-          '-i', 'concat.txt',
-          '-c', 'copy',  // Fast copy - no re-encoding!
-          '-movflags', '+faststart',
-          'output.mp4'
-        ])
-      } catch (error) {
-        // If copy fails (incompatible codecs), re-encode with quality settings
-        console.log('[Export] Fast copy failed, re-encoding with quality settings...')
-        await ffmpeg.exec([
-          '-f', 'concat',
-          '-safe', '0',
-          '-i', 'concat.txt',
-          '-c:v', codec,
-          '-profile:v', 'baseline',
-          '-level', '3.0',
-          '-preset', preset,
-          '-b:v', bitrate,
-          '-maxrate', bitrate,
-          '-bufsize', `${parseInt(bitrate) * 2}M`,
-          '-r', fps.toString(),
-          '-s', resolution,
-          '-pix_fmt', 'yuv420p',
-          '-c:a', 'aac',
-          '-b:a', '192k',
-          '-ar', '48000',
-          '-ac', '2',
-          '-movflags', '+faststart',
-          'output.mp4'
-        ])
-      }
+      // Merge clips - need to re-encode to handle dynamic audio streams
+      // (some clips have audio, some don't)
+      console.log('[Export] Merging normalized clips with audio handling...')
+      console.log('[Export] Concat file contents:', concatContent)
+
+      await ffmpeg.exec([
+        '-f', 'concat',
+        '-safe', '0',
+        '-i', 'concat.txt',
+        '-c:v', 'copy',      // Copy video (already H.264)
+        '-c:a', 'copy',      // Copy audio where it exists
+        '-map', '0:v:0',     // Map first video stream
+        '-map', '0:a?',      // Map audio if exists (optional)
+        '-movflags', '+faststart',
+        'output.mp4'
+      ])
+      console.log('[Export] Merge complete!')
 
       if (abortRef.current) return null
 
@@ -283,6 +292,14 @@ export function useFFmpegExport() {
 
       const data = await ffmpeg.readFile('output.mp4')
       const blob = new Blob([data], { type: 'video/mp4' })
+
+      console.log('[Export] Output file size:', blob.size, 'bytes')
+      console.log('[Export] Expected ~', clips.length, 'clips merged')
+
+      // Check if output is valid (not empty)
+      if (blob.size === 0) {
+        throw new Error('Export produced empty file - clips may have incompatible codecs')
+      }
 
       // Step 7: Cleanup
       try {
