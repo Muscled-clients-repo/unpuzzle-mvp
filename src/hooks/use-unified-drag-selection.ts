@@ -1,13 +1,33 @@
 "use client"
 
-import { useCallback, useEffect, useRef, RefObject } from 'react'
-import { useProjectsSelectionStore } from '@/stores/projects-selection-store'
+import { useCallback, useEffect, RefObject } from 'react'
+import { SelectionStoreState } from '@/stores/create-selection-store'
 
 interface DragRectangle {
   left: number
   top: number
   width: number
   height: number
+}
+
+/**
+ * Configuration for unified drag selection hook
+ */
+interface UseDragSelectionConfig {
+  containerRef: RefObject<HTMLElement>
+  allItemIds: string[]
+  enabled: boolean
+  dataAttribute: string // e.g., 'data-selectable' or 'data-selectable-project'
+  store: {
+    dragSelection: SelectionStoreState['dragSelection']
+    startDragSelection: SelectionStoreState['startDragSelection']
+    updateDragSelection: SelectionStoreState['updateDragSelection']
+    finalizeDragSelection: SelectionStoreState['finalizeDragSelection']
+    cancelDragSelection: SelectionStoreState['cancelDragSelection']
+    autoScroll?: SelectionStoreState['autoScroll']
+    startAutoScroll?: SelectionStoreState['startAutoScroll']
+    stopAutoScroll?: SelectionStoreState['stopAutoScroll']
+  }
 }
 
 // Helper function to convert screen coordinates to container-relative coordinates
@@ -52,14 +72,15 @@ function getDragRectangle(
 function getIntersectingElements(
   startPoint: { x: number, y: number },
   currentPoint: { x: number, y: number },
-  container: HTMLElement | null
+  container: HTMLElement | null,
+  dataAttribute: string
 ): string[] {
   if (!container) return []
 
   const dragRect = getDragRectangle(startPoint, currentPoint)
   if (!dragRect) return []
 
-  const selectableElements = container.querySelectorAll('[data-selectable-project]')
+  const selectableElements = container.querySelectorAll(`[${dataAttribute}]`)
   const intersectingIds: string[] = []
   const containerRect = container.getBoundingClientRect()
 
@@ -86,9 +107,9 @@ function getIntersectingElements(
     )
 
     if (intersects) {
-      const projectId = element.getAttribute('data-selectable-project')
-      if (projectId) {
-        intersectingIds.push(projectId)
+      const itemId = element.getAttribute(dataAttribute)
+      if (itemId) {
+        intersectingIds.push(itemId)
       }
     }
   })
@@ -96,24 +117,60 @@ function getIntersectingElements(
   return intersectingIds
 }
 
+// Helper function to check if mouse is near edge for auto-scroll
+function getAutoScrollDirection(
+  event: MouseEvent,
+  container: HTMLElement
+): { direction: 'up' | 'down' | null, speed: number } {
+  const rect = container.getBoundingClientRect()
+  const mouseY = event.clientY - rect.top
+  const scrollZone = 100 // pixels from edge to trigger scroll
+  const maxSpeed = 20
+
+  if (mouseY < scrollZone) {
+    const distance = scrollZone - mouseY
+    const speed = Math.min(maxSpeed, (distance / scrollZone) * maxSpeed)
+    return { direction: 'up', speed }
+  } else if (mouseY > rect.height - scrollZone) {
+    const distance = mouseY - (rect.height - scrollZone)
+    const speed = Math.min(maxSpeed, (distance / scrollZone) * maxSpeed)
+    return { direction: 'down', speed }
+  }
+
+  return { direction: null, speed: 0 }
+}
+
 /**
- * Project drag selection hook - matches media route pattern
- * Uses store methods for drag selection state management
+ * Unified drag selection hook
+ * Works with any route by accepting store methods and configuration
+ *
+ * @example
+ * const { isDragActive, dragRectangle, selectedDuringDrag } = useUnifiedDragSelection({
+ *   containerRef,
+ *   allItemIds: projectIds,
+ *   enabled: isSelectionMode,
+ *   dataAttribute: 'data-selectable-project',
+ *   store: useProjectsSelectionStore()
+ * })
  */
-export function useProjectsDragSelection(
-  containerRef: RefObject<HTMLElement>,
-  allProjectIds: string[] = [],
-  enabled: boolean = true
-) {
+export function useUnifiedDragSelection(config: UseDragSelectionConfig) {
+  const {
+    containerRef,
+    allItemIds,
+    enabled,
+    dataAttribute,
+    store
+  } = config
+
   const {
     dragSelection,
-    selectedProjects,
-    lastSelectedId,
     startDragSelection,
     updateDragSelection,
     finalizeDragSelection,
-    cancelDragSelection
-  } = useProjectsSelectionStore()
+    cancelDragSelection,
+    startAutoScroll,
+    stopAutoScroll
+  } = store
 
   // Global mouse event handlers
   const handleGlobalMouseDown = useCallback((event: MouseEvent) => {
@@ -124,7 +181,7 @@ export function useProjectsDragSelection(
     if (!container?.contains(target)) return
 
     // Check if this is a selectable item or empty space
-    const isSelectableItem = target.closest('[data-selectable-project]')
+    const isSelectableItem = target.closest(`[${dataAttribute}]`)
     const isInteractiveElement = target.closest('button, input, [role="button"], a')
 
     // Only start drag selection for selectable items or empty space (not interactive elements)
@@ -137,7 +194,7 @@ export function useProjectsDragSelection(
 
       startDragSelection(containerPoint, selectionMode)
     }
-  }, [startDragSelection, containerRef])
+  }, [startDragSelection, containerRef, dataAttribute])
 
   const handleMouseMove = useCallback((event: MouseEvent) => {
     if (!dragSelection.isActive || !containerRef.current) return
@@ -152,17 +209,49 @@ export function useProjectsDragSelection(
     const intersectingIds = getIntersectingElements(
       dragSelection.startPoint!,
       currentPoint,
-      containerRef.current
+      containerRef.current,
+      dataAttribute
     )
 
     updateDragSelection(currentPoint, intersectingIds)
-  }, [dragSelection.isActive, dragSelection.startPoint, updateDragSelection, containerRef])
+
+    // Handle auto-scroll if enabled
+    if (startAutoScroll && stopAutoScroll) {
+      const { direction, speed } = getAutoScrollDirection(event, containerRef.current)
+      if (direction) {
+        startAutoScroll(direction, speed)
+      } else {
+        stopAutoScroll()
+      }
+    }
+  }, [dragSelection.isActive, dragSelection.startPoint, updateDragSelection, containerRef, dataAttribute, startAutoScroll, stopAutoScroll])
 
   const handleMouseUp = useCallback(() => {
     if (dragSelection.isActive) {
       finalizeDragSelection()
+      if (stopAutoScroll) {
+        stopAutoScroll()
+      }
     }
-  }, [dragSelection.isActive, finalizeDragSelection])
+  }, [dragSelection.isActive, finalizeDragSelection, stopAutoScroll])
+
+  // Auto-scroll effect (only if auto-scroll is enabled)
+  useEffect(() => {
+    if (!store.autoScroll?.isScrolling || !containerRef.current) return
+
+    const container = containerRef.current
+    const { direction, speed } = store.autoScroll
+
+    const scrollInterval = setInterval(() => {
+      if (direction === 'up') {
+        container.scrollTop -= speed
+      } else if (direction === 'down') {
+        container.scrollTop += speed
+      }
+    }, 16) // ~60fps
+
+    return () => clearInterval(scrollInterval)
+  }, [store.autoScroll?.isScrolling, store.autoScroll?.direction, store.autoScroll?.speed, containerRef])
 
   useEffect(() => {
     if (!enabled) return

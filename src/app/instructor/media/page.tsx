@@ -20,7 +20,7 @@ import { MediaFiltersSection } from "@/components/media/media-filters-section"
 import { MediaGrid } from "@/components/media/media-grid"
 import { PageContainer } from "@/components/layout/page-container"
 import { PageHeaderSkeleton, FiltersSectionSkeleton, MediaCardSkeleton, Skeleton } from "@/components/common/universal-skeleton"
-import { useDragSelection } from "@/hooks/use-drag-selection"
+import { useUnifiedDragSelection } from "@/hooks/use-unified-drag-selection"
 import {
   Upload,
   Search,
@@ -89,6 +89,7 @@ export default function MediaPage() {
   const containerRef = useRef<HTMLDivElement>(null)
   
   // ARCHITECTURE-COMPLIANT: UI state in Zustand
+  const mediaStore = useMediaStore()
   const {
     viewMode,
     setViewMode,
@@ -103,7 +104,15 @@ export default function MediaPage() {
     toggleSelection,
     selectRange,
     clearSelection,
-  } = useMediaStore()
+    dragSelection,
+    startDragSelection,
+    updateDragSelection,
+    finalizeDragSelection,
+    cancelDragSelection,
+    autoScroll,
+    startAutoScroll,
+    stopAutoScroll,
+  } = mediaStore
   
   // ARCHITECTURE-COMPLIANT: Server state in TanStack Query
   const { data: mediaData, isLoading, error, isFetching } = useMediaFiles({
@@ -320,13 +329,24 @@ export default function MediaPage() {
     setShowTagSuggestions(false)
   }
 
-  // Drag selection hook with file IDs for range selection  
+  // Unified drag selection hook with file IDs for range selection
   const allFileIds = filteredMedia.map(item => item.id)
-  const { isDragActive, dragRectangle, selectedDuringDrag } = useDragSelection(
-    containerRef, 
-    allFileIds,
-    isSelectionMode // Only enable drag selection when in selection mode
-  )
+  const { isDragActive, dragRectangle, selectedDuringDrag } = useUnifiedDragSelection({
+    containerRef,
+    allItemIds: allFileIds,
+    enabled: isSelectionMode, // Only enable drag selection when in selection mode
+    dataAttribute: 'data-selectable',
+    store: {
+      dragSelection,
+      startDragSelection,
+      updateDragSelection,
+      finalizeDragSelection,
+      cancelDragSelection,
+      autoScroll,
+      startAutoScroll,
+      stopAutoScroll,
+    }
+  })
 
   // Temporarily disabled auto-enter/exit to debug issues
   // TODO: Re-enable after fixing selection issues

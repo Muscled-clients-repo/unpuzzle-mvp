@@ -71,10 +71,16 @@ export function MediaCard({
     if (!item.tags || item.tags.length === 0) {
       return (
         <div
-          className="flex items-center gap-1 cursor-pointer hover:opacity-70 transition-opacity"
+          className={cn(
+            "flex items-center gap-1 transition-opacity",
+            !isSelectionMode && "cursor-pointer hover:opacity-70"
+          )}
           onClick={(e) => {
-            e.stopPropagation()
-            onEditTags(item.id)
+            // Only allow tag editing when NOT in selection mode
+            if (!isSelectionMode) {
+              e.stopPropagation()
+              onEditTags(item.id)
+            }
           }}
         >
           <Tag className="h-3 w-3 text-muted-foreground/50" />
@@ -94,7 +100,7 @@ export function MediaCard({
         data-selectable={item.id}
         className={cn(
           "group relative bg-card border rounded-lg overflow-hidden hover:shadow-md cursor-pointer",
-          "transform",
+          "transform select-none", // Prevent text selection during drag
           isSelected && "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950",
           isDeleting && "opacity-0 scale-90 pointer-events-none transition-all duration-700 ease-out"
         )}
@@ -105,21 +111,27 @@ export function MediaCard({
           <div className="absolute top-2 left-2 z-20">
             <div className={cn(
               "w-6 h-6 rounded-md flex items-center justify-center border-2",
-              isSelected 
-                ? "bg-blue-500 border-blue-500 text-white" 
+              isSelected
+                ? "bg-blue-500 border-blue-500 text-white"
                 : "bg-background border-gray-300 hover:border-gray-400"
             )}>
               {isSelected && <CheckSquare className="w-4 h-4" />}
             </div>
           </div>
         )}
-        
+
         {/* Thumbnail/Preview */}
         <div
-          className="aspect-video bg-muted flex items-center justify-center relative cursor-pointer overflow-hidden"
+          className={cn(
+            "aspect-video bg-muted flex items-center justify-center relative overflow-hidden",
+            !isSelectionMode && "cursor-pointer" // Only show pointer cursor when not in selection mode
+          )}
           onClick={(e) => {
-            e.stopPropagation()
-            onPreview(item)
+            // Only allow preview when NOT in selection mode
+            if (!isSelectionMode) {
+              e.stopPropagation()
+              onPreview(item)
+            }
           }}
         >
           {item.thumbnail ? (
@@ -127,6 +139,7 @@ export function MediaCard({
               src={item.thumbnail}
               alt={item.name}
               className="w-full h-full object-cover"
+              draggable={false}
             />
           ) : (
             getTypeIcon(item.type)
@@ -211,7 +224,7 @@ export function MediaCard({
       data-selectable={item.id}
       className={cn(
         "flex items-center gap-4 p-4 bg-card border rounded-lg hover:bg-accent/50 cursor-pointer",
-        "transform",
+        "transform select-none", // Prevent text selection during drag
         isSelected && "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950",
         isDeleting && "opacity-0 scale-90 pointer-events-none transition-all duration-700 ease-out"
       )}

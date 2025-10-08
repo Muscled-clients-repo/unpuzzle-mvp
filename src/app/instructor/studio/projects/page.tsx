@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useStudioProjects, useDeleteStudioProject, useProjectTags, useBulkDeleteProjects } from "@/hooks/use-studio-queries"
 import { useProjectsSelectionStore } from "@/stores/projects-selection-store"
-import { useProjectsDragSelection } from "@/hooks/use-projects-drag-selection"
+import { useUnifiedDragSelection } from "@/hooks/use-unified-drag-selection"
 import { ErrorBoundary, LoadingSpinner, ErrorFallback } from "@/components/common"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -62,13 +62,19 @@ export default function StudioProjectsPage() {
   const { mutate: bulkDeleteProjects } = useBulkDeleteProjects()
 
   // Selection store
+  const selectionStore = useProjectsSelectionStore()
   const {
     selectedProjects,
     lastSelectedId,
     toggleProjectSelection,
     selectRange,
-    clearProjectSelection
-  } = useProjectsSelectionStore()
+    clearProjectSelection,
+    dragSelection,
+    startDragSelection,
+    updateDragSelection,
+    finalizeDragSelection,
+    cancelDragSelection
+  } = selectionStore
 
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
@@ -108,12 +114,20 @@ export default function StudioProjectsPage() {
   // All project IDs for range selection
   const allProjectIds = sortedProjects.map(p => p.id)
 
-  // Drag selection hook (matches media route pattern)
-  const { isDragActive, dragRectangle, selectedDuringDrag } = useProjectsDragSelection(
+  // Unified drag selection hook
+  const { isDragActive, dragRectangle, selectedDuringDrag } = useUnifiedDragSelection({
     containerRef,
-    allProjectIds,
-    isSelectionMode // Only enable when in selection mode
-  )
+    allItemIds: allProjectIds,
+    enabled: isSelectionMode, // Only enable when in selection mode
+    dataAttribute: 'data-selectable-project',
+    store: {
+      dragSelection,
+      startDragSelection,
+      updateDragSelection,
+      finalizeDragSelection,
+      cancelDragSelection
+    }
+  })
 
   // Handle single delete confirmation
   const handleDelete = (projectId: string) => {
@@ -395,7 +409,6 @@ export default function StudioProjectsPage() {
                     <div className="absolute top-4 left-4 z-10">
                       <Checkbox
                         checked={isSelected}
-                        onCheckedChange={() => toggleProjectSelection(project.id)}
                         className="h-5 w-5 border-2"
                         onClick={(e) => e.stopPropagation()}
                       />
