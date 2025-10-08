@@ -76,7 +76,24 @@ export class VirtualTimelineEngine {
     const inactive = this.getInactiveVideo()
     if (!inactive) return
 
+    // CRITICAL: Pause and mute the old video to stop its audio
+    const oldVideo = this.activeVideo
+    if (oldVideo) {
+      const pausePromise = oldVideo.pause()
+      if (pausePromise) {
+        pausePromise.catch(() => {})
+      }
+      // Mute the old video to ensure audio stops
+      oldVideo.muted = true
+    }
+
+    // Switch to new video
     this.activeVideo = inactive
+
+    // Unmute the new video so its audio plays
+    if (this.activeVideo) {
+      this.activeVideo.muted = false
+    }
   }
 
   // Set callbacks
@@ -154,15 +171,22 @@ export class VirtualTimelineEngine {
     // Handle gaps (no segment)
     if (!targetSegment) {
       if (this.currentSegment) {
+        // Pause the video element but DON'T stop playback
+        // Let the playhead continue through gaps
         const pausePromise = this.videoElement?.pause()
         if (pausePromise) {
           pausePromise.catch(() => {
             // Ignore pause errors
           })
         }
-        // Keep video loaded but paused
+        // Clear canvas to show black screen in gaps
+        if (this.renderer) {
+          this.renderer.clear()
+        }
+        // Clear current segment
         this.currentSegment = null
       }
+      // Continue playback - don't pause timeline
       return
     }
 
@@ -178,6 +202,11 @@ export class VirtualTimelineEngine {
 
     if (isNewSegment || isDifferentVideo) {
       if (isDifferentVideo) {
+        console.log('📹 Loading different video:', {
+          from: this.currentSegment?.sourceUrl?.substring(0, 80),
+          to: targetSegment.sourceUrl?.substring(0, 80),
+          targetTime: targetTime.toFixed(2) + 's'
+        })
         // Different video file - use dual video architecture
         // CRITICAL: Set currentSegment IMMEDIATELY to prevent repeated loads
         this.currentSegment = targetSegment
@@ -230,10 +259,31 @@ export class VirtualTimelineEngine {
 
     // Check if we've exceeded the segment's logical out point (for playback control)
     if (this.isPlaying && sourceFrame >= targetSegment.sourceOutFrame) {
-      // Move to next segment or pause
+      console.log('⏭️ Reached end of trimmed clip at frame', sourceFrame, 'out of', targetSegment.sourceOutFrame)
+
+      // Move to next segment or pause timeline
       const nextFrame = targetSegment.endFrame
       if (nextFrame < this.totalFrames) {
+        // Jump to start of next segment
         this.currentFrame = nextFrame
+
+        // CRITICAL: Clear current segment AND pause video
+        // This forces the next sync to load the new segment fresh
+        if (this.videoElement) {
+          const pausePromise = this.videoElement.pause()
+          if (pausePromise) {
+            pausePromise.catch(() => {})
+          }
+        }
+
+        // Clear both canvas and current segment
+        if (this.renderer) {
+          this.renderer.clear()
+        }
+        this.currentSegment = null
+
+        // On next frame, syncVideoToTimeline will detect the new segment and load it
+        console.log('🔄 Jumping to next segment at frame', nextFrame)
       } else {
         this.pause()
       }

@@ -15,6 +15,8 @@ export class SimpleCanvasRenderer {
     this.canvas = canvas
     const ctx = canvas.getContext('2d', {
       alpha: false, // No transparency needed
+      desynchronized: true, // Better performance, allow async rendering
+      willReadFrequently: false, // We're only drawing, not reading
     })
 
     if (!ctx) {
@@ -22,6 +24,10 @@ export class SimpleCanvasRenderer {
     }
 
     this.ctx = ctx
+
+    // Disable image smoothing for better performance (especially in Firefox)
+    this.ctx.imageSmoothingEnabled = true
+    this.ctx.imageSmoothingQuality = 'low' // Use low quality for better performance
 
     // Set default canvas size
     this.canvas.width = 1920
@@ -56,11 +62,7 @@ export class SimpleCanvasRenderer {
       this.canvas.height = video.videoHeight
     }
 
-    // Clear canvas with black
-    this.ctx.fillStyle = '#000000'
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height)
-
-    // Draw current video frame to canvas
+    // Draw current video frame to canvas (no need to clear, video will overwrite)
     try {
       this.ctx.drawImage(video, 0, 0, this.canvas.width, this.canvas.height)
     } catch (err) {
