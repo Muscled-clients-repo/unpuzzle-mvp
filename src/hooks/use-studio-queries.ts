@@ -8,7 +8,10 @@ import {
   deleteStudioProjectAction,
   saveRecordingToMediaAction,
   exportTimelineToMediaAction,
-  publishStudioProjectAction
+  publishStudioProjectAction,
+  getProjectTagsAction,
+  updateProjectTagsAction,
+  bulkDeleteProjectsAction
 } from '@/app/actions/studio-actions'
 import { toast } from 'sonner'
 import { Clip, Track } from '@/lib/video-editor/types'
@@ -29,6 +32,7 @@ export interface StudioProject {
   last_exported_at: string | null
   created_at: string | null
   updated_at: string | null
+  tags: string[] | null
 }
 
 // List projects
@@ -266,6 +270,93 @@ export function useExportTimeline() {
     onError: (error, { metadata }) => {
       console.error('Export timeline error:', error)
       toast.error(`❌ Failed to export timeline "${metadata.title}": ${error.message}`)
+    }
+  })
+}
+
+// Get all project tags
+export function useProjectTags() {
+  return useQuery({
+    queryKey: ['project-tags'],
+    queryFn: async () => {
+      const result = await getProjectTagsAction()
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to fetch project tags')
+      }
+      return result.tags
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
+  })
+}
+
+// Update tags for projects (bulk operation)
+export function useUpdateProjectTags() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({
+      projectIds,
+      tags
+    }: {
+      projectIds: string[]
+      tags: string[]
+    }) => {
+      const result = await updateProjectTagsAction(projectIds, tags)
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update tags')
+      }
+      return result
+    },
+
+    onSuccess: (_, { projectIds }) => {
+      toast.success(`✅ Tags updated for ${projectIds.length} project${projectIds.length !== 1 ? 's' : ''}`)
+
+      // Invalidate projects list and tags
+      queryClient.invalidateQueries({ queryKey: ['studio-projects'] })
+      queryClient.invalidateQueries({ queryKey: ['project-tags'] })
+
+      // Invalidate individual project caches
+      projectIds.forEach(id => {
+        queryClient.invalidateQueries({ queryKey: ['studio-project', id] })
+      })
+    },
+
+    onError: (error) => {
+      console.error('Update tags error:', error)
+      toast.error(`❌ Failed to update tags: ${error.message}`)
+    }
+  })
+}
+
+// Bulk delete projects
+export function useBulkDeleteProjects() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (projectIds: string[]) => {
+      const result = await bulkDeleteProjectsAction(projectIds)
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to delete projects')
+      }
+      return result
+    },
+
+    onSuccess: (_, projectIds) => {
+      toast.success(`✅ Deleted ${projectIds.length} project${projectIds.length !== 1 ? 's' : ''}`)
+
+      // Invalidate projects list
+      queryClient.invalidateQueries({ queryKey: ['studio-projects'] })
+
+      // Remove individual project caches
+      projectIds.forEach(id => {
+        queryClient.removeQueries({ queryKey: ['studio-project', id] })
+      })
+    },
+
+    onError: (error) => {
+      console.error('Bulk delete projects error:', error)
+      toast.error(`❌ Failed to delete projects: ${error.message}`)
     }
   })
 }

@@ -453,3 +453,126 @@ export async function publishStudioProjectAction(projectId: string) {
     }
   }
 }
+
+// Get all existing tags across all projects
+export async function getProjectTagsAction() {
+  try {
+    const supabase = await createSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'Not authenticated', tags: [] }
+    }
+
+    // Query all projects and extract unique tags
+    const { data: projects, error } = await supabase
+      .from('studio_projects')
+      .select('tags')
+      .eq('instructor_id', user.id)
+
+    if (error) {
+      console.error('❌ Failed to get project tags:', error)
+      return { success: false, error: error.message, tags: [] }
+    }
+
+    // Flatten and deduplicate tags
+    const allTags = projects
+      ?.flatMap(p => p.tags || [])
+      .filter((tag, index, self) => tag && self.indexOf(tag) === index)
+      .sort() || []
+
+    return { success: true, tags: allTags }
+  } catch (error) {
+    console.error('❌ Get project tags failed:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to get tags',
+      tags: []
+    }
+  }
+}
+
+// Update tags for multiple projects (bulk operation)
+export async function updateProjectTagsAction(
+  projectIds: string[],
+  tags: string[]
+) {
+  try {
+    const supabase = await createSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'Not authenticated' }
+    }
+
+    if (projectIds.length === 0) {
+      return { success: false, error: 'No projects specified' }
+    }
+
+    console.log(`🏷️  Updating tags for ${projectIds.length} projects`)
+
+    // Update all projects in a single query
+    const { error } = await supabase
+      .from('studio_projects')
+      .update({ tags })
+      .in('id', projectIds)
+      .eq('instructor_id', user.id)
+
+    if (error) {
+      console.error('❌ Failed to update project tags:', error)
+      return { success: false, error: error.message }
+    }
+
+    console.log('✅ Project tags updated successfully')
+    revalidatePath('/instructor/studio/projects')
+
+    return { success: true }
+  } catch (error) {
+    console.error('❌ Update project tags failed:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to update tags'
+    }
+  }
+}
+
+// Bulk delete projects
+export async function bulkDeleteProjectsAction(projectIds: string[]) {
+  try {
+    const supabase = await createSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'Not authenticated' }
+    }
+
+    if (projectIds.length === 0) {
+      return { success: false, error: 'No projects specified' }
+    }
+
+    console.log(`🗑️  Bulk deleting ${projectIds.length} projects`)
+
+    // Delete all projects in a single query
+    const { error } = await supabase
+      .from('studio_projects')
+      .delete()
+      .in('id', projectIds)
+      .eq('instructor_id', user.id)
+
+    if (error) {
+      console.error('❌ Failed to bulk delete projects:', error)
+      return { success: false, error: error.message }
+    }
+
+    console.log('✅ Projects deleted successfully')
+    revalidatePath('/instructor/studio/projects')
+
+    return { success: true }
+  } catch (error) {
+    console.error('❌ Bulk delete projects failed:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to delete projects'
+    }
+  }
+}

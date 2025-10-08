@@ -1,13 +1,16 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useCallback } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useStudioProjects, useDeleteStudioProject } from "@/hooks/use-studio-queries"
+import { useStudioProjects, useDeleteStudioProject, useProjectTags, useBulkDeleteProjects } from "@/hooks/use-studio-queries"
+import { useProjectsSelectionStore } from "@/stores/projects-selection-store"
+import { useProjectsDragSelection } from "@/hooks/use-projects-drag-selection"
 import { ErrorBoundary, LoadingSpinner, ErrorFallback } from "@/components/common"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Plus,
   Search,
@@ -20,7 +23,10 @@ import {
   AlertCircle,
   Video,
   PlayCircle,
-  Film
+  Film,
+  Tag,
+  CheckSquare,
+  Square
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -45,16 +51,34 @@ import { StatsGrid } from "@/components/layout/stats-grid"
 import { StatsCardsSkeleton } from "@/components/common/universal-skeleton"
 import { FiltersSection } from "@/components/layout"
 import { SearchInput, FilterDropdown } from "@/components/ui/filters"
+import { BulkProjectSelectionToolbar } from "@/components/studio/BulkProjectSelectionToolbar"
+import { cn } from "@/lib/utils"
 
 export default function StudioProjectsPage() {
   const router = useRouter()
   const { data: projects, isLoading, error } = useStudioProjects()
+  const { data: allTags = [] } = useProjectTags()
   const { mutate: deleteProject } = useDeleteStudioProject()
+  const { mutate: bulkDeleteProjects } = useBulkDeleteProjects()
+
+  // Selection store
+  const {
+    selectedProjects,
+    lastSelectedId,
+    toggleProjectSelection,
+    selectRange,
+    clearProjectSelection
+  } = useProjectsSelectionStore()
 
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [tagFilter, setTagFilter] = useState("all")
   const [sortBy, setSortBy] = useState("lastUpdated")
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null)
+  const [isSelectionMode, setIsSelectionMode] = useState(false)
+
+  // Container ref for drag selection
+  const containerRef = useRef<HTMLDivElement>(null)
 
   // Filter projects
   const filteredProjects = (projects || []).filter(project => {
@@ -62,7 +86,9 @@ export default function StudioProjectsPage() {
     const matchesStatus = statusFilter === "all" ||
       (statusFilter === "draft" && project.is_draft) ||
       (statusFilter === "published" && !project.is_draft)
-    return matchesSearch && matchesStatus
+    const matchesTag = tagFilter === "all" ||
+      (project.tags && project.tags.includes(tagFilter))
+    return matchesSearch && matchesStatus && matchesTag
   })
 
   // Sort projects
@@ -79,7 +105,17 @@ export default function StudioProjectsPage() {
     }
   })
 
-  // Handle delete confirmation
+  // All project IDs for range selection
+  const allProjectIds = sortedProjects.map(p => p.id)
+
+  // Drag selection hook (matches media route pattern)
+  const { isDragActive, dragRectangle, selectedDuringDrag } = useProjectsDragSelection(
+    containerRef,
+    allProjectIds,
+    isSelectionMode // Only enable when in selection mode
+  )
+
+  // Handle single delete confirmation
   const handleDelete = (projectId: string) => {
     deleteProject(projectId, {
       onSuccess: () => {
@@ -87,6 +123,46 @@ export default function StudioProjectsPage() {
       }
     })
   }
+
+  // Handle bulk delete
+  const handleBulkDelete = (projectIds: string[]) => {
+    bulkDeleteProjects(projectIds, {
+      onSuccess: () => {
+        clearProjectSelection()
+      }
+    })
+  }
+
+  // Handle project card click (with selection support) - matches media route pattern exactly
+  const handleProjectClick = useCallback((projectId: string, event?: React.MouseEvent) => {
+    // Only handle selection if in selection mode and not currently dragging
+    if (!isSelectionMode || isDragActive) return
+
+    if (event) {
+      if (event.shiftKey && lastSelectedId && allProjectIds.length > 0) {
+        // Range selection with Shift+click
+        selectRange(lastSelectedId, projectId, allProjectIds)
+      } else if (event.ctrlKey || event.metaKey) {
+        // Add/remove from selection with Ctrl/Cmd+click
+        toggleProjectSelection(projectId)
+      } else {
+        // Normal click - replace selection
+        clearProjectSelection()
+        toggleProjectSelection(projectId)
+      }
+    } else {
+      // Fallback for direct calls without event
+      toggleProjectSelection(projectId)
+    }
+  }, [isSelectionMode, isDragActive, toggleProjectSelection, selectRange, clearProjectSelection, lastSelectedId, allProjectIds])
+
+  // Handle opening project in editor (when not in selection mode)
+  const handleOpenProject = useCallback((e: React.MouseEvent, projectId: string) => {
+    if (!isSelectionMode) {
+      e.stopPropagation()
+      router.push(`/instructor/studio?projectId=${projectId}`)
+    }
+  }, [isSelectionMode, router])
 
   // Show error state
   if (error) return <ErrorFallback error={error} />
@@ -210,6 +286,18 @@ export default function StudioProjectsPage() {
           />
 
           <FilterDropdown
+            value={tagFilter}
+            onChange={setTagFilter}
+            placeholder="Filter by tag"
+            width="w-[180px]"
+            icon={<Tag className="h-4 w-4" />}
+            options={[
+              { value: "all", label: "All Tags" },
+              ...allTags.map(tag => ({ value: tag, label: tag }))
+            ]}
+          />
+
+          <FilterDropdown
             value={sortBy}
             onChange={setSortBy}
             placeholder="Sort by"
@@ -220,6 +308,20 @@ export default function StudioProjectsPage() {
               { value: "clips", label: "Most Clips" }
             ]}
           />
+
+          {/* Selection Mode Button */}
+          <Button
+            variant={isSelectionMode ? "default" : "outline"}
+            onClick={() => {
+              if (isSelectionMode) {
+                clearProjectSelection()
+              }
+              setIsSelectionMode(!isSelectionMode)
+            }}
+          >
+            {isSelectionMode ? <CheckSquare className="h-4 w-4 mr-2" /> : <Square className="h-4 w-4 mr-2" />}
+            Select
+          </Button>
         </FiltersSection>
 
         {/* Projects Grid */}
@@ -243,11 +345,11 @@ export default function StudioProjectsPage() {
               <Film className="h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold mb-2">No projects found</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                {searchQuery || statusFilter !== "all"
+                {searchQuery || statusFilter !== "all" || tagFilter !== "all"
                   ? "Try adjusting your search or filters"
                   : "Get started by creating your first video project"}
               </p>
-              {!searchQuery && statusFilter === "all" && (
+              {!searchQuery && statusFilter === "all" && tagFilter === "all" && (
                 <Button onClick={() => router.push('/instructor/studio')}>
                   <Plus className="mr-2 h-4 w-4" />
                   Create First Project
@@ -256,89 +358,163 @@ export default function StudioProjectsPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {sortedProjects.map((project) => (
-              <Card key={project.id} className="flex flex-col hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <CardTitle className="text-base line-clamp-1">{project.title}</CardTitle>
-                      <CardDescription className="line-clamp-2 mt-1">
-                        {project.description || 'No description'}
-                      </CardDescription>
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => router.push(`/instructor/studio?projectId=${project.id}`)}>
-                          <Edit className="mr-2 h-4 w-4" />
-                          Open in Editor
-                        </DropdownMenuItem>
-                        {project.last_export_id && (
-                          <DropdownMenuItem onClick={() => router.push('/instructor/media')}>
-                            <Eye className="mr-2 h-4 w-4" />
-                            View Export
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive"
-                          onClick={() => setProjectToDelete(project.id)}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete Project
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </CardHeader>
+          <div
+            ref={containerRef}
+            className="relative grid gap-6 md:grid-cols-2 lg:grid-cols-3"
+          >
+            {/* Drag selection rectangle */}
+            {isDragActive && dragRectangle && (
+              <div
+                className="absolute border-2 border-blue-500 bg-blue-500/10 pointer-events-none z-10 rounded"
+                style={{
+                  left: dragRectangle.left,
+                  top: dragRectangle.top,
+                  width: dragRectangle.width,
+                  height: dragRectangle.height
+                }}
+              />
+            )}
 
-                <CardContent className="flex-1">
-                  <div className="space-y-3">
-                    {/* Project stats */}
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <Video className="h-4 w-4" />
-                        <span>{project.timeline_state?.clips?.length || 0} clips</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Clock className="h-4 w-4" />
-                        <span>{formatDate(project.updated_at)}</span>
-                      </div>
-                    </div>
+            {sortedProjects.map((project) => {
+              const isSelected = selectedProjects.has(project.id) || selectedDuringDrag.has(project.id)
 
-                    {/* Status badge */}
-                    <div className="flex items-center gap-2">
-                      <Badge variant={project.is_draft ? "secondary" : "default"}>
-                        {project.is_draft ? "Draft" : "Published"}
-                      </Badge>
-                      {project.last_export_id && (
-                        <Badge variant="outline" className="text-green-600">
-                          <PlayCircle className="mr-1 h-3 w-3" />
-                          Exported
-                        </Badge>
+              return (
+                <Card
+                  key={project.id}
+                  data-selectable-project={project.id}
+                  className={cn(
+                    "flex flex-col hover:shadow-lg transition-all relative group cursor-pointer",
+                    isSelected && "ring-2 ring-primary",
+                    !isSelectionMode && "hover:ring-1 hover:ring-border",
+                    isSelectionMode && "select-none"
+                  )}
+                  onClick={(e) => handleProjectClick(project.id, e)}
+                >
+                  {/* Selection checkbox - only show in selection mode */}
+                  {isSelectionMode && (
+                    <div className="absolute top-4 left-4 z-10">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleProjectSelection(project.id)}
+                        className="h-5 w-5 border-2"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  )}
+
+                  <CardHeader className={cn(isSelectionMode && "pl-12")}>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <CardTitle className="text-base line-clamp-1">{project.title}</CardTitle>
+                        <CardDescription className="line-clamp-2 mt-1">
+                          {project.description || 'No description'}
+                        </CardDescription>
+                      </div>
+                      {!isSelectionMode && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={(e) => handleOpenProject(e, project.id)}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              Open in Editor
+                            </DropdownMenuItem>
+                            {project.last_export_id && (
+                              <DropdownMenuItem onClick={(e) => {
+                                e.stopPropagation()
+                                router.push('/instructor/media')
+                              }}>
+                                <Eye className="mr-2 h-4 w-4" />
+                                View Export
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setProjectToDelete(project.id)
+                              }}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete Project
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       )}
                     </div>
-                  </div>
-                </CardContent>
+                  </CardHeader>
 
-                <CardFooter className="border-t pt-4">
-                  <Button
-                    className="w-full"
-                    onClick={() => router.push(`/instructor/studio?projectId=${project.id}`)}
-                  >
-                    Open Project
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))}
+                  <CardContent className="flex-1">
+                    <div className="space-y-3">
+                      {/* Project stats */}
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Video className="h-4 w-4" />
+                          <span>{project.timeline_state?.clips?.length || 0} clips</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-4 w-4" />
+                          <span>{formatDate(project.updated_at)}</span>
+                        </div>
+                      </div>
+
+                      {/* Tags display */}
+                      {project.tags && project.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {project.tags.slice(0, 3).map(tag => (
+                            <Badge key={tag} variant="secondary" className="text-xs">
+                              {tag}
+                            </Badge>
+                          ))}
+                          {project.tags.length > 3 && (
+                            <Badge variant="outline" className="text-xs">
+                              +{project.tags.length - 3}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Status badges */}
+                      <div className="flex items-center gap-2">
+                        <Badge variant={project.is_draft ? "secondary" : "default"}>
+                          {project.is_draft ? "Draft" : "Published"}
+                        </Badge>
+                        {project.last_export_id && (
+                          <Badge variant="outline" className="text-green-600">
+                            <PlayCircle className="mr-1 h-3 w-3" />
+                            Exported
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+
+                  {!isSelectionMode && (
+                    <CardFooter className="border-t pt-4">
+                      <Button
+                        className="w-full"
+                        onClick={(e) => handleOpenProject(e, project.id)}
+                      >
+                        Open Project
+                      </Button>
+                    </CardFooter>
+                  )}
+                </Card>
+              )
+            })}
           </div>
         )}
       </PageContainer>
+
+      {/* Bulk Selection Toolbar */}
+      <BulkProjectSelectionToolbar
+        onBulkDelete={handleBulkDelete}
+        allProjectIds={sortedProjects.map(p => p.id)}
+      />
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!projectToDelete} onOpenChange={() => setProjectToDelete(null)}>

@@ -10,9 +10,9 @@ export default function InstructorLayout({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
-  
-  // Hide sidebar on studio page and video pages
-  const isFullscreenPage = pathname.includes('/studio') || pathname.includes('/video/')
+
+  // Hide sidebar only on studio editor page (not projects page) and video pages
+  const isFullscreenPage = pathname === '/instructor/studio' || pathname.includes('/video/')
   
   return (
     <div className="min-h-screen">
