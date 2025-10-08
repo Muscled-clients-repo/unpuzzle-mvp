@@ -202,11 +202,6 @@ export class VirtualTimelineEngine {
 
     if (isNewSegment || isDifferentVideo) {
       if (isDifferentVideo) {
-        console.log('📹 Loading different video:', {
-          from: this.currentSegment?.sourceUrl?.substring(0, 80),
-          to: targetSegment.sourceUrl?.substring(0, 80),
-          targetTime: targetTime.toFixed(2) + 's'
-        })
         // Different video file - use dual video architecture
         // CRITICAL: Set currentSegment IMMEDIATELY to prevent repeated loads
         this.currentSegment = targetSegment
@@ -259,8 +254,6 @@ export class VirtualTimelineEngine {
 
     // Check if we've exceeded the segment's logical out point (for playback control)
     if (this.isPlaying && sourceFrame >= targetSegment.sourceOutFrame) {
-      console.log('⏭️ Reached end of trimmed clip at frame', sourceFrame, 'out of', targetSegment.sourceOutFrame)
-
       // Move to next segment or pause timeline
       const nextFrame = targetSegment.endFrame
       if (nextFrame < this.totalFrames) {
@@ -281,9 +274,6 @@ export class VirtualTimelineEngine {
           this.renderer.clear()
         }
         this.currentSegment = null
-
-        // On next frame, syncVideoToTimeline will detect the new segment and load it
-        console.log('🔄 Jumping to next segment at frame', nextFrame)
       } else {
         this.pause()
       }
@@ -397,6 +387,34 @@ export class VirtualTimelineEngine {
           inactiveVideo.addEventListener('seeked', onSeeked, { once: true })
         })
 
+        // Always wait for canplay event to ensure smooth playback
+        // This is especially important for first-time loads
+        await new Promise<void>((resolve) => {
+          // Check if already ready
+          if (inactiveVideo.readyState >= 3) {
+            resolve()
+            return
+          }
+
+          const timeout = setTimeout(() => {
+            // Timeout after 2 seconds - proceed anyway to avoid getting stuck
+            inactiveVideo.removeEventListener('canplay', onCanPlay)
+            inactiveVideo.removeEventListener('canplaythrough', onCanPlay)
+            resolve()
+          }, 2000)
+
+          const onCanPlay = () => {
+            clearTimeout(timeout)
+            inactiveVideo.removeEventListener('canplay', onCanPlay)
+            inactiveVideo.removeEventListener('canplaythrough', onCanPlay)
+            resolve()
+          }
+
+          // Listen to both events - whichever fires first
+          inactiveVideo.addEventListener('canplay', onCanPlay, { once: true })
+          inactiveVideo.addEventListener('canplaythrough', onCanPlay, { once: true })
+        })
+
         // Switch videos NOW (this might be after playhead has moved past, but that's OK)
         this.switchActiveVideo()
         this.currentSegment = segment
@@ -446,7 +464,10 @@ export class VirtualTimelineEngine {
 
         if (this.isPlaying) {
           this.videoElement.play().catch((err) => {
-            console.error('Play error:', err)
+            // Ignore AbortError - happens during rapid play/pause transitions
+            if (err.name !== 'AbortError') {
+              console.error('Play error:', err)
+            }
           })
         }
       }

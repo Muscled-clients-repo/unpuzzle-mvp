@@ -115,6 +115,15 @@ export function useVideoEditor() {
     }))
 
     engineRef.current.setSegments(segments)
+
+    // Preload first clip to avoid lag on initial playback
+    if (segments.length > 0 && videoRef.current) {
+      const firstClip = segments[0]
+      if (videoRef.current.src !== firstClip.sourceUrl) {
+        videoRef.current.src = firstClip.sourceUrl
+        videoRef.current.load()
+      }
+    }
   }, [clips])
   
   // Store recording data for later processing

@@ -283,14 +283,10 @@ export function VideoStudio() {
     type: 'video' | 'audio' | 'image'
     durationSeconds?: number
   }) => {
-    console.log('📥 Importing media:', mediaFile.name, 'Duration (seconds):', mediaFile.durationSeconds)
-
     // Calculate duration in frames
     const durationFrames = mediaFile.durationSeconds
       ? Math.floor(mediaFile.durationSeconds * FPS)
       : FPS * 10 // Default to 10 seconds if duration unknown
-
-    console.log('📏 Duration in frames:', durationFrames, '(FPS:', FPS, ')')
 
     // Add to timeline
     editor.addClipFromUrl({
@@ -531,12 +527,14 @@ export function VideoStudio() {
         className="hidden"
         crossOrigin="anonymous"
         playsInline
+        preload="auto"
       />
       <video
         ref={editor.bufferVideoRef}
         className="hidden"
         crossOrigin="anonymous"
         playsInline
+        preload="auto"
       />
 
       {/* Full Tab View Controls (outside preview container) */}
