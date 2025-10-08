@@ -10,7 +10,7 @@ interface UseRecordingProps {
   selectedTrackIndex?: number | null
   clips?: Clip[]
   tracks?: Track[]
-  onClipCreated: (clip: Clip) => void
+  onClipCreated: (clip: Clip, blob: Blob, durationMs: number) => void
   onTotalFramesUpdate: (frames: number) => void
 }
 
@@ -51,9 +51,10 @@ export function useRecording({
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: 'video/webm' })
         const url = URL.createObjectURL(blob)
-        
-        // Calculate duration in frames
-        const recordingSeconds = (Date.now() - recordingStartTimeRef.current) / 1000
+
+        // Calculate duration in frames and milliseconds
+        const durationMs = Date.now() - recordingStartTimeRef.current
+        const recordingSeconds = durationMs / 1000
         const durationFrames = timeToFrame(recordingSeconds)
         
         // Determine which track to use (priority order)
@@ -102,8 +103,8 @@ export function useRecording({
           sourceInFrame: 0,
           sourceOutFrame: durationFrames
         }
-        
-        onClipCreated(newClip)
+
+        onClipCreated(newClip, blob, durationMs)
         onTotalFramesUpdate(totalFrames + durationFrames)
         setIsRecording(false)
         

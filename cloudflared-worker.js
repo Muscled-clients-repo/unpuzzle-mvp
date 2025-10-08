@@ -91,7 +91,10 @@ export default {
             status: 401,
             headers: {
               'Content-Type': 'text/plain',
-              'WWW-Authenticate': 'Bearer realm="Video Access"'
+              'WWW-Authenticate': 'Bearer realm="Video Access"',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+              'Access-Control-Allow-Headers': 'range'
             }
           });
         }
@@ -106,7 +109,12 @@ export default {
         if (!verificationResult.valid) {
           return new Response(`Unauthorized - ${verificationResult.error || 'Invalid token'}`, {
             status: 401,
-            headers: { 'Content-Type': 'text/plain' }
+            headers: {
+              'Content-Type': 'text/plain',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+              'Access-Control-Allow-Headers': 'range'
+            }
           });
         }
       }

@@ -275,17 +275,20 @@ export class VirtualTimelineEngine {
     // Allow seeking anywhere, not limited by totalFrames (which is based on clips)
     // This allows scrubber to move in empty timeline regions
     this.currentFrame = Math.max(0, frame)
-    
+
+    console.log('🎯 Seeking to frame:', frame, 'Time:', (frame / this.fps).toFixed(2) + 's', 'isPlaying:', this.isPlaying)
+
     // Reset end flag if seeking before the end
     if (frame < this.totalFrames) {
       this.hasReachedEnd = false
     }
-    
+
     // If playing, the loop will handle syncing
     // If paused, sync immediately
     if (!this.isPlaying) {
       this.syncVideoToTimeline()
       this.onFrameUpdate?.(this.currentFrame)
+      console.log('📍 Synced - Video currentTime:', this.videoElement?.currentTime?.toFixed(2), 'Segment:', this.currentSegment?.id)
     }
   }
 

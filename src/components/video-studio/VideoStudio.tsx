@@ -3,14 +3,30 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useVideoEditor } from '@/lib/video-editor/useVideoEditor'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Play, Pause, Circle, Square, Undo2, Redo2, X, Maximize } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { ArrowLeft, Play, Pause, Circle, Square, Undo2, Redo2, X, Maximize, Save, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { Timeline } from './Timeline'
 import { useKeyboardShortcuts } from '@/lib/video-editor/useKeyboardShortcuts'
 import { formatFrame } from './formatters'
+import { useSearchParams, useRouter } from 'next/navigation'
+import { useSaveStudioProject, useStudioProject, useSaveRecording } from '@/hooks/use-studio-queries'
+import { FPS } from '@/lib/video-editor/types'
 
 export function VideoStudio() {
   const editor = useVideoEditor()
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const projectId = searchParams.get('projectId')
+
+  // TanStack Query hooks
+  const { data: project, isLoading: isLoadingProject } = useStudioProject(projectId)
+  const { mutate: saveProject, isPending: isSaving } = useSaveStudioProject()
+  const { mutate: saveRecording, isPending: isSavingRecording } = useSaveRecording()
+
+  // Project metadata state
+  const [projectTitle, setProjectTitle] = useState('Untitled Project')
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null)
   const [topSectionHeight, setTopSectionHeight] = useState(65) // Default to 65%
   const [leftPanelWidth, setLeftPanelWidth] = useState(20) // Default to 20%
   const [recordingDuration, setRecordingDuration] = useState(0)
@@ -100,7 +116,140 @@ export function VideoStudio() {
       }
     }
   }, [editor.isRecording])
-  
+
+  // Load project from database when it's fetched
+  useEffect(() => {
+    if (project?.timeline_state) {
+      console.log('📂 Loading project from database:', project.title)
+
+      editor.loadTimeline(
+        project.timeline_state.clips,
+        project.timeline_state.tracks,
+        project.timeline_state.totalFrames
+      )
+
+      setProjectTitle(project.title)
+    }
+  }, [project, editor.loadTimeline])
+
+  // Track previous recording state to detect when recording stops
+  const wasRecordingRef = useRef(false)
+
+  // Save recording to media_files when recording stops
+  useEffect(() => {
+    // Detect transition from recording to not recording
+    if (wasRecordingRef.current && !editor.isRecording) {
+      const recordingData = editor.getLatestRecording()
+
+      if (recordingData) {
+        const { clipId, blob, durationMs } = recordingData
+
+        console.log('💾 Saving recording to media library...', { clipId, blobSize: blob.size, durationMs })
+
+        saveRecording({
+          blob,
+          metadata: {
+            name: `recording-${Date.now()}`,
+            track_type: 'video',
+            duration_ms: durationMs,
+            clip_id: clipId,
+            project_id: projectId || undefined
+          }
+        }, {
+          onSuccess: (result) => {
+            console.log('✅ Recording save result:', result)
+            if (result.fileUrl) {
+              console.log('✅ Recording saved, updating clip URL from blob to CDN:', result.fileUrl)
+              editor.updateClipUrl(clipId, result.fileUrl)
+
+              // Auto-save project to persist the CDN URL in database
+              // Use a micro-task to ensure state update has completed
+              Promise.resolve().then(() => {
+                // Get the latest clips from editor after updateClipUrl has run
+                const updatedClips = editor.clips.map(clip =>
+                  clip.id === clipId ? { ...clip, url: result.fileUrl } : clip
+                )
+
+                console.log('💾 Auto-saving project with updated CDN URL...')
+                saveProject(
+                  {
+                    id: projectId || undefined,
+                    title: projectTitle,
+                    timeline_state: {
+                      clips: updatedClips,
+                      tracks: editor.tracks,
+                      totalFrames: editor.totalFrames,
+                      fps: FPS
+                    },
+                    is_draft: true // Auto-save as draft
+                  },
+                  {
+                    onSuccess: (saveResult) => {
+                      console.log('✅ Project auto-saved with CDN URL')
+                      setLastSavedAt(Date.now())
+
+                      // If this was a new project, update URL with projectId
+                      if (!projectId && saveResult.project?.id) {
+                        console.log('✅ New project created during recording save, updating URL')
+                        router.push(`/instructor/studio?projectId=${saveResult.project.id}`)
+                      }
+                    }
+                  }
+                )
+              })
+            } else {
+              console.error('❌ No fileUrl in result:', result)
+            }
+          },
+          onError: (error) => {
+            console.error('❌ Failed to save recording:', error)
+          }
+        })
+      } else {
+        console.log('⚠️ No recording data found')
+      }
+    }
+
+    wasRecordingRef.current = editor.isRecording
+  }, [editor.isRecording, editor, saveRecording, projectId, projectTitle, saveProject, router])
+
+  // Save handler
+  const handleSave = useCallback(() => {
+    saveProject(
+      {
+        id: projectId || undefined,
+        title: projectTitle,
+        timeline_state: {
+          clips: editor.clips,
+          tracks: editor.tracks,
+          totalFrames: editor.totalFrames,
+          fps: FPS
+        },
+        is_draft: false // Manual saves are not drafts
+      },
+      {
+        onSuccess: (result) => {
+          setLastSavedAt(Date.now())
+
+          // If this was a new project (no projectId), update URL with the new project ID
+          if (!projectId && result.project?.id) {
+            console.log('✅ New project created, updating URL with projectId:', result.project.id)
+            router.push(`/instructor/studio?projectId=${result.project.id}`)
+          }
+        }
+      }
+    )
+  }, [projectId, projectTitle, editor.clips, editor.tracks, editor.totalFrames, saveProject, router])
+
+  // Format last saved time
+  const formatLastSaved = () => {
+    if (!lastSavedAt) return null
+    const seconds = Math.floor((Date.now() - lastSavedAt) / 1000)
+    if (seconds < 60) return 'Just now'
+    const minutes = Math.floor(seconds / 60)
+    return `${minutes}m ago`
+  }
+
   // Format recording duration
   const formatRecordingTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -329,9 +478,10 @@ export function VideoStudio() {
   return (
     <div className="h-screen flex flex-col bg-gray-900 text-white">
       {/* Video element will be positioned by useEffect - start hidden */}
-      <video 
+      <video
         ref={editor.videoRef}
         className="hidden"
+        crossOrigin="anonymous"
       />
 
       {/* Full Tab View Controls (outside preview container) */}
@@ -429,12 +579,24 @@ export function VideoStudio() {
           <Link href="/" className="text-gray-400 hover:text-white">
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          <h1 className="text-lg font-semibold">Unpuzzle AI Course Maker</h1>
+          <Input
+            type="text"
+            value={projectTitle}
+            onChange={(e) => setProjectTitle(e.target.value)}
+            className="w-64 bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+            placeholder="Project title..."
+          />
+          {isLoadingProject && (
+            <span className="text-xs text-gray-400">Loading...</span>
+          )}
+          {lastSavedAt && (
+            <span className="text-xs text-gray-400">Saved {formatLastSaved()}</span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {/* Recording Controls in Header */}
           {!editor.isRecording ? (
-            <Button 
+            <Button
               size="sm"
               onClick={editor.startRecording}
               className="bg-red-600 hover:bg-red-700"
@@ -448,7 +610,7 @@ export function VideoStudio() {
                 <Circle className="h-3 w-3 fill-red-500 animate-pulse" />
                 {formatRecordingTime(recordingDuration)}
               </span>
-              <Button 
+              <Button
                 size="sm"
                 onClick={editor.stopRecording}
                 className="bg-red-600 hover:bg-red-700 text-white font-semibold"
@@ -458,7 +620,24 @@ export function VideoStudio() {
               </Button>
             </div>
           )}
-          <Button size="sm" variant="ghost">Save Project</Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleSave}
+            disabled={isSaving || editor.clips.length === 0}
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-1" />
+                Save
+              </>
+            )}
+          </Button>
           <Button size="sm" className="bg-blue-600 hover:bg-blue-700">Export</Button>
         </div>
       </div>

@@ -102,8 +102,15 @@ export function useVideoEditor() {
     engineRef.current.setSegments(segments)
   }, [clips])
   
+  // Store recording data for later processing
+  const recordingDataRef = useRef<{ clipId: string; blob: Blob; durationMs: number } | null>(null)
+
   // Recording hook integration
-  const handleClipCreated = useCallback((clip: Clip) => {
+  const handleClipCreated = useCallback((clip: Clip, blob: Blob, durationMs: number) => {
+    // Store recording data for parent component to access
+    recordingDataRef.current = { clipId: clip.id, blob, durationMs }
+
+    // Add clip to timeline immediately with blob URL
     setClipsWithRef(prev => {
       const newClips = [...prev, clip]
       // Save history immediately when adding a clip
@@ -231,7 +238,31 @@ export function useVideoEditor() {
       return updatedClips
     })
   }, [])
-  
+
+  // Update clip URL (used to replace blob URL with CDN URL after saving recording)
+  const updateClipUrl = useCallback((clipId: string, newUrl: string) => {
+    setClipsWithRef(prevClips => {
+      const clipIndex = prevClips.findIndex(c => c.id === clipId)
+      if (clipIndex === -1) return prevClips
+
+      const updatedClips = [...prevClips]
+      updatedClips[clipIndex] = {
+        ...updatedClips[clipIndex],
+        url: newUrl
+      }
+
+      console.log(`✅ Updated clip ${clipId} URL to CDN URL`)
+      return updatedClips
+    })
+  }, [])
+
+  // Get latest recording data
+  const getLatestRecording = useCallback(() => {
+    const data = recordingDataRef.current
+    recordingDataRef.current = null // Clear after reading
+    return data
+  }, [])
+
   // Trim the start of a clip (live update during drag)
   const trimClipStart = useCallback((clipId: string, newStartOffset: number) => {
     setClipsWithRef(prevClips => {
@@ -575,6 +606,40 @@ export function useVideoEditor() {
     }
   }, []) // Empty deps - only runs on unmount
 
+  // Load timeline from database (restore saved project)
+  const loadTimeline = useCallback((
+    loadedClips: Clip[],
+    loadedTracks: Track[],
+    loadedTotalFrames: number
+  ) => {
+    // Stop playback if playing
+    if (isPlaying) {
+      pause()
+    }
+
+    // Clear existing clips and tracks
+    setClipsWithRef(loadedClips)
+    setTracks(loadedTracks)
+    setTotalFramesWithRef(loadedTotalFrames)
+
+    // Reset playhead to start
+    setCurrentFrame(0)
+    setVisualFrame(0)
+
+    // Clear selection
+    setSelectedClipId(null)
+    setSelectedTrackIndex(null)
+
+    // Initialize history with loaded state
+    historyRef.current.initialize(loadedClips, loadedTotalFrames)
+
+    console.log('✅ Timeline loaded:', {
+      clips: loadedClips.length,
+      tracks: loadedTracks.length,
+      totalFrames: loadedTotalFrames
+    })
+  }, [isPlaying, pause])
+
   return {
     // State
     clips,
@@ -591,6 +656,7 @@ export function useVideoEditor() {
     videoRef,
     
     // Actions
+    loadTimeline,
     startRecording,
     stopRecording,
     play,
@@ -606,6 +672,8 @@ export function useVideoEditor() {
     moveClip,
     moveClipComplete,
     deleteClip,
+    updateClipUrl,
+    getLatestRecording,
     
     // Track management
     addTrack,
