@@ -29,6 +29,7 @@ import {
   UserCheck,
   GitBranch,
   History,
+  FolderOpen,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -64,6 +65,7 @@ const instructorNavItems: NavItem[] = [
   { href: "/instructor/courses", label: "My Courses", icon: BookOpen },
   { href: "/instructor/media", label: "Media", icon: Upload },
   { href: "/instructor/studio/projects", label: "Studio", icon: PlayCircle },
+  { href: "/instructor/resources", label: "Resources", icon: FolderOpen },
   {
     href: "/instructor/requests",
     label: "Requests",

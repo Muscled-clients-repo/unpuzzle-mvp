@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState } from 'react'
-import { Pin, MoreVertical, Heart, MessageCircle, Send, Crown, Loader2 } from 'lucide-react'
+import React, { useState, useRef, useEffect } from 'react'
+import { Pin, MoreVertical, Heart, MessageCircle, Send, Crown, Loader2, Trash2 } from 'lucide-react'
 import { FilterDropdown } from '@/components/ui/filters'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAppStore } from '@/stores/app-store'
@@ -11,6 +11,8 @@ import {
   likePost,
   unlikePost,
   replyToPost,
+  deletePost,
+  togglePinPost,
   type CommunityPost
 } from '@/app/actions/community-actions'
 import { toast } from 'sonner'
@@ -23,6 +25,8 @@ export function CommunityPostsFeedConnected() {
   const [newPost, setNewPost] = useState('')
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
   const [replyContent, setReplyContent] = useState('')
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   // Fetch posts
   const { data: postsData, isLoading } = useQuery({
@@ -87,6 +91,46 @@ export function CommunityPostsFeedConnected() {
       queryClient.invalidateQueries({ queryKey: ['community-posts'] })
     }
   })
+
+  // Delete post mutation
+  const deleteMutation = useMutation({
+    mutationFn: deletePost,
+    onSuccess: (result) => {
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      toast.success('Post deleted!')
+      setOpenDropdown(null)
+      queryClient.invalidateQueries({ queryKey: ['community-posts'] })
+    }
+  })
+
+  // Pin/unpin mutation
+  const pinMutation = useMutation({
+    mutationFn: ({ postId, isPinned }: { postId: string; isPinned: boolean }) =>
+      togglePinPost(postId, isPinned),
+    onSuccess: (result) => {
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      toast.success(result.success ? 'Post updated!' : 'Error updating post')
+      setOpenDropdown(null)
+      queryClient.invalidateQueries({ queryKey: ['community-posts'] })
+    }
+  })
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setOpenDropdown(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const filterOptions = [
     { value: 'all', label: 'All Posts' },
@@ -206,6 +250,8 @@ export function CommunityPostsFeedConnected() {
             const isLiked = user ? post.likes.some(like => like.user_id === user.id) : false
             const authorName = post.author?.full_name || 'Unknown'
             const authorGoal = post.author?.track_goals?.name || 'No goal set'
+            const canDelete = user && (post.author_id === user.id || user.role === 'admin')
+            const canPin = user && (user.role === 'instructor' || user.role === 'admin')
 
             return (
               <div key={post.id} className={`bg-white border border-gray-200 rounded-lg ${
@@ -237,9 +283,46 @@ export function CommunityPostsFeedConnected() {
                         <span className="text-sm text-gray-500">{formatTimestamp(post.created_at)}</span>
                       </div>
                     </div>
-                    <button className="text-gray-400 hover:text-gray-600">
-                      <MoreVertical className="h-4 w-4" />
-                    </button>
+                    {(canDelete || canPin) && (
+                      <div className="relative" ref={openDropdown === post.id ? dropdownRef : null}>
+                        <button
+                          onClick={() => setOpenDropdown(openDropdown === post.id ? null : post.id)}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </button>
+                        {openDropdown === post.id && (
+                          <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+                            {canPin && (
+                              <button
+                                onClick={() => {
+                                  pinMutation.mutate({ postId: post.id, isPinned: !post.is_pinned })
+                                }}
+                                disabled={pinMutation.isPending}
+                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                              >
+                                <Pin className="h-4 w-4" />
+                                {post.is_pinned ? 'Unpin Post' : 'Pin Post'}
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                onClick={() => {
+                                  if (confirm('Are you sure you want to delete this post?')) {
+                                    deleteMutation.mutate(post.id)
+                                  }
+                                }}
+                                disabled={deleteMutation.isPending}
+                                className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                Delete Post
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
