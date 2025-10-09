@@ -10,6 +10,7 @@ interface ConversationIntegrationV2Props {
   isInstructorView?: boolean
   enableUnifiedSystem?: boolean
   goalProgress?: any
+  onGoalProgressUpdate?: () => void
   className?: string
 }
 
@@ -23,6 +24,7 @@ export function ConversationIntegrationV2({
   isInstructorView = false,
   enableUnifiedSystem = true,
   goalProgress,
+  onGoalProgressUpdate,
   className = ''
 }: ConversationIntegrationV2Props) {
   // For now, always use the DailyGoalTrackerV2 which provides the original UI/UX
@@ -34,6 +36,7 @@ export function ConversationIntegrationV2({
         instructorId={instructorId}
         isInstructorView={isInstructorView}
         goalProgress={goalProgress}
+        onGoalProgressUpdate={onGoalProgressUpdate}
       />
     </div>
   )

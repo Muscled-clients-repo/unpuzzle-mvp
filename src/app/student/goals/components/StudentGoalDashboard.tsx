@@ -10,7 +10,7 @@ export function StudentGoalDashboard() {
   const { user } = useAppStore()
 
   // Fetch student's assigned goal from their profile
-  const { data: goalData, isLoading: goalLoading } = useQuery({
+  const { data: goalData, isLoading: goalLoading, refetch: refetchGoalData } = useQuery({
     queryKey: ['student-goal', user?.id],
     staleTime: 0, // Force fresh data
     cacheTime: 0, // Don't cache
@@ -25,6 +25,8 @@ export function StudentGoalDashboard() {
         .select(`
           current_goal_id,
           goal_assigned_at,
+          total_revenue_earned,
+          current_mrr,
           track_goals (
             id,
             name,
@@ -40,10 +42,7 @@ export function StudentGoalDashboard() {
         .eq('id', user.id)
         .single()
 
-      console.log('🔍 DEBUG StudentGoalDashboard query result:', { profile, profileError })
-
       if (profileError || !profile?.current_goal_id) {
-        console.log('🔍 DEBUG No goal assigned or error:', { profileError, hasGoal: !!profile?.current_goal_id })
         return null
       }
 
@@ -51,15 +50,13 @@ export function StudentGoalDashboard() {
       const goal = profile.track_goals
       const startDate = profile.goal_assigned_at || new Date().toISOString()
 
-      console.log('🔍 DEBUG Goal data transformation:', {
-        goalAssignedAt: profile.goal_assigned_at,
-        startDate,
-        goalName: goal?.name,
-        goalDescription: goal?.description
-      })
+      // Get current amount based on track type
+      const isSaasTrack = goal.tracks?.name?.toLowerCase().includes('saas')
+      const currentRevenueAmount = isSaasTrack ? profile.current_mrr : profile.total_revenue_earned
+      const targetAmount = goal.target_amount || 1000
 
-      // Format target amount from structured data
-      const formatTargetAmount = (amount: number, currency: string = 'USD') => {
+      // Format amount from structured data
+      const formatAmount = (amount: number, currency: string = 'USD') => {
         const formatter = new Intl.NumberFormat('en-US', {
           style: 'currency',
           currency: currency,
@@ -69,12 +66,15 @@ export function StudentGoalDashboard() {
         return formatter.format(amount)
       }
 
+      // Calculate progress percentage
+      const progressPercentage = targetAmount > 0 ? Math.min((currentRevenueAmount / targetAmount) * 100, 100) : 0
+
       return {
         id: goal.id,
         title: goal.name || goal.description, // Use clean goal name
-        currentAmount: '$0', // This should come from actual progress tracking
-        targetAmount: formatTargetAmount(goal.target_amount || 1000, goal.currency || 'USD'),
-        progress: 0, // This should come from actual progress calculation
+        currentAmount: formatAmount(currentRevenueAmount || 0, goal.currency || 'USD'),
+        targetAmount: formatAmount(targetAmount, goal.currency || 'USD'),
+        progress: progressPercentage,
         targetDate: new Date(new Date(startDate).getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 90 days from start
         startDate: startDate.split('T')[0],
         status: 'active',
@@ -105,6 +105,7 @@ export function StudentGoalDashboard() {
         isInstructorView={false}
         enableUnifiedSystem={true}
         goalProgress={goalData}
+        onGoalProgressUpdate={refetchGoalData}
       />
     </div>
   )

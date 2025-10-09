@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useMemo, useEffect } from 'react'
-import { Target, Calendar, MessageCircle, Plus, Clock } from 'lucide-react'
+import { Target, Calendar, MessageCircle, Plus, Clock, DollarSign, Loader2, CheckCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -20,12 +20,16 @@ import { useUITransitionStore } from '@/stores/ui-transition-store'
 import { useConversationDrafts } from '@/hooks/use-conversation-drafts'
 import { formatDate } from '@/lib/utils'
 import { QuestionnaireReview } from '@/components/instructor/QuestionnaireReview'
+import { RevenueSubmissionModal } from '@/app/student/goals/components/RevenueSubmissionModal'
+import { getLatestRevenueSubmission } from '@/app/actions/revenue-actions'
+import { RevenueReviewModal } from './RevenueReviewModal'
 
 interface DailyGoalTrackerV2Props {
   studentId: string
   instructorId?: string
   isInstructorView?: boolean
   goalProgress?: any
+  onGoalProgressUpdate?: () => void
 }
 
 interface DailyEntry {
@@ -54,7 +58,8 @@ export function DailyGoalTrackerV2({
   studentId,
   instructorId,
   isInstructorView = false,
-  goalProgress
+  goalProgress,
+  onGoalProgressUpdate
 }: DailyGoalTrackerV2Props) {
   const [respondingToDay, setRespondingToDay] = useState<number | null>(null)
   const [editingNote, setEditingNote] = useState<string | null>(null)
@@ -68,6 +73,13 @@ export function DailyGoalTrackerV2({
     dailyEntry: null,
     initialIndex: 0
   })
+
+  // Revenue submission state
+  const [showRevenueModal, setShowRevenueModal] = useState(false)
+  const [submissionStatus, setSubmissionStatus] = useState<'pending' | 'approved' | 'rejected' | null>(null)
+  const [isLoadingStatus, setIsLoadingStatus] = useState(false)
+  const [pendingSubmission, setPendingSubmission] = useState<any>(null)
+  const [showReviewModal, setShowReviewModal] = useState(false)
 
   // Draft management
   const [currentDraftId, setCurrentDraftId] = useState<string | undefined>()
@@ -94,6 +106,37 @@ export function DailyGoalTrackerV2({
     conversationData?.conversation?.id
   )
 
+  // Fetch revenue submission status
+  const fetchSubmissionStatus = async () => {
+    if (!conversationData?.conversation?.id) return
+
+    setIsLoadingStatus(true)
+    try {
+      const result = await getLatestRevenueSubmission(conversationData.conversation.id)
+      if (result.submission && result.submission.metadata) {
+        const metadata = result.submission.metadata as any
+        setSubmissionStatus(metadata.status || null)
+        // Store full submission for instructor review
+        if (isInstructorView && metadata.status === 'pending') {
+          setPendingSubmission(result.submission)
+        } else {
+          setPendingSubmission(null)
+        }
+      } else {
+        setSubmissionStatus(null)
+        setPendingSubmission(null)
+      }
+    } catch (error) {
+      console.error('Error fetching submission status:', error)
+    } finally {
+      setIsLoadingStatus(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchSubmissionStatus()
+  }, [conversationData?.conversation?.id])
+
 
   // Form and UI state for message composer
   const messageForm = useMessageForm({
@@ -115,9 +158,6 @@ export function DailyGoalTrackerV2({
   // WebSocket real-time updates (only connect when user is available)
   const { isConnected } = useConversationWebSocket(studentId, user?.id)
 
-  // Mock goal data (in real app, this would come from props or separate query)
-  console.log('🔍 DEBUG DailyGoalTrackerV2 goalProgress prop:', goalProgress)
-
   const currentGoal = goalProgress || {
     id: '1',
     title: 'UI/UX Designer to $4K/month',
@@ -128,12 +168,6 @@ export function DailyGoalTrackerV2({
     startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 7 days ago
     status: 'active'
   }
-
-  console.log('🔍 DEBUG currentGoal being used:', {
-    isUsingRealData: !!goalProgress,
-    currentGoal: currentGoal,
-    startDate: currentGoal.startDate
-  })
 
   // Transform conversation messages into daily entries
   const dailyEntries = useMemo(() => {
@@ -205,14 +239,6 @@ export function DailyGoalTrackerV2({
         }
       })
     }
-
-    console.log('🔍 DEBUG Daily Entry Creation:', {
-      today,
-      startDate: currentGoal.startDate,
-      totalDays: daysSinceStart,
-      existingDates: Array.from(entriesMap.keys()),
-      existingDays: Array.from(entriesMap.values()).map(e => ({ date: e.date, day: e.day }))
-    })
 
     // Convert to array and sort by day descending
     return Array.from(entriesMap.values()).sort((a, b) => b.day - a.day)
@@ -540,12 +566,93 @@ export function DailyGoalTrackerV2({
             </div>
           </div>
           <div className="mt-4">
-            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-3">
               <div
                 className="bg-gray-900 dark:bg-gray-300 h-3 rounded-full transition-all"
                 style={{ width: `${currentGoal.progress}%` }}
               />
             </div>
+
+            {/* Revenue Submission/Review Buttons */}
+            {conversationData?.conversation?.id && (
+              <div className="mt-3">
+                {!isInstructorView ? (
+                  // Student view - submission button
+                  <>
+                    {isLoadingStatus ? (
+                      <Button variant="outline" size="sm" className="w-full" disabled>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Loading status...
+                      </Button>
+                    ) : submissionStatus === 'pending' ? (
+                      <Button variant="outline" size="sm" className="w-full" disabled>
+                        <Clock className="h-4 w-4 mr-2 text-yellow-600" />
+                        <span className="text-yellow-700">Under Review</span>
+                      </Button>
+                    ) : submissionStatus === 'approved' ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full border-green-200 bg-green-50 hover:bg-green-100 dark:border-green-800 dark:bg-green-950 dark:hover:bg-green-900"
+                        onClick={() => setShowRevenueModal(true)}
+                      >
+                        <CheckCircle className="h-4 w-4 mr-2 text-green-600 dark:text-green-400" />
+                        <span className="text-green-700 dark:text-green-300">Last submission approved - Submit new proof</span>
+                      </Button>
+                    ) : submissionStatus === 'rejected' ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full border-red-200 bg-red-50 hover:bg-red-100 dark:border-red-800 dark:bg-red-950 dark:hover:bg-red-900"
+                        onClick={() => setShowRevenueModal(true)}
+                      >
+                        <DollarSign className="h-4 w-4 mr-2 text-red-600 dark:text-red-400" />
+                        <span className="text-red-700 dark:text-red-300">Resubmit Revenue Proof</span>
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => setShowRevenueModal(true)}
+                      >
+                        <DollarSign className="h-4 w-4 mr-2" />
+                        Submit Revenue Proof
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  // Instructor view - review button
+                  <>
+                    {isLoadingStatus ? (
+                      <Button variant="outline" size="sm" className="w-full" disabled>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Loading...
+                      </Button>
+                    ) : pendingSubmission ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full border-yellow-200 bg-yellow-50 hover:bg-yellow-100 dark:border-yellow-800 dark:bg-yellow-950 dark:hover:bg-yellow-900"
+                        onClick={() => setShowReviewModal(true)}
+                      >
+                        <Clock className="h-4 w-4 mr-2 text-yellow-600 dark:text-yellow-400" />
+                        <span className="text-yellow-700 dark:text-yellow-300">Revenue Submission Pending - Click to Review</span>
+                      </Button>
+                    ) : submissionStatus === 'approved' ? (
+                      <div className="text-sm text-green-600 dark:text-green-400 text-center py-2">
+                        <CheckCircle className="h-4 w-4 inline mr-2" />
+                        Last submission approved
+                      </div>
+                    ) : submissionStatus === 'rejected' ? (
+                      <div className="text-sm text-gray-600 dark:text-gray-400 text-center py-2">
+                        Last submission rejected
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </CardHeader>
       </Card>
@@ -577,15 +684,7 @@ export function DailyGoalTrackerV2({
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
                       <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
-                        {(() => {
-                          const formatted = formatDate(entry.date)
-                          console.log('🔍 DEBUG formatDate conversion:', {
-                            inputDate: entry.date,
-                            formattedOutput: formatted,
-                            rawDateObject: new Date(entry.date)
-                          })
-                          return formatted
-                        })()}
+                        {formatDate(entry.date)}
                       </h3>
                       {entry.day === currentDay && (
                         <Badge className="bg-gray-100 text-gray-800">Today</Badge>
@@ -1165,6 +1264,37 @@ export function DailyGoalTrackerV2({
           onClose={() => setImageViewer({ isOpen: false, dailyEntry: null, initialIndex: 0 })}
           initialImageIndex={imageViewer.initialIndex}
           dailyEntry={imageViewer.dailyEntry}
+        />
+      )}
+
+      {/* Revenue Submission Modal (Student) */}
+      {!isInstructorView && conversationData?.conversation?.id && (
+        <RevenueSubmissionModal
+          isOpen={showRevenueModal}
+          onClose={() => setShowRevenueModal(false)}
+          conversationId={conversationData.conversation.id}
+          trackType={goalProgress?.trackName?.toLowerCase().includes('saas') ? 'saas' : 'agency'}
+          onSuccess={() => {
+            fetchSubmissionStatus()
+            onGoalProgressUpdate?.()
+          }}
+        />
+      )}
+
+      {/* Revenue Review Modal (Instructor) */}
+      {isInstructorView && pendingSubmission && (
+        <RevenueReviewModal
+          isOpen={showReviewModal}
+          onClose={() => setShowReviewModal(false)}
+          messageId={pendingSubmission.id}
+          studentName={goalProgress?.studentName}
+          trackType={goalProgress?.trackName?.toLowerCase().includes('saas') ? 'saas' : 'agency'}
+          submittedAmount={pendingSubmission.metadata?.submitted_amount || 0}
+          proofVideoUrl={pendingSubmission.metadata?.proof_video_url || ''}
+          onSuccess={() => {
+            fetchSubmissionStatus()
+            onGoalProgressUpdate?.()
+          }}
         />
       )}
 

@@ -16,7 +16,7 @@ export function InstructorStudentGoalTracker({
   instructorId
 }: InstructorStudentGoalTrackerProps) {
   // Fetch the same real goal data that student view uses
-  const { data: goalData, isLoading: goalLoading } = useQuery({
+  const { data: goalData, isLoading: goalLoading, refetch: refetchGoalData } = useQuery({
     queryKey: ['instructor-student-goal', studentId],
     queryFn: async () => {
       if (!studentId) return null
@@ -29,6 +29,8 @@ export function InstructorStudentGoalTracker({
         .select(`
           current_goal_id,
           goal_assigned_at,
+          total_revenue_earned,
+          current_mrr,
           track_goals (
             id,
             name,
@@ -52,8 +54,13 @@ export function InstructorStudentGoalTracker({
       const goal = profile.track_goals
       const startDate = profile.goal_assigned_at || new Date().toISOString()
 
+      // Get current amount based on track type
+      const isSaasTrack = goal.tracks?.name?.toLowerCase().includes('saas')
+      const currentRevenueAmount = isSaasTrack ? profile.current_mrr : profile.total_revenue_earned
+      const targetAmount = goal.target_amount || 1000
+
       // Format target amount from structured data
-      const formatTargetAmount = (amount: number, currency: string = 'USD') => {
+      const formatAmount = (amount: number, currency: string = 'USD') => {
         const formatter = new Intl.NumberFormat('en-US', {
           style: 'currency',
           currency: currency,
@@ -63,12 +70,15 @@ export function InstructorStudentGoalTracker({
         return formatter.format(amount)
       }
 
+      // Calculate progress percentage
+      const progressPercentage = targetAmount > 0 ? Math.min((currentRevenueAmount / targetAmount) * 100, 100) : 0
+
       return {
         id: goal.id,
         title: goal.name || goal.description, // Use clean goal name
-        currentAmount: '$0', // This should come from actual progress tracking
-        targetAmount: formatTargetAmount(goal.target_amount || 1000, goal.currency || 'USD'),
-        progress: 0, // This should come from actual progress calculation
+        currentAmount: formatAmount(currentRevenueAmount || 0, goal.currency || 'USD'),
+        targetAmount: formatAmount(targetAmount, goal.currency || 'USD'),
+        progress: progressPercentage,
         targetDate: new Date(new Date(startDate).getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 90 days from start
         startDate: startDate.split('T')[0],
         status: 'active',
@@ -97,6 +107,7 @@ export function InstructorStudentGoalTracker({
         isInstructorView={true}
         enableUnifiedSystem={true}
         goalProgress={goalData} // Now pass the real goal data
+        onGoalProgressUpdate={refetchGoalData} // Pass refetch function
       />
     </div>
   )

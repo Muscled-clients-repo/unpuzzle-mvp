@@ -1,9 +1,11 @@
 'use client'
 
-import React from 'react'
-import { Target, Calendar, Edit, Eye, CheckCircle, Clock, Circle } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { Target, Calendar, Edit, Eye, CheckCircle, Clock, Circle, DollarSign, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { RevenueSubmissionModal } from './RevenueSubmissionModal'
+import { getLatestRevenueSubmission } from '@/app/actions/revenue-actions'
 
 interface Milestone {
   id: string
@@ -36,9 +38,38 @@ interface Goal {
 
 interface CurrentGoalCardProps {
   goal: Goal
+  conversationId?: string // Optional: for revenue submission
 }
 
-export function CurrentGoalCard({ goal }: CurrentGoalCardProps) {
+export function CurrentGoalCard({ goal, conversationId }: CurrentGoalCardProps) {
+  const [showRevenueModal, setShowRevenueModal] = useState(false)
+  const [submissionStatus, setSubmissionStatus] = useState<'pending' | 'approved' | 'rejected' | null>(null)
+  const [isLoadingStatus, setIsLoadingStatus] = useState(false)
+
+  // Fetch submission status on mount and after submission
+  const fetchSubmissionStatus = async () => {
+    if (!conversationId) return
+
+    setIsLoadingStatus(true)
+    try {
+      const result = await getLatestRevenueSubmission(conversationId)
+      if (result.submission && result.submission.metadata) {
+        const metadata = result.submission.metadata as any
+        setSubmissionStatus(metadata.status || null)
+      } else {
+        setSubmissionStatus(null)
+      }
+    } catch (error) {
+      console.error('Error fetching submission status:', error)
+    } finally {
+      setIsLoadingStatus(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchSubmissionStatus()
+  }, [conversationId])
+
   const getActionIcon = (type: string) => {
     switch (type) {
       case 'reflection':
@@ -91,18 +122,65 @@ export function CurrentGoalCard({ goal }: CurrentGoalCardProps) {
       </CardHeader>
 
       <CardContent className="space-y-6">
-        {/* Progress Bar */}
+        {/* Progress Bar with Revenue Submission */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700">Progress</span>
+            <span className="text-sm font-medium text-gray-700">Revenue Progress</span>
             <span className="text-sm font-bold text-gray-900">{goal.progress}%</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-3">
-            <div 
+          <div className="w-full bg-gray-200 rounded-full h-3 mb-3">
+            <div
               className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-300"
               style={{ width: `${goal.progress}%` }}
             />
           </div>
+
+          {/* Revenue Submission Button */}
+          {conversationId && (
+            <div className="mt-3">
+              {isLoadingStatus ? (
+                <Button variant="outline" size="sm" className="w-full" disabled>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Loading status...
+                </Button>
+              ) : submissionStatus === 'pending' ? (
+                <Button variant="outline" size="sm" className="w-full" disabled>
+                  <Clock className="h-4 w-4 mr-2 text-yellow-600" />
+                  <span className="text-yellow-700">Under Review</span>
+                </Button>
+              ) : submissionStatus === 'approved' ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full border-green-200 bg-green-50 hover:bg-green-100"
+                  onClick={() => setShowRevenueModal(true)}
+                >
+                  <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
+                  <span className="text-green-700">Last submission approved - Submit new proof</span>
+                </Button>
+              ) : submissionStatus === 'rejected' ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full border-red-200 bg-red-50 hover:bg-red-100"
+                  onClick={() => setShowRevenueModal(true)}
+                >
+                  <DollarSign className="h-4 w-4 mr-2 text-red-600" />
+                  <span className="text-red-700">Resubmit Revenue Proof</span>
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => setShowRevenueModal(true)}
+                >
+                  <DollarSign className="h-4 w-4 mr-2" />
+                  Submit Revenue Proof
+                </Button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Milestones */}
@@ -183,6 +261,17 @@ export function CurrentGoalCard({ goal }: CurrentGoalCardProps) {
           </Button>
         </div>
       </CardContent>
+
+      {/* Revenue Submission Modal */}
+      {conversationId && (
+        <RevenueSubmissionModal
+          isOpen={showRevenueModal}
+          onClose={() => setShowRevenueModal(false)}
+          conversationId={conversationId}
+          trackType={goal.track}
+          onSuccess={fetchSubmissionStatus}
+        />
+      )}
     </Card>
   )
 }
