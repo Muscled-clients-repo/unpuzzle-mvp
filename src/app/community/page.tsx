@@ -6,7 +6,7 @@ import { CommunityReviewsSection } from '@/components/community/CommunityReviews
 export default function CommunityPage() {
   return (
     <div className="min-h-screen bg-white">
-      {/* Hero Section with Navigation */}
+      {/* Hero Section with Navigation (includes Community Posts Feed in tabs) */}
       <CommunityHeader />
 
       {/* Reviews Section */}

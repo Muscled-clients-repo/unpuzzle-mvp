@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, Play, Pause, ArrowRight, BookOpen, Target, VideoIcon, Home, GraduationCap, FileText } from 'lucide-react'
-import { CommunityPostsFeed } from './CommunityPostsFeed'
+import { CommunityPostsFeedConnected } from './CommunityPostsFeedConnected'
 import { CommunityGoalsSection } from './CommunityGoalsSection'
 import { CommunityCoursesSection } from './CommunityCoursesSection'
 import { CommunityResourcesSection } from './CommunityResourcesSection'
@@ -397,7 +397,7 @@ export function CommunityHeader({ communityPosts, userRole = 'student', goalData
 
             {/* Right Content Area - Tab-specific content */}
             <div className="lg:col-span-3">
-              {activeTab === 'community' && <CommunityPostsFeed posts={communityPosts} userRole={userRole} />}
+              {activeTab === 'community' && <CommunityPostsFeedConnected />}
               {activeTab === 'goals' && (
                 <CommunityGoalsSection
                   userRole={userRole}
