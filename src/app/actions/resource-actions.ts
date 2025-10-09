@@ -288,7 +288,7 @@ export async function deleteResource(id: string) {
 }
 
 /**
- * Record a resource download
+ * Record a resource download (authenticated users)
  */
 export async function recordResourceDownload(resourceId: string) {
   try {
@@ -313,6 +313,33 @@ export async function recordResourceDownload(resourceId: string) {
   } catch (error) {
     console.error('Error in recordResourceDownload:', error)
     return { error: 'An unexpected error occurred' }
+  }
+}
+
+/**
+ * Record a guest resource download with email
+ */
+export async function recordGuestResourceDownload(resourceId: string, email: string) {
+  try {
+    const supabase = await createClient()
+
+    // Use the existing RPC function which handles guest downloads
+    const { error: downloadError } = await supabase.rpc('record_resource_download', {
+      p_resource_id: resourceId,
+      p_user_id: null,
+      p_email: email
+    })
+
+    if (downloadError) {
+      console.error('Error recording guest download:', downloadError)
+      // Don't fail the email send if tracking fails
+      return { success: false, error: 'Failed to record download' }
+    }
+
+    return { success: true }
+  } catch (error) {
+    console.error('Error in recordGuestResourceDownload:', error)
+    return { success: false, error: 'An unexpected error occurred' }
   }
 }
 
@@ -353,6 +380,58 @@ export async function rateResource(
     return { success: true }
   } catch (error) {
     console.error('Error in rateResource:', error)
+    return { error: 'An unexpected error occurred' }
+  }
+}
+
+/**
+ * Generate CDN URL for resource download
+ */
+export async function getResourceDownloadUrl(resourceId: string) {
+  try {
+    const supabase = await createClient()
+
+    // Get resource with private URL
+    const { data: resource, error: resourceError } = await supabase
+      .from('resources')
+      .select('file_url')
+      .eq('id', resourceId)
+      .is('deleted_at', null)
+      .single()
+
+    if (resourceError || !resource) {
+      console.error('Error fetching resource:', resourceError)
+      return { error: 'Resource not found' }
+    }
+
+    // Generate CDN URL with HMAC token (same pattern as media-actions.ts)
+    const { generateCDNUrlWithToken, extractFilePathFromPrivateUrl } = await import('@/services/security/hmac-token-service')
+
+    const privateUrl = resource.file_url
+
+    if (!privateUrl || !privateUrl.startsWith('private:')) {
+      return { cdnUrl: privateUrl } // Return as-is if not private format
+    }
+
+    const cdnBaseUrl = 'https://cdn.unpuzzle.co'
+    const hmacSecret = process.env.CDN_AUTH_SECRET || process.env.AUTH_SECRET
+
+    if (!hmacSecret) {
+      console.warn('⚠️ HMAC secret not configured, cannot generate CDN URL')
+      return { error: 'CDN not configured' }
+    }
+
+    try {
+      const filePath = extractFilePathFromPrivateUrl(privateUrl)
+      const cdnUrl = generateCDNUrlWithToken(cdnBaseUrl, filePath, hmacSecret, { expirationHours: 6 })
+
+      return { cdnUrl }
+    } catch (error) {
+      console.error('❌ Error generating CDN URL:', error)
+      return { error: 'Failed to generate download URL' }
+    }
+  } catch (error) {
+    console.error('Error in getResourceDownloadUrl:', error)
     return { error: 'An unexpected error occurred' }
   }
 }

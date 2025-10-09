@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, Play, Pause, ArrowRight, BookOpen, Target, V
 import { CommunityPostsFeedConnected } from './CommunityPostsFeedConnected'
 import { CommunityGoalsSection } from './CommunityGoalsSection'
 import { CommunityCoursesSection } from './CommunityCoursesSection'
-import { CommunityResourcesSection } from './CommunityResourcesSection'
+import { CommunityResourcesSectionConnected } from './CommunityResourcesSectionConnected'
 
 interface CommunityHeaderProps {
   communityPosts?: any[]
@@ -416,7 +416,7 @@ export function CommunityHeader({ communityPosts, userRole = 'student', goalData
                 />
               )}
               {activeTab === 'resources' && (
-                <CommunityResourcesSection userRole="guest" />
+                <CommunityResourcesSectionConnected />
               )}
             </div>
           </div>
