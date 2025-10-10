@@ -6,12 +6,12 @@ import dynamic from "next/dynamic"
 import { useAppStore } from "@/stores/app-store"
 import { LoadingSpinner } from "@/components/common/LoadingSpinner"
 
-// Dynamically import the V2 VideoPlayer component with loading fallback
-const StudentVideoPlayerV2 = dynamic(
-  () => import("@/components/video/student/StudentVideoPlayerV2").then(mod => ({ 
-    default: mod.StudentVideoPlayerV2 
+// Dynamically import the StudentVideoPlayer component with loading fallback
+const StudentVideoPlayer = dynamic(
+  () => import("@/components/video/student/StudentVideoPlayer").then(mod => ({
+    default: mod.StudentVideoPlayer
   })),
-  { 
+  {
     loading: () => (
       <div className="aspect-video bg-black rounded-lg flex items-center justify-center">
         <LoadingSpinner />
@@ -76,7 +76,7 @@ export default function VideoPlayerPage() {
       } : currentCourse)
     : null
 
-  const standaloneLesson = isStandaloneLesson ? lessons.find(l => l.id === videoId) : null
+  const standaloneLesson = isStandaloneLesson ? lessons?.find(l => l.id === videoId) : null
 
   const currentVideo = isStandaloneLesson
     ? standaloneLesson
@@ -133,11 +133,11 @@ export default function VideoPlayerPage() {
     }
 
     loadData()
-  }, [isStandaloneLesson, videoId, courseId, loadStudentVideo, loadCourseById, loadLessons, lessons.length])
+  }, [isStandaloneLesson, videoId, courseId, loadStudentVideo, loadCourseById, loadLessons, lessons?.length])
 
   // Track view for standalone lesson - separate effect for side effects
   useEffect(() => {
-    if (isStandaloneLesson && lessons.length > 0) {
+    if (isStandaloneLesson && lessons && lessons.length > 0) {
       const lesson = lessons.find(l => l.id === videoId)
       if (lesson) {
         trackView(videoId)
@@ -230,8 +230,8 @@ export default function VideoPlayerPage() {
 
   return (
     <div className="fixed inset-0 top-16 bg-background">
-      {/* V2 Video Player with integrated AI sidebar - takes full viewport minus header */}
-      <StudentVideoPlayerV2
+      {/* Student Video Player with integrated AI sidebar - takes full viewport minus header */}
+      <StudentVideoPlayer
         videoUrl={currentVideo.videoUrl}
         title={currentVideo.title}
         transcript={currentVideo.transcriptText || currentVideo.transcript?.join(' ')}

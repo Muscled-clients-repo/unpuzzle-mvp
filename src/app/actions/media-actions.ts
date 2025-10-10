@@ -1022,6 +1022,58 @@ export async function bulkRemoveTagsAction(fileIds: string[], tagsToRemove: stri
   }
 }
 
+/**
+ * Get a single media file with CDN URL generated (for instructor video page)
+ */
+export async function getInstructorVideoAction(videoId: string) {
+  try {
+    const supabase = await createSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return {
+        success: false,
+        error: 'User not authenticated'
+      }
+    }
+
+    // Fetch video data
+    const { data: video, error: videoError } = await supabase
+      .from('media_files')
+      .select('id, name, backblaze_url, file_size, duration_seconds, file_type, uploaded_by, status')
+      .eq('id', videoId)
+      .eq('uploaded_by', user.id)
+      .single()
+
+    if (videoError || !video) {
+      console.error('❌ Failed to fetch video:', videoError)
+      return {
+        success: false,
+        error: 'Video not found or access denied',
+        video: null
+      }
+    }
+
+    // Generate CDN URL from private URL
+    const cdnUrl = generateCDNUrlWithToken(video.backblaze_url)
+
+    return {
+      success: true,
+      video: {
+        ...video,
+        cdn_url: cdnUrl
+      }
+    }
+  } catch (error) {
+    console.error('❌ Failed to get instructor video:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to get video',
+      video: null
+    }
+  }
+}
+
 export async function bulkReplaceTagsAction(fileIds: string[], newTags: string[]) {
   try {
     const supabase = await createSupabaseClient()

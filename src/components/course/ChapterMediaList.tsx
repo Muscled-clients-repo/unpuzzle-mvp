@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -47,6 +48,9 @@ export function ChapterMediaList({
   isDraggable = true,
   className
 }: ChapterMediaListProps) {
+
+  // Router for navigation
+  const router = useRouter()
 
   // UI state management
   const ui = useCourseCreationUI()
@@ -290,19 +294,39 @@ export function ChapterMediaList({
                 />
               ) : (
                 <div className="space-y-1">
-                  <p
-                    className={cn(
-                      "text-sm font-medium cursor-pointer truncate",
-                      hasPendingChange && "text-orange-700 dark:text-orange-300"
-                    )}
-                    onClick={() => !isDeletionPending && handleStartEdit(mediaItem)}
-                    title={getDisplayTitle(mediaItem)}
-                  >
-                    {hasPendingChange ? pendingChanges[mediaItem.junctionId] : getDisplayTitle(mediaItem)}
-                    {hasPendingChange && (
-                      <span className="ml-2 text-xs text-orange-500">*</span>
-                    )}
-                  </p>
+                  <div className="flex items-center gap-2 group/title">
+                    <p
+                      className={cn(
+                        "text-sm font-medium cursor-pointer truncate hover:underline",
+                        hasPendingChange && "text-orange-700 dark:text-orange-300"
+                      )}
+                      onClick={() => {
+                        if (!isDeletionPending) {
+                          console.log('🎬 [MEDIA LIST] Navigating to video editor:', {
+                            mediaId: mediaItem.id,
+                            mediaName: mediaItem.name,
+                            junctionId: mediaItem.junctionId
+                          })
+                          router.push(`/instructor/video/${mediaItem.id}`)
+                        }
+                      }}
+                      title={`Open ${getDisplayTitle(mediaItem)} in video editor`}
+                    >
+                      {hasPendingChange ? pendingChanges[mediaItem.junctionId] : getDisplayTitle(mediaItem)}
+                      {hasPendingChange && (
+                        <span className="ml-2 text-xs text-orange-500">*</span>
+                      )}
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 w-5 p-0 opacity-0 group-hover/title:opacity-100 transition-opacity"
+                      onClick={() => !isDeletionPending && handleStartEdit(mediaItem)}
+                      title="Rename video"
+                    >
+                      <Edit2 className="h-3 w-3" />
+                    </Button>
+                  </div>
 
                   {/* Media metadata */}
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">

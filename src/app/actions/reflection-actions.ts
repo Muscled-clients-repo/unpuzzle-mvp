@@ -193,6 +193,36 @@ export async function submitReflectionAction(formData: FormData) {
       return { success: false, error: 'Failed to save reflection' }
     }
 
+    // Auto-create community activity for voice memos (not screenshots or loom)
+    if (type === 'voice') {
+      try {
+        const { createCommunityActivity } = await import('./community-activity-actions')
+
+        // Get video title for display
+        const { data: video } = await supabase
+          .from('media_files')
+          .select('title')
+          .eq('id', videoId)
+          .single()
+
+        await createCommunityActivity({
+          activity_type: 'voice_memo',
+          reflection_id: reflection.id,
+          media_file_id: videoId,
+          video_title: video?.title || 'Untitled Video',
+          timestamp_seconds: videoTimestamp,
+          content: `Voice memo recorded (${duration || 2}s)`,
+          metadata: {
+            duration_seconds: duration || 2
+          },
+          is_public: true // Voice memos are public by default
+        })
+      } catch (activityError) {
+        // Log but don't fail the reflection submission if activity creation fails
+        console.error('[ReflectionAction] Failed to create community activity:', activityError)
+      }
+    }
+
     return {
       success: true,
       data: {

@@ -98,6 +98,36 @@ export async function submitQuizAttemptAction(data: QuizAttemptData) {
 
     console.log('[QuizAction] Quiz attempt saved successfully:', quizAttempt)
 
+    // Auto-create community activity for quiz completion
+    try {
+      const { createCommunityActivity } = await import('./community-activity-actions')
+
+      // Get video title for display
+      const { data: video } = await supabase
+        .from('media_files')
+        .select('title')
+        .eq('id', data.videoId)
+        .single()
+
+      await createCommunityActivity({
+        activity_type: 'quiz',
+        quiz_attempt_id: quizAttempt.id,
+        media_file_id: data.videoId,
+        video_title: video?.title || 'Untitled Video',
+        timestamp_seconds: data.videoTimestamp,
+        content: `Quiz completed: ${data.score}/${data.totalQuestions} (${data.percentage}%)`,
+        metadata: {
+          score: data.score,
+          totalQuestions: data.totalQuestions,
+          percentage: data.percentage
+        },
+        is_public: data.percentage >= 70 // Only show passing scores publicly
+      })
+    } catch (activityError) {
+      // Log but don't fail the quiz submission if activity creation fails
+      console.error('[QuizAction] Failed to create community activity:', activityError)
+    }
+
     return {
       success: true,
       data: quizAttempt

@@ -2,6 +2,32 @@
 
 import { createClient } from '@/lib/supabase/server'
 import type { Course } from '@/types/domain'
+import { generateCDNUrlWithToken, extractFilePathFromPrivateUrl } from '@/services/security/hmac-token-service'
+
+/**
+ * Helper function to convert private URL format to actual CDN URL
+ */
+function convertPrivateUrlToCDN(privateUrl: string | null): string | null {
+  if (!privateUrl || !privateUrl.startsWith('private:')) {
+    return privateUrl
+  }
+
+  const cdnBaseUrl = 'https://cdn.unpuzzle.co'
+  const hmacSecret = process.env.CDN_AUTH_SECRET || process.env.AUTH_SECRET
+
+  if (!hmacSecret) {
+    console.error('[CDN Helper] HMAC secret not configured')
+    return null
+  }
+
+  try {
+    const filePath = extractFilePathFromPrivateUrl(privateUrl)
+    return generateCDNUrlWithToken(cdnBaseUrl, filePath, hmacSecret)
+  } catch (err) {
+    console.error('[CDN Helper] Failed to generate CDN URL:', err)
+    return null
+  }
+}
 
 /**
  * Get accessible courses for a student using the new junction table architecture
@@ -111,7 +137,7 @@ export async function getStudentCoursesWithJunctionTable(): Promise<any[]> {
               description: '',
               duration: mediaItem.media_files.duration_seconds || 600,
               order: globalIndex + 1,
-              videoUrl: mediaItem.media_files.cdn_url,
+              videoUrl: convertPrivateUrlToCDN(mediaItem.media_files.cdn_url),
               thumbnailUrl: mediaItem.media_files.thumbnail_url,
               transcript: [],
               createdAt: new Date().toISOString(),
@@ -236,7 +262,7 @@ export async function getStudentCourseDetails(courseId: string): Promise<any | n
             duration_seconds: mediaItem.media_files.duration_seconds || 600,
             order: mediaItem.order_in_chapter,
             chapter_id: chapter.id,
-            videoUrl: mediaItem.media_files.cdn_url,
+            videoUrl: convertPrivateUrlToCDN(mediaItem.media_files.cdn_url),
             thumbnailUrl: mediaItem.media_files.thumbnail_url
           }
           chapterVideos.push(video)
@@ -249,7 +275,7 @@ export async function getStudentCourseDetails(courseId: string): Promise<any | n
             description: '',
             duration: mediaItem.media_files.duration_seconds || 600,
             order: globalVideoIndex + 1,
-            videoUrl: mediaItem.media_files.cdn_url,
+            videoUrl: convertPrivateUrlToCDN(mediaItem.media_files.cdn_url),
             thumbnailUrl: mediaItem.media_files.thumbnail_url,
             transcript: [],
             createdAt: new Date().toISOString(),
@@ -421,12 +447,18 @@ export async function getStudentVideoFromJunctionTable(videoId: string): Promise
       transcriptArray = chapterMediaData.transcript_text.split(' ')
     }
 
+    // Generate actual CDN URL from private URL format
+    const actualVideoUrl = convertPrivateUrlToCDN(videoData.cdn_url)
+    if (actualVideoUrl) {
+      console.log('[Junction Video Action] Generated CDN URL from private format')
+    }
+
     const transformedVideo = {
       id: videoData.id,
       courseId: courseData.id,
       title: chapterMediaData.title || videoData.name,
       description: '',
-      videoUrl: videoData.cdn_url,
+      videoUrl: actualVideoUrl,
       thumbnailUrl: videoData.thumbnail_url,
       duration: videoData.duration_seconds || 600,
       order: chapterMediaData.order_in_chapter,

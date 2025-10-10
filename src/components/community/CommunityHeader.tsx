@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Play, Pause, ArrowRight, BookOpen, Target, VideoIcon, Home, GraduationCap, FileText } from 'lucide-react'
 import { CommunityPostsFeedConnected } from './CommunityPostsFeedConnected'
 import { CommunityGoalsSection } from './CommunityGoalsSection'
@@ -16,13 +17,16 @@ interface CommunityHeaderProps {
   }
   hiddenTabs?: string[]
   coursesByGoal?: any[]
+  initialTab?: 'community' | 'goals' | 'courses' | 'resources'
 }
 
-export function CommunityHeader({ communityPosts, userRole = 'student', goalData, hiddenTabs = [], coursesByGoal }: CommunityHeaderProps) {
+export function CommunityHeader({ communityPosts, userRole = 'student', goalData, hiddenTabs = [], coursesByGoal, initialTab = 'community' }: CommunityHeaderProps) {
+  const router = useRouter()
+  const pathname = usePathname()
   const [currentSlide, setCurrentSlide] = useState(0)
   const [isVideoPlaying, setIsVideoPlaying] = useState(false)
   const [currentActivity, setCurrentActivity] = useState(0)
-  const [activeTab, setActiveTab] = useState('community')
+  const [activeTab, setActiveTab] = useState(initialTab)
   const [showFloatingCTA, setShowFloatingCTA] = useState(false)
   
   const allNavigationTabs = [
@@ -379,7 +383,12 @@ export function CommunityHeader({ communityPosts, userRole = 'student', goalData
                     return (
                       <button
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
+                        onClick={() => {
+                          setActiveTab(tab.id)
+                          // Navigate to the appropriate route without scrolling
+                          const route = tab.id === 'community' ? '/community' : `/community/${tab.id}`
+                          router.push(route, { scroll: false })
+                        }}
                         className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg font-medium text-sm transition-colors ${
                           activeTab === tab.id
                             ? 'bg-gray-900 text-white'

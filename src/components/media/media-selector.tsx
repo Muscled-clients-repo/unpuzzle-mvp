@@ -61,7 +61,8 @@ export function MediaSelector({
   } = useMediaStore()
   
   // ARCHITECTURE-COMPLIANT: Server state in TanStack Query
-  const { data: mediaFiles = [], isLoading } = useMediaFiles()
+  const { data, isLoading } = useMediaFiles()
+  const mediaFiles = data?.media || []
 
   const getTypeIcon = (type: string) => {
     switch (type) {
