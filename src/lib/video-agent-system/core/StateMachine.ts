@@ -18,6 +18,9 @@ export class VideoAgentStateMachine {
   private reflectionMutation: ((data: any) => Promise<any>) | null = null
   private quizAttemptMutation: ((data: any) => Promise<any>) | null = null
   private lastFrozenContext: Readonly<SystemContext> | null = null
+  // PERFORMANCE P1: Debounce non-critical updates
+  private updateTimeout: NodeJS.Timeout | null = null
+  private pendingContext: SystemContext | null = null
 
   constructor() {
     this.context = {
@@ -730,24 +733,65 @@ export class VideoAgentStateMachine {
   // No separate methods that do their own updateContext calls
   
   private updateContext(newContext: SystemContext) {
-    const prevActiveType = this.context.agentState.activeType
-
-    // Check if context actually changed (shallow comparison of top-level keys)
-    const contextChanged = this.hasContextChanged(this.context, newContext)
-
-    this.context = newContext
-
-    // Only clear cache if context actually changed
-    if (contextChanged) {
-      this.lastFrozenContext = null
+    // PERFORMANCE P1: Cancel any pending debounced update
+    if (this.updateTimeout) {
+      clearTimeout(this.updateTimeout)
+      this.updateTimeout = null
     }
 
-    const newActiveType = this.context.agentState.activeType
+    // PERFORMANCE P1: Determine if this is a critical update that needs immediate processing
+    const isCriticalUpdate =
+      this.context.state !== newContext.state ||
+      this.context.videoState.isPlaying !== newContext.videoState.isPlaying ||
+      this.context.agentState.activeType !== newContext.agentState.activeType ||
+      this.context.agentState.currentUnactivatedId !== newContext.agentState.currentUnactivatedId ||
+      this.context.agentState.currentSystemMessageId !== newContext.agentState.currentSystemMessageId ||
+      this.context.messages.length !== newContext.messages.length ||
+      this.context.aiState.isGenerating !== newContext.aiState.isGenerating ||
+      this.context.segmentState.inPoint !== newContext.segmentState.inPoint ||
+      this.context.segmentState.outPoint !== newContext.segmentState.outPoint ||
+      this.context.recordingState.isRecording !== newContext.recordingState.isRecording
 
-    if (prevActiveType !== newActiveType) {
+    if (isCriticalUpdate) {
+      // Critical update - apply immediately
+      const prevActiveType = this.context.agentState.activeType
+      const contextChanged = this.hasContextChanged(this.context, newContext)
+
+      this.context = newContext
+
+      if (contextChanged) {
+        this.lastFrozenContext = null
+      }
+
+      const newActiveType = this.context.agentState.activeType
+      if (prevActiveType !== newActiveType) {
+      }
+
+      this.notifySubscribers()
+    } else {
+      // Non-critical update (like time updates) - debounce by 100ms
+      this.pendingContext = newContext
+      this.updateTimeout = setTimeout(() => {
+        if (this.pendingContext) {
+          const prevActiveType = this.context.agentState.activeType
+          const contextChanged = this.hasContextChanged(this.context, this.pendingContext)
+
+          this.context = this.pendingContext
+          this.pendingContext = null
+
+          if (contextChanged) {
+            this.lastFrozenContext = null
+          }
+
+          const newActiveType = this.context.agentState.activeType
+          if (prevActiveType !== newActiveType) {
+          }
+
+          this.notifySubscribers()
+        }
+        this.updateTimeout = null
+      }, 100) // 100ms debounce for non-critical updates like time
     }
-
-    this.notifySubscribers()
   }
 
   private hasContextChanged(oldContext: SystemContext, newContext: SystemContext): boolean {

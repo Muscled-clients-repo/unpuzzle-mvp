@@ -10,7 +10,8 @@ import { Message, MessageState } from "@/lib/video-agent-system"
 import { useTranscriptQuery } from "@/hooks/use-transcript-queries"
 import { useVideoSummary } from "@/hooks/use-video-summary"
 import { UnpuzzlingAnimation } from "@/components/ui/UnpuzzlingAnimation"
-import { useAIConversationsQuery } from "@/hooks/use-ai-conversations-query"
+import { useInfiniteAIConversations } from "@/hooks/use-ai-conversations-query"
+import { useVirtualizer } from "@tanstack/react-virtual"
 
 interface ChatInterfaceProps {
   messages: Message[]
@@ -57,16 +58,23 @@ export function ChatInterface({
   // Get video summary for AI context
   const { data: videoSummary } = useVideoSummary(videoId)
 
-  // Get conversation history from database
-  const { data: conversationsData, isLoading: isLoadingConversations } = useAIConversationsQuery(videoId || '')
+  // PERFORMANCE P0: Get conversation history with infinite query (pagination)
+  const {
+    data: conversationsData,
+    isLoading: isLoadingConversations,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage
+  } = useInfiniteAIConversations(videoId || '', 20)
 
   // Convert database conversations to Message format and merge with current messages
   // Use a ref to track if we've already loaded the initial conversations
   const hasLoadedConversations = useRef(false)
 
   useEffect(() => {
-    if (conversationsData?.success && conversationsData.conversations && !hasLoadedConversations.current) {
-      const dbConversations = conversationsData.conversations
+    if (conversationsData?.pages && !hasLoadedConversations.current) {
+      // Flatten all pages of conversations
+      const dbConversations = conversationsData.pages.flatMap(page => page.conversations)
 
       // Convert each conversation to two messages (user + AI)
       const dbMessages: Message[] = []
@@ -126,11 +134,28 @@ export function ChatInterface({
     hasLoadedConversations.current = false
   }, [videoId])
 
+  // No threading - just show messages in chronological order
+  const chatMessages = messages
+
+  // PERFORMANCE P1: Virtual scrolling for messages
+  // Only render visible messages in viewport for better performance with long chat histories
+  const rowVirtualizer = useVirtualizer({
+    count: chatMessages.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 100, // Estimated height per message (will adjust dynamically)
+    overscan: 5, // Render 5 extra items above/below viewport for smooth scrolling
+  })
 
   // Auto-scroll to bottom when new messages arrive
+  // Only scroll if user is near bottom (within 100px) to avoid interrupting reading
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100
+
+      if (isNearBottom) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+      }
     }
   }, [messages])
 
@@ -222,9 +247,6 @@ export function ChatInterface({
     return { text, actualStart, actualEnd }
   }
 
-  // No threading - just show messages in chronological order
-  const chatMessages = messages
-
   const handleSendMessage = useCallback(async () => {
     if (!input.trim() || isGenerating || !videoId || !onAddMessage || !onAddOrUpdateMessage) return
 
@@ -266,10 +288,7 @@ export function ChatInterface({
     ).slice(-6) // Last 6 messages for context
 
     try {
-      // Add 1 second delay before starting API call (hide animation at the end)
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      setHasStartedResponse(true) // Hide animation right when API call starts
-
+      // PERFORMANCE P1: Optimistic update - Start API call immediately without artificial delay
       const response = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -314,8 +333,12 @@ export function ChatInterface({
               if (data.type === 'chunk') {
                 fullContent = data.fullContent
 
+                // PERFORMANCE P1: Show first chunk immediately to hide loading animation
+                if (!hasStartedResponse) {
+                  setHasStartedResponse(true)
+                }
 
-                // Update or create AI message using addOrUpdate for streaming
+                // PERFORMANCE P1: Optimistic update - Update or create AI message immediately
                 const aiMsg: Message = {
                   id: aiMessageId,
                   type: 'ai',
@@ -325,8 +348,8 @@ export function ChatInterface({
                 }
                 onAddOrUpdateMessage(aiMsg)
 
-                // Add 75ms delay between chunks for more human-like typing
-                await new Promise(resolve => setTimeout(resolve, 75))
+                // Reduced delay for more responsive feel (30ms vs 75ms)
+                await new Promise(resolve => setTimeout(resolve, 30))
               } else if (data.type === 'complete') {
                 // Final message is already handled by chunks
                 break
@@ -416,63 +439,104 @@ export function ChatInterface({
             </div>
           </div>
         ) : (
-          chatMessages.map((msg) => (
-            <div key={msg.id} className="space-y-2">
-              {/* Context Area (if user message has context) */}
-              {msg.type === 'user' && msg.contextData && (
-                <div className="flex justify-end">
-                  <div className="max-w-[80%] bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-                    <div className="text-xs text-muted-foreground mb-1">
-                      Video context {formatRecordingTime(msg.contextData.startTime)}-{formatRecordingTime(msg.contextData.endTime)}
-                    </div>
-                    <div className="text-sm italic text-gray-700 dark:text-gray-300">
-                      {msg.contextData.transcript}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Message Content */}
-              <div
-                className={cn(
-                  "flex gap-3",
-                  msg.type === 'user' ? "justify-end" : "justify-start"
-                )}
-              >
-                <div
-                  className={cn(
-                    "max-w-[80%] rounded-lg px-3 py-2",
-                    msg.type === 'user'
-                      ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700"
-                      : msg.type === 'ai'
-                      ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                      : "bg-orange-50 dark:bg-orange-900/20 text-orange-900 dark:text-orange-100 border border-orange-200 dark:border-orange-800"
-                  )}
+          <>
+            {/* PERFORMANCE P0: Load More button for pagination */}
+            {hasNextPage && (
+              <div className="flex justify-center mb-4">
+                <Button
+                  onClick={() => fetchNextPage()}
+                  disabled={isFetchingNextPage}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
                 >
-                  <div className="text-sm whitespace-pre-wrap">
-                    {msg.message}
-                  </div>
-                  <div className="text-xs opacity-70 mt-1">
-                    {formatTimeAgo(msg.timestamp)}
-                  </div>
-                </div>
-
-                {/* Avatar */}
-                <div className={cn(
-                  "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-                  msg.type === 'user'
-                    ? "bg-gray-400 dark:bg-gray-600 text-white order-first"
-                    : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
-                )}>
-                  {msg.type === 'user' ? (
-                    <User className="h-4 w-4" />
-                  ) : (
-                    <Bot className="h-4 w-4" />
-                  )}
-                </div>
+                  {isFetchingNextPage ? 'Loading...' : 'Load older messages'}
+                </Button>
               </div>
+            )}
+
+            {/* PERFORMANCE P1: Virtual scrolling - only render visible messages */}
+            <div
+              style={{
+                height: `${rowVirtualizer.getTotalSize()}px`,
+                width: '100%',
+                position: 'relative',
+              }}
+            >
+              {rowVirtualizer.getVirtualItems().map((virtualItem) => {
+                const msg = chatMessages[virtualItem.index]
+                return (
+                  <div
+                    key={virtualItem.key}
+                    data-index={virtualItem.index}
+                    ref={rowVirtualizer.measureElement}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualItem.start}px)`,
+                    }}
+                    className="space-y-2"
+                  >
+                    {/* Context Area (if user message has context) */}
+                    {msg.type === 'user' && msg.contextData && (
+                      <div className="flex justify-end">
+                        <div className="max-w-[80%] bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                          <div className="text-xs text-muted-foreground mb-1">
+                            Video context {formatRecordingTime(msg.contextData.startTime)}-{formatRecordingTime(msg.contextData.endTime)}
+                          </div>
+                          <div className="text-sm italic text-gray-700 dark:text-gray-300">
+                            {msg.contextData.transcript}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Message Content */}
+                    <div
+                      className={cn(
+                        "flex gap-3",
+                        msg.type === 'user' ? "justify-end" : "justify-start"
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "max-w-[80%] rounded-lg px-3 py-2",
+                          msg.type === 'user'
+                            ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700"
+                            : msg.type === 'ai'
+                            ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                            : "bg-orange-50 dark:bg-orange-900/20 text-orange-900 dark:text-orange-100 border border-orange-200 dark:border-orange-800"
+                        )}
+                      >
+                        <div className="text-sm whitespace-pre-wrap">
+                          {msg.message}
+                        </div>
+                        <div className="text-xs opacity-70 mt-1">
+                          {formatTimeAgo(msg.timestamp)}
+                        </div>
+                      </div>
+
+                      {/* Avatar */}
+                      <div className={cn(
+                        "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
+                        msg.type === 'user'
+                          ? "bg-gray-400 dark:bg-gray-600 text-white order-first"
+                          : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                      )}>
+                        {msg.type === 'user' ? (
+                          <User className="h-4 w-4" />
+                        ) : (
+                          <Bot className="h-4 w-4" />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-          ))
+          </>
         )}
 
         {/* Loading animation and space reservation */}
