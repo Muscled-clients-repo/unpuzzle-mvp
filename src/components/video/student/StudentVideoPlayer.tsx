@@ -51,30 +51,6 @@ interface StudentVideoPlayerProps {
 }
 
 export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
-  // 🔍 DEBUG: Track component renders
-  const renderCount = useRef(0)
-  const prevPropsRef = useRef<StudentVideoPlayerProps>(props)
-
-  useEffect(() => {
-    renderCount.current++
-    console.log(`🎬 [StudentVideoPlayer] RENDER #${renderCount.current}`)
-
-    // Check which props changed
-    const changedProps: string[] = []
-    Object.keys(props).forEach(key => {
-      const propKey = key as keyof StudentVideoPlayerProps
-      if (prevPropsRef.current[propKey] !== props[propKey]) {
-        changedProps.push(key)
-      }
-    })
-
-    if (changedProps.length > 0) {
-      console.log(`🎬 [StudentVideoPlayer] Props changed:`, changedProps)
-    }
-
-    prevPropsRef.current = props
-  })
-
   // Video player ref for imperative control
   const videoPlayerRef = useRef<VideoPlayerCoreRef>(null)
 
@@ -90,30 +66,6 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
     reflectionMutation: reflectionMutation.mutateAsync,
     quizAttemptMutation: quizAttemptMutation.mutateAsync
   })
-
-  // 🔍 DEBUG: Track context changes from state machine
-  const prevContextRef = useRef(context)
-  useEffect(() => {
-    if (prevContextRef.current !== context) {
-      const changes: string[] = []
-
-      if (prevContextRef.current.state !== context.state) {
-        changes.push(`state: ${prevContextRef.current.state} → ${context.state}`)
-      }
-      if (prevContextRef.current.messages.length !== context.messages.length) {
-        changes.push(`messages: ${prevContextRef.current.messages.length} → ${context.messages.length}`)
-      }
-      if (prevContextRef.current.videoState !== context.videoState) {
-        changes.push('videoState changed')
-      }
-      if (prevContextRef.current.aiState !== context.aiState) {
-        changes.push('aiState changed')
-      }
-
-      console.log('🔄 [StudentVideoPlayer] Context changed:', changes)
-      prevContextRef.current = context
-    }
-  }, [context])
 
   // State for sidebar
   // Note: We get currentTime from videoPlayerRef when needed to avoid re-renders on every time update

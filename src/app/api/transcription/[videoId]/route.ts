@@ -17,11 +17,8 @@ export async function GET(
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
-      console.log('Transcript API: Auth failed', { authError, hasUser: !!user })
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-
-    console.log('Transcript API: User authenticated', { userId: user.id, videoId })
 
     // Get video and transcript via junction table (simplified RLS)
     const { data: mediaWithTranscript, error: mediaError } = await supabase
@@ -54,42 +51,23 @@ export async function GET(
       .eq('file_type', 'video')
       .single()
 
-    console.log('Transcript API: Media query result', {
-      mediaWithTranscript: JSON.stringify(mediaWithTranscript, null, 2),
-      mediaError
-    })
-
     if (mediaError || !mediaWithTranscript) {
-      console.log('Transcript API: Media file not found', { mediaError, hasMedia: !!mediaWithTranscript })
       return NextResponse.json({ error: 'Video not found' }, { status: 404 })
     }
 
     // Get the first chapter media entry (should be only one)
     const chapterMedia = mediaWithTranscript.course_chapter_media[0]
     if (!chapterMedia) {
-      console.log('Transcript API: No chapter media found')
       return NextResponse.json({ error: 'Video not associated with course' }, { status: 404 })
     }
 
     const courseData = chapterMedia.course_chapters.courses
-
-    console.log('Transcript API: Video found', {
-      videoTitle: chapterMedia.title || mediaWithTranscript.name,
-      courseTitle: courseData.title,
-      courseInstructorId: courseData.instructor_id,
-      userId: user.id
-    })
 
     // Allow both instructors and students with goal access
     const isInstructor = courseData.instructor_id === user.id
 
     // If not instructor, check if student has goal access to this course
     if (!isInstructor) {
-      console.log('Transcript API: Checking goal access for student', {
-        userId: user.id,
-        courseId: courseData.id
-      })
-
       // First check if user's current goal matches
       const { data: userProfile, error: profileError } = await supabase
         .from('profiles')
@@ -97,13 +75,7 @@ export async function GET(
         .eq('id', user.id)
         .single()
 
-      console.log('Transcript API: User profile lookup', {
-        userProfile,
-        profileError
-      })
-
       if (profileError || !userProfile) {
-        console.log('Transcript API: Access denied - user profile not found')
         return NextResponse.json({
           error: 'Access denied. User profile not found.'
         }, { status: 403 })
@@ -116,38 +88,16 @@ export async function GET(
         .eq('course_id', courseData.id)
         .eq('goal_id', userProfile.current_goal_id)
 
-      console.log('Transcript API: Goal alignment check', {
-        goalAlignment,
-        alignmentError,
-        lookingFor: {
-          courseId: courseData.id,
-          goalId: userProfile.current_goal_id
-        }
-      })
-
       if (alignmentError || !goalAlignment || goalAlignment.length === 0) {
-        console.log('Transcript API: Access denied - goal not aligned with course')
         return NextResponse.json({
           error: 'Access denied. Goal not aligned with course.'
         }, { status: 403 })
       }
-
-      console.log('Transcript API: Student access granted via goal alignment')
-    } else {
-      console.log('Transcript API: Instructor access granted')
     }
 
     const hasTranscript = chapterMedia.transcript_text && chapterMedia.transcript_status === 'completed'
 
-    console.log('Transcript API: Transcript lookup result', {
-      hasTranscript,
-      transcriptStatus: chapterMedia.transcript_status,
-      textLength: chapterMedia.transcript_text?.length || 0,
-      hasFilePath: !!chapterMedia.transcript_file_path
-    })
-
     if (!hasTranscript) {
-      console.log('Transcript API: No transcript found or not completed')
       return NextResponse.json({
         success: true,
         hasTranscript: false,

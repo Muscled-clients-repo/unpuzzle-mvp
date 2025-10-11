@@ -88,6 +88,10 @@ export async function getDrafts(type?: 'bug_report' | 'feature_request' | 'daily
     const { data: drafts, error } = await query
 
     if (error) {
+      // Silently fail if drafts table doesn't exist (optional feature)
+      if (error.code === 'PGRST205') {
+        return { success: true, drafts: [] }
+      }
       console.error('Error fetching drafts:', error)
       throw new Error(`Failed to fetch drafts: ${error.message}`)
     }
@@ -97,6 +101,10 @@ export async function getDrafts(type?: 'bug_report' | 'feature_request' | 'daily
       drafts: drafts || []
     }
   } catch (error: any) {
+    // Silently fail if drafts table doesn't exist
+    if (error.message?.includes('Could not find the table')) {
+      return { success: true, drafts: [] }
+    }
     console.error('Error in getDrafts:', error)
     return {
       success: false,

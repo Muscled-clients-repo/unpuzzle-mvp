@@ -68,8 +68,6 @@ export function ChatInterface({
     if (conversationsData?.success && conversationsData.conversations && !hasLoadedConversations.current) {
       const dbConversations = conversationsData.conversations
 
-      console.log(`[ChatInterface] ✅ Loading ${dbConversations.length} conversations for video ${videoId}`)
-
       // Convert each conversation to two messages (user + AI)
       const dbMessages: Message[] = []
       dbConversations.forEach((conv) => {
@@ -110,11 +108,9 @@ export function ChatInterface({
       if (newMessages.length > 0) {
         // Use loadInitialMessages for batch loading (prevents multiple re-renders)
         if (onLoadInitialMessages) {
-          console.log('[ChatInterface] Batch loading', newMessages.length, 'messages')
           onLoadInitialMessages(newMessages)
         } else if (onAddMessage) {
           // Fallback to old method if loadInitialMessages not available
-          console.log('[ChatInterface] Fallback: Adding messages one by one')
           newMessages.forEach(msg => onAddMessage(msg))
         }
       }

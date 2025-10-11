@@ -20,7 +20,6 @@ export function useAIConversationsQuery(mediaFileId: string) {
     queryKey: aiConversationKeys.list(mediaFileId),
     queryFn: async () => {
       const result = await getVideoAIConversations(mediaFileId)
-      console.log('[useAIConversationsQuery] Loaded conversations:', result.success ? `${result.conversations?.length || 0} conversations` : 'Failed')
       return result
     },
     enabled: !!mediaFileId,

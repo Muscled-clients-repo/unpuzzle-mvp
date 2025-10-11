@@ -34,11 +34,7 @@ export class BackblazeService {
   constructor() {
     const keyId = process.env.BACKBLAZE_APPLICATION_KEY_ID
     const key = process.env.BACKBLAZE_APPLICATION_KEY
-    
-    console.log('[BACKBLAZE] Initializing with credentials:')
-    console.log('[BACKBLAZE] Key ID:', keyId ? `${keyId.substring(0, 10)}...` : 'MISSING')
-    console.log('[BACKBLAZE] Key:', key ? 'SET' : 'MISSING')
-    
+
     if (!keyId || !key) {
       console.error('[BACKBLAZE] Missing credentials! Check your .env.local file')
       console.error('[BACKBLAZE] Need BACKBLAZE_APPLICATION_KEY_ID and BACKBLAZE_APPLICATION_KEY')
