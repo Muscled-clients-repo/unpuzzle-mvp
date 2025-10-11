@@ -23,7 +23,12 @@ export function useAIConversationsQuery(mediaFileId: string) {
       return result
     },
     enabled: !!mediaFileId,
-    staleTime: 30 * 1000, // 30 seconds - conversations don't change often
+    // PERFORMANCE P1: Stale-While-Revalidate pattern
+    staleTime: 2 * 60 * 1000, // 2 minutes - data is considered fresh
+    cacheTime: 30 * 60 * 1000, // 30 minutes - keep in cache
+    refetchOnMount: 'always', // Always fetch on mount, but serve stale data first
+    refetchOnWindowFocus: false, // Don't refetch on tab switch (reduce API calls)
+    refetchOnReconnect: true, // Refetch on reconnect
   })
 }
 
