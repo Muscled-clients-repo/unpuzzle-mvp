@@ -51,6 +51,30 @@ interface StudentVideoPlayerProps {
 }
 
 export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
+  // 🔍 DEBUG: Track component renders
+  const renderCount = useRef(0)
+  const prevPropsRef = useRef<StudentVideoPlayerProps>(props)
+
+  useEffect(() => {
+    renderCount.current++
+    console.log(`🎬 [StudentVideoPlayer] RENDER #${renderCount.current}`)
+
+    // Check which props changed
+    const changedProps: string[] = []
+    Object.keys(props).forEach(key => {
+      const propKey = key as keyof StudentVideoPlayerProps
+      if (prevPropsRef.current[propKey] !== props[propKey]) {
+        changedProps.push(key)
+      }
+    })
+
+    if (changedProps.length > 0) {
+      console.log(`🎬 [StudentVideoPlayer] Props changed:`, changedProps)
+    }
+
+    prevPropsRef.current = props
+  })
+
   // Video player ref for imperative control
   const videoPlayerRef = useRef<VideoPlayerCoreRef>(null)
 
@@ -67,14 +91,38 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
     quizAttemptMutation: quizAttemptMutation.mutateAsync
   })
 
+  // 🔍 DEBUG: Track context changes from state machine
+  const prevContextRef = useRef(context)
+  useEffect(() => {
+    if (prevContextRef.current !== context) {
+      const changes: string[] = []
+
+      if (prevContextRef.current.state !== context.state) {
+        changes.push(`state: ${prevContextRef.current.state} → ${context.state}`)
+      }
+      if (prevContextRef.current.messages.length !== context.messages.length) {
+        changes.push(`messages: ${prevContextRef.current.messages.length} → ${context.messages.length}`)
+      }
+      if (prevContextRef.current.videoState !== context.videoState) {
+        changes.push('videoState changed')
+      }
+      if (prevContextRef.current.aiState !== context.aiState) {
+        changes.push('aiState changed')
+      }
+
+      console.log('🔄 [StudentVideoPlayer] Context changed:', changes)
+      prevContextRef.current = context
+    }
+  }, [context])
+
   // State for sidebar
-  const currentTime = useAppStore((state) => state.currentTime)
+  // Note: We get currentTime from videoPlayerRef when needed to avoid re-renders on every time update
   const showChatSidebar = useAppStore((state) => state.preferences.showChatSidebar)
   const sidebarWidth = useAppStore((state) => state.preferences.sidebarWidth)
   const updatePreferences = useAppStore((state) => state.updatePreferences)
 
-  // Student-specific: Load student video data
-  const loadStudentVideo = useAppStore((state) => state.loadStudentVideo)
+  // REMOVED: loadStudentVideo call - parent page handles this
+  // Calling it here causes duplicate loads and regenerates HMAC tokens
 
   const [isResizing, setIsResizing] = useState(false)
   const sidebarRef = useRef<HTMLDivElement>(null)
@@ -82,22 +130,13 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
   // Student-specific state for enhanced interactions
   const [highlightedSegment, setHighlightedSegment] = useState<number | null>(null)
 
-  // Load student-specific video data when component mounts
-  useEffect(() => {
-    if (props.videoId) {
-      loadStudentVideo(props.videoId)
-    }
-  }, [props.videoId, loadStudentVideo])
-
   // Connect video ref to state machine with retry logic
   useEffect(() => {
     const connectVideoRef = () => {
       if (videoPlayerRef.current) {
-        console.log('[Student] Successfully connected video ref')
         setVideoRef(videoPlayerRef.current)
         return true
       } else {
-        console.log('[Student] Video ref not available yet, retrying...')
         return false
       }
     }
@@ -117,7 +156,6 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
     // Clean up after 10 seconds
     const timeout = setTimeout(() => {
       clearInterval(retryInterval)
-      console.warn('[Student] Failed to connect video ref after 10 seconds')
     }, 10000)
 
     return () => {
@@ -129,11 +167,13 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
   // Set video ID and course ID for AI agent context
   useEffect(() => {
     setVideoId(props.videoId || null)
-  }, [props.videoId, setVideoId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.videoId])
 
   useEffect(() => {
     setCourseId(props.courseId || null)
-  }, [props.courseId, setCourseId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.courseId])
 
   // Load existing reflections and convert them to audio messages for persistence
   useEffect(() => {
@@ -171,7 +211,8 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
         loadInitialMessages(audioMessages)
       }
     }
-  }, [reflectionsQuery.data, loadInitialMessages])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reflectionsQuery.data])
 
   // Cleanup function to delete all voice memos
   const handleDeleteAllVoiceMemos = async () => {
@@ -255,7 +296,6 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
   // Student-specific: Enhanced interactions between sidebar and video
   const handleSegmentClick = (segmentTime: number, segmentIndex: number) => {
     setHighlightedSegment(segmentIndex)
-    console.log(`Student Feature: Seeking to ${segmentTime}s for segment ${segmentIndex + 1}`)
   }
 
   const handleVideoTimeUpdate = (time: number) => {
@@ -286,6 +326,7 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
         e.preventDefault()
         // Instead of calling handlePlayPause directly, use state machine
         if (context.videoState?.isPlaying) {
+          const currentTime = videoPlayerRef.current?.getCurrentTime() || 0
           dispatch({
             type: 'VIDEO_MANUALLY_PAUSED',
             payload: { time: currentTime }
@@ -299,7 +340,7 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
         break
       // Let other keys fall through to the original handler
     }
-  }, [context.videoState?.isPlaying, currentTime, dispatch])
+  }, [context.videoState?.isPlaying, dispatch])
 
   // Add keyboard event listener for spacebar routing through state machine
   useEffect(() => {
@@ -548,7 +589,7 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
               isVideoPlaying={context.videoState?.isPlaying || false}
               videoId={props.videoId}
               courseId={props.courseId}
-              currentVideoTime={currentTime}
+              currentVideoTime={videoPlayerRef.current?.getCurrentTime() || 0}
               aiState={context.aiState}
               onAgentRequest={handleAgentRequest}
               onAgentAccept={(id) => dispatch({ type: 'ACCEPT_AGENT', payload: id })}
@@ -564,6 +605,7 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
               recordingState={context.recordingState}
               addMessage={addMessage}
               addOrUpdateMessage={addOrUpdateMessage}
+              loadInitialMessages={loadInitialMessages}
             />
           </div>
         </>

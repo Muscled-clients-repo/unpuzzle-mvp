@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useParams, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
 import { useAppStore } from "@/stores/app-store"
@@ -38,6 +38,11 @@ import {
 import Link from "next/link"
 
 export default function VideoPlayerPage() {
+  // 🔍 DEBUG: Track page component renders
+  const renderCountRef = useState(() => ({ current: 0 }))[0]
+  renderCountRef.current++
+  console.log(`📄 [VideoPlayerPage] RENDER #${renderCountRef.current}`)
+
   const params = useParams()
   const searchParams = useSearchParams()
   const courseId = params.id as string
@@ -46,52 +51,80 @@ export default function VideoPlayerPage() {
   // Calculate resume timestamp from URL params OR database progress
   const urlTimestamp = searchParams?.get('t') ? parseInt(searchParams.get('t')!) : 0
   
-  // NEW: Use student video slice for video data
-  const {
-    currentVideo: storeVideoData,
-    loadStudentVideo,
-    reflections,
-    addReflection,
-    currentCourse,
-    loadCourseById
-  } = useAppStore()
-  
-  // OLD: Keep lessons for standalone mode
-  const { lessons, loadLessons, trackView } = useAppStore()
-  
+  // PERFORMANCE: Use selective subscriptions to prevent unnecessary re-renders
+  // Only re-render when currentVideo changes, not on every store update
+  const storeVideoData = useAppStore((state) => state.currentVideo)
+  const loadStudentVideo = useAppStore((state) => state.loadStudentVideo)
+  const currentCourse = useAppStore((state) => state.currentCourse)
+  const loadCourseById = useAppStore((state) => state.loadCourseById)
+
+  // OLD: Keep lessons for standalone mode - also use selective subscription
+  const lessons = useAppStore((state) => state.lessons)
+  const loadLessons = useAppStore((state) => state.loadLessons)
+  const trackView = useAppStore((state) => state.trackView)
+
   // Check if this is a standalone lesson
   const isStandaloneLesson = courseId === 'lesson'
 
   // ALL HOOKS MUST BE DECLARED AT THE TOP BEFORE ANY CONDITIONAL LOGIC OR EARLY RETURNS
   const [isLoading, setIsLoading] = useState(true)
 
+  // Define all callback handlers at the top (before any early returns)
+  const handleTimeUpdate = useCallback((time: number) => {
+    // Time update handling without progress saving
+  }, [])
+
+  const handlePause = useCallback((time: number) => {
+    // Pause handler
+  }, [])
+
+  const handlePlay = useCallback(() => {
+    // Play handler
+  }, [])
+
+  const handleEnded = useCallback(() => {
+    // Ended handler
+  }, [])
+
   // Get video data based on context - use store data for course videos
   // 001-COMPLIANT: Use course context from junction table video action
-  const course = !isStandaloneLesson
-    ? (storeVideoData?.course ? {
+  // PERFORMANCE: Memoize to prevent creating new object references on every render
+  const course = useMemo(() => {
+    if (isStandaloneLesson) return null
+
+    if (storeVideoData?.course) {
+      return {
         id: storeVideoData.course.id,
         title: storeVideoData.course.title,
         description: storeVideoData.course.description,
         videos: [] // Not needed for video page
-      } : currentCourse)
-    : null
+      }
+    }
+
+    return currentCourse
+  }, [isStandaloneLesson, storeVideoData?.course, currentCourse])
 
   const standaloneLesson = isStandaloneLesson ? lessons?.find(l => l.id === videoId) : null
 
-  const currentVideo = isStandaloneLesson
-    ? standaloneLesson
-      ? {
-          id: standaloneLesson.id,
-          title: standaloneLesson.title,
-          description: standaloneLesson.description,
-          videoUrl: standaloneLesson.videoUrl,
-          thumbnailUrl: standaloneLesson.thumbnailUrl,
-          duration: standaloneLesson.duration,
-          transcript: [],
-          timestamps: []
-        }
-      : null
-    : storeVideoData // Use video data from junction table action
+  // PERFORMANCE: Memoize to prevent creating new object references on every render
+  const currentVideo = useMemo(() => {
+    if (isStandaloneLesson) {
+      if (!standaloneLesson) return null
+
+      return {
+        id: standaloneLesson.id,
+        title: standaloneLesson.title,
+        description: standaloneLesson.description,
+        videoUrl: standaloneLesson.videoUrl,
+        thumbnailUrl: standaloneLesson.thumbnailUrl,
+        duration: standaloneLesson.duration,
+        transcript: [],
+        timestamps: []
+      }
+    }
+
+    return storeVideoData // Use video data from junction table action
+  }, [isStandaloneLesson, standaloneLesson, storeVideoData])
 
   // Only use URL timestamp for resume, no database progress loading
   const resumeTimestamp = urlTimestamp
@@ -102,6 +135,14 @@ export default function VideoPlayerPage() {
     }
   }, [resumeTimestamp])
 
+  // 🔍 DEBUG: Track storeVideoData changes
+  useEffect(() => {
+    console.log(`📄 [VideoPlayerPage] storeVideoData updated:`, {
+      videoUrl: storeVideoData?.videoUrl,
+      hasData: !!storeVideoData
+    })
+  }, [storeVideoData])
+
   // Single effect to handle all loading - ensures hooks are always called in same order
   useEffect(() => {
     const loadData = async () => {
@@ -111,7 +152,7 @@ export default function VideoPlayerPage() {
         // Load course video data
         try {
           await Promise.all([
-            loadStudentVideo(videoId),
+            loadStudentVideo(videoId, courseId), // SECURITY: Pass courseId to verify video belongs to course
             loadCourseById(courseId)
           ])
         } catch (error) {
@@ -128,8 +169,8 @@ export default function VideoPlayerPage() {
         }
       }
 
-      // Give a small delay to ensure store is updated
-      setTimeout(() => setIsLoading(false), 100)
+      // Data is ready, show content immediately
+      setIsLoading(false)
     }
 
     loadData()
@@ -194,20 +235,6 @@ export default function VideoPlayerPage() {
   
   // Calculate progress through course - for video page, show as individual progress
   const courseProgress = 100 // Individual video is 100% when playing
-
-  const handleTimeUpdate = (time: number) => {
-    // Time update handling without progress saving
-  }
-
-  const handlePause = (time: number) => {
-  }
-
-  const handlePlay = () => {
-  }
-
-  const handleEnded = () => {
-  }
-
 
   // Check if video URL is valid before rendering player
   if (!currentVideo.videoUrl) {

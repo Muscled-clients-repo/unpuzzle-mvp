@@ -9,6 +9,8 @@ export interface StudentVideoSlice {
   selectedSegment: VideoSegment | null
   activeQuiz: Quiz | null
   reflections: Reflection[]
+  // Cache to prevent duplicate loads
+  _loadingVideoId: string | null
   
   // Basic video playback state
   currentTime: number
@@ -28,7 +30,7 @@ export interface StudentVideoSlice {
   showLiveTranscript: boolean
   
   // Actions
-  loadStudentVideo: (videoId: string) => Promise<void>
+  loadStudentVideo: (videoId: string, courseId?: string) => Promise<void>
   setVideoSegment: (inPoint: number, outPoint: number) => void
   clearVideoSegment: () => void
   addReflection: (reflection: Partial<Reflection>) => Promise<void>
@@ -52,7 +54,8 @@ export const createStudentVideoSlice: StateCreator<StudentVideoSlice> = (set, ge
   selectedSegment: null,
   activeQuiz: null,
   reflections: [],
-  
+  _loadingVideoId: null,
+
   // Basic video state
   currentTime: 0,
   duration: 0,
@@ -61,41 +64,54 @@ export const createStudentVideoSlice: StateCreator<StudentVideoSlice> = (set, ge
   isMuted: false,
   playbackRate: 1,
   isFullscreen: false,
-  
+
   inPoint: null,
   outPoint: null,
   showControls: true,
   showLiveTranscript: false,
 
-  loadStudentVideo: async (videoId: string) => {
+  loadStudentVideo: async (videoId: string, courseId?: string) => {
+    // PERFORMANCE: Prevent duplicate loads with the same videoId
+    // This prevents regenerating HMAC tokens unnecessarily
+    const state = get()
+    if (state._loadingVideoId === videoId && state.currentVideo?.id === videoId) {
+      console.log('[Student Video Slice] Video already loaded, skipping duplicate load')
+      return
+    }
+
+    // Mark as loading this videoId
+    set({ _loadingVideoId: videoId })
+
     // 001-COMPLIANT: Use junction table action instead of old videos table
     const { getStudentVideoFromJunctionTable } = await import('@/app/actions/student-course-actions-junction')
 
     try {
-      const videoData = await getStudentVideoFromJunctionTable(videoId)
+      // SECURITY: Pass courseId to verify video belongs to course (prevent URL manipulation)
+      const videoData = await getStudentVideoFromJunctionTable(videoId, courseId)
       if (videoData) {
         set({
           currentVideo: videoData,
-          reflections: videoData.reflections || []
+          reflections: videoData.reflections || [],
+          _loadingVideoId: null
         })
       } else {
-        console.warn('[Student Video Slice] Video not found or no access:', videoId)
         set({
           currentVideo: null,
-          reflections: []
+          reflections: [],
+          _loadingVideoId: null
         })
       }
     } catch (error) {
       console.error('[Student Video Slice] Error loading video:', error)
       set({
         currentVideo: null,
-        reflections: []
+        reflections: [],
+        _loadingVideoId: null
       })
     }
   },
 
   setVideoSegment: (inPoint: number, outPoint: number) => {
-    console.log('🎯 setVideoSegment called:', { inPoint, outPoint })
     set({
       inPoint,
       outPoint,
@@ -109,7 +125,6 @@ export const createStudentVideoSlice: StateCreator<StudentVideoSlice> = (set, ge
   },
 
   clearVideoSegment: () => {
-    console.log('🧹 clearVideoSegment called')
     set({
       inPoint: null,
       outPoint: null,
@@ -128,10 +143,7 @@ export const createStudentVideoSlice: StateCreator<StudentVideoSlice> = (set, ge
 
   submitQuizAnswer: async (quizId: string, answer: number) => {
     const result = await studentVideoService.submitQuizAnswer(quizId, answer)
-    if (result.data) {
-      // Handle quiz result - could show feedback, update score, etc.
-      console.log('Quiz result:', result.data)
-    }
+    // Handle quiz result - could show feedback, update score, etc.
   },
 
   setShowControls: (showControls: boolean) => {
