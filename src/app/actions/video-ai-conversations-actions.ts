@@ -108,7 +108,7 @@ export async function getVideoAIConversations(mediaFileId: string) {
 
     const { data: { user }, error: userError } = await supabase.auth.getUser()
     if (userError || !user) {
-      return { error: 'Unauthorized' }
+      return { error: 'Unauthorized', success: false }
     }
 
     const { data: conversations, error } = await supabase
@@ -119,14 +119,14 @@ export async function getVideoAIConversations(mediaFileId: string) {
       .order('created_at', { ascending: true })
 
     if (error) {
-      console.error('Error fetching AI conversations:', error)
-      return { error: 'Failed to fetch conversations' }
+      console.error('[getVideoAIConversations] Database error:', error)
+      return { error: 'Failed to fetch conversations', success: false }
     }
 
-    return { conversations }
+    return { success: true, conversations: conversations || [] }
   } catch (error) {
-    console.error('Error in getVideoAIConversations:', error)
-    return { error: 'An unexpected error occurred' }
+    console.error('[getVideoAIConversations] Unexpected error:', error)
+    return { error: 'An unexpected error occurred', success: false }
   }
 }
 

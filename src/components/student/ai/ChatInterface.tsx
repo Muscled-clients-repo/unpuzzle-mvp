@@ -10,6 +10,7 @@ import { Message, MessageState } from "@/lib/video-agent-system"
 import { useTranscriptQuery } from "@/hooks/use-transcript-queries"
 import { useVideoSummary } from "@/hooks/use-video-summary"
 import { UnpuzzlingAnimation } from "@/components/ui/UnpuzzlingAnimation"
+import { useAIConversationsQuery } from "@/hooks/use-ai-conversations-query"
 
 interface ChatInterfaceProps {
   messages: Message[]
@@ -53,6 +54,70 @@ export function ChatInterface({
 
   // Get video summary for AI context
   const { data: videoSummary } = useVideoSummary(videoId)
+
+  // Get conversation history from database
+  const { data: conversationsData, isLoading: isLoadingConversations } = useAIConversationsQuery(videoId || '')
+
+  // Convert database conversations to Message format and merge with current messages
+  // Use a ref to track if we've already loaded the initial conversations
+  const hasLoadedConversations = useRef(false)
+
+  useEffect(() => {
+    if (conversationsData?.success && conversationsData.conversations && onAddMessage && !hasLoadedConversations.current) {
+      const dbConversations = conversationsData.conversations
+
+      console.log(`[ChatInterface] ✅ Loading ${dbConversations.length} conversations for video ${videoId}`)
+
+      // Convert each conversation to two messages (user + AI)
+      const dbMessages: Message[] = []
+      dbConversations.forEach((conv) => {
+        // User message
+        dbMessages.push({
+          id: `db_user_${conv.id}`,
+          type: 'user',
+          state: MessageState.PERMANENT,
+          message: conv.user_message,
+          timestamp: new Date(conv.created_at).getTime(),
+          contextData: conv.conversation_context ? {
+            transcript: conv.conversation_context,
+            startTime: conv.video_timestamp || 0,
+            endTime: conv.video_timestamp || 0
+          } : undefined,
+          metadata: {
+            conversationId: conv.id
+          }
+        })
+
+        // AI response
+        dbMessages.push({
+          id: `db_ai_${conv.id}`,
+          type: 'ai',
+          state: MessageState.PERMANENT,
+          message: conv.ai_response,
+          timestamp: new Date(conv.created_at).getTime() + 1,
+          metadata: {
+            conversationId: conv.id
+          }
+        })
+      })
+
+      // Only add messages that don't already exist
+      const existingIds = new Set(messages.map(m => m.id))
+      const newMessages = dbMessages.filter(m => !existingIds.has(m.id))
+
+      if (newMessages.length > 0) {
+        newMessages.forEach(msg => onAddMessage(msg))
+      }
+
+      hasLoadedConversations.current = true
+    }
+  }, [conversationsData, onAddMessage, videoId])
+
+  // Reset the flag when videoId changes
+  useEffect(() => {
+    hasLoadedConversations.current = false
+  }, [videoId])
+
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -149,7 +214,7 @@ export function ChatInterface({
     return { text, actualStart, actualEnd }
   }
 
-  // No filtering needed - messages are pre-filtered by parent component
+  // No threading - just show messages in chronological order
   const chatMessages = messages
 
   const handleSendMessage = useCallback(async () => {
@@ -456,7 +521,7 @@ export function ChatInterface({
         </div>
       )}
 
-      {/* Chat Input */}
+      {/* Chat Input - At Bottom */}
       <div className="border-t p-4">
         <div className="flex gap-2">
           <Input

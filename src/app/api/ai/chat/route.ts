@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Groq from 'groq-sdk'
+import { createAIConversation } from '@/app/actions/video-ai-conversations-actions'
 
 // Initialize Groq client with fallback for build time
 const groq = new Groq({
@@ -108,6 +109,29 @@ Keep responses concise but thorough, focusing on helping the student learn and u
                 fullContent
               })}\n\n`)
             )
+          }
+
+          // Save conversation to database
+          try {
+            const conversationData = {
+              media_file_id: videoId,
+              video_timestamp: currentTimestamp,
+              conversation_context: selectedTranscript?.text || videoSummary?.content?.substring(0, 500) || null,
+              user_message: userMessage,
+              ai_response: fullContent,
+              model_used: 'llama-3.3-70b-versatile'
+            }
+
+            const dbResult = await createAIConversation(conversationData)
+
+            if (dbResult.error) {
+              console.error('Failed to save conversation to database:', dbResult.error)
+            } else {
+              console.log('✅ Conversation saved to database:', dbResult.conversation?.id)
+            }
+          } catch (dbError) {
+            console.error('Database save error:', dbError)
+            // Don't fail the request if database save fails
           }
 
           // Send the final complete response
