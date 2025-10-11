@@ -55,13 +55,11 @@ export function CheckpointForm({
 
   // Form state
   const [checkpointType, setCheckpointType] = useState<CheckpointType>(
-    checkpoint?.prompt_type || 'quiz'
+    checkpoint?.prompt_type || 'multiple_choice'
   )
   const [timestamp, setTimestamp] = useState(
     checkpoint?.timestamp_seconds || defaultTimestamp
   )
-  const [title, setTitle] = useState(checkpoint?.title || '')
-  const [instructions, setInstructions] = useState(checkpoint?.instructions || '')
   const [isRequired, setIsRequired] = useState(checkpoint?.is_required || false)
   const [isActive, setIsActive] = useState(checkpoint?.is_active ?? true)
 
@@ -70,11 +68,6 @@ export function CheckpointForm({
     checkpoint?.quiz_questions || [{ question: '', options: ['', '', '', ''], correctAnswer: '' }]
   )
   const [passingScore, setPassingScore] = useState(checkpoint?.passing_score || 70)
-
-  // Reflection-specific state
-  const [reflectionPrompt, setReflectionPrompt] = useState(checkpoint?.reflection_prompt || '')
-  const [requiresVideo, setRequiresVideo] = useState(checkpoint?.requires_video || false)
-  const [requiresAudio, setRequiresAudio] = useState(checkpoint?.requires_audio || false)
 
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -120,37 +113,40 @@ export function CheckpointForm({
   }
 
   const handleSave = async () => {
-    // Validation
-    if (!title.trim()) {
-      toast.error('Please enter a title')
+    // Validation for multiple choice and true/false
+    if ((checkpointType === 'multiple_choice' || checkpointType === 'true_false') && quizQuestions.length === 0) {
+      toast.error('Please add at least one question')
       return
     }
 
-    if (checkpointType === 'quiz' && quizQuestions.length === 0) {
-      toast.error('Please add at least one quiz question')
-      return
-    }
-
-    if (checkpointType === 'quiz') {
+    if (checkpointType === 'multiple_choice') {
       for (const q of quizQuestions) {
         if (!q.question.trim()) {
-          toast.error('All quiz questions must have text')
+          toast.error('All questions must have text')
           return
         }
         if (q.options.some(opt => !opt.trim())) {
-          toast.error('All quiz options must be filled')
+          toast.error('All options must be filled')
           return
         }
         if (!q.correctAnswer.trim()) {
-          toast.error('Each quiz question must have a correct answer')
+          toast.error('Each question must have a correct answer')
           return
         }
       }
     }
 
-    if (checkpointType === 'reflection' && !reflectionPrompt.trim()) {
-      toast.error('Please enter a reflection prompt')
-      return
+    if (checkpointType === 'true_false') {
+      for (const q of quizQuestions) {
+        if (!q.question.trim()) {
+          toast.error('All questions must have text')
+          return
+        }
+        if (!q.correctAnswer.trim()) {
+          toast.error('Each question must have an answer (True or False)')
+          return
+        }
+      }
     }
 
     setIsSaving(true)
@@ -160,18 +156,11 @@ export function CheckpointForm({
         media_file_id: videoId,
         prompt_type: checkpointType,
         timestamp_seconds: timestamp,
-        title: title.trim(),
-        instructions: instructions.trim() || undefined,
         is_required: isRequired,
         is_active: isActive,
-        ...(checkpointType === 'quiz' && {
+        ...((checkpointType === 'multiple_choice' || checkpointType === 'true_false') && {
           quiz_questions: quizQuestions,
-          passing_score: passingScore
-        }),
-        ...(checkpointType === 'reflection' && {
-          reflection_prompt: reflectionPrompt.trim(),
-          requires_video: requiresVideo,
-          requires_audio: requiresAudio
+          passing_score: checkpointType === 'multiple_choice' ? passingScore : undefined
         })
       }
 
@@ -238,8 +227,9 @@ export function CheckpointForm({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="quiz">🎯 Quiz</SelectItem>
-                    <SelectItem value="reflection">💭 Reflection</SelectItem>
+                    <SelectItem value="multiple_choice">✓ Multiple Choice</SelectItem>
+                    <SelectItem value="true_false">⚡ True/False</SelectItem>
+                    <SelectItem value="loom_video">🎥 Loom Video</SelectItem>
                     <SelectItem value="voice_memo">🎤 Voice Memo</SelectItem>
                   </SelectContent>
                 </Select>
@@ -277,27 +267,6 @@ export function CheckpointForm({
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="title">Title</Label>
-              <Input
-                id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g., Understanding useState"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="instructions">Instructions (Optional)</Label>
-              <Textarea
-                id="instructions"
-                value={instructions}
-                onChange={(e) => setInstructions(e.target.value)}
-                placeholder="Additional context or instructions for students"
-                rows={2}
-              />
-            </div>
-
             {/* Settings */}
             <div className="flex items-center justify-between p-3 border rounded-lg">
               <div className="flex-1">
@@ -327,12 +296,13 @@ export function CheckpointForm({
           {/* Type-Specific Fields */}
           <Tabs value={checkpointType} className="w-full">
             <TabsList className="hidden">
-              <TabsTrigger value="quiz">Quiz</TabsTrigger>
-              <TabsTrigger value="reflection">Reflection</TabsTrigger>
+              <TabsTrigger value="multiple_choice">Multiple Choice</TabsTrigger>
+              <TabsTrigger value="true_false">True/False</TabsTrigger>
+              <TabsTrigger value="loom_video">Loom Video</TabsTrigger>
               <TabsTrigger value="voice_memo">Voice Memo</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="quiz" className="space-y-4">
+            <TabsContent value="multiple_choice" className="space-y-4">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Quiz Questions</Label>
@@ -407,43 +377,72 @@ export function CheckpointForm({
               </div>
             </TabsContent>
 
-            <TabsContent value="reflection" className="space-y-4">
+            <TabsContent value="true_false" className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="reflection-prompt">Reflection Prompt</Label>
-                <Textarea
-                  id="reflection-prompt"
-                  value={reflectionPrompt}
-                  onChange={(e) => setReflectionPrompt(e.target.value)}
-                  placeholder="What did you learn from this section? How would you apply it?"
-                  rows={4}
-                />
-              </div>
+                <div className="flex items-center justify-between">
+                  <Label>True/False Questions</Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleAddQuizQuestion}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Question
+                  </Button>
+                </div>
 
-              <div className="space-y-3">
-                <Label>Submission Requirements</Label>
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <Label htmlFor="requires-video">Requires Video Response</Label>
-                  <Switch
-                    id="requires-video"
-                    checked={requiresVideo}
-                    onCheckedChange={setRequiresVideo}
-                  />
-                </div>
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <Label htmlFor="requires-audio">Requires Audio Response</Label>
-                  <Switch
-                    id="requires-audio"
-                    checked={requiresAudio}
-                    onCheckedChange={setRequiresAudio}
-                  />
-                </div>
+                {quizQuestions.map((q, qIndex) => (
+                  <Card key={qIndex} className="p-4">
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <Input
+                          placeholder={`Question ${qIndex + 1}`}
+                          value={q.question}
+                          onChange={(e) => handleQuestionChange(qIndex, 'question', e.target.value)}
+                        />
+                        {quizQuestions.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveQuizQuestion(qIndex)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-xs">Answer</Label>
+                        <Select
+                          value={q.correctAnswer}
+                          onValueChange={(value) => handleQuestionChange(qIndex, 'correctAnswer', value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select answer" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="True">True</SelectItem>
+                            <SelectItem value="False">False</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
               </div>
+            </TabsContent>
+
+            <TabsContent value="loom_video" className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Students will be prompted to record a Loom video response at this timestamp.
+              </p>
             </TabsContent>
 
             <TabsContent value="voice_memo" className="space-y-4">
               <p className="text-sm text-muted-foreground">
                 Students will be prompted to record a voice memo at this timestamp.
-                The prompt will use the title and instructions you provided above.
               </p>
             </TabsContent>
           </Tabs>

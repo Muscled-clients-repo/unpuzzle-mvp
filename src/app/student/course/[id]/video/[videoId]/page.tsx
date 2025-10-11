@@ -38,11 +38,6 @@ import {
 import Link from "next/link"
 
 export default function VideoPlayerPage() {
-  // 🔍 DEBUG: Track page component renders
-  const renderCountRef = useState(() => ({ current: 0 }))[0]
-  renderCountRef.current++
-  console.log(`📄 [VideoPlayerPage] RENDER #${renderCountRef.current}`)
-
   const params = useParams()
   const searchParams = useSearchParams()
   const courseId = params.id as string
@@ -128,20 +123,6 @@ export default function VideoPlayerPage() {
 
   // Only use URL timestamp for resume, no database progress loading
   const resumeTimestamp = urlTimestamp
-
-  // Log resume functionality for debugging
-  useEffect(() => {
-    if (resumeTimestamp > 0) {
-    }
-  }, [resumeTimestamp])
-
-  // 🔍 DEBUG: Track storeVideoData changes
-  useEffect(() => {
-    console.log(`📄 [VideoPlayerPage] storeVideoData updated:`, {
-      videoUrl: storeVideoData?.videoUrl,
-      hasData: !!storeVideoData
-    })
-  }, [storeVideoData])
 
   // Single effect to handle all loading - ensures hooks are always called in same order
   useEffect(() => {

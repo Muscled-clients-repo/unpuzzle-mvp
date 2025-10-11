@@ -38,13 +38,15 @@ export function useVideoAgentSystem(options?: UseVideoAgentSystemOptions) {
     if (options?.quizAttemptMutation) {
       globalStateMachine.setQuizAttemptMutation(options.quizAttemptMutation)
     }
-    
+
     // Subscribe to updates
-    const unsubscribe = globalStateMachine.subscribe(setContext)
-    
+    const unsubscribe = globalStateMachine.subscribe((newContext) => {
+      setContext(newContext)
+    })
+
     // Get initial state
     setContext(globalStateMachine.getContext())
-    
+
     return () => {
       unsubscribe()
       // Note: We don't destroy the global instance here since it might be used by other components
