@@ -88,6 +88,9 @@ export const VideoPlayerCore = forwardRef<
   const setShowControls = useAppStore((state) => state.setShowControls)
   const setShowLiveTranscript = useAppStore((state) => state.setShowLiveTranscript)
 
+  // Store local currentTime to avoid store updates on every tick
+  const [localCurrentTime, setLocalCurrentTime] = useState(currentTime)
+
   // Expose imperative API for parent components
   useImperativeHandle(ref, () => ({
     pause: () => {
@@ -99,8 +102,8 @@ export const VideoPlayerCore = forwardRef<
       // State will be set by VideoEngine's onPlay event
     },
     isPaused: () => !isPlaying,
-    getCurrentTime: () => currentTime
-  }), [isPlaying, currentTime, setIsPlaying])
+    getCurrentTime: () => localCurrentTime
+  }), [isPlaying, localCurrentTime])
 
   // Cleanup timeouts on unmount
   useEffect(() => {
@@ -208,7 +211,7 @@ export const VideoPlayerCore = forwardRef<
 
       videoEngineRef.current!.pause()
       // Don't set state here - VideoEngine's onPause will handle it
-      onPause?.(currentTime)
+      onPause?.(localCurrentTime)
       // Show controls when paused
       setShowControls(true)
     } else {
@@ -270,7 +273,7 @@ export const VideoPlayerCore = forwardRef<
 
     // Get the actual video element to read current time directly
     const videoElement = videoEngineRef.current.getVideoElement?.()
-    const actualCurrentTime = videoElement?.currentTime ?? currentTime
+    const actualCurrentTime = videoElement?.currentTime ?? localCurrentTime
 
     // Use videoDuration from local state first, then store, then video element
     const actualDuration = videoDuration || duration || videoElement?.duration || 0
@@ -357,8 +360,13 @@ export const VideoPlayerCore = forwardRef<
   }
 
   const handleTimeUpdate = (time: number) => {
-    setCurrentTime(time)
+    // Update local state instead of store to prevent re-renders
+    setLocalCurrentTime(time)
     onTimeUpdate?.(time)
+    // Only update store occasionally (every second) for other components that need it
+    if (Math.floor(time) !== Math.floor(localCurrentTime)) {
+      setCurrentTime(time)
+    }
   }
 
   const handleLoadedMetadata = (duration: number) => {
@@ -434,7 +442,7 @@ export const VideoPlayerCore = forwardRef<
         >
           <div className="mb-2">
             <VideoSeeker
-              currentTime={currentTime}
+              currentTime={localCurrentTime}
               duration={videoDuration || duration}
               onSeek={handleSeek}
               videoRef={videoEngineRef.current?.getVideoElement()}
@@ -448,7 +456,7 @@ export const VideoPlayerCore = forwardRef<
             volume={volume}
             isMuted={isMuted}
             playbackRate={playbackRate}
-            currentTime={currentTime}
+            currentTime={localCurrentTime}
             duration={videoDuration || duration}
             showLiveTranscript={showLiveTranscript}
             onPlayPause={handlePlayPause}
@@ -470,7 +478,7 @@ export const VideoPlayerCore = forwardRef<
 
       {showLiveTranscript && (
         <TranscriptPanel
-          currentTime={currentTime}
+          currentTime={localCurrentTime}
           videoId={videoId || 'unknown'}
           onClose={() => setShowLiveTranscript(false)}
           onSeek={handleSeek}

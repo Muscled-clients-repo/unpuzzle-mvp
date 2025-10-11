@@ -96,6 +96,7 @@ interface AIChatSidebarV2Props {
   dispatch?: (action: any) => void
   addMessage?: (message: Message) => void
   addOrUpdateMessage?: (message: Message) => void
+  loadInitialMessages?: (messages: Message[]) => void
   recordingState?: {
     isRecording: boolean
     isPaused: boolean
@@ -106,6 +107,7 @@ interface AIChatSidebarV2Props {
     streamedContent: string
     error: string | null
   }
+  reflectionsQueryResult?: any // Query result from parent to avoid duplicate query
 }
 
 export function AIChatSidebarV2({
@@ -128,7 +130,9 @@ export function AIChatSidebarV2({
   aiState,
   recordingState,
   addMessage,
-  addOrUpdateMessage
+  addOrUpdateMessage,
+  loadInitialMessages,
+  reflectionsQueryResult
 }: AIChatSidebarV2Props) {
   const [inputValue, setInputValue] = useState("")
   const [isTyping, setIsTyping] = useState(false)
@@ -149,7 +153,8 @@ export function AIChatSidebarV2({
 
   // Query for quiz attempts and reflections from database
   const quizAttemptsQuery = useQuizAttemptsQuery(videoId || '', courseId || '')
-  const reflectionsQuery = useReflectionsQuery(videoId || '', courseId || '')
+  // Use passed reflectionsQueryResult to avoid duplicate query, fallback to hook if not provided
+  const reflectionsQuery = reflectionsQueryResult || useReflectionsQuery(videoId || '', courseId || '')
 
   // Reflection mutation for submitting reflections (TanStack Query - Server State)
   const reflectionMutation = useReflectionMutation()
@@ -1360,6 +1365,7 @@ export function AIChatSidebarV2({
             onUpdateSegmentContext={onUpdateSegmentContext}
             onAddMessage={addMessage}
             onAddOrUpdateMessage={addOrUpdateMessage}
+            onLoadInitialMessages={loadInitialMessages}
           />
         ) : (
           /* Agents Tab: Scrollable content */

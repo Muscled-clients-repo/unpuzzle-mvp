@@ -17,6 +17,7 @@ export class VideoAgentStateMachine {
   private courseId: string | null = null
   private reflectionMutation: ((data: any) => Promise<any>) | null = null
   private quizAttemptMutation: ((data: any) => Promise<any>) | null = null
+  private lastFrozenContext: Readonly<SystemContext> | null = null
 
   constructor() {
     this.context = {
@@ -104,7 +105,14 @@ export class VideoAgentStateMachine {
   }
   
   public getContext(): Readonly<SystemContext> {
-    return Object.freeze(JSON.parse(JSON.stringify(this.context)))
+    // Return cached context if available (no changes since last freeze)
+    if (this.lastFrozenContext) {
+      return this.lastFrozenContext
+    }
+
+    // Create and cache new frozen context
+    this.lastFrozenContext = Object.freeze(JSON.parse(JSON.stringify(this.context)))
+    return this.lastFrozenContext
   }
   
   public setVideoRef(ref: VideoRefLike) {
@@ -723,13 +731,70 @@ export class VideoAgentStateMachine {
   
   private updateContext(newContext: SystemContext) {
     const prevActiveType = this.context.agentState.activeType
+
+    // Check if context actually changed (shallow comparison of top-level keys)
+    const contextChanged = this.hasContextChanged(this.context, newContext)
+
     this.context = newContext
+
+    // Only clear cache if context actually changed
+    if (contextChanged) {
+      this.lastFrozenContext = null
+    }
+
     const newActiveType = this.context.agentState.activeType
-    
+
     if (prevActiveType !== newActiveType) {
     }
-    
+
     this.notifySubscribers()
+  }
+
+  private hasContextChanged(oldContext: SystemContext, newContext: SystemContext): boolean {
+    // Compare state enum
+    if (oldContext.state !== newContext.state) return true
+
+    // Compare videoState
+    if (oldContext.videoState.isPlaying !== newContext.videoState.isPlaying) return true
+    if (oldContext.videoState.currentTime !== newContext.videoState.currentTime) return true
+    if (oldContext.videoState.duration !== newContext.videoState.duration) return true
+
+    // Compare agentState
+    if (oldContext.agentState.activeType !== newContext.agentState.activeType) return true
+    if (oldContext.agentState.currentUnactivatedId !== newContext.agentState.currentUnactivatedId) return true
+    if (oldContext.agentState.currentSystemMessageId !== newContext.agentState.currentSystemMessageId) return true
+
+    // Compare aiState
+    if (oldContext.aiState.isGenerating !== newContext.aiState.isGenerating) return true
+    if (oldContext.aiState.generatingType !== newContext.aiState.generatingType) return true
+    if (oldContext.aiState.streamedContent !== newContext.aiState.streamedContent) return true
+    if (oldContext.aiState.error !== newContext.aiState.error) return true
+
+    // Compare segmentState
+    if (oldContext.segmentState.inPoint !== newContext.segmentState.inPoint) return true
+    if (oldContext.segmentState.outPoint !== newContext.segmentState.outPoint) return true
+    if (oldContext.segmentState.isComplete !== newContext.segmentState.isComplete) return true
+    if (oldContext.segmentState.sentToChat !== newContext.segmentState.sentToChat) return true
+
+    // Compare recordingState
+    if (oldContext.recordingState.isRecording !== newContext.recordingState.isRecording) return true
+    if (oldContext.recordingState.isPaused !== newContext.recordingState.isPaused) return true
+
+    // Compare messages array (reference equality first, then length)
+    if (oldContext.messages !== newContext.messages) {
+      if (oldContext.messages.length !== newContext.messages.length) return true
+      // If lengths are same but arrays are different references, check if content changed
+      for (let i = 0; i < oldContext.messages.length; i++) {
+        if (oldContext.messages[i] !== newContext.messages[i]) return true
+      }
+    }
+
+    // Compare errors array
+    if (oldContext.errors !== newContext.errors) {
+      if (oldContext.errors.length !== newContext.errors.length) return true
+    }
+
+    return false
   }
   
   private notifySubscribers() {

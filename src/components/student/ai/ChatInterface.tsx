@@ -20,6 +20,7 @@ interface ChatInterfaceProps {
   onSendMessage?: (message: string) => void
   onAddMessage?: (message: Message) => void
   onAddOrUpdateMessage?: (message: Message) => void
+  onLoadInitialMessages?: (messages: Message[]) => void
   segmentContext?: {
     inPoint: number | null
     outPoint: number | null
@@ -39,6 +40,7 @@ export function ChatInterface({
   onSendMessage,
   onAddMessage,
   onAddOrUpdateMessage,
+  onLoadInitialMessages,
   segmentContext,
   onClearSegmentContext,
   onUpdateSegmentContext
@@ -63,7 +65,7 @@ export function ChatInterface({
   const hasLoadedConversations = useRef(false)
 
   useEffect(() => {
-    if (conversationsData?.success && conversationsData.conversations && onAddMessage && !hasLoadedConversations.current) {
+    if (conversationsData?.success && conversationsData.conversations && !hasLoadedConversations.current) {
       const dbConversations = conversationsData.conversations
 
       console.log(`[ChatInterface] ✅ Loading ${dbConversations.length} conversations for video ${videoId}`)
@@ -106,12 +108,22 @@ export function ChatInterface({
       const newMessages = dbMessages.filter(m => !existingIds.has(m.id))
 
       if (newMessages.length > 0) {
-        newMessages.forEach(msg => onAddMessage(msg))
+        // Use loadInitialMessages for batch loading (prevents multiple re-renders)
+        if (onLoadInitialMessages) {
+          console.log('[ChatInterface] Batch loading', newMessages.length, 'messages')
+          onLoadInitialMessages(newMessages)
+        } else if (onAddMessage) {
+          // Fallback to old method if loadInitialMessages not available
+          console.log('[ChatInterface] Fallback: Adding messages one by one')
+          newMessages.forEach(msg => onAddMessage(msg))
+        }
       }
 
       hasLoadedConversations.current = true
     }
-  }, [conversationsData, onAddMessage, videoId])
+    // Note: Intentionally NOT including 'messages' in dependencies to avoid re-trigger after loading
+    // The hasLoadedConversations ref already guards against duplicate loads
+  }, [conversationsData, onAddMessage, onLoadInitialMessages, videoId])
 
   // Reset the flag when videoId changes
   useEffect(() => {
@@ -372,7 +384,32 @@ export function ChatInterface({
         ref={scrollRef}
         className="flex-1 overflow-y-auto space-y-3 p-4"
       >
-        {chatMessages.length === 0 ? (
+        {isLoadingConversations ? (
+          // Loading skeleton while conversations load
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="space-y-2">
+                {/* User message skeleton */}
+                <div className="flex justify-end gap-3">
+                  <div className="bg-gray-200 dark:bg-gray-700 rounded-lg px-3 py-2 max-w-[80%] animate-pulse">
+                    <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-48 mb-2"></div>
+                    <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-20"></div>
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 animate-pulse"></div>
+                </div>
+                {/* AI message skeleton */}
+                <div className="flex justify-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 animate-pulse"></div>
+                  <div className="bg-gray-200 dark:bg-gray-700 rounded-lg px-3 py-2 max-w-[80%] animate-pulse">
+                    <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-64 mb-2"></div>
+                    <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-56 mb-2"></div>
+                    <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-20"></div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : chatMessages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <Bot className="h-8 w-8 text-muted-foreground mb-2" />
             <div className="text-sm text-muted-foreground">
