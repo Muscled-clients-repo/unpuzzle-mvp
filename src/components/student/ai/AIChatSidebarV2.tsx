@@ -427,13 +427,13 @@ export function AIChatSidebarV2({
   const scrollRef = useRef<HTMLDivElement>(null)
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const playbackIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  
-  // Auto-scroll to bottom when messages change
+
+  // Auto-scroll to bottom when messages change or AI generation completes
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollIntoView({ behavior: "smooth" })
     }
-  }, [messages])
+  }, [messages.length, aiState?.isGenerating])
 
   // Clear pending quiz answer when question is answered
   useEffect(() => {
@@ -1299,7 +1299,20 @@ export function AIChatSidebarV2({
                               </span>
                               {/* Individual timestamp on the right side */}
                               <span className="text-xs text-muted-foreground ml-2">
-                                {activity.formattedTime || formatTime(new Date(activity.timestamp))}
+                                {(() => {
+                                  // Don't show "Just now" while AI is generating for reflections too
+                                  const now = Date.now()
+                                  const timestamp = new Date(activity.timestamp).getTime()
+                                  const diffInSeconds = (now - timestamp) / 1000
+                                  const isRecent = diffInSeconds < 120 // Within 2 minutes
+
+                                  // If AI is generating and this is recent, show time without "Just now"
+                                  if (aiState?.isGenerating && isRecent) {
+                                    return formatTime(new Date(activity.timestamp))
+                                  }
+                                  // Otherwise use normal "Just now" logic
+                                  return formatTimeWithRecent(new Date(activity.timestamp))
+                                })()}
                               </span>
                             </div>
                           </div>
@@ -1397,7 +1410,20 @@ export function AIChatSidebarV2({
                             {/* Individual timestamp on the right side */}
                             <span className="text-xs text-muted-foreground ml-2">
                               {isQuizActivity
-                                ? formatTimeWithRecent(new Date(activity.timestamp))
+                                ? (() => {
+                                    // Don't show "Just now" while AI is generating
+                                    const now = Date.now()
+                                    const timestamp = new Date(activity.timestamp).getTime()
+                                    const diffInSeconds = (now - timestamp) / 1000
+                                    const isRecent = diffInSeconds < 120 // Within 2 minutes
+
+                                    // If AI is generating and this is recent, show time without "Just now"
+                                    if (aiState?.isGenerating && isRecent) {
+                                      return formatTime(new Date(activity.timestamp))
+                                    }
+                                    // Otherwise use normal "Just now" logic
+                                    return formatTimeWithRecent(new Date(activity.timestamp))
+                                  })()
                                 : (activity.formattedTime || formatTime(new Date(activity.timestamp)))}
                             </span>
                           </div>
@@ -1972,6 +1998,9 @@ export function AIChatSidebarV2({
                 !(msg.type === 'agent-prompt' && msg.state === MessageState.UNACTIVATED && !(msg as any).accepted)
               )
               .map(renderMessage)}
+
+            {/* Scroll anchor - invisible element at the bottom for auto-scroll */}
+            <div ref={scrollRef} className="h-1" />
           </div>
         )}
       </div>
