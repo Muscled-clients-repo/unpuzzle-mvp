@@ -89,8 +89,9 @@ export function ChatInterface({
 
   useEffect(() => {
     if (conversationsData?.pages && !hasLoadedConversations.current) {
-      // Flatten all pages of conversations
-      const dbConversations = conversationsData.pages.flatMap(page => page.conversations)
+      // Flatten all pages of conversations and reverse to get oldest first
+      // Database returns newest first, but chat needs oldest first (for bottom rendering)
+      const dbConversations = conversationsData.pages.flatMap(page => page.conversations).reverse()
 
       // Convert each conversation to two messages (user + AI)
       const dbMessages: Message[] = []
