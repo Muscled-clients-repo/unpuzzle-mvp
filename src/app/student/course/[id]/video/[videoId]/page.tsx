@@ -131,8 +131,14 @@ export default function VideoPlayerPage() {
       }
     }
 
+    // Only return video data if the ID matches the URL
+    // This ensures loader shows when switching videos
+    if (storeVideoData?.id !== videoId) {
+      return null
+    }
+
     return storeVideoData // Use video data from junction table action
-  }, [isStandaloneLesson, standaloneLesson, storeVideoData])
+  }, [isStandaloneLesson, standaloneLesson, storeVideoData, videoId])
 
   // Only use URL timestamp for resume, no database progress loading
   const resumeTimestamp = urlTimestamp

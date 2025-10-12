@@ -123,6 +123,31 @@ export class VideoAgentStateMachine {
   }
 
   public setVideoId(videoId: string | null) {
+    // Clear messages if switching to a different video
+    if (this.videoId && this.videoId !== videoId) {
+      console.log('[SM] Video changed, clearing messages')
+      this.updateContext({
+        ...this.context,
+        messages: [],
+        agentState: {
+          currentUnactivatedId: null,
+          currentSystemMessageId: null,
+          activeType: null
+        },
+        aiState: {
+          isGenerating: false,
+          generatingType: null,
+          streamedContent: '',
+          error: null
+        },
+        segmentState: {
+          inPoint: null,
+          outPoint: null,
+          isComplete: false,
+          sentToChat: false
+        }
+      })
+    }
     this.videoId = videoId
   }
 

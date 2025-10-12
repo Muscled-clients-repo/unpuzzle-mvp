@@ -75,16 +75,17 @@ export const createStudentVideoSlice: StateCreator<StudentVideoSlice> = (set, ge
     // This prevents regenerating HMAC tokens unnecessarily
     const state = get()
 
-    // Skip if already loading this video OR if already loaded
+    // Skip if already loading this EXACT video (prevent duplicate concurrent requests)
     if (state._loadingVideoId === videoId) {
       return
     }
 
-    if (state.currentVideo?.id === videoId) {
+    // Skip if this video is already loaded AND we're not switching to a different video
+    if (state.currentVideo?.id === videoId && state._loadingVideoId === null) {
       return
     }
 
-    // Mark as loading this videoId
+    // Mark as loading this videoId (this ensures loader shows during video switch)
     set({ _loadingVideoId: videoId })
 
     // 001-COMPLIANT: Use junction table action instead of old videos table
