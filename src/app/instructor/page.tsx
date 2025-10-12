@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import dynamic from "next/dynamic"
 import { useAppStore } from "@/stores/app-store"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -9,22 +10,6 @@ import { Badge } from "@/components/ui/badge"
 import { DateRangePicker } from "@/components/instructor/date-range-picker"
 import { getInstructorDashboardStats, type InstructorDashboardStats } from "@/lib/actions/instructor-dashboard-actions"
 import { useQuery } from "@tanstack/react-query"
-import {
-  LineChart,
-  Line,
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-  ReferenceLine,
-  ComposedChart,
-} from "recharts"
 import {
   DollarSign,
   Users,
@@ -44,6 +29,21 @@ import { cn } from "@/lib/utils"
 import { PageContainer } from "@/components/layout/page-container"
 import { PageContentHeader } from "@/components/layout/page-content-header"
 import { StatsGrid } from "@/components/layout/stats-grid"
+
+// PERFORMANCE P2: Code split heavy recharts library (~60KB gzipped)
+const RevenueChart = dynamic(
+  () => import("@/components/instructor/RevenueChart").then((mod) => ({
+    default: mod.RevenueChart,
+  })),
+  {
+    loading: () => (
+      <div className="h-[300px] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    ),
+    ssr: false,
+  }
+)
 
 export default function InstructorDashboard() {
   const {
@@ -118,39 +118,6 @@ export default function InstructorDashboard() {
     compareExecutionPace: compareData[index]?.executionPace
   }))
 
-  // Format date for display
-  const formatXAxisDate = (dateStr: string) => {
-    const date = new Date(dateStr)
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  }
-
-  // Custom tooltip
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-background border rounded-lg p-3 shadow-lg">
-          <p className="font-medium text-sm mb-2">{formatXAxisDate(label)}</p>
-          {payload.map((entry: any, index: number) => (
-            <div key={index} className="flex items-center gap-2 text-xs">
-              <div 
-                className="w-3 h-3 rounded-full" 
-                style={{ backgroundColor: entry.color }}
-              />
-              <span className="text-muted-foreground">{entry.name}:</span>
-              <span className="font-medium">
-                {entry.name.includes('Revenue') 
-                  ? `$${entry.value.toLocaleString()}`
-                  : entry.name.includes('Rate') || entry.name.includes('Pace')
-                    ? `${entry.value}%`
-                    : entry.value}
-              </span>
-            </div>
-          ))}
-        </div>
-      )
-    }
-    return null
-  }
 
   return (
     <PageContainer>
@@ -285,48 +252,9 @@ export default function InstructorDashboard() {
           </div>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <ComposedChart data={combinedChartData}>
-              <defs>
-                <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-              <XAxis 
-                dataKey="date" 
-                tickFormatter={formatXAxisDate}
-                className="text-xs"
-              />
-              <YAxis 
-                className="text-xs"
-                tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend />
-              <Area
-                type="monotone"
-                dataKey="revenue"
-                stroke="#3b82f6"
-                strokeWidth={2}
-                fillOpacity={1}
-                fill="url(#colorRevenue)"
-                name="Current Period"
-              />
-              <Line
-                type="monotone"
-                dataKey="compareRevenue"
-                stroke="#94a3b8"
-                strokeDasharray="5 5"
-                strokeWidth={1}
-                dot={false}
-                name="Previous Period"
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
+          <RevenueChart data={combinedChartData} />
         </CardContent>
-        </Card>
+      </Card>
 
         <div className="space-y-6">
         {/* Routes Table with Live User Counts */}

@@ -74,8 +74,13 @@ export const createStudentVideoSlice: StateCreator<StudentVideoSlice> = (set, ge
     // PERFORMANCE: Prevent duplicate loads with the same videoId
     // This prevents regenerating HMAC tokens unnecessarily
     const state = get()
-    if (state._loadingVideoId === videoId && state.currentVideo?.id === videoId) {
-      console.log('[Student Video Slice] Video already loaded, skipping duplicate load')
+
+    // Skip if already loading this video OR if already loaded
+    if (state._loadingVideoId === videoId) {
+      return
+    }
+
+    if (state.currentVideo?.id === videoId) {
       return
     }
 

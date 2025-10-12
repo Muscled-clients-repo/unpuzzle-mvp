@@ -291,6 +291,17 @@ export async function getStudentCourseDetails(courseId: string): Promise<any | n
       status: courseData.status || 'published'
     }
 
+    console.log('[Junction Action] getStudentCourseDetails result:', {
+      courseId,
+      chaptersCount: transformedChapters.length,
+      videosCount: transformedVideos.length,
+      chapters: transformedChapters.map(ch => ({
+        id: ch.id,
+        title: ch.title,
+        videosCount: ch.videos.length
+      }))
+    })
+
     return course
 
   } catch (error) {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useState, useRef, useEffect, useCallback, Suspense } from "react"
 import { VideoPlayerCore, VideoPlayerCoreRef } from "../core/VideoPlayerCore"
 import { useAppStore } from "@/stores/app-store"
 import { useVideoAgentSystem } from "@/lib/video-agent-system"
@@ -8,25 +8,30 @@ import { useReflectionMutation } from "@/hooks/use-reflection-mutation"
 import { useReflectionsQuery } from "@/hooks/use-reflections-query"
 import { useQuizAttemptMutation } from "@/hooks/use-quiz-attempt-mutation"
 import { deleteAllVoiceMemosAction } from "@/app/actions/reflection-actions"
+import { useCourseStructureQuery } from "@/hooks/use-course-structure-query"
+import Link from "next/link"
 import dynamic from "next/dynamic"
 import { LoadingSpinner } from "@/components/common/LoadingSpinner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { MessageSquare, Eye, Clock, Sparkles } from "lucide-react"
 
-// Dynamically import the AIChatSidebarV2 component for enhanced features
+// PERFORMANCE P2: Dynamically import AI sidebar with Suspense boundary
 const AIChatSidebarV2 = dynamic(
   () => import("@/components/student/ai/AIChatSidebarV2").then(mod => ({
     default: mod.AIChatSidebarV2
   })),
   {
-    loading: () => (
-      <div className="h-full flex items-center justify-center bg-background">
-        <LoadingSpinner />
-      </div>
-    ),
     ssr: false
   }
+)
+
+// PERFORMANCE P2: Suspense fallback for AI sidebar
+const SidebarSkeleton = () => (
+  <div className="h-full flex flex-col items-center justify-center bg-background p-6 gap-4">
+    <LoadingSpinner />
+    <p className="text-sm text-muted-foreground">Loading AI Assistant...</p>
+  </div>
 )
 
 export interface StudentVideoPlayerRef {
@@ -37,7 +42,7 @@ export interface StudentVideoPlayerRef {
 }
 
 interface StudentVideoPlayerProps {
-  videoUrl: string
+  videoUrl: string | null  // Allow null for loading state
   title?: string
   transcript?: string
   videoId?: string
@@ -48,6 +53,20 @@ interface StudentVideoPlayerProps {
   onPause?: (time: number) => void
   onPlay?: () => void
   onEnded?: () => void
+  courseStructure?: {
+    chapters: {
+      id: string
+      title: string
+      order: number
+      videos: {
+        id: string
+        title: string
+        duration_seconds: number
+        order: number
+        chapter_id: string
+      }[]
+    }[]
+  } | null
 }
 
 export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
@@ -60,6 +79,23 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
 
   // Query to fetch existing reflections for this video
   const reflectionsQuery = useReflectionsQuery(props.videoId || '', props.courseId || '')
+
+  // Query to fetch course structure for outline
+  const courseStructureQuery = useCourseStructureQuery(props.courseId || null)
+  const courseStructure = courseStructureQuery.data
+
+  // DEBUG: Log course structure query state
+  useEffect(() => {
+    console.log('[CourseStructure] Query state:', {
+      courseId: props.courseId,
+      isLoading: courseStructureQuery.isLoading,
+      isError: courseStructureQuery.isError,
+      error: courseStructureQuery.error,
+      hasData: !!courseStructure,
+      chaptersCount: courseStructure?.chapters?.length || 0,
+      data: courseStructure
+    })
+  }, [props.courseId, courseStructureQuery.isLoading, courseStructureQuery.isError, courseStructure])
 
   // State machine for agent system with mutations
   const { context, dispatch, setVideoRef, setVideoId, setCourseId, loadInitialMessages, clearAudioMessages, addMessage, addOrUpdateMessage } = useVideoAgentSystem({
@@ -405,21 +441,31 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
       <div className="flex-1 overflow-y-auto">
         {/* Video Player Section */}
         <div className="flex-1 bg-black p-4">
-          <VideoPlayerCore
-            ref={videoPlayerRef}
-            {...props}
-            onTimeUpdate={handleVideoTimeUpdate}
-            onPause={handleVideoPause}
-            onPlay={handleVideoPlay}
-            // Pass segment handlers to core player
-            onSetInPoint={handleSetInPoint}
-            onSetOutPoint={handleSetOutPoint}
-            onSendToChat={handleSendSegmentToChat}
-            onClearSelection={handleClearSegment}
-            onUpdateSegment={handleUpdateSegmentContext}
-            inPoint={context.segmentState.inPoint}
-            outPoint={context.segmentState.outPoint}
-          />
+          {/* PERFORMANCE P2: Show skeleton only for video while data loads, keep UI visible */}
+          {!props.videoUrl ? (
+            <div className="aspect-video bg-black flex items-center justify-center rounded-lg">
+              <div className="text-center text-white/80">
+                <LoadingSpinner />
+                <p className="mt-4 text-sm">Loading video...</p>
+              </div>
+            </div>
+          ) : (
+            <VideoPlayerCore
+              ref={videoPlayerRef}
+              {...props}
+              onTimeUpdate={handleVideoTimeUpdate}
+              onPause={handleVideoPause}
+              onPlay={handleVideoPlay}
+              // Pass segment handlers to core player
+              onSetInPoint={handleSetInPoint}
+              onSetOutPoint={handleSetOutPoint}
+              onSendToChat={handleSendSegmentToChat}
+              onClearSelection={handleClearSegment}
+              onUpdateSegment={handleUpdateSegmentContext}
+              inPoint={context.segmentState.inPoint}
+              outPoint={context.segmentState.outPoint}
+            />
+          )}
         </div>
 
         {/* Video Info & Features - Below the video */}
@@ -463,56 +509,63 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
                 <CardTitle>Course Outline</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  <div
-                    className={`flex items-center gap-3 p-3 rounded-lg hover:bg-muted cursor-pointer ${highlightedSegment === 0 ? 'bg-primary/10 border border-primary/20' : ''}`}
-                    onClick={() => handleSegmentClick(0, 0)}
-                  >
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-sm font-medium">
-                      1
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium">Introduction to Hooks</div>
-                      <div className="text-sm text-muted-foreground">Understanding the basics • 0:00</div>
-                    </div>
+                {courseStructureQuery.isLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="flex items-center gap-3 p-3 rounded-lg animate-pulse">
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
+                          <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div
-                    className={`flex items-center gap-3 p-3 rounded-lg hover:bg-muted cursor-pointer ${highlightedSegment === 1 ? 'bg-primary/10 border border-primary/20' : ''}`}
-                    onClick={() => handleSegmentClick(180, 1)}
-                  >
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-sm font-medium">
-                      2
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium">useState Hook</div>
-                      <div className="text-sm text-muted-foreground">Managing component state • 3:00</div>
-                    </div>
+                ) : courseStructure?.chapters && courseStructure.chapters.length > 0 ? (
+                  <div className="space-y-4">
+                    {courseStructure.chapters.map((chapter, chapterIndex) => (
+                      <div key={chapter.id}>
+                        <h3 className="font-semibold text-sm text-muted-foreground mb-2">
+                          {chapter.title}
+                        </h3>
+                        <div className="space-y-2">
+                          {chapter.videos.map((video, videoIndex) => {
+                            const globalIndex = courseStructure.chapters
+                              .slice(0, chapterIndex)
+                              .reduce((sum, ch) => sum + ch.videos.length, 0) + videoIndex
+                            const isCurrentVideo = video.id === props.videoId
+                            const minutes = Math.floor(video.duration_seconds / 60)
+                            const seconds = video.duration_seconds % 60
+
+                            return (
+                              <Link
+                                key={video.id}
+                                href={`/student/course/${props.courseId}/video/${video.id}`}
+                                className={`flex items-center gap-3 p-3 rounded-lg hover:bg-muted transition-colors ${
+                                  isCurrentVideo ? 'bg-primary/10 border border-primary/20' : ''
+                                }`}
+                              >
+                                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                                  isCurrentVideo ? 'bg-primary text-primary-foreground' : 'bg-primary/20'
+                                }`}>
+                                  {globalIndex + 1}
+                                </div>
+                                <div className="flex-1">
+                                  <div className="font-medium">{video.title}</div>
+                                  <div className="text-sm text-muted-foreground">
+                                    {minutes}:{seconds.toString().padStart(2, '0')}
+                                  </div>
+                                </div>
+                              </Link>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div
-                    className={`flex items-center gap-3 p-3 rounded-lg hover:bg-muted cursor-pointer ${highlightedSegment === 2 ? 'bg-primary/10 border border-primary/20' : ''}`}
-                    onClick={() => handleSegmentClick(300, 2)}
-                  >
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-sm font-medium">
-                      3
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium">useEffect Hook</div>
-                      <div className="text-sm text-muted-foreground">Side effects in components • 5:00</div>
-                    </div>
-                  </div>
-                  <div
-                    className={`flex items-center gap-3 p-3 rounded-lg hover:bg-muted cursor-pointer ${highlightedSegment === 3 ? 'bg-primary/10 border border-primary/20' : ''}`}
-                    onClick={() => handleSegmentClick(420, 3)}
-                  >
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-sm font-medium">
-                      4
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium">Custom Hooks</div>
-                      <div className="text-sm text-muted-foreground">Building your own hooks • 7:00</div>
-                    </div>
-                  </div>
-                </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No course outline available</p>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -536,29 +589,32 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
             className="border-l bg-background"
             style={{ width: `${sidebarWidth}px`, height: '100%', overflow: 'hidden', flexShrink: 0 }}
           >
-            <AIChatSidebarV2
-              messages={context.messages}
-              isVideoPlaying={context.videoState?.isPlaying || false}
-              videoId={props.videoId}
-              courseId={props.courseId}
-              currentVideoTime={videoPlayerRef.current?.getCurrentTime() || 0}
-              aiState={context.aiState}
-              onAgentRequest={handleAgentRequest}
-              onAgentAccept={(id) => dispatch({ type: 'ACCEPT_AGENT', payload: id })}
-              onAgentReject={(id) => dispatch({ type: 'REJECT_AGENT', payload: id })}
-              onQuizAnswer={handleQuizAnswer}
-              onReflectionSubmit={handleReflectionSubmit}
-              onReflectionTypeChosen={handleReflectionTypeChosen}
-              onReflectionCancel={handleReflectionCancel}
-              segmentContext={context.segmentState}
-              onClearSegmentContext={handleClearSegment}
-              onUpdateSegmentContext={handleUpdateSegmentContext}
-              dispatch={dispatch}
-              recordingState={context.recordingState}
-              addMessage={addMessage}
-              addOrUpdateMessage={addOrUpdateMessage}
-              loadInitialMessages={loadInitialMessages}
-            />
+            {/* PERFORMANCE P2: Suspense boundary for AI sidebar - better perceived performance */}
+            <Suspense fallback={<SidebarSkeleton />}>
+              <AIChatSidebarV2
+                messages={context.messages}
+                isVideoPlaying={context.videoState?.isPlaying || false}
+                videoId={props.videoId}
+                courseId={props.courseId}
+                currentVideoTime={videoPlayerRef.current?.getCurrentTime() || 0}
+                aiState={context.aiState}
+                onAgentRequest={handleAgentRequest}
+                onAgentAccept={(id) => dispatch({ type: 'ACCEPT_AGENT', payload: id })}
+                onAgentReject={(id) => dispatch({ type: 'REJECT_AGENT', payload: id })}
+                onQuizAnswer={handleQuizAnswer}
+                onReflectionSubmit={handleReflectionSubmit}
+                onReflectionTypeChosen={handleReflectionTypeChosen}
+                onReflectionCancel={handleReflectionCancel}
+                segmentContext={context.segmentState}
+                onClearSegmentContext={handleClearSegment}
+                onUpdateSegmentContext={handleUpdateSegmentContext}
+                dispatch={dispatch}
+                recordingState={context.recordingState}
+                addMessage={addMessage}
+                addOrUpdateMessage={addOrUpdateMessage}
+                loadInitialMessages={loadInitialMessages}
+              />
+            </Suspense>
           </div>
         </>
       )}

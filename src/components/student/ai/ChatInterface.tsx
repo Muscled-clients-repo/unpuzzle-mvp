@@ -159,6 +159,18 @@ export function ChatInterface({
     }
   }, [messages])
 
+  // PERFORMANCE FIX: Scroll to bottom on initial load when conversations are loaded
+  useEffect(() => {
+    if (scrollRef.current && conversationsData?.pages && !isLoadingConversations) {
+      // Small delay to ensure DOM is rendered
+      setTimeout(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+        }
+      }, 100)
+    }
+  }, [conversationsData?.pages, isLoadingConversations])
+
   // Update video player in/out points when segment context changes and transcript chunks extend the range
   useEffect(() => {
     if (
