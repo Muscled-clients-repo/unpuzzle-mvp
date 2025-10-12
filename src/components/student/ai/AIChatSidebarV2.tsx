@@ -742,13 +742,28 @@ export function AIChatSidebarV2({
                           return
                         }
 
+                        // Validate required context
+                        if (!videoId || !courseId) {
+                          console.error('Missing videoId or courseId:', { videoId, courseId })
+                          alert('Cannot submit Loom reflection: missing video or course context')
+                          return
+                        }
+
                         // Submit Loom reflection using proper 3-Layer SSOT pattern
                         try {
+                          console.log('Submitting Loom reflection:', {
+                            type: 'loom',
+                            videoId,
+                            courseId,
+                            videoTimestamp: currentVideoTime,
+                            loomUrl
+                          })
+
                           await reflectionMutation.mutateAsync({
                             type: 'loom',
-                            videoId: videoId || '',
-                            courseId: courseId || '',
-                            videoTimestamp: currentTime,
+                            videoId: videoId,
+                            courseId: courseId,
+                            videoTimestamp: currentVideoTime,
                             loomUrl: loomUrl
                           })
 
@@ -758,7 +773,7 @@ export function AIChatSidebarV2({
                           setLoomUrl('')
                         } catch (error) {
                           console.error('Failed to submit Loom reflection:', error)
-                          alert('Failed to submit Loom reflection. Please try again.')
+                          alert(`Failed to submit Loom reflection: ${error instanceof Error ? error.message : 'Unknown error'}`)
                         }
                       }}
                       disabled={!loomUrl.trim() || reflectionMutation.isPending}
@@ -1241,7 +1256,7 @@ export function AIChatSidebarV2({
                 const additionalInfo = extractAdditionalInfo(activity.message)
                 const Icon = parsed.icon
                 const isQuizActivity = parsed.type === 'quiz' || parsed.type === 'quiz-complete'
-                const isReflectionActivity = parsed.type === 'reflect' || parsed.type === 'reflect-complete'
+                const isReflectionActivity = parsed.type === 'reflect' || parsed.type === 'reflect-complete' || parsed.type === 'loom'
                 const isExpanded = expandedActivity === activity.id
 
                 // State-based filtering has already handled message visibility
@@ -1262,20 +1277,22 @@ export function AIChatSidebarV2({
                               <span className="text-xs text-foreground">
                                 {(() => {
                                   // Display proper names for different activity types
-                                  if (parsed.type === 'reflect' || parsed.type === 'reflect-complete') {
+                                  if (parsed.type === 'reflect' || parsed.type === 'reflect-complete' || parsed.type === 'loom') {
                                     // Handle different reflection types
                                     if ((activity as any).audioData) {
-                                      // Voice memo
-                                      const duration = (activity as any).audioData.duration || 0
+                                      // Voice memo - match quiz format
                                       const timestamp = (activity as any).audioData.videoTimestamp || 0
-                                      const durationText = duration > 0 ? `${duration.toFixed(1)}s` : '0:00'
-                                      return `🎙️ Voice memo (${durationText}) at ${timestamp.toFixed(0)}s`
+                                      const mins = Math.floor(timestamp / 60)
+                                      const secs = Math.floor(timestamp % 60)
+                                      return `Voice memo submitted at ▶️ ${mins}:${String(secs).padStart(2, '0')}`
                                     } else if ((activity as any).loomData) {
-                                      // Loom video
+                                      // Loom video - match quiz format
                                       const timestamp = (activity as any).loomData.videoTimestamp || 0
-                                      return `🎬 Loom video at ${timestamp.toFixed(0)}s`
+                                      const mins = Math.floor(timestamp / 60)
+                                      const secs = Math.floor(timestamp % 60)
+                                      return `Loom video submitted at ▶️ ${mins}:${String(secs).padStart(2, '0')}`
                                     }
-                                    return '🎙️ Voice memo'
+                                    return 'Reflection'
                                   }
                                   return activity.message.replace(/📍\s*/, '').replace(/at \d+:\d+/, '').trim()
                                 })()}

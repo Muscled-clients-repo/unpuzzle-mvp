@@ -33,7 +33,7 @@ export function useReflectionMutation() {
         formData.append('file', data.file)
         console.log('[ReflectionMutation] File appended to FormData')
       } else {
-        console.error('[ReflectionMutation] No file in data object!')
+        console.log('[ReflectionMutation] No file in data object (OK for loom type)')
       }
 
       if (data.duration) {
