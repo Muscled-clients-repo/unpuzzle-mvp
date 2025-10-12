@@ -116,7 +116,7 @@ export async function getVideoAIConversations(mediaFileId: string) {
       .select('*')
       .eq('media_file_id', mediaFileId)
       .eq('user_id', user.id)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
 
     if (error) {
       console.error('[getVideoAIConversations] Database error:', error)

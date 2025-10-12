@@ -14,7 +14,7 @@ import dynamic from "next/dynamic"
 import { LoadingSpinner } from "@/components/common/LoadingSpinner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { MessageSquare, Eye, Clock, Sparkles } from "lucide-react"
+import { MessageSquare } from "lucide-react"
 
 // PERFORMANCE P2: Dynamically import AI sidebar with Suspense boundary
 const AIChatSidebarV2 = dynamic(
@@ -474,20 +474,6 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h1 className="text-2xl font-bold">{props.title || "Untitled Video"}</h1>
-                <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <Eye className="h-4 w-4" />
-                    1,234 views
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-4 w-4" />
-                    10:00
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Sparkles className="h-4 w-4" />
-                    42 AI interactions
-                  </span>
-                </div>
               </div>
               <Button
                 variant="outline"
@@ -497,11 +483,6 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
                 {showChatSidebar ? 'Hide' : 'Show'} AI Assistant
               </Button>
             </div>
-
-            <p className="text-muted-foreground mb-4">
-              Learn the fundamentals of React Hooks including useState, useEffect, and custom hooks.
-              This comprehensive lesson covers everything you need to know to start using hooks in your React applications.
-            </p>
 
             {/* Course Outline / Lesson Segments */}
             <Card className="mt-6">

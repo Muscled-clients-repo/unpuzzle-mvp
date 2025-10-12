@@ -1298,13 +1298,15 @@ export class VideoAgentStateMachine {
   }
 
   private async handleQuizAnswer(payload: { questionId: string, selectedAnswer: number }) {
-    
+
     // Find the current quiz question message
     const quizMessages = this.context.messages.filter(msg => msg.type === 'quiz-question')
     const currentQuizMessage = quizMessages[quizMessages.length - 1]
-    
+
+    // Silently ignore quiz answers when quiz has already completed
+    // This can happen if user clicks answer after quiz cleanup started
     if (!currentQuizMessage?.quizState || !currentQuizMessage?.quizData) {
-      console.error('No active quiz found')
+      console.log('[SM] Ignoring quiz answer - quiz already completed or cleaned up')
       return
     }
 
