@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Play, Pause } from 'lucide-react'
 import { useReflectionPlaybackStore } from '@/stores/reflection-playback-store'
-import { useSignedUrl } from '@/hooks/use-signed-url'
+import { useReflectionCDN } from '@/hooks/use-reflection-cdn'
 import { cn } from '@/lib/utils'
 import WaveSurfer from 'wavesurfer.js'
 
@@ -29,8 +29,8 @@ export function WaveformAudioPlayer({
   const [audioDuration, setAudioDuration] = useState(propDuration || 0)
   const [isWaveformReady, setIsWaveformReady] = useState(false)
 
-  // Use the same signed URL hook as video player
-  const signedUrl = useSignedUrl(fileUrl, 30)
+  // Use HMAC CDN token (replaces old useSignedUrl)
+  const cdnResult = useReflectionCDN(reflectionId)
 
   const {
     currentlyPlaying,
@@ -41,9 +41,9 @@ export function WaveformAudioPlayer({
 
   const isThisPlaying = currentlyPlaying === reflectionId && isPlaying
 
-  // Initialize WaveSurfer - Wait for signed URL to be ready
+  // Initialize WaveSurfer - Wait for CDN URL to be ready
   useEffect(() => {
-    if (!waveformRef.current || !signedUrl.url || signedUrl.isLoading) return
+    if (!waveformRef.current || !cdnResult.url || cdnResult.isLoading) return
 
     // Clean up previous instance
     if (wavesurferRef.current) {
@@ -72,7 +72,7 @@ export function WaveformAudioPlayer({
     wavesurferRef.current = wavesurfer
 
     // Load audio
-    wavesurfer.load(signedUrl.url)
+    wavesurfer.load(cdnResult.url)
 
     // Event listeners
     wavesurfer.on('ready', () => {
@@ -112,7 +112,7 @@ export function WaveformAudioPlayer({
         wavesurfer.destroy()
       }
     }
-  }, [signedUrl.url, signedUrl.isLoading, isOwn, propDuration, stopPlayback])
+  }, [cdnResult.url, cdnResult.isLoading, isOwn, propDuration, stopPlayback])
 
   // Sync playback state with WaveSurfer
   useEffect(() => {
@@ -191,9 +191,9 @@ export function WaveformAudioPlayer({
             : "hover:bg-gray-200 dark:hover:bg-gray-700"
         )}
         onClick={handlePlayPause}
-        disabled={signedUrl.isLoading || !signedUrl.url || !isWaveformReady}
+        disabled={cdnResult.isLoading || !cdnResult.url || !isWaveformReady}
       >
-        {signedUrl.isLoading || !isWaveformReady ? (
+        {cdnResult.isLoading || !isWaveformReady ? (
           <div className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
         ) : isThisPlaying ? (
           <Pause className="h-3 w-3" />

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Play, Pause, Volume2 } from 'lucide-react'
 import { useReflectionPlaybackStore } from '@/stores/reflection-playback-store'
-import { useSignedUrl } from '@/hooks/use-signed-url'
+import { useReflectionCDN } from '@/hooks/use-reflection-cdn'
 import { cn } from '@/lib/utils'
 
 interface MessengerAudioPlayerProps {
@@ -26,8 +26,8 @@ export function MessengerAudioPlayer({
   const [currentTime, setCurrentTime] = useState(0)
   const [audioDuration, setAudioDuration] = useState(propDuration || 0)
 
-  // Use the same signed URL hook as video player
-  const signedUrl = useSignedUrl(fileUrl, 30)
+  // Use HMAC CDN token (replaces old useSignedUrl)
+  const cdnResult = useReflectionCDN(reflectionId)
 
   const {
     currentlyPlaying,
@@ -38,11 +38,14 @@ export function MessengerAudioPlayer({
 
   const isThisPlaying = currentlyPlaying === reflectionId && isPlaying
 
-  // Set audio source when signed URL is available
+  // Set audio source when CDN URL is available (only once)
   useEffect(() => {
-    if (signedUrl.url && audioRef.current) {
-      audioRef.current.src = signedUrl.url
-      audioRef.current.preload = 'metadata'
+    if (cdnResult.url && audioRef.current) {
+      // Only set src if it's different (prevent reload during playback)
+      if (audioRef.current.src !== cdnResult.url) {
+        audioRef.current.src = cdnResult.url
+        audioRef.current.preload = 'metadata'
+      }
 
       // Immediate fallback for prop duration if we have it
       if (propDuration && propDuration > 0) {
@@ -58,7 +61,7 @@ export function MessengerAudioPlayer({
 
       return () => clearTimeout(fallbackTimer)
     }
-  }, [signedUrl.url, propDuration, audioDuration])
+  }, [cdnResult.url, propDuration, audioDuration])
 
   // Format time display
   const formatTime = (seconds: number) => {
@@ -81,20 +84,48 @@ export function MessengerAudioPlayer({
         stopPlayback()
       }
 
-      // Check if we have a signed URL ready
-      if (!signedUrl.url) {
-        console.error('No signed URL available for audio playback')
+      // Check if we have a CDN URL ready
+      if (!cdnResult.url) {
+        console.error('No CDN URL available for audio playback')
         return
       }
 
       // Start playback
       if (audioRef.current) {
-        // Source should already be set, just play
         try {
+          // Ensure src is set before playing
+          if (audioRef.current.src !== cdnResult.url) {
+            audioRef.current.src = cdnResult.url
+            // Wait for canplay event before starting
+            await new Promise<void>((resolve, reject) => {
+              const handleCanPlay = () => {
+                audioRef.current?.removeEventListener('canplay', handleCanPlay)
+                audioRef.current?.removeEventListener('error', handleError)
+                resolve()
+              }
+              const handleError = (e: Event) => {
+                audioRef.current?.removeEventListener('canplay', handleCanPlay)
+                audioRef.current?.removeEventListener('error', handleError)
+                reject(e)
+              }
+              audioRef.current?.addEventListener('canplay', handleCanPlay)
+              audioRef.current?.addEventListener('error', handleError)
+
+              // Timeout after 5 seconds
+              setTimeout(() => {
+                audioRef.current?.removeEventListener('canplay', handleCanPlay)
+                audioRef.current?.removeEventListener('error', handleError)
+                reject(new Error('Audio load timeout'))
+              }, 5000)
+            })
+          }
+
+          // Call play() - the 'play' event listener will update the state
           await audioRef.current.play()
-          startPlayback(reflectionId)
         } catch (error) {
           console.error('Failed to play audio:', error)
+          // Make sure state is reset on error
+          stopPlayback()
         }
       }
     }
@@ -157,6 +188,18 @@ export function MessengerAudioPlayer({
       }
     }
 
+    const handlePlay = () => {
+      // Sync state when audio actually starts playing
+      startPlayback(reflectionId)
+    }
+
+    const handlePause = () => {
+      // Sync state when audio pauses
+      if (currentlyPlaying === reflectionId) {
+        stopPlayback()
+      }
+    }
+
     const handleEnded = () => {
       stopPlayback()
       setCurrentTime(0)
@@ -164,14 +207,18 @@ export function MessengerAudioPlayer({
 
     audio.addEventListener('timeupdate', handleTimeUpdate)
     audio.addEventListener('loadedmetadata', handleLoadedMetadata)
+    audio.addEventListener('play', handlePlay)
+    audio.addEventListener('pause', handlePause)
     audio.addEventListener('ended', handleEnded)
 
     return () => {
       audio.removeEventListener('timeupdate', handleTimeUpdate)
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata)
+      audio.removeEventListener('play', handlePlay)
+      audio.removeEventListener('pause', handlePause)
       audio.removeEventListener('ended', handleEnded)
     }
-  }, [stopPlayback, isThisPlaying])
+  }, [stopPlayback, isThisPlaying, startPlayback, reflectionId, currentlyPlaying])
 
 
   // Stop playback when component unmounts
@@ -215,13 +262,13 @@ export function MessengerAudioPlayer({
         className={cn(
           "h-5 w-5 p-0 rounded-full flex-shrink-0",
           isOwn
-            ? "hover:bg-blue-500/20 text-blue-600"
+            ? "hover:bg-blue-500/20 text-blue-600 dark:text-blue-400"
             : "hover:bg-gray-200 dark:hover:bg-gray-700"
         )}
         onClick={handlePlayPause}
-        disabled={signedUrl.isLoading || !signedUrl.url}
+        disabled={cdnResult.isLoading || !cdnResult.url}
       >
-        {signedUrl.isLoading ? (
+        {cdnResult.isLoading ? (
           <div className="h-2 w-2 animate-spin rounded-full border border-current border-t-transparent" />
         ) : isThisPlaying ? (
           <Pause className="h-2 w-2" />
@@ -255,7 +302,8 @@ export function MessengerAudioPlayer({
               }
               // else fillPercent stays 0 (not played)
 
-              const playedColor = isOwn ? "rgb(37 99 235)" : "rgb(59 130 246)" // blue-600 : blue-500
+              // Use brighter blues in dark mode for better contrast
+              const playedColor = isOwn ? "rgb(96 165 250)" : "rgb(147 197 253)" // blue-400 : blue-300
               const unplayedColor = isOwn ? "rgb(156 163 175)" : "rgb(107 114 128)" // gray-400 : gray-500 - solid colors for better visibility
 
               // Use more visible height for timeline
@@ -284,7 +332,7 @@ export function MessengerAudioPlayer({
         {/* Time Display */}
         <span className={cn(
           "text-[10px] font-mono flex-shrink-0",
-          isOwn ? "text-blue-600" : "text-gray-600 dark:text-gray-400"
+          isOwn ? "text-blue-600 dark:text-blue-400" : "text-gray-600 dark:text-gray-400"
         )}>
           {formatTime(currentTime)}/{formatTime(audioDuration)}
         </span>

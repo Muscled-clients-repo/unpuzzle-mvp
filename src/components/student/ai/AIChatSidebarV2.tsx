@@ -393,6 +393,9 @@ export function AIChatSidebarV2({
   const [activeTab, setActiveTab] = useState<'chat' | 'agents'>('chat')
   // Quiz answer feedback state
   const [pendingQuizAnswer, setPendingQuizAnswer] = useState<{messageId: string, answerIndex: number} | null>(null)
+  // Audio playback element and saved duration
+  const audioElementRef = useRef<HTMLAudioElement | null>(null)
+  const [savedRecordingDuration, setSavedRecordingDuration] = useState(0)
 
   // PERFORMANCE P0: Lazy load quiz attempts and reflections only when agents tab is active
   // This reduces initial API calls from 4 to 2, improving initial load time by ~40%
@@ -447,7 +450,41 @@ export function AIChatSidebarV2({
       setPendingQuizAnswer(null)
     }
   }, [messages, pendingQuizAnswer])
-  
+
+  // Create HTML Audio element when audioBlob changes
+  useEffect(() => {
+    // Clean up previous audio element
+    if (audioElementRef.current) {
+      audioElementRef.current.pause()
+      audioElementRef.current.src = ''
+      audioElementRef.current = null
+    }
+
+    // Create new audio element if we have a blob
+    if (audioBlob) {
+      const audioUrl = URL.createObjectURL(audioBlob)
+      const audio = new Audio(audioUrl)
+      audioElementRef.current = audio
+
+      // Update playback time as audio plays
+      audio.addEventListener('timeupdate', () => {
+        setPlaybackTime(Math.floor(audio.currentTime))
+      })
+
+      // Handle audio end
+      audio.addEventListener('ended', () => {
+        setIsPlaying(false)
+        setPlaybackTime(0)
+      })
+
+      // Cleanup on unmount
+      return () => {
+        audio.pause()
+        URL.revokeObjectURL(audioUrl)
+      }
+    }
+  }, [audioBlob])
+
   const handleSendMessage = () => {
     if (!inputValue.trim()) return
     
@@ -1768,6 +1805,8 @@ export function AIChatSidebarV2({
                         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                           mediaRecorder.stop()
                         }
+                        // Save the duration BEFORE resetting
+                        setSavedRecordingDuration(recordingTime)
                         setIsRecording(false)
                         setIsPaused(false)
                         setRecordingTime(0)
@@ -1797,8 +1836,8 @@ export function AIChatSidebarV2({
                           <p className="text-sm font-medium">Voice Memo Ready</p>
                           <p className="text-xs text-muted-foreground">
                             {isPlaying
-                              ? `Playing ${formatRecordingTime(playbackTime)} / ${formatRecordingTime(recordingTime)}`
-                              : `Duration: ${formatRecordingTime(recordingTime)}`
+                              ? `Playing ${formatRecordingTime(playbackTime)} / ${formatRecordingTime(savedRecordingDuration)}`
+                              : `Duration: ${formatRecordingTime(savedRecordingDuration)}`
                             }
                           </p>
                         </div>
@@ -1811,21 +1850,10 @@ export function AIChatSidebarV2({
                             size="sm"
                             variant="secondary"
                             onClick={() => {
-                              setIsPlaying(true)
-                              setPlaybackTime(0)
-
-                              playbackIntervalRef.current = setInterval(() => {
-                                setPlaybackTime(prev => {
-                                  if (prev >= recordingTime) {
-                                    setIsPlaying(false)
-                                    if (playbackIntervalRef.current) {
-                                      clearInterval(playbackIntervalRef.current)
-                                    }
-                                    return recordingTime
-                                  }
-                                  return prev + 1
-                                })
-                              }, 1000)
+                              if (audioElementRef.current) {
+                                audioElementRef.current.play()
+                                setIsPlaying(true)
+                              }
                             }}
                             className="flex-1"
                           >
@@ -1837,9 +1865,9 @@ export function AIChatSidebarV2({
                             size="sm"
                             variant="secondary"
                             onClick={() => {
-                              setIsPlaying(false)
-                              if (playbackIntervalRef.current) {
-                                clearInterval(playbackIntervalRef.current)
+                              if (audioElementRef.current) {
+                                audioElementRef.current.pause()
+                                setIsPlaying(false)
                               }
                             }}
                             className="flex-1"
@@ -1852,13 +1880,17 @@ export function AIChatSidebarV2({
                           size="sm"
                           variant="outline"
                           onClick={() => {
+                            // Clean up audio element
+                            if (audioElementRef.current) {
+                              audioElementRef.current.pause()
+                              audioElementRef.current = null
+                            }
                             setHasRecording(false)
                             setRecordingTime(0)
+                            setSavedRecordingDuration(0)
                             setAudioBlob(null)
                             setIsPlaying(false)
-                            if (playbackIntervalRef.current) {
-                              clearInterval(playbackIntervalRef.current)
-                            }
+                            setPlaybackTime(0)
                           }}
                           className="flex-1"
                         >
@@ -1872,25 +1904,30 @@ export function AIChatSidebarV2({
                         size="sm"
                         onClick={() => {
                           if (audioBlob) {
-                            // Create reflection data
+                            // Create reflection data using saved duration
                             const reflectionData = {
                               type: 'voice',
                               audioBlob: audioBlob,
-                              duration: recordingTime,
+                              duration: savedRecordingDuration,
                               videoTimestamp: currentVideoTime
                             }
 
                             onReflectionSubmit?.('voice', reflectionData)
 
+                            // Clean up audio element
+                            if (audioElementRef.current) {
+                              audioElementRef.current.pause()
+                              audioElementRef.current = null
+                            }
+
                             // Reset all states
                             setIsRecording(false)
                             setHasRecording(false)
                             setRecordingTime(0)
+                            setSavedRecordingDuration(0)
                             setAudioBlob(null)
                             setIsPlaying(false)
-                            if (playbackIntervalRef.current) {
-                              clearInterval(playbackIntervalRef.current)
-                            }
+                            setPlaybackTime(0)
                           }
                         }}
                         className="w-full bg-primary hover:bg-primary/90"
