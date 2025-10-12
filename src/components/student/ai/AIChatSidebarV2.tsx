@@ -64,6 +64,20 @@ function formatTime(date: Date): string {
   })
 }
 
+// Format time with "Just now" for recent activities (within 2 minutes)
+function formatTimeWithRecent(date: Date): string {
+  const now = Date.now()
+  const timestamp = date.getTime()
+  const diffInSeconds = (now - timestamp) / 1000
+
+  // Show "Just now" for activities within the last 2 minutes (120 seconds)
+  if (diffInSeconds < 120) {
+    return 'Just now'
+  }
+
+  return formatTime(date)
+}
+
 function groupActivitiesByDate(activities: any[]) {
   const groups: { [key: string]: any[] } = {}
 
@@ -377,6 +391,8 @@ export function AIChatSidebarV2({
   const [expandedActivity, setExpandedActivity] = useState<string | null>(null)
   const [showReflectionOptions, setShowReflectionOptions] = useState<string | null>(null) // Track which message is showing reflection options
   const [activeTab, setActiveTab] = useState<'chat' | 'agents'>('chat')
+  // Quiz answer feedback state
+  const [pendingQuizAnswer, setPendingQuizAnswer] = useState<{messageId: string, answerIndex: number} | null>(null)
 
   // PERFORMANCE P0: Lazy load quiz attempts and reflections only when agents tab is active
   // This reduces initial API calls from 4 to 2, improving initial load time by ~40%
@@ -415,6 +431,22 @@ export function AIChatSidebarV2({
       scrollRef.current.scrollIntoView({ behavior: "smooth" })
     }
   }, [messages])
+
+  // Clear pending quiz answer when question is answered
+  useEffect(() => {
+    if (!pendingQuizAnswer) return
+
+    // Find the quiz question message
+    const quizMessage = messages.find(msg => msg.id === pendingQuizAnswer.messageId)
+    if (!quizMessage || quizMessage.type !== 'quiz-question') return
+
+    // Check if the question has been answered
+    const quizState = quizMessage.quizState
+    if (quizState && quizState.userAnswers[quizState.currentQuestionIndex] !== null) {
+      // Answer has been validated, clear pending state
+      setPendingQuizAnswer(null)
+    }
+  }, [messages, pendingQuizAnswer])
   
   const handleSendMessage = () => {
     if (!inputValue.trim()) return
@@ -804,13 +836,17 @@ export function AIChatSidebarV2({
     if (msg.type === 'quiz-question') {
       const quizData = msg.quizData
       const quizState = msg.quizState
-      
+
       if (!quizData) return null
-      
+
       const hasAnswered = quizState?.userAnswers[quizState.currentQuestionIndex] !== null
       const selectedAnswer = quizState?.userAnswers[quizState.currentQuestionIndex]
       const isCorrect = selectedAnswer === quizData.correctAnswer
-      
+
+      // Check if this question has a pending answer (user clicked but not validated yet)
+      const isPending = pendingQuizAnswer?.messageId === msg.id && !hasAnswered
+      const pendingIndex = isPending ? pendingQuizAnswer.answerIndex : null
+
       return (
         <Card key={msg.id} className="my-4 bg-gradient-to-br from-emerald-500/10 to-green-500/10 border-2 border-emerald-500/50">
           <div className="p-4">
@@ -820,42 +856,74 @@ export function AIChatSidebarV2({
             </div>
             <p className="text-sm font-medium mb-4">{quizData.question}</p>
             <div className="space-y-2">
-              {quizData.options.map((option, index) => (
-                <button
-                  key={index}
-                  onClick={() => !hasAnswered && onQuizAnswer?.(quizData.id, index)}
-                  disabled={hasAnswered}
-                  className={cn(
-                    "w-full text-left p-3 rounded-lg transition-all text-sm",
-                    hasAnswered && index === selectedAnswer
-                      ? isCorrect
+              {quizData.options.map((option, index) => {
+                const isPendingAnswer = isPending && index === pendingIndex
+
+                return (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      if (!hasAnswered && !isPending) {
+                        // Set pending state immediately for visual feedback
+                        setPendingQuizAnswer({ messageId: msg.id, answerIndex: index })
+                        // Trigger the actual quiz answer
+                        onQuizAnswer?.(quizData.id, index)
+                      }
+                    }}
+                    disabled={hasAnswered || isPending}
+                    className={cn(
+                      "w-full text-left p-3 rounded-lg transition-all text-sm",
+                      // Pending state (blue highlight with loading)
+                      isPendingAnswer
+                        ? "bg-blue-100 dark:bg-blue-950 border-2 border-blue-500"
+                        // Answered states
+                        : hasAnswered && index === selectedAnswer
+                        ? isCorrect
+                          ? "bg-green-100 dark:bg-green-950 border-2 border-green-500"
+                          : "bg-red-100 dark:bg-red-950 border-2 border-red-500"
+                        : hasAnswered && index === quizData.correctAnswer
                         ? "bg-green-100 dark:bg-green-950 border-2 border-green-500"
-                        : "bg-red-100 dark:bg-red-950 border-2 border-red-500"
-                      : hasAnswered && index === quizData.correctAnswer
-                      ? "bg-green-100 dark:bg-green-950 border-2 border-green-500"
-                      : hasAnswered
-                      ? "bg-gray-100 dark:bg-gray-800 opacity-50"
-                      : "bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700"
-                  )}
-                >
-                  <div className="flex items-center justify-between">
-                    <span>{option}</span>
-                    {hasAnswered && index === selectedAnswer && (
-                      <span className={isCorrect ? "text-green-600" : "text-red-600"}>
-                        {isCorrect ? "✓" : "✗"}
-                      </span>
+                        // Disabled during pending
+                        : isPending
+                        ? "bg-gray-100 dark:bg-gray-800 opacity-50 cursor-not-allowed"
+                        // Answered but not selected
+                        : hasAnswered
+                        ? "bg-gray-100 dark:bg-gray-800 opacity-50"
+                        // Default state
+                        : "bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700"
                     )}
-                    {hasAnswered && index === quizData.correctAnswer && index !== selectedAnswer && (
-                      <span className="text-green-600">✓</span>
-                    )}
-                  </div>
-                </button>
-              ))}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>{option}</span>
+                      {/* Pending indicator */}
+                      {isPendingAnswer && (
+                        <span className="text-blue-600">⏳</span>
+                      )}
+                      {/* Answer feedback */}
+                      {hasAnswered && index === selectedAnswer && (
+                        <span className={isCorrect ? "text-green-600" : "text-red-600"}>
+                          {isCorrect ? "✓" : "✗"}
+                        </span>
+                      )}
+                      {hasAnswered && index === quizData.correctAnswer && index !== selectedAnswer && (
+                        <span className="text-green-600">✓</span>
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
             </div>
+            {/* Checking answer state */}
+            {isPending && (
+              <div className="mt-3 p-2 bg-blue-50 dark:bg-blue-950/30 rounded-lg text-sm text-blue-800 dark:text-blue-200 text-center">
+                Checking answer...
+              </div>
+            )}
+            {/* Answer explanation */}
             {hasAnswered && (
               <div className={cn(
                 "mt-4 p-3 rounded-lg text-sm",
-                isCorrect 
+                isCorrect
                   ? "bg-green-50 dark:bg-green-950/30 text-green-800 dark:text-green-200"
                   : "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200"
               )}>
@@ -1016,7 +1084,7 @@ export function AIChatSidebarV2({
   // Auto-expand the latest quiz activity only (not reflections)
   useEffect(() => {
     if (activities.length > 0) {
-      const latestActivity = activities[activities.length - 1] // Last item is latest now
+      const latestActivity = activities[0] // First item is latest (sorted newest first)
       if (latestActivity && latestActivity.id !== expandedActivity) {
         // Parse activity to check if it's a quiz
         const parsed = parseActivity(latestActivity)
@@ -1229,7 +1297,14 @@ export function AIChatSidebarV2({
                               {(() => {
                                 // Display proper names for different activity types (quiz section only)
                                 if (parsed.type === 'quiz' || parsed.type === 'quiz-complete') {
-                                  return 'PuzzleCheck • Quiz'
+                                  // Extract video timestamp from the quiz attempt
+                                  const videoTimestamp = (activity as any).quizResult?.completedAt || (activity as any).dbQuizAttempt?.video_timestamp
+                                  if (videoTimestamp !== undefined) {
+                                    const mins = Math.floor(videoTimestamp / 60)
+                                    const secs = Math.floor(videoTimestamp % 60)
+                                    return `Quiz taken at ▶️ ${mins}:${String(secs).padStart(2, '0')}`
+                                  }
+                                  return 'Quiz taken'
                                 }
                                 if (parsed.type === 'hint') {
                                   return 'PuzzleHint • Hint'
@@ -1267,7 +1342,9 @@ export function AIChatSidebarV2({
                             </span>
                             {/* Individual timestamp on the right side */}
                             <span className="text-xs text-muted-foreground ml-2">
-                              {activity.formattedTime || formatTime(new Date(activity.timestamp))}
+                              {isQuizActivity
+                                ? formatTimeWithRecent(new Date(activity.timestamp))
+                                : (activity.formattedTime || formatTime(new Date(activity.timestamp)))}
                             </span>
                           </div>
                         </div>
@@ -1826,12 +1903,20 @@ export function AIChatSidebarV2({
               </div>
             )}
 
-            {/* Activity List */}
+            {/* Active Quiz Questions - Show BEFORE activity list */}
+            {agentMessages
+              .filter(msg => msg.type === 'quiz-question')
+              .map(renderMessage)}
+
+            {/* Activity List (completed quizzes and reflections) */}
             {renderActivityList()}
 
-            {/* Other Agent Messages - Show all non-prompt agent messages */}
+            {/* Other Agent Messages - Show all non-prompt, non-quiz-question agent messages */}
             {agentMessages
-              .filter(msg => !(msg.type === 'agent-prompt' && msg.state === MessageState.UNACTIVATED && !(msg as any).accepted))
+              .filter(msg =>
+                msg.type !== 'quiz-question' &&
+                !(msg.type === 'agent-prompt' && msg.state === MessageState.UNACTIVATED && !(msg as any).accepted)
+              )
               .map(renderMessage)}
           </div>
         )}
