@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import { useParams, useSearchParams, useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
-import { Header } from "@/components/layout/header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -318,24 +317,8 @@ export function InstructorVideoView() {
   }
   
   return (
-    <div className="min-h-screen">
-      <Header 
-        user={{ 
-          name: "John Instructor", 
-          email: "john@unpuzzle.com", 
-          role: "instructor" 
-        }}
-        backButton={{
-          href: fromAnalytics && courseId 
-            ? `/instructor/course/${courseId}/analytics` 
-            : "/instructor/engagement",
-          label: fromAnalytics 
-            ? "Back to Analytics" 
-            : "Back to Engagement"
-        }}
-      />
-      
-      <div className="pt-16 flex h-screen">
+    <div className="min-h-screen pt-16">
+      <div className="flex h-screen">
         {/* Main Content */}
         <div className="flex-1 flex flex-col">
           {/* Video Player */}
