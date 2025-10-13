@@ -13,7 +13,7 @@ import { InstructorSlice, createInstructorSlice } from './slices/instructor-slic
 import { StudentCourseSlice, createStudentCourseSlice } from './slices/student-course-slice'
 import { StudentLearningSlice, createStudentLearningSlice } from './slices/student-learning-slice'
 import { InstructorCourseSlice, createInstructorCourseSlice } from './slices/instructor-course-slice'
-import { StudentVideoSlice, createStudentVideoSlice } from './slices/student-video-slice'
+import { CourseVideoSlice, createCourseVideoSlice } from './slices/course-video-slice'
 import { InstructorVideoSlice, createInstructorVideoSlice } from './slices/instructor-video-slice'
 import { UISlice, createUISlice } from './slices/ui-slice'
 import { StudioSlice, createStudioSlice } from './slices/studio-slice'
@@ -32,8 +32,8 @@ export interface AppStore extends
   StudentCourseSlice,    // NEW - role-specific
   // StudentLearningSlice,  // NEW - enhanced with database analytics - DISABLED to avoid conflicts
   // InstructorCourseSlice, // NEW - role-specific - temporarily disabled
-  StudentVideoSlice,     // NEW - role-specific
-  InstructorVideoSlice,  // NEW - role-specific
+  CourseVideoSlice,      // NEW - course video playback (used by both students and instructors)
+  InstructorVideoSlice,  // NEW - instructor-specific video analytics
   UISlice,               // NEW - pure UI state following 3-layer pattern
   StudioSlice            // NEW - video studio state management
 {}
@@ -55,7 +55,7 @@ export const useAppStore = create<AppStore>()(
         // TODO: Enable when ready to switch to database
         // ...createStudentLearningSlice(...args), // Enhanced with database analytics - DISABLED to avoid conflicts
         // ...createInstructorCourseSlice(...args), // Temporarily disabled to avoid publishCourse conflict
-        ...createStudentVideoSlice(...args),
+        ...createCourseVideoSlice(...args),
         ...createInstructorVideoSlice(...args),
         ...createUISlice(...args),
         ...createStudioSlice(...args),

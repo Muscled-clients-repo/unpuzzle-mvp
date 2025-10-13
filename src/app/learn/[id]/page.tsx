@@ -44,10 +44,10 @@ export default function PublicLessonPage() {
   const courseId = 'lesson' // Special courseId for public lessons
   const videoId = lessonId
   
-  // NEW: Use student video slice for video data
+  // NEW: Use course video slice for video data
   const {
     currentVideo: storeVideoData,
-    loadStudentVideo,
+    loadCourseVideo,
     reflections,
     addReflection,
     currentCourse,

@@ -1,17 +1,17 @@
-// src/stores/slices/student-video-slice.ts
+// src/stores/slices/course-video-slice.ts
 import { StateCreator } from 'zustand'
 import { StudentVideoData, Reflection, VideoSegment, Quiz } from '@/types/domain'
 import { studentVideoService } from '@/services/student-video-service'
 
-export interface StudentVideoSlice {
-  // Student-specific video state
+export interface CourseVideoSlice {
+  // Course video state (used by both students and instructors)
   currentVideo: StudentVideoData | null
   selectedSegment: VideoSegment | null
   activeQuiz: Quiz | null
   reflections: Reflection[]
   // Cache to prevent duplicate loads
   _loadingVideoId: string | null
-  
+
   // Basic video playback state
   currentTime: number
   duration: number
@@ -20,24 +20,24 @@ export interface StudentVideoSlice {
   isMuted: boolean
   playbackRate: number
   isFullscreen: boolean
-  
+
   // AI Chat context
   inPoint: number | null
   outPoint: number | null
-  
+
   // UI state for video player
   showControls: boolean
   showLiveTranscript: boolean
-  
+
   // Actions
-  loadStudentVideo: (videoId: string, courseId?: string) => Promise<void>
+  loadCourseVideo: (videoId: string, courseId?: string) => Promise<void>
   setVideoSegment: (inPoint: number, outPoint: number) => void
   clearVideoSegment: () => void
   addReflection: (reflection: Partial<Reflection>) => Promise<void>
   submitQuizAnswer: (quizId: string, answer: number) => Promise<void>
   setShowControls: (showControls: boolean) => void
   setShowLiveTranscript: (showLiveTranscript: boolean) => void
-  
+
   // Basic video control actions
   setCurrentTime: (time: number) => void
   setDuration: (duration: number) => void
@@ -49,7 +49,7 @@ export interface StudentVideoSlice {
   resetVideo: () => void
 }
 
-export const createStudentVideoSlice: StateCreator<StudentVideoSlice> = (set, get) => ({
+export const createCourseVideoSlice: StateCreator<CourseVideoSlice> = (set, get) => ({
   currentVideo: null,
   selectedSegment: null,
   activeQuiz: null,
@@ -70,7 +70,7 @@ export const createStudentVideoSlice: StateCreator<StudentVideoSlice> = (set, ge
   showControls: true,
   showLiveTranscript: false,
 
-  loadStudentVideo: async (videoId: string, courseId?: string) => {
+  loadCourseVideo: async (videoId: string, courseId?: string) => {
     // PERFORMANCE: Prevent duplicate loads with the same videoId
     // This prevents regenerating HMAC tokens unnecessarily
     const state = get()
@@ -88,7 +88,7 @@ export const createStudentVideoSlice: StateCreator<StudentVideoSlice> = (set, ge
     // Mark as loading this videoId (this ensures loader shows during video switch)
     set({ _loadingVideoId: videoId })
 
-    // 001-COMPLIANT: Use junction table action instead of old videos table
+    // 001-COMPLIANT: Use junction table action to load course video data
     const { getStudentVideoFromJunctionTable } = await import('@/app/actions/student-course-actions-junction')
 
     try {
@@ -108,7 +108,7 @@ export const createStudentVideoSlice: StateCreator<StudentVideoSlice> = (set, ge
         })
       }
     } catch (error) {
-      console.error('[Student Video Slice] Error loading video:', error)
+      console.error('[Course Video Slice] Error loading video:', error)
       set({
         currentVideo: null,
         reflections: [],

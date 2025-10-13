@@ -54,6 +54,7 @@ interface StudentVideoPlayerProps {
   onPlay?: () => void
   onEnded?: () => void
   isInstructorMode?: boolean  // Disable AI sidebar for instructor view
+  customSidebar?: React.ReactNode  // Custom sidebar component (e.g., InstructorVideoSidebar)
   courseStructure?: {
     chapters: {
       id: string
@@ -110,7 +111,7 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
   const sidebarWidth = useAppStore((state) => state.preferences.sidebarWidth)
   const updatePreferences = useAppStore((state) => state.updatePreferences)
 
-  // REMOVED: loadStudentVideo call - parent page handles this
+  // REMOVED: loadCourseVideo call - parent page handles this
   // Calling it here causes duplicate loads and regenerates HMAC tokens
 
   const [isResizing, setIsResizing] = useState(false)
@@ -556,51 +557,59 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
         </div>
       </div>
 
-      {/* AI Chat Sidebar - Only show for students */}
-      {!props.isInstructorMode && showChatSidebar && (
-        <>
-          {/* Resize Handle */}
-          <div
-            className="w-1 bg-border hover:bg-primary/20 cursor-col-resize transition-colors relative group"
-            onMouseDown={handleMouseDown}
-          >
-            <div className="absolute inset-y-0 -left-1 -right-1 group-hover:bg-primary/10" />
-          </div>
+      {/* Sidebar - Custom (instructor) or AI Chat (student) */}
+      {props.customSidebar ? (
+        // Instructor mode: Show custom sidebar (InstructorVideoSidebar)
+        <div className="w-[400px] border-l bg-background flex-shrink-0">
+          {props.customSidebar}
+        </div>
+      ) : (
+        // Student mode: Show AI Chat Sidebar
+        !props.isInstructorMode && showChatSidebar && (
+          <>
+            {/* Resize Handle */}
+            <div
+              className="w-1 bg-border hover:bg-primary/20 cursor-col-resize transition-colors relative group"
+              onMouseDown={handleMouseDown}
+            >
+              <div className="absolute inset-y-0 -left-1 -right-1 group-hover:bg-primary/10" />
+            </div>
 
-          {/* Sidebar */}
-          <div
-            ref={sidebarRef}
-            className="border-l bg-background"
-            style={{ width: `${sidebarWidth}px`, height: '100%', overflow: 'hidden', flexShrink: 0 }}
-          >
-            {/* PERFORMANCE P2: Suspense boundary for AI sidebar - better perceived performance */}
-            <Suspense fallback={<SidebarSkeleton />}>
-              <AIChatSidebarV2
-                messages={context.messages}
-                isVideoPlaying={context.videoState?.isPlaying || false}
-                videoId={props.videoId}
-                courseId={props.courseId}
-                currentVideoTime={videoPlayerRef.current?.getCurrentTime() || 0}
-                aiState={context.aiState}
-                onAgentRequest={handleAgentRequest}
-                onAgentAccept={(id) => dispatch({ type: 'ACCEPT_AGENT', payload: id })}
-                onAgentReject={(id) => dispatch({ type: 'REJECT_AGENT', payload: id })}
-                onQuizAnswer={handleQuizAnswer}
-                onReflectionSubmit={handleReflectionSubmit}
-                onReflectionTypeChosen={handleReflectionTypeChosen}
-                onReflectionCancel={handleReflectionCancel}
-                segmentContext={context.segmentState}
-                onClearSegmentContext={handleClearSegment}
-                onUpdateSegmentContext={handleUpdateSegmentContext}
-                dispatch={dispatch}
-                recordingState={context.recordingState}
-                addMessage={addMessage}
-                addOrUpdateMessage={addOrUpdateMessage}
-                loadInitialMessages={loadInitialMessages}
-              />
-            </Suspense>
-          </div>
-        </>
+            {/* Sidebar */}
+            <div
+              ref={sidebarRef}
+              className="border-l bg-background"
+              style={{ width: `${sidebarWidth}px`, height: '100%', overflow: 'hidden', flexShrink: 0 }}
+            >
+              {/* PERFORMANCE P2: Suspense boundary for AI sidebar - better perceived performance */}
+              <Suspense fallback={<SidebarSkeleton />}>
+                <AIChatSidebarV2
+                  messages={context.messages}
+                  isVideoPlaying={context.videoState?.isPlaying || false}
+                  videoId={props.videoId}
+                  courseId={props.courseId}
+                  currentVideoTime={videoPlayerRef.current?.getCurrentTime() || 0}
+                  aiState={context.aiState}
+                  onAgentRequest={handleAgentRequest}
+                  onAgentAccept={(id) => dispatch({ type: 'ACCEPT_AGENT', payload: id })}
+                  onAgentReject={(id) => dispatch({ type: 'REJECT_AGENT', payload: id })}
+                  onQuizAnswer={handleQuizAnswer}
+                  onReflectionSubmit={handleReflectionSubmit}
+                  onReflectionTypeChosen={handleReflectionTypeChosen}
+                  onReflectionCancel={handleReflectionCancel}
+                  segmentContext={context.segmentState}
+                  onClearSegmentContext={handleClearSegment}
+                  onUpdateSegmentContext={handleUpdateSegmentContext}
+                  dispatch={dispatch}
+                  recordingState={context.recordingState}
+                  addMessage={addMessage}
+                  addOrUpdateMessage={addOrUpdateMessage}
+                  loadInitialMessages={loadInitialMessages}
+                />
+              </Suspense>
+            </div>
+          </>
+        )
       )}
     </div>
   )

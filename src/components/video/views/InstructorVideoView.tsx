@@ -46,15 +46,9 @@ export function InstructorVideoView(props?: InstructorVideoViewProps) {
   // Store - OLD (for lessons data)
   const { lessons, loadLessons } = useAppStore()
 
-  // Store - Use student video loading for actual video data
+  // Store - Use course video loading for actual video data
   const currentVideo = useAppStore((state) => state.currentVideo)
-  const loadStudentVideo = useAppStore((state) => state.loadStudentVideo)
-
-  // Store - NEW (instructor video features for student activity)
-  const {
-    studentActivities,
-    loadInstructorVideo
-  } = useAppStore()
+  const loadCourseVideo = useAppStore((state) => state.loadCourseVideo)
 
   // Store - OLD (for current time - still needed for video playback)
   const currentTime = useAppStore((state) => state.currentTime)
@@ -70,15 +64,13 @@ export function InstructorVideoView(props?: InstructorVideoViewProps) {
     }
   }, [lessons?.length, loadLessons])
   
-  // Load actual video data (using student video loader for real data)
+  // Load actual video data (using course video loader for real data)
   useEffect(() => {
     if (videoId && courseId) {
       console.log('📹 Loading video data for:', { videoId, courseId })
-      loadStudentVideo(videoId, courseId)
-      // Also load instructor-specific data (student activities)
-      loadInstructorVideo(videoId, undefined)
+      loadCourseVideo(videoId, courseId)
     }
-  }, [videoId, courseId, loadStudentVideo, loadInstructorVideo])
+  }, [videoId, courseId, loadCourseVideo])
 
   // Debug current video data
   useEffect(() => {
@@ -90,12 +82,6 @@ export function InstructorVideoView(props?: InstructorVideoViewProps) {
       })
     }
   }, [currentVideo])
-
-  // Debug student activities
-  useEffect(() => {
-    console.log('📊 Student activities:', studentActivities)
-    console.log('📊 Activities count:', studentActivities.length)
-  }, [studentActivities])
   
   const lesson = lessons?.find(l => l.id === videoId) || {
     id: videoId,
@@ -111,58 +97,26 @@ export function InstructorVideoView(props?: InstructorVideoViewProps) {
   }
   
   return (
-    <div className="min-h-screen pt-16">
-      <div className="flex h-screen">
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col">
-          {/* Video Player */}
-          <div className="bg-black p-4">
-            <div className="relative">
-              <VideoPlayer
-                videoUrl={currentVideo?.videoUrl || null}
-                title={currentVideo?.title || 'Loading...'}
-                transcript={currentVideo?.transcriptText || currentVideo?.transcript?.join(' ') || ''}
-                videoId={videoId}
-                courseId={courseId}
-                isInstructorMode={true}
-                onTimeUpdate={handleTimeUpdate}
-                onPause={(time) => console.log('Paused at', time)}
-                onPlay={() => console.log('Playing')}
-                onEnded={() => console.log('Video ended')}
-              />
-              
-            </div>
-          </div>
-          
-          {/* Video Info */}
-          <div className="p-6 bg-background flex-1 overflow-y-auto">
-            <div className="max-w-3xl">
-              {/* Instructor and Video Info */}
-              <div className="mb-6">
-                <h1 className="text-2xl font-bold mb-3">{currentVideo?.title || 'Loading...'}</h1>
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <User className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="font-medium">Instructor</p>
-                    <p className="text-sm text-muted-foreground">Course Instructor</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Instructor Sidebar */}
-        <div className="w-[400px] border-l bg-background">
+    <div className="fixed inset-0 top-16 bg-background">
+      <VideoPlayer
+        videoUrl={currentVideo?.videoUrl || null}
+        title={currentVideo?.title || 'Loading...'}
+        transcript={currentVideo?.transcriptText || currentVideo?.transcript?.join(' ') || ''}
+        videoId={videoId}
+        courseId={courseId}
+        isInstructorMode={true}
+        customSidebar={
           <InstructorVideoSidebar
             videoId={videoId}
             currentVideoTime={currentTime}
             videoPlayerRef={videoPlayerRef}
           />
-        </div>
-      </div>
+        }
+        onTimeUpdate={handleTimeUpdate}
+        onPause={(time) => console.log('Paused at', time)}
+        onPlay={() => console.log('Playing')}
+        onEnded={() => console.log('Video ended')}
+      />
     </div>
   )
 }

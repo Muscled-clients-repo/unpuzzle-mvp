@@ -112,6 +112,21 @@ The video page prefetches all sidebar data in parallel before components mount:
 
 This ensures instant data availability when users interact with sidebar features, eliminating loading states during user flow.
 
+### 7. Component Co-location Pattern
+
+Components load their own data where it's used, rather than relying on parent components to provide it:
+
+- **CheckpointEditorSidebar** calls `getVideoCheckpoints` directly when rendered
+- **StudentJourneySidebar** will load student activities when needed (not from parent)
+- Each tab component owns its data dependencies
+- Prevents inappropriate coupling (e.g., generic video loader shouldn't load tab-specific data)
+
+**Benefits:**
+- Makes data dependencies explicit and local
+- Easier to understand what data each component needs
+- Prevents bloated parent components that load everything
+- Follows single responsibility principle
+
 ---
 
 ## Core Components
@@ -165,7 +180,7 @@ This ensures instant data availability when users interact with sidebar features
 3. Try DOM querySelector for video element
 4. Try keyboard event simulation (spacebar for pause/play)
 
-### 3. StudentVideoPlayer (Orchestrator)
+### 3. StudentVideoPlayer (Shared Video Orchestrator)
 
 **File:** `/src/components/video/student/StudentVideoPlayer.tsx`
 
@@ -175,7 +190,14 @@ This ensures instant data availability when users interact with sidebar features
 - Handles all event dispatching to state machine
 - Manages sidebar resize functionality
 - Loads existing reflections from database
-- Renders VideoPlayerCore and AIChatSidebarV2
+- Renders VideoPlayerCore with swappable sidebar
+
+**Dual-Purpose Design:**
+- Used by both student AND instructor views
+- Accepts `isInstructorMode` prop to disable AI features
+- Accepts `customSidebar` prop for injecting custom sidebar
+- When `customSidebar` provided → renders it with fixed 400px width
+- When no custom sidebar → renders AI chat sidebar (student mode)
 
 **Event Flow Orchestration:**
 - Keyboard shortcuts → dispatch to state machine
@@ -268,7 +290,7 @@ This ensures instant data availability when users interact with sidebar features
 - Shows segment indicator in input placeholder
 - Clears segment context after sending
 
-### 7. Video Player Page
+### 7. Video Player Page (Student)
 
 **File:** `/src/app/student/course/[id]/video/[videoId]/page.tsx`
 
@@ -292,6 +314,43 @@ Launches 4 parallel queries before components mount:
 4. Course structure (for outline navigation)
 
 This reduces perceived load time by 40-60%.
+
+### 8. InstructorVideoView (Instructor Wrapper)
+
+**File:** `/src/components/video/views/InstructorVideoView.tsx`
+
+**Responsibilities:**
+- Wraps StudentVideoPlayer for instructor mode
+- Manages instructor-specific props and context
+- Provides InstructorVideoSidebar via `customSidebar` prop
+- Handles video and course ID extraction from URL params
+
+**Architecture:**
+- Uses same `loadCourseVideo` function as students (loads from junction table)
+- Passes `isInstructorMode={true}` to disable AI features
+- Passes custom sidebar with instructor-specific tabs
+- Layout: `fixed inset-0 top-16` (no spacing, matches student layout)
+
+### 9. InstructorVideoSidebar
+
+**File:** `/src/components/video/instructor/InstructorVideoSidebar.tsx`
+
+**Responsibilities:**
+- Two-tab interface for instructor video features
+- Tab switching and active state management
+- Routes to appropriate sub-components
+
+**Tab 1: Checkpoints**
+- Uses CheckpointEditorSidebar component
+- Create/edit/delete checkpoints at video timestamps
+- Preview checkpoint prompts and questions
+- Loads own data via `getVideoCheckpoints` action
+
+**Tab 2: Student Journey**
+- Uses StudentJourneySidebar component
+- Shows student activity timeline (currently mock data)
+- Will display: quiz attempts, reflections, voice memos, progress
+- Follows component co-location pattern (will load own data when ready)
 
 ---
 
@@ -524,7 +583,7 @@ User clicks "No, continue video" → dispatch REJECT_AGENT → update message st
 1. Next.js renders video page
 2. Page extracts videoId=456, courseId=123 from URL
 3. Launch parallel operations (non-blocking):
-   - loadStudentVideo(videoId, courseId) via Zustand
+   - loadCourseVideo(videoId, courseId) via Zustand
    - loadCourseById(courseId) via Zustand
    - Prefetch 4 TanStack queries in parallel
 4. Zustand checks if video already loaded:
@@ -939,15 +998,21 @@ Instructors define specific points in videos where students must:
 **Video Components:**
 ```
 /src/components/video/
+├── views/
+│   └── InstructorVideoView.tsx (instructor video page wrapper)
 ├── student/
-│   ├── StudentVideoPlayer.tsx (main orchestrator)
-│   └── (student-specific video features)
+│   ├── StudentVideoPlayer.tsx (shared orchestrator - used by both roles)
+│   └── ai/ (AI-specific features for students)
+│       ├── AIChatSidebarV2.tsx
+│       └── ChatInterface.tsx
 ├── core/
 │   ├── VideoPlayerCore.tsx (core player + controls)
 │   ├── VideoSeeker.tsx (progress bar + segments)
 │   └── TranscriptPanel.tsx (transcript display)
 └── instructor/
-    └── (instructor video management)
+    ├── InstructorVideoSidebar.tsx (two-tab interface)
+    ├── CheckpointEditorSidebar.tsx (checkpoint CRUD)
+    └── StudentJourneySidebar.tsx (student activity timeline)
 ```
 
 **AI Components:**
@@ -1020,7 +1085,8 @@ aiConversationKeys.detail(conversationId) = ['aiConversations', videoId, convers
 - `app-store.ts` - Combines all slices
 
 **Slices:**
-- `slices/student-video-slice.ts` - Video loading and state
+- `slices/course-video-slice.ts` - Video loading and state (used by both students and instructors)
+- `slices/instructor-video-slice.ts` - Instructor-specific video analytics
 - `slices/auth-slice.ts` - User authentication
 - `slices/ui-slice.ts` - UI preferences
 - (other domain slices)
@@ -1241,6 +1307,30 @@ Slices combined in app-store with zustand/middleware/combine.
 - Audio player must be compact
 - Waveform quality limited by size
 
+### 11. Shared Video Player with Swappable Sidebars
+
+**Decision:** Use same video player component (StudentVideoPlayer) for both student and instructor views, with sidebar swapping via `customSidebar` prop.
+
+**Rationale:**
+- Prevents code duplication for video playback logic (one player to maintain)
+- Video playback behavior identical for both roles
+- Sidebar is the only difference between student/instructor views
+- Easy to add new view modes (e.g., public view, preview mode)
+- `customSidebar` prop makes sidebar swapping explicit and flexible
+
+**Trade-offs:**
+- Component naming misleading ("StudentVideoPlayer" used by instructors too)
+- Must carefully guard mode-specific features with `isInstructorMode` flag
+- Single component responsible for multiple roles (more complex)
+- Risk of accidentally showing student features to instructors
+
+**Implementation:**
+- `isInstructorMode` prop disables AI chat features
+- `customSidebar` prop injects InstructorVideoSidebar instead of AI chat
+- Both layouts use same CSS: `fixed inset-0 top-16` (no spacing differences)
+- Instructor sidebar shows Checkpoints and Student Journey tabs
+- Student sidebar shows Chat and Agents tabs with AI features
+
 ---
 
 ## Summary
@@ -1254,15 +1344,23 @@ The video player architecture is built around a **centralized state machine** th
 4. Imperative Video Control with multiple fallbacks
 5. Parallel Query Prefetching for instant data availability
 6. Selective State Subscriptions for performance
+7. Component Co-location for data dependencies
 
 **Core features work together through:**
 - **Video playback** provides timestamp context for all features
 - **Transcript** provides content context for AI and segment selection
 - **In/out points** allow precise segment selection for AI queries
-- **AI agents** pause video and guide learning activities
+- **AI agents** pause video and guide learning activities (student mode)
 - **Quizzes** test comprehension with AI-generated or instructor questions
 - **Reflections** capture student thoughts via voice/video/text
 - **Private notes** enable personal note-taking and instructor sharing
-- **Checkpoints** provide instructor-controlled learning milestones
+- **Checkpoints** provide instructor-controlled learning milestones (instructor mode)
 
-The architecture prioritizes **performance** (prefetching, lazy loading, memoization), **reliability** (fallback strategies, error handling), and **maintainability** (clear separation of concerns, explicit state management).
+**Dual-mode architecture:**
+- **Student view:** AI chat sidebar with agents, reflections, and quiz features
+- **Instructor view:** Checkpoint editor and student journey sidebar (same video player component)
+- **Shared components:** VideoPlayerCore, video controls, transcript panel
+- **Role-specific components:** Sidebars swapped via `customSidebar` prop
+- **Naming convention:** `loadCourseVideo` used by both roles (not role-specific)
+
+The architecture prioritizes **performance** (prefetching, lazy loading, memoization), **reliability** (fallback strategies, error handling), and **maintainability** (clear separation of concerns, explicit state management, component co-location).

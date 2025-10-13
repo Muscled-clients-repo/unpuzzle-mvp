@@ -61,7 +61,7 @@ export default function VideoPlayerPage() {
   // PERFORMANCE: Use selective subscriptions to prevent unnecessary re-renders
   // Only re-render when currentVideo changes, not on every store update
   const storeVideoData = useAppStore((state) => state.currentVideo)
-  const loadStudentVideo = useAppStore((state) => state.loadStudentVideo)
+  const loadCourseVideo = useAppStore((state) => state.loadCourseVideo)
   const currentCourse = useAppStore((state) => state.currentCourse)
   const loadCourseById = useAppStore((state) => state.loadCourseById)
 
@@ -149,7 +149,7 @@ export default function VideoPlayerPage() {
       if (!isStandaloneLesson) {
         // Load course video data in background (non-blocking)
         Promise.all([
-          loadStudentVideo(videoId, courseId), // SECURITY: Pass courseId to verify video belongs to course
+          loadCourseVideo(videoId, courseId), // SECURITY: Pass courseId to verify video belongs to course
           loadCourseById(courseId)
         ])
           .catch(error => console.error('Error loading course data:', error))
