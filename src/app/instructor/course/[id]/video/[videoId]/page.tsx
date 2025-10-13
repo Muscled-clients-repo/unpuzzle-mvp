@@ -102,18 +102,18 @@ export default function InstructorVideoPage() {
   const FREE_AI_LIMIT = 3
   const [isLoading, setIsLoading] = useState(true)
   
-  // Load lessons on mount
+  // Load lessons on mount (skip for instructor mode)
   useEffect(() => {
-    if (lessons.length === 0) {
+    if (!isInstructorMode && lessons && lessons.length === 0) {
       loadLessons()
     }
     // Set loading to false after initial check or when lessons load
     const timer = setTimeout(() => setIsLoading(false), 100)
     return () => clearTimeout(timer)
-  }, [lessons.length])
+  }, [lessons?.length, isInstructorMode])
   
-  // Get the lesson (using videoId to find it)
-  const lesson = lessons.find(l => l.id === videoId)
+  // Get the lesson (using videoId to find it) - only for non-instructor mode
+  const lesson = lessons?.find(l => l.id === videoId)
   
   // Track view and fetch transcript when lesson loads
   useEffect(() => {
@@ -244,7 +244,7 @@ export default function InstructorVideoPage() {
   
   // Handle instructor mode
   if (isInstructorMode) {
-    return <InstructorVideoView />
+    return <InstructorVideoView videoId={videoId} courseId={courseId} />
   }
 
   // Then show not found if lesson doesn't exist
@@ -468,7 +468,7 @@ export default function InstructorVideoPage() {
             <div className="mt-8">
               <RelatedLessonsCarousel
                 currentLessonId={videoId}
-                lessons={lessons}
+                lessons={lessons || []}
                 title="Continue Learning"
               />
             </div>

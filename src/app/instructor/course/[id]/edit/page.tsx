@@ -554,6 +554,7 @@ export default function CourseEditPage(props: { params: Promise<{ id: string }> 
                           <CardContent>
                             <ChapterMediaList
                               chapterId={chapter.id}
+                              courseId={courseId}
                               media={chapter.media || []}
                               onMediaUnlink={handleMediaUnlink}
                               onMediaPreview={handleMediaPreview}

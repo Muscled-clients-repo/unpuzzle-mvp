@@ -25,6 +25,7 @@ import { useCourseCreationUI } from '@/stores/course-creation-ui'
 
 interface ChapterMediaListProps {
   chapterId: string
+  courseId?: string
   media: ChapterMedia[]
   onMediaUnlink: (junctionId: string) => void
   onMediaPreview?: (media: ChapterMedia) => void
@@ -38,6 +39,7 @@ interface ChapterMediaListProps {
 
 export function ChapterMediaList({
   chapterId,
+  courseId,
   media,
   onMediaUnlink,
   onMediaPreview,
@@ -305,9 +307,14 @@ export function ChapterMediaList({
                           console.log('🎬 [MEDIA LIST] Navigating to video editor:', {
                             mediaId: mediaItem.id,
                             mediaName: mediaItem.name,
-                            junctionId: mediaItem.junctionId
+                            junctionId: mediaItem.junctionId,
+                            courseId
                           })
-                          router.push(`/instructor/video/${mediaItem.id}`)
+                          // If courseId exists, use course context route, otherwise use standalone route
+                          const videoPath = courseId
+                            ? `/instructor/course/${courseId}/video/${mediaItem.id}`
+                            : `/instructor/video/${mediaItem.id}`
+                          router.push(videoPath)
                         }
                       }}
                       title={`Open ${getDisplayTitle(mediaItem)} in video editor`}

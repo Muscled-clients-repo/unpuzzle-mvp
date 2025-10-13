@@ -23,11 +23,18 @@ export default function InstructorLayout({
   }
 
   const courseId = getCourseIdFromPath()
-  const backButton = isVideoPage && courseId
-    ? {
-        href: `/instructor/course/${courseId}/analytics`,
-        label: "Back to Analytics"
-      }
+
+  // Always provide back button on video pages
+  const backButton = isVideoPage
+    ? courseId
+      ? {
+          href: `/instructor/course/${courseId}/edit`,
+          label: "Back to Course"
+        }
+      : {
+          href: "/instructor/engagement",
+          label: "Back to Engagement"
+        }
     : undefined
 
   return (

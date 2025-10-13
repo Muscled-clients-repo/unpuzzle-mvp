@@ -53,6 +53,7 @@ interface StudentVideoPlayerProps {
   onPause?: (time: number) => void
   onPlay?: () => void
   onEnded?: () => void
+  isInstructorMode?: boolean  // Disable AI sidebar for instructor view
   courseStructure?: {
     chapters: {
       id: string
@@ -475,13 +476,15 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
               <div>
                 <h1 className="text-2xl font-bold">{props.title || "Untitled Video"}</h1>
               </div>
-              <Button
-                variant="outline"
-                onClick={() => updatePreferences({ showChatSidebar: !showChatSidebar })}
-              >
-                <MessageSquare className="mr-2 h-4 w-4" />
-                {showChatSidebar ? 'Hide' : 'Show'} AI Assistant
-              </Button>
+              {!props.isInstructorMode && (
+                <Button
+                  variant="outline"
+                  onClick={() => updatePreferences({ showChatSidebar: !showChatSidebar })}
+                >
+                  <MessageSquare className="mr-2 h-4 w-4" />
+                  {showChatSidebar ? 'Hide' : 'Show'} AI Assistant
+                </Button>
+              )}
             </div>
 
             {/* Course Outline / Lesson Segments */}
@@ -553,8 +556,8 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
         </div>
       </div>
 
-      {/* AI Chat Sidebar */}
-      {showChatSidebar && (
+      {/* AI Chat Sidebar - Only show for students */}
+      {!props.isInstructorMode && showChatSidebar && (
         <>
           {/* Resize Handle */}
           <div
