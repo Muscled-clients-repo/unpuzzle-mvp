@@ -6,6 +6,7 @@ import dynamic from "next/dynamic"
 import { User } from "lucide-react"
 import { useAppStore } from "@/stores/app-store"
 import { InstructorVideoSidebar } from "../instructor/InstructorVideoSidebar"
+import { StudentJourneySidebarV2 } from "../instructor/StudentJourneySidebar-v2"
 import type { VideoPlayerCoreRef } from "../core/VideoPlayerCore"
 
 // Dynamically import VideoPlayer
@@ -25,6 +26,15 @@ export function InstructorVideoView(props?: InstructorVideoViewProps) {
   const params = useParams()
   const searchParams = useSearchParams()
   const router = useRouter()
+
+  // Detect if this is a navigation (from another page) vs a refresh
+  const [shouldAutoplay, setShouldAutoplay] = useState(false)
+
+  useEffect(() => {
+    // Check navigation type: 'navigate' = clicked link, 'reload' = refresh
+    const navigationType = (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming)?.type
+    setShouldAutoplay(navigationType === 'navigate')
+  }, [])
 
   // Use props if provided, otherwise fall back to params (for backwards compatibility)
   const videoId = props?.videoId || (params.videoId as string) || (params.id as string)
@@ -99,15 +109,17 @@ export function InstructorVideoView(props?: InstructorVideoViewProps) {
   return (
     <div className="fixed inset-0 top-16 bg-background">
       <VideoPlayer
-        videoUrl={currentVideo?.videoUrl || null}
-        title={currentVideo?.title || 'Loading...'}
-        transcript={currentVideo?.transcriptText || currentVideo?.transcript?.join(' ') || ''}
+        videoUrl={currentVideo?.id === videoId ? currentVideo.videoUrl : null}
+        title={currentVideo?.id === videoId ? currentVideo.title : 'Loading...'}
+        transcript={currentVideo?.id === videoId ? (currentVideo.transcriptText || currentVideo.transcript?.join(' ') || '') : ''}
         videoId={videoId}
         courseId={courseId}
         isInstructorMode={true}
+        autoplay={shouldAutoplay}
         customSidebar={
-          <InstructorVideoSidebar
+          <StudentJourneySidebarV2
             videoId={videoId}
+            courseId={courseId}
             currentVideoTime={currentTime}
             videoPlayerRef={videoPlayerRef}
           />

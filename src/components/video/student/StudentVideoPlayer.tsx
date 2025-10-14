@@ -525,7 +525,10 @@ export function StudentVideoPlayer(props: StudentVideoPlayerProps) {
                             return (
                               <Link
                                 key={video.id}
-                                href={`/student/course/${props.courseId}/video/${video.id}`}
+                                href={props.isInstructorMode
+                                  ? `/instructor/course/${props.courseId}/video/${video.id}`
+                                  : `/student/course/${props.courseId}/video/${video.id}`
+                                }
                                 className={`flex items-center gap-3 p-3 rounded-lg hover:bg-muted transition-colors ${
                                   isCurrentVideo ? 'bg-primary/10 border border-primary/20' : ''
                                 }`}
