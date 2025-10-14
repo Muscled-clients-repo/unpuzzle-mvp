@@ -2,9 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { getResourceById, getResourceDownloadUrl, recordGuestResourceDownload } from '@/app/actions/resource-actions'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 export async function POST(request: NextRequest) {
+  // Initialize Resend client inside function to avoid build-time errors when env vars are missing
+  if (!process.env.RESEND_API_KEY) {
+    return NextResponse.json(
+      { error: 'Email service not configured' },
+      { status: 500 }
+    )
+  }
+
+  const resend = new Resend(process.env.RESEND_API_KEY)
   try {
     const { email, resourceId } = await request.json()
 
