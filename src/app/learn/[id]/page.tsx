@@ -6,12 +6,12 @@ import dynamic from "next/dynamic"
 import { useAppStore } from "@/stores/app-store"
 import { LoadingSpinner } from "@/components/common/LoadingSpinner"
 
-// Dynamically import the V2 VideoPlayer component with loading fallback
-const StudentVideoPlayerV2 = dynamic(
-  () => import("@/components/video/student/StudentVideoPlayerV2").then(mod => ({ 
-    default: mod.StudentVideoPlayerV2 
+// Dynamically import the VideoPlayer component with loading fallback
+const StudentVideoPlayer = dynamic(
+  () => import("@/components/video/student/StudentVideoPlayer").then(mod => ({
+    default: mod.StudentVideoPlayer
   })),
-  { 
+  {
     loading: () => (
       <div className="aspect-video bg-black rounded-lg flex items-center justify-center">
         <LoadingSpinner />
@@ -166,8 +166,8 @@ export default function PublicLessonPage() {
 
   return (
     <div className="h-screen bg-background">
-      {/* V2 Video Player with integrated AI sidebar - takes full viewport */}
-      <StudentVideoPlayerV2
+      {/* Video Player with integrated AI sidebar - takes full viewport */}
+      <StudentVideoPlayer
         videoUrl={currentVideo.videoUrl}
         title={currentVideo.title}
         transcript={currentVideo.transcript?.join(' ')}

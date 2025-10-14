@@ -29,12 +29,12 @@ interface BlogDetailClientProps {
 }
 
 export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) {
-  const { 
+  const {
     likedPosts,
     toggleLikePost
   } = useAppStore()
-  
-  const isLiked = likedPosts.includes(post.id)
+
+  const isLiked = likedPosts?.includes(post.id) || false
 
   const handleNewsletterSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -197,15 +197,17 @@ export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) 
             {formatContent(post.content)}
           </div>
 
-          <div className="flex flex-wrap gap-2 mt-12 pt-8 border-t">
-            <span className="text-sm font-medium">Tags:</span>
-            {post.tags.map(tag => (
-              <Badge key={tag} variant="outline">
-                <Tag className="mr-1 h-3 w-3" />
-                {tag}
-              </Badge>
-            ))}
-          </div>
+          {post.tags && post.tags.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-12 pt-8 border-t">
+              <span className="text-sm font-medium">Tags:</span>
+              {post.tags.map(tag => (
+                <Badge key={tag} variant="outline">
+                  <Tag className="mr-1 h-3 w-3" />
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          )}
 
           <div className="bg-muted rounded-lg p-6 mt-12">
             <div className="flex items-start gap-4">

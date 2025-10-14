@@ -81,7 +81,7 @@ const instructorNavItems: NavItem[] = [
     label: "Student Goals",
     icon: Target,
     submenu: [
-      { href: "/instructor/student-goals", label: "Current Goals", icon: Target },
+      { href: "/instructor/student-goals", label: "Private Mentorship", icon: Target },
       { href: "/instructor/student-goals/history", label: "Track History", icon: History },
     ]
   },

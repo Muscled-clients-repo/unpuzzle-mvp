@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Target, User, Search, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -35,7 +35,7 @@ interface StudentGoal {
 
 // Real student data is now fetched from database via TanStack Query
 
-export default function InstructorStudentGoalsPage() {
+function InstructorStudentGoalsContent() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed' | 'paused'>('all')
   const { user } = useAppStore()
@@ -420,5 +420,13 @@ export default function InstructorStudentGoalsPage() {
         </Card>
       )}
     </PageContainer>
+  )
+}
+
+export default function InstructorStudentGoalsPage() {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <InstructorStudentGoalsContent />
+    </Suspense>
   )
 }

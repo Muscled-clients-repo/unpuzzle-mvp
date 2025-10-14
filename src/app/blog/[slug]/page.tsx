@@ -17,7 +17,7 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const post = blogPosts.find(p => p.slug === params.slug)
-  
+
   if (!post) {
     return {
       title: 'Post Not Found - Unpuzzle Blog',
@@ -32,8 +32,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       description: post.excerpt,
       type: 'article',
       publishedTime: post.publishedAt,
-      authors: [post.author.name],
-      tags: post.tags,
+      authors: [post.author?.name || 'Unpuzzle Team'],
+      tags: post.tags || [],
     },
     twitter: {
       card: 'summary_large_image',
@@ -51,10 +51,10 @@ export default function BlogDetailPage({ params }: PageProps) {
   }
 
   const relatedPosts = blogPosts
-    .filter(p => 
-      p.id !== post.id && 
-      (p.category === post.category || 
-       p.tags.some(tag => post.tags.includes(tag)))
+    .filter(p =>
+      p.id !== post.id &&
+      (p.category === post.category ||
+       (p.tags && post.tags && p.tags.some(tag => post.tags.includes(tag))))
     )
     .slice(0, 3)
 

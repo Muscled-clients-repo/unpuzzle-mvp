@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { StudentVideoPlayerV2 } from "@/components/video/student/StudentVideoPlayerV2"
+import { StudentVideoPlayer } from "@/components/video/student/StudentVideoPlayer"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
@@ -79,7 +79,7 @@ export default function VideoV2DemoPage() {
 
       {/* Video Player V2 - Takes remaining height */}
       <div className="flex-1 min-h-0">
-        <StudentVideoPlayerV2 
+        <StudentVideoPlayer
           videoUrl={demoVideo.videoUrl}
           title={demoVideo.title}
           videoId={demoVideo.videoId}
