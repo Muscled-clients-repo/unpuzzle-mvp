@@ -87,10 +87,11 @@ export function useUploadMediaFile() {
       }
       
       // Update TanStack cache with progress (same pattern as Video system)
-      queryClient.setQueryData(['media-files'], (currentData: MediaFile[] | undefined) => {
-        if (!currentData) return currentData
-        
-        const updated = currentData.map(file => {
+      // Update all pages of media-files
+      queryClient.setQueriesData(['media-files'], (currentData: any) => {
+        if (!currentData?.media) return currentData
+
+        const updated = currentData.media.map((file: MediaFile) => {
           // Match by operationId (stored in backblaze_file_id for temp files)
           if (file.backblaze_file_id === event.operationId) {
             console.log(`📈 [MEDIA UPLOAD PROGRESS] Updating progress for file ${file.id}: ${event.data.progress}%`)
@@ -102,12 +103,12 @@ export function useUploadMediaFile() {
           }
           return file
         })
-        
-        console.log('[MEDIA UPLOAD PROGRESS] Files with progress after update:', 
-          updated.filter(f => f.uploadProgress !== undefined).map(f => ({ id: f.id, progress: f.uploadProgress }))
+
+        console.log('[MEDIA UPLOAD PROGRESS] Files with progress after update:',
+          updated.filter((f: MediaFile) => f.uploadProgress !== undefined).map((f: MediaFile) => ({ id: f.id, progress: f.uploadProgress }))
         )
-        
-        return updated
+
+        return { ...currentData, media: updated }
       })
     }
     
@@ -120,15 +121,64 @@ export function useUploadMediaFile() {
 
     const handleDurationUpdate = (event: any) => {
       console.log('[MEDIA DURATION UPDATE] Received event:', event)
+      console.log('[MEDIA DURATION UPDATE] Event data:', {
+        fileId: event.fileId,
+        durationSeconds: event.durationSeconds,
+        operationId: event.operationId
+      })
 
-      // Invalidate cache to refresh media files with updated duration
+      // Immediately update cache with duration (all pages)
+      queryClient.setQueriesData(['media-files'], (currentData: any) => {
+        if (!currentData?.media) return currentData
+
+        const updated = currentData.media.map((file: MediaFile) => {
+          // Match by fileId or operationId
+          if (file.id === event.fileId || file.backblaze_file_id === event.operationId) {
+            console.log(`⏱️ [MEDIA DURATION UPDATE] Updating duration for file ${file.id}:`, event.durationSeconds)
+            return {
+              ...file,
+              duration_seconds: event.durationSeconds
+            }
+          }
+          return file
+        })
+
+        return { ...currentData, media: updated }
+      })
+
+      // Also invalidate to ensure we get fresh data
       queryClient.invalidateQueries({ queryKey: ['media-files'] })
     }
 
     const handleThumbnailUpdate = (event: any) => {
       console.log('[MEDIA THUMBNAIL UPDATE] Received event:', event)
+      console.log('[MEDIA THUMBNAIL UPDATE] Event data:', {
+        fileId: event.fileId,
+        thumbnailUrl: event.thumbnailUrl,
+        operationId: event.operationId
+      })
 
-      // Invalidate cache to refresh media files with updated thumbnail
+      // Immediately update cache with new thumbnail (all pages)
+      queryClient.setQueriesData(['media-files'], (currentData: any) => {
+        if (!currentData?.media) return currentData
+
+        const updated = currentData.media.map((file: MediaFile) => {
+          // Match by fileId or operationId
+          if (file.id === event.fileId || file.backblaze_file_id === event.operationId) {
+            console.log(`🖼️ [MEDIA THUMBNAIL UPDATE] Updating thumbnail for file ${file.id}:`, event.thumbnailUrl)
+            return {
+              ...file,
+              thumbnail: event.thumbnailUrl,
+              cdn_url: event.thumbnailUrl // Update CDN URL too
+            }
+          }
+          return file
+        })
+
+        return { ...currentData, media: updated }
+      })
+
+      // Also invalidate to ensure we get fresh data
       queryClient.invalidateQueries({ queryKey: ['media-files'] })
     }
 
@@ -177,10 +227,10 @@ export function useUploadMediaFile() {
         status: 'uploading'
       }
       
-      // Optimistically add the uploading file to the cache
-      queryClient.setQueryData(['media-files'], (oldData: MediaFile[] | undefined) => {
-        if (!oldData) return [tempMediaFile]
-        return [tempMediaFile, ...oldData]
+      // Optimistically add the uploading file to the cache (all pages)
+      queryClient.setQueriesData(['media-files'], (oldData: any) => {
+        if (!oldData?.media) return { ...oldData, media: [tempMediaFile] }
+        return { ...oldData, media: [tempMediaFile, ...oldData.media] }
       })
       
       console.log('📈 [MEDIA UPLOAD] Added temporary file to cache:', tempMediaFile)
@@ -192,19 +242,22 @@ export function useUploadMediaFile() {
       if (result.success) {
         toast.success(`✅ ${file.name} uploaded successfully`)
         
-        // First update the temp file to show 100% completion
-        queryClient.setQueryData(['media-files'], (oldData: MediaFile[] | undefined) => {
-          if (!oldData) return oldData
-          return oldData.map(mediaFile => {
-            if (mediaFile.id === operationId) {
-              return {
-                ...mediaFile,
-                uploadProgress: 100,
-                status: 'ready' as const
+        // First update the temp file to show 100% completion (all pages)
+        queryClient.setQueriesData(['media-files'], (oldData: any) => {
+          if (!oldData?.media) return oldData
+          return {
+            ...oldData,
+            media: oldData.media.map((mediaFile: MediaFile) => {
+              if (mediaFile.id === operationId) {
+                return {
+                  ...mediaFile,
+                  uploadProgress: 100,
+                  status: 'ready' as const
+                }
               }
-            }
-            return mediaFile
-          })
+              return mediaFile
+            })
+          }
         })
         
         // Delay invalidation to show 100% progress for a moment
@@ -215,10 +268,10 @@ export function useUploadMediaFile() {
         console.log(`✅ [MEDIA UPLOAD] Upload successful for operationId: ${operationId}`)
       } else {
         toast.error(`❌ Upload failed: ${result.error}`)
-        // Remove the temporary file on failure
-        queryClient.setQueryData(['media-files'], (oldData: MediaFile[] | undefined) => {
-          if (!oldData) return []
-          return oldData.filter(file => file.id !== operationId)
+        // Remove the temporary file on failure (all pages)
+        queryClient.setQueriesData(['media-files'], (oldData: any) => {
+          if (!oldData?.media) return oldData
+          return { ...oldData, media: oldData.media.filter((file: MediaFile) => file.id !== operationId) }
         })
       }
     },
@@ -226,11 +279,11 @@ export function useUploadMediaFile() {
     onError: (error, { file, operationId }) => {
       console.error('Upload mutation error:', error)
       toast.error(`❌ Failed to upload ${file.name}`)
-      
-      // Remove the temporary file on error
-      queryClient.setQueryData(['media-files'], (oldData: MediaFile[] | undefined) => {
-        if (!oldData) return []
-        return oldData.filter(file => file.id !== operationId)
+
+      // Remove the temporary file on error (all pages)
+      queryClient.setQueriesData(['media-files'], (oldData: any) => {
+        if (!oldData?.media) return oldData
+        return { ...oldData, media: oldData.media.filter((f: MediaFile) => f.id !== operationId) }
       })
     }
   })
@@ -318,11 +371,11 @@ export function useBulkDeleteFiles() {
     onSuccess: (result, { fileIds }) => {
       if (result.success) {
         toast.success(`✅ Successfully deleted ${fileIds.length} file${fileIds.length !== 1 ? 's' : ''}`)
-        
-        // Remove from UI after animation completes
-        queryClient.setQueryData(['media-files'], (oldData: MediaFile[] | undefined) => {
-          if (!oldData) return []
-          return oldData.filter(file => !fileIds.includes(file.id))
+
+        // Remove from UI after animation completes (all pages)
+        queryClient.setQueriesData(['media-files'], (oldData: any) => {
+          if (!oldData?.media) return oldData
+          return { ...oldData, media: oldData.media.filter((file: MediaFile) => !fileIds.includes(file.id)) }
         })
         
         // Invalidate and refetch to get fresh data

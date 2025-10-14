@@ -92,13 +92,13 @@ export function MediaFiltersSection({
         options={[
           { value: "all", label: "All Courses" },
           { value: "unused", label: "Unused Files", divider: true },
-          ...courses.map(course => ({
+          ...(Array.isArray(courses) ? courses.map(course => ({
             value: course.id,
             label: course.title,
-            count: mediaFiles.filter(file => 
+            count: mediaFiles.filter(file =>
               file.media_usage?.some(usage => usage.course_id === course.id)
             ).length
-          }))
+          })) : [])
         ]}
       />
 
