@@ -22,6 +22,13 @@ export async function createRequest(params: CreateRequestParams) {
     throw new Error('Unauthorized')
   }
 
+  // Get user profile for notification metadata
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name, email')
+    .eq('id', user.id)
+    .single()
+
   // For track change requests, check if user already has a pending request
   if (params.request_type === 'track_change') {
     const { data: existingRequest } = await supabase
@@ -39,7 +46,7 @@ export async function createRequest(params: CreateRequestParams) {
     }
   }
 
-  const { error } = await supabase
+  const { data: request, error } = await supabase
     .from('requests')
     .insert({
       user_id: user.id,
@@ -49,10 +56,38 @@ export async function createRequest(params: CreateRequestParams) {
       metadata: params.metadata || {},
       priority: params.priority || 'medium'
     })
+    .select()
+    .single()
 
   if (error) {
     console.error('Failed to create request:', error)
     throw new Error('Failed to create request')
+  }
+
+  // Notify all instructors about the new request
+  try {
+    const requestTypeLabels: Record<string, string> = {
+      track_change: 'Track Change',
+      bug_report: 'Bug Report',
+      feature_request: 'Feature Request',
+      refund: 'Refund'
+    }
+
+    await supabase.rpc('notify_all_instructors', {
+      notification_type: 'track_request',
+      notification_title: `New ${requestTypeLabels[params.request_type] || 'Request'} from ${profile?.full_name || 'Student'}`,
+      notification_message: params.title,
+      notification_metadata: {
+        requestId: request.id,
+        studentName: profile?.full_name || 'Unknown',
+        studentEmail: profile?.email || user.email,
+        requestType: params.request_type
+      },
+      notification_action_url: '/instructor/requests'
+    })
+  } catch (notifError) {
+    // Log but don't fail the request if notification fails
+    console.error('Failed to send notification:', notifError)
   }
 
   revalidatePath('/instructor')
@@ -373,6 +408,13 @@ export async function createTrackChangeRequestWithQuestionnaire(
     throw new Error('Unauthorized')
   }
 
+  // Get user profile for notification metadata
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name, email')
+    .eq('id', user.id)
+    .single()
+
   // Get user's current track info
   const currentTrackData = await getUserCurrentTrack()
   const currentTrackName = currentTrackData?.track_name || 'No Track'
@@ -415,6 +457,26 @@ export async function createTrackChangeRequestWithQuestionnaire(
   if (error) {
     console.error('Failed to create track change request:', error)
     throw new Error('Failed to create track change request')
+  }
+
+  // Notify all instructors about the new track change request
+  try {
+    await supabase.rpc('notify_all_instructors', {
+      notification_type: 'track_request',
+      notification_title: `New Track Change Request from ${profile?.full_name || 'Student'}`,
+      notification_message: `${profile?.full_name || 'Student'} wants to switch to ${desiredTrackName}`,
+      notification_metadata: {
+        requestId: request.id,
+        studentName: profile?.full_name || 'Unknown',
+        studentEmail: profile?.email || user.email,
+        requestType: 'track_change',
+        desiredTrack: desiredTrackName
+      },
+      notification_action_url: '/instructor/requests'
+    })
+  } catch (notifError) {
+    // Log but don't fail the request if notification fails
+    console.error('Failed to send notification:', notifError)
   }
 
   // Broadcast websocket event for real-time notification
@@ -639,6 +701,37 @@ export async function acceptTrackChangeRequest(requestId: string, goalId?: strin
       .eq('id', goalId)
       .single()
     goalName = goal?.name
+  }
+
+  // Notify student about track change approval
+  try {
+    // Get student profile for notification
+    const { data: studentProfile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', request.user_id)
+      .single()
+
+    // Notify the student
+    await supabase.rpc('notify_instructor', {
+      instructor_id: request.user_id, // Send to student
+      notification_type: 'system',
+      notification_title: `Track Change Request Approved!`,
+      notification_message: goalId
+        ? `Your track change to ${metadata.desired_track} has been approved and your goal "${goalName}" has been assigned!`
+        : `Your track change to ${metadata.desired_track} has been approved! Your instructor will assign you a goal soon.`,
+      notification_metadata: {
+        requestId: request.id,
+        newTrackName: metadata.desired_track,
+        goalId: goalId || null,
+        goalName: goalName || null,
+        conversationId: conversation.id
+      },
+      notification_action_url: goalId ? `/student/goals` : `/student/track-selection`
+    })
+  } catch (notifError) {
+    // Log but don't fail if notification fails
+    console.error('Failed to send track change approval notification:', notifError)
   }
 
   // Broadcast websocket event for real-time notification

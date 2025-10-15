@@ -17,11 +17,14 @@ import {
   AlertCircle,
   Eye
 } from 'lucide-react'
-import { getAllRequests, updateRequestStatus, approveTrackChangeRequest } from '@/lib/actions/request-actions'
+import { getAllRequests, updateRequestStatus, acceptTrackChangeRequest } from '@/lib/actions/request-actions'
 import { toast } from 'sonner'
+import AcceptTrackChangeModal from '@/components/instructor/AcceptTrackChangeModal'
 
 export default function RequestsPage() {
   const [filter, setFilter] = useState<string>('all')
+  const [acceptModalOpen, setAcceptModalOpen] = useState(false)
+  const [selectedRequest, setSelectedRequest] = useState<any>(null)
   const queryClient = useQueryClient()
 
   const { data: requests, isLoading } = useQuery({
@@ -41,18 +44,29 @@ export default function RequestsPage() {
     }
   })
 
-  const approveTrackChangeMutation = useMutation({
-    mutationFn: ({ requestId, notes }: { requestId: string; notes?: string }) =>
-      approveTrackChangeRequest(requestId, notes),
+  const acceptTrackChangeMutation = useMutation({
+    mutationFn: ({ requestId, goalId }: { requestId: string; goalId?: string }) =>
+      acceptTrackChangeRequest(requestId, goalId),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['all-requests'] })
+      setAcceptModalOpen(false)
+      setSelectedRequest(null)
       toast.success(data.message)
     },
     onError: (error) => {
-      toast.error('Failed to approve track change request')
+      toast.error('Failed to accept track change request')
       console.error(error)
     }
   })
+
+  const handleAcceptTrackChange = (request: any) => {
+    setSelectedRequest(request)
+    setAcceptModalOpen(true)
+  }
+
+  const handleModalAccept = (requestId: string, goalId: string) => {
+    acceptTrackChangeMutation.mutate({ requestId, goalId })
+  }
 
   const getRequestIcon = (type: string) => {
     switch (type) {
@@ -284,10 +298,7 @@ export default function RequestsPage() {
                         className="text-green-600 border-green-600 hover:bg-green-50"
                         onClick={() => {
                           if (request.request_type === 'track_change') {
-                            approveTrackChangeMutation.mutate({
-                              requestId: request.id,
-                              notes: 'Track change approved - student will need to complete questionnaire for new track'
-                            })
+                            handleAcceptTrackChange(request)
                           } else {
                             updateStatusMutation.mutate({
                               requestId: request.id,
@@ -295,10 +306,10 @@ export default function RequestsPage() {
                             })
                           }
                         }}
-                        disabled={updateStatusMutation.isPending || approveTrackChangeMutation.isPending}
+                        disabled={updateStatusMutation.isPending || acceptTrackChangeMutation.isPending}
                       >
                         <CheckCircle className="h-4 w-4 mr-1" />
-                        {request.request_type === 'track_change' ? 'Approve & Send to Questionnaire' : 'Approve'}
+                        {request.request_type === 'track_change' ? 'Accept & Assign Goal' : 'Approve'}
                       </Button>
                       <Button
                         size="sm"
@@ -335,6 +346,18 @@ export default function RequestsPage() {
           ))
         )}
       </div>
+
+      {/* Accept Track Change Modal */}
+      <AcceptTrackChangeModal
+        isOpen={acceptModalOpen}
+        onClose={() => {
+          setAcceptModalOpen(false)
+          setSelectedRequest(null)
+        }}
+        request={selectedRequest}
+        onAccept={handleModalAccept}
+        isAccepting={acceptTrackChangeMutation.isPending}
+      />
     </div>
   )
 }

@@ -411,6 +411,66 @@ export async function createMessage(data: CreateMessageData) {
     throw new Error(`Failed to create message: ${error.message}`)
   }
 
+  // Notify instructor when student submits a daily note
+  if (data.messageType === 'daily_note' && isStudent && conversation.instructor_id) {
+    try {
+      // Get student profile for notification
+      const { data: studentProfile } = await (serviceClient as any)
+        .from('profiles')
+        .select('full_name, email, goal_title')
+        .eq('id', user.id)
+        .single()
+
+      // Notify the assigned instructor
+      await (serviceClient as any).rpc('notify_instructor', {
+        instructor_id: conversation.instructor_id,
+        notification_type: 'daily_note',
+        notification_title: `New Daily Note from ${studentProfile?.full_name || 'Student'}`,
+        notification_message: data.content.substring(0, 100) + (data.content.length > 100 ? '...' : ''),
+        notification_metadata: {
+          noteId: message.id,
+          studentName: studentProfile?.full_name || 'Unknown',
+          studentEmail: studentProfile?.email || user.email,
+          goalTitle: studentProfile?.goal_title || 'Unknown Goal',
+          noteDate: data.targetDate || new Date().toISOString().split('T')[0]
+        },
+        notification_action_url: `/instructor/student-goals/${user.id}`
+      })
+    } catch (notifError) {
+      // Log but don't fail the message creation if notification fails
+      console.error('Failed to send daily note notification:', notifError)
+    }
+  }
+
+  // Notify student when instructor posts a response in their goal conversation
+  if (data.messageType === 'instructor_response' && isInstructor && conversation.student_id) {
+    try {
+      // Get instructor profile for notification
+      const { data: instructorProfile } = await (serviceClient as any)
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .single()
+
+      // Notify the student
+      await (serviceClient as any).rpc('notify_instructor', {
+        instructor_id: conversation.student_id, // Send to student
+        notification_type: 'system',
+        notification_title: `New Message from ${instructorProfile?.full_name || 'Your Instructor'}`,
+        notification_message: data.content.substring(0, 100) + (data.content.length > 100 ? '...' : ''),
+        notification_metadata: {
+          messageId: message.id,
+          instructorName: instructorProfile?.full_name || 'Instructor',
+          messageDate: data.targetDate || new Date().toISOString().split('T')[0]
+        },
+        notification_action_url: `/student/goals`
+      })
+    } catch (notifError) {
+      // Log but don't fail the message creation if notification fails
+      console.error('Failed to send instructor response notification:', notifError)
+    }
+  }
+
   // Broadcast WebSocket event for real-time updates
   await broadcastWebSocketMessage({
     type: CONVERSATION_EVENTS.MESSAGE_CREATED,
@@ -684,6 +744,47 @@ export async function publishDraft(draftId: string) {
     .select('student_id')
     .eq('id', publishedMessage.conversation_id)
     .single()
+
+  // Notify instructor when student publishes a daily note draft
+  if (publishedMessage.message_type === 'daily_note' && conversation) {
+    try {
+      // Get conversation details to find instructor
+      const { data: conversationDetails } = await (serviceClient as any)
+        .from('goal_conversations')
+        .select('instructor_id, student_id')
+        .eq('id', publishedMessage.conversation_id)
+        .single()
+
+      // Only notify if there's an assigned instructor and user is the student
+      if (conversationDetails?.instructor_id && user.id === conversationDetails.student_id) {
+        // Get student profile for notification
+        const { data: studentProfile } = await (serviceClient as any)
+          .from('profiles')
+          .select('full_name, email, goal_title')
+          .eq('id', user.id)
+          .single()
+
+        // Notify the assigned instructor
+        await (serviceClient as any).rpc('notify_instructor', {
+          instructor_id: conversationDetails.instructor_id,
+          notification_type: 'daily_note',
+          notification_title: `New Daily Note from ${studentProfile?.full_name || 'Student'}`,
+          notification_message: publishedMessage.content.substring(0, 100) + (publishedMessage.content.length > 100 ? '...' : ''),
+          notification_metadata: {
+            noteId: publishedMessage.id,
+            studentName: studentProfile?.full_name || 'Unknown',
+            studentEmail: studentProfile?.email || user.email,
+            goalTitle: studentProfile?.goal_title || 'Unknown Goal',
+            noteDate: publishedMessage.target_date || new Date().toISOString().split('T')[0]
+          },
+          notification_action_url: `/instructor/student-goals/${user.id}`
+        })
+      }
+    } catch (notifError) {
+      // Log but don't fail if notification fails
+      console.error('Failed to send daily note notification:', notifError)
+    }
+  }
 
   // Broadcast WebSocket event
   if (conversation) {

@@ -45,10 +45,11 @@ class CourseEventObserver {
   emit(eventType: string, courseIdOrUserId: string, data: any, operationId?: string) {
     const startTime = performance.now()
 
-    // Determine if this is a user-specific event (like drafts/track requests) or course-specific
+    // Determine if this is a user-specific event (like drafts/track requests/notifications) or course-specific
     const isDraftEvent = Object.values(DRAFT_EVENTS).includes(eventType as any)
     const isTrackRequestEvent = Object.values(TRACK_REQUEST_EVENTS).includes(eventType as any)
-    const isUserSpecificEvent = isDraftEvent || isTrackRequestEvent
+    const isNotificationEvent = Object.values(NOTIFICATION_EVENTS).includes(eventType as any)
+    const isUserSpecificEvent = isDraftEvent || isTrackRequestEvent || isNotificationEvent
 
     const event: CourseEvent = {
       type: eventType,
@@ -338,6 +339,30 @@ export interface TrackRequestApprovedEvent {
   timestamp: string
 }
 
+// Notification event interfaces
+export interface NotificationCreatedEvent {
+  notificationId: string
+  userId: string // Instructor receiving notification
+  type: 'track_request' | 'daily_note' | 'revenue_submission' | 'system'
+  title: string
+  message?: string
+  metadata?: any
+  actionUrl?: string
+  timestamp: string
+}
+
+export interface NotificationReadEvent {
+  notificationId: string
+  userId: string
+  timestamp: string
+}
+
+export interface NotificationReadAllEvent {
+  userId: string
+  count: number
+  timestamp: string
+}
+
 // Event type constants
 export const COURSE_EVENTS = {
   CHAPTER_UPDATE_COMPLETE: 'chapter-update-complete',
@@ -397,6 +422,13 @@ export const TRACK_REQUEST_EVENTS = {
   REQUEST_APPROVED: 'track-request-approved'
 } as const
 
+// Notification events (real-time instructor notifications)
+export const NOTIFICATION_EVENTS = {
+  NOTIFICATION_CREATED: 'notification-created',
+  NOTIFICATION_READ: 'notification-read',
+  NOTIFICATION_READ_ALL: 'notification-read-all'
+} as const
+
 export type CourseEventType = typeof COURSE_EVENTS[keyof typeof COURSE_EVENTS]
 export type MediaEventType = typeof MEDIA_EVENTS[keyof typeof MEDIA_EVENTS]
 export type ConversationEventType = typeof CONVERSATION_EVENTS[keyof typeof CONVERSATION_EVENTS]
@@ -404,7 +436,8 @@ export type StudentEventType = typeof STUDENT_EVENTS[keyof typeof STUDENT_EVENTS
 export type CourseGoalEventType = typeof COURSE_GOAL_EVENTS[keyof typeof COURSE_GOAL_EVENTS]
 export type DraftEventType = typeof DRAFT_EVENTS[keyof typeof DRAFT_EVENTS]
 export type TrackRequestEventType = typeof TRACK_REQUEST_EVENTS[keyof typeof TRACK_REQUEST_EVENTS]
-export type AllEventType = CourseEventType | MediaEventType | ConversationEventType | StudentEventType | CourseGoalEventType | DraftEventType | TrackRequestEventType
+export type NotificationEventType = typeof NOTIFICATION_EVENTS[keyof typeof NOTIFICATION_EVENTS]
+export type AllEventType = CourseEventType | MediaEventType | ConversationEventType | StudentEventType | CourseGoalEventType | DraftEventType | TrackRequestEventType | NotificationEventType
 
 // Development utilities
 if (process.env.NODE_ENV === 'development') {

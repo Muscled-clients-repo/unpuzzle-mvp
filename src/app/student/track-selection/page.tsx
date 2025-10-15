@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle, ArrowUpDown, Loader2, Clock, Sparkles, BookOpen } from 'lucide-react'
-import { getUserCurrentTrack, getAllTracks, createRequest, getStudentTrackChangeStatus } from '@/lib/actions/request-actions'
+import { getUserCurrentTrack, getAllTracks, getStudentTrackChangeStatus } from '@/lib/actions/request-actions'
 import { toast } from 'sonner'
 import { useAppStore } from '@/stores/app-store'
 import { useTrackRequestWebSocket } from '@/hooks/use-track-request-websocket'
@@ -21,6 +21,7 @@ interface Track {
 export default function TrackSelectionPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const [isCheckingRequest, setIsCheckingRequest] = useState(false)
 
   // Select user directly from store (correct pattern)
   const user = useAppStore((state) => state.user)
@@ -40,44 +41,35 @@ export default function TrackSelectionPage() {
     queryFn: getAllTracks
   })
 
-  // Check for pending track change requests
+  // Check for pending track change requests (only show on page, not block navigation)
   const { data: pendingRequest, isLoading: pendingRequestLoading } = useQuery({
     queryKey: ['student-track-change-status'],
-    queryFn: () => getStudentTrackChangeStatus('current-user'), // Will use current user internally
-    enabled: !!currentTrack // Only run if we have current track data
+    queryFn: () => getStudentTrackChangeStatus('current-user'),
+    enabled: !!currentTrack
   })
 
-  // Request track switch mutation
-  const requestSwitchMutation = useMutation({
-    mutationFn: async (desiredTrack: Track) => {
-      return createRequest({
-        request_type: 'track_change',
-        title: `Request to switch to ${desiredTrack.name}`,
-        description: `I would like to switch from my current track "${currentTrack?.name}" to "${desiredTrack.name}".`,
-        metadata: {
-          current_track: currentTrack?.name || 'Unknown',
-          current_track_id: currentTrack?.id || null,
-          desired_track: desiredTrack.name,
-          desired_track_id: desiredTrack.id
-        },
-        priority: 'medium'
-      })
-    },
-    onSuccess: () => {
-      toast.success('Track switch request submitted! An instructor will review your request.')
-      queryClient.invalidateQueries({ queryKey: ['user-requests'] })
-    },
-    onError: (error) => {
-      toast.error('Failed to submit request')
-      console.error(error)
+  const handleRequestSwitch = async (desiredTrack: Track) => {
+    setIsCheckingRequest(true)
+    try {
+      // Check for pending requests first
+      const pendingRequest = await getStudentTrackChangeStatus('current-user')
+
+      if (pendingRequest && (pendingRequest.status === 'pending' || pendingRequest.status === 'in_review')) {
+        // Show message about existing pending request
+        setIsCheckingRequest(false)
+        toast.error('You already have a pending track change request. Please wait for it to be reviewed by an instructor.')
+        return
+      }
+
+      // If no pending requests, redirect to questionnaire
+      const trackType = desiredTrack.name.toLowerCase().includes('saas') ? 'saas' : 'agency'
+      const questionnaireUrl = `/student/track-selection/questionnaire?track=${trackType}&track_change=true&desired_track=${encodeURIComponent(desiredTrack.name)}`
+      window.location.href = questionnaireUrl
+    } catch (error) {
+      console.error('Error checking pending requests:', error)
+      setIsCheckingRequest(false)
+      toast.error('Failed to process request. Please try again.')
     }
-  })
-
-  const handleRequestSwitch = (desiredTrack: Track) => {
-    // Instead of directly submitting the request, redirect to questionnaire first
-    const trackType = desiredTrack.name.toLowerCase().includes('saas') ? 'saas' : 'agency'
-    const questionnaireUrl = `/student/track-selection/questionnaire?track=${trackType}&track_change=true&desired_track=${encodeURIComponent(desiredTrack.name)}`
-    window.location.href = questionnaireUrl
   }
 
   // Find the other available track (not current track)
@@ -235,13 +227,13 @@ export default function TrackSelectionPage() {
 
                 <Button
                   onClick={() => handleRequestSwitch(otherTrack)}
-                  disabled={requestSwitchMutation.isPending}
+                  disabled={isCheckingRequest}
                   className="w-full"
                 >
-                  {requestSwitchMutation.isPending ? (
+                  {isCheckingRequest ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Submitting Request...
+                      Loading...
                     </>
                   ) : (
                     `Request to Switch to ${otherTrack.name}`

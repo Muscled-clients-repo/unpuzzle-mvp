@@ -80,20 +80,23 @@ export function useVideoEditor() {
   // Set canvas when it becomes available
   useEffect(() => {
     if (canvasRef.current && engineRef.current) {
+      console.log('🎨 Setting canvas on engine')
       engineRef.current.setCanvas(canvasRef.current)
     }
-  }, [])
+  }, [canvasRef.current])
 
   // Set video elements when they become available
   useEffect(() => {
     if (!engineRef.current) return
 
     if (videoRef.current && bufferVideoRef.current) {
+      console.log('🎥 Setting video elements on engine (dual video)')
       engineRef.current.setVideoElements(videoRef.current, bufferVideoRef.current)
     } else if (videoRef.current) {
+      console.log('🎥 Setting video element on engine (single video)')
       engineRef.current.setVideoElement(videoRef.current)
     }
-  }, [])
+  }, [videoRef.current, bufferVideoRef.current])
   
   // Initialize history with empty state
   useEffect(() => {

@@ -319,10 +319,12 @@ export default function MediaPage() {
   }, [mediaFiles, debouncedSearchQuery, filterType, selectedInstructorCourse])
 
   // Filter tags for autocomplete suggestions
-  const tagSuggestions = existingTags.filter(tag =>
-    tag.toLowerCase().includes(searchQuery.toLowerCase()) && 
-    searchQuery.length > 0
-  ).slice(0, 5) // Limit to 5 suggestions
+  const tagSuggestions = Array.isArray(existingTags)
+    ? existingTags.filter(tag =>
+        tag.toLowerCase().includes(searchQuery.toLowerCase()) &&
+        searchQuery.length > 0
+      ).slice(0, 5) // Limit to 5 suggestions
+    : []
 
   const handleTagSuggestionClick = (tag: string) => {
     setSearchQuery(tag)

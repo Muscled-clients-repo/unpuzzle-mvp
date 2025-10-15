@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { NotificationBell } from "@/components/notifications/NotificationBell"
 import {
   Bell, Search, User, Menu, Eye, LogOut, ChevronLeft, GraduationCap, BookOpen
 } from "lucide-react"
@@ -208,10 +209,8 @@ function HeaderActions({ user, userRole, userDatabaseRole, onSignOut }: HeaderAc
       {user ? (
         <>
           {/* Notifications */}
-          <Button variant="ghost" size="icon">
-            <Bell className="h-5 w-5" />
-          </Button>
-          
+          <NotificationBell />
+
           {/* User menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
