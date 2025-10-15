@@ -5,7 +5,6 @@ WORKDIR /app
 
 # Copy WebSocket server files
 COPY websocket-server.js ./
-COPY transcription-worker.js ./
 COPY package.json package-lock.json* ./
 
 # Install only production dependencies
