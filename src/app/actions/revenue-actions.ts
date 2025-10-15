@@ -99,6 +99,37 @@ export async function submitRevenueProof(params: {
       return { error: 'Failed to submit revenue proof' }
     }
 
+    // Notify instructor about new revenue submission
+    if (conversation.instructor_id) {
+      try {
+        // Get student profile for notification
+        const { data: studentProfile } = await supabase
+          .from('profiles')
+          .select('full_name, email, goal_title')
+          .eq('id', user.id)
+          .single()
+
+        // Notify the assigned instructor
+        await supabase.rpc('notify_instructor', {
+          instructor_id: conversation.instructor_id,
+          notification_type: 'revenue_submission',
+          notification_title: `New Revenue Submission from ${studentProfile?.full_name || 'Student'}`,
+          notification_message: `${studentProfile?.full_name || 'Student'} submitted $${params.amount.toLocaleString()} in revenue for review`,
+          notification_metadata: {
+            submissionId: message.id,
+            studentName: studentProfile?.full_name || 'Unknown',
+            studentEmail: studentProfile?.email || user.email,
+            amount: params.amount,
+            goalTitle: studentProfile?.goal_title || 'Unknown Goal'
+          },
+          notification_action_url: `/instructor/student-goals/${user.id}`
+        })
+      } catch (notifError) {
+        // Log but don't fail the submission if notification fails
+        console.error('Failed to send revenue submission notification:', notifError)
+      }
+    }
+
     revalidatePath('/student/goals')
     return { success: true, messageId: message.id }
   } catch (error) {
@@ -250,6 +281,34 @@ export async function reviewRevenueSubmission(params: {
       if (revenueError) {
         console.error('Error updating user revenue:', revenueError)
         // Don't return error - message is already updated, this is just a sync issue
+      }
+
+      // Notify student about approved revenue submission
+      try {
+        // Get student profile for notification
+        const { data: studentProfile } = await supabase
+          .from('profiles')
+          .select('full_name, goal_title')
+          .eq('id', conversation.student_id)
+          .single()
+
+        // Notify the student
+        await supabase.rpc('notify_instructor', {
+          instructor_id: conversation.student_id, // Using the student_id here since notify_instructor sends to user_id
+          notification_type: 'system',
+          notification_title: `Revenue Submission Approved!`,
+          notification_message: `Your $${metadata.submitted_amount.toLocaleString()} revenue submission has been approved and added to your progress.`,
+          notification_metadata: {
+            submissionId: params.messageId,
+            amount: metadata.submitted_amount,
+            goalTitle: studentProfile?.goal_title || 'Your Goal',
+            trackType: metadata.track_type
+          },
+          notification_action_url: `/student/goals`
+        })
+      } catch (notifError) {
+        // Log but don't fail if notification fails
+        console.error('Failed to send approval notification:', notifError)
       }
     }
 

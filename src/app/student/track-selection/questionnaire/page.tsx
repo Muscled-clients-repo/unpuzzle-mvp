@@ -16,9 +16,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { ChevronLeft, ChevronRight, Target, Clock, Zap, BookOpen, Lightbulb, Palette, Code } from 'lucide-react'
 import { submitQuestionnaire } from '@/lib/actions/track-actions'
 import { assignTrackByType } from '@/lib/actions/track-helpers'
-import { createTrackChangeRequestWithQuestionnaire, getUserCurrentTrack, checkPendingTrackRequest } from '@/lib/actions/request-actions'
+import { createTrackChangeRequestWithQuestionnaire, getUserCurrentTrack } from '@/lib/actions/request-actions'
 import { toast } from 'sonner'
-import { useEffect } from 'react'
 
 interface QuestionnaireData {
   // Agency track fields
@@ -211,41 +210,12 @@ function QuestionnaireContent() {
     approachPreference: 'direct'
   })
   const [touchedSliders, setTouchedSliders] = useState<Set<string>>(new Set())
-  const [checkingPending, setCheckingPending] = useState(true)
-
-  // Check for existing pending request
-  useEffect(() => {
-    const checkForPendingRequest = async () => {
-      try {
-        const pendingRequest = await checkPendingTrackRequest()
-
-        if (pendingRequest) {
-          // User has a pending request, redirect to dashboard
-          toast.info('You already have a track change request pending review. Please wait for instructor approval.')
-          router.push('/student/dashboard')
-        } else {
-          // No pending request, allow questionnaire
-          setCheckingPending(false)
-        }
-      } catch (error) {
-        console.error('Error checking pending requests:', error)
-        setCheckingPending(false)
-      }
-    }
-
-    // Only check for pending request if this is a change request
-    if (isChangeRequest) {
-      checkForPendingRequest()
-    } else {
-      setCheckingPending(false)
-    }
-  }, [isChangeRequest, router])
 
   // Get current track if this is a change request
   const { data: currentTrackData } = useQuery({
     queryKey: ['currentTrack'],
     queryFn: getUserCurrentTrack,
-    enabled: isChangeRequest && !checkingPending
+    enabled: isChangeRequest
   })
 
   const questions = selectedTrack === 'agency'
@@ -329,19 +299,6 @@ function QuestionnaireContent() {
             <Button onClick={() => router.push('/student/track-selection')} className="mt-4">
               Go Back
             </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  // Show loading while checking for pending requests
-  if (checkingPending) {
-    return (
-      <div className="container mx-auto p-4 max-w-2xl">
-        <Card>
-          <CardContent className="p-8 text-center">
-            <p className="text-lg text-muted-foreground">Checking for existing requests...</p>
           </CardContent>
         </Card>
       </div>
