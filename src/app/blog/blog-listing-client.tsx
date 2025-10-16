@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
@@ -8,12 +8,11 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
-import { useAppStore } from "@/stores/app-store"
 import { BlogPost } from "@/types/blog"
-import { 
-  Calendar, 
-  Clock, 
-  Search, 
+import {
+  Calendar,
+  Clock,
+  Search,
   ArrowRight,
   TrendingUp,
   BookOpen,
@@ -26,17 +25,13 @@ interface BlogListingClientProps {
   featuredPosts: BlogPost[]
 }
 
-export function BlogListingClient({ 
-  initialPosts, 
-  categories, 
-  featuredPosts 
+export function BlogListingClient({
+  initialPosts,
+  categories,
+  featuredPosts
 }: BlogListingClientProps) {
-  const { 
-    selectedCategory,
-    searchQuery,
-    setSelectedCategory,
-    setSearchQuery
-  } = useAppStore()
+  const [selectedCategory, setSelectedCategory] = useState('all')
+  const [searchQuery, setSearchQuery] = useState('')
 
   // Filter posts client-side based on UI state
   const filteredPosts = useMemo(() => {
@@ -66,8 +61,8 @@ export function BlogListingClient({
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      
-      <main className="flex-1">
+
+      <main className="flex-1 pt-20">
         {/* Hero Section */}
         <section className="bg-gradient-to-b from-primary/10 to-background py-16">
           <div className="container px-4">

@@ -8,9 +8,14 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { BlogPost } from "@/types/blog"
 import { useAppStore } from "@/stores/app-store"
-import { 
-  Calendar, 
-  Clock, 
+import { EnhancedAuthorBio } from "@/components/blog/EnhancedAuthorBio"
+import { TableOfContents } from "@/components/blog/TableOfContents"
+import { SocialProof } from "@/components/blog/SocialProof"
+import { ReadingProgress } from "@/components/blog/ReadingProgress"
+import { Comments } from "@/components/blog/Comments"
+import {
+  Calendar,
+  Clock,
   ArrowLeft,
   ArrowRight,
   Share2,
@@ -49,15 +54,21 @@ export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) 
   const formatContent = (content: string) => {
     return content.split('\n').map((line, index) => {
       if (line.startsWith('### ')) {
-        return <h3 key={index} className="text-xl font-semibold mt-6 mb-3">{line.replace('### ', '')}</h3>
+        const text = line.replace('### ', '')
+        const id = `heading-${index}-${text.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+        return <h3 key={index} id={id} className="text-xl font-semibold mt-6 mb-3 scroll-mt-20">{text}</h3>
       }
       if (line.startsWith('## ')) {
-        return <h2 key={index} className="text-2xl font-bold mt-8 mb-4">{line.replace('## ', '')}</h2>
+        const text = line.replace('## ', '')
+        const id = `heading-${index}-${text.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+        return <h2 key={index} id={id} className="text-2xl font-bold mt-8 mb-4 scroll-mt-20">{text}</h2>
       }
       if (line.startsWith('# ')) {
-        return <h1 key={index} className="text-3xl font-bold mt-8 mb-4">{line.replace('# ', '')}</h1>
+        const text = line.replace('# ', '')
+        const id = `heading-${index}-${text.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+        return <h1 key={index} id={id} className="text-3xl font-bold mt-8 mb-4 scroll-mt-20">{text}</h1>
       }
-      
+
       if (line.startsWith('- ')) {
         return (
           <li key={index} className="ml-6 mb-2 list-disc">
@@ -65,22 +76,22 @@ export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) 
           </li>
         )
       }
-      
+
       if (line.includes('**')) {
         const parts = line.split('**')
         return (
           <p key={index} className="mb-4 text-muted-foreground leading-relaxed">
-            {parts.map((part, i) => 
+            {parts.map((part, i) =>
               i % 2 === 1 ? <strong key={i} className="text-foreground font-semibold">{part}</strong> : part
             )}
           </p>
         )
       }
-      
+
       if (line.trim()) {
         return <p key={index} className="mb-4 text-muted-foreground leading-relaxed">{line}</p>
       }
-      
+
       return null
     })
   }
@@ -104,10 +115,11 @@ export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) 
 
   return (
     <div className="min-h-screen flex flex-col">
+      <ReadingProgress />
       <Header />
       
-      <main className="flex-1">
-        <article className="container max-w-4xl mx-auto px-4 py-12">
+      <main className="flex-1 pt-20">
+        <div className="container max-w-7xl mx-auto px-4 py-8">
           <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-8">
             <Link href="/" className="hover:text-foreground">Home</Link>
             <ChevronRight className="h-3 w-3" />
@@ -116,7 +128,11 @@ export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) 
             <span className="text-foreground">{post.category}</span>
           </nav>
 
-          <header className="mb-8">
+          <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-12">
+            <TableOfContents content={post.content} />
+
+            <article className="min-w-0">
+              <header className="mb-8">
             <Badge className="mb-4" variant="secondary">
               {post.category}
             </Badge>
@@ -131,27 +147,49 @@ export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) 
             
             <div className="flex flex-wrap items-center gap-6 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
-                <div className="h-10 w-10 rounded-full bg-muted" />
+                <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary/20 to-purple-600/20 flex items-center justify-center">
+                  <span className="text-sm font-bold text-primary">
+                    {post.author.name.split(' ').map(n => n[0]).join('')}
+                  </span>
+                </div>
                 <div>
                   <p className="font-medium text-foreground">{post.author.name}</p>
                   <p className="text-xs">{post.author.role}</p>
                 </div>
               </div>
-              
+
               <div className="flex items-center gap-1">
                 <Calendar className="h-4 w-4" />
-                {new Date(post.publishedAt).toLocaleDateString('en-US', { 
-                  month: 'long', 
-                  day: 'numeric', 
-                  year: 'numeric' 
+                {new Date(post.publishedAt).toLocaleDateString('en-US', {
+                  month: 'long',
+                  day: 'numeric',
+                  year: 'numeric'
                 })}
               </div>
-              
+
+              {post.updatedAt && post.updatedAt !== post.publishedAt && (
+                <div className="flex items-center gap-1">
+                  <Calendar className="h-4 w-4" />
+                  Updated {new Date(post.updatedAt).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                  })}
+                </div>
+              )}
+
               <div className="flex items-center gap-1">
                 <Clock className="h-4 w-4" />
                 {post.readingTime} min read
               </div>
             </div>
+
+            <SocialProof
+              views={post.views}
+              likes={post.likes}
+              shares={post.shares}
+              className="mt-6 pt-6 border-t"
+            />
           </header>
 
           <div className="aspect-video bg-gradient-to-br from-primary/20 to-purple-600/20 rounded-lg mb-8" />
@@ -209,28 +247,12 @@ export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) 
             </div>
           )}
 
-          <div className="bg-muted rounded-lg p-6 mt-12">
-            <div className="flex items-start gap-4">
-              <div className="h-16 w-16 rounded-full bg-background" />
-              <div className="flex-1">
-                <h3 className="font-semibold mb-1">About {post.author.name}</h3>
-                <p className="text-sm text-muted-foreground mb-3">{post.author.role}</p>
-                <p className="text-sm text-muted-foreground">
-                  Passionate about transforming education through technology. 
-                  Helping thousands of learners achieve their goals through AI-enhanced learning experiences.
-                </p>
-                <div className="flex gap-2 mt-4">
-                  <Button size="sm" variant="outline">
-                    View Profile
-                  </Button>
-                  <Button size="sm" variant="outline">
-                    Follow
-                  </Button>
-                </div>
-              </div>
-            </div>
+          <EnhancedAuthorBio author={post.author} />
+
+          <Comments comments={post.comments} postId={post.id} />
+            </article>
           </div>
-        </article>
+        </div>
 
         {relatedPosts.length > 0 && (
           <section className="bg-muted py-12">
