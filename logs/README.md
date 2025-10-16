@@ -23,3 +23,5 @@ some things to know:
 20w ans = Me asking claude code to give me max 20 word answer
 
 Don't give timeline when making implementation plans such as "week 1" or Week 2 or how many days etc because we're using claude code which makes the work get done within minutes or hours at most.
+
+When asked to create a md file, after you finish creating it, dont start executing on it unless told otherwise. Always get confirmation to execute on it from the user.
