@@ -9,26 +9,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Bug,
   Lightbulb,
-  ArrowUpDown,
-  DollarSign,
   Clock,
   CheckCircle,
   XCircle,
   AlertCircle,
   Eye
 } from 'lucide-react'
-import { getAllRequests, updateRequestStatus, acceptTrackChangeRequest } from '@/lib/actions/request-actions'
+import { getAllRequests, updateRequestStatus } from '@/lib/actions/request-actions'
 import { toast } from 'sonner'
-import AcceptTrackChangeModal from '@/components/instructor/AcceptTrackChangeModal'
 
-export default function RequestsPage() {
+export default function AdminRequestsPage() {
   const [filter, setFilter] = useState<string>('all')
-  const [acceptModalOpen, setAcceptModalOpen] = useState(false)
-  const [selectedRequest, setSelectedRequest] = useState<any>(null)
   const queryClient = useQueryClient()
 
   const { data: requests, isLoading } = useQuery({
-    queryKey: ['all-requests'],
+    queryKey: ['admin-requests'],
     queryFn: getAllRequests
   })
 
@@ -36,7 +31,7 @@ export default function RequestsPage() {
     mutationFn: ({ requestId, status }: { requestId: string; status: string }) =>
       updateRequestStatus(requestId, status),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['all-requests'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-requests'] })
       toast.success('Request status updated successfully')
     },
     onError: () => {
@@ -44,36 +39,10 @@ export default function RequestsPage() {
     }
   })
 
-  const acceptTrackChangeMutation = useMutation({
-    mutationFn: ({ requestId, goalId }: { requestId: string; goalId?: string }) =>
-      acceptTrackChangeRequest(requestId, goalId),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['all-requests'] })
-      setAcceptModalOpen(false)
-      setSelectedRequest(null)
-      toast.success(data.message)
-    },
-    onError: (error) => {
-      toast.error('Failed to accept track change request')
-      console.error(error)
-    }
-  })
-
-  const handleAcceptTrackChange = (request: any) => {
-    setSelectedRequest(request)
-    setAcceptModalOpen(true)
-  }
-
-  const handleModalAccept = (requestId: string, goalId: string) => {
-    acceptTrackChangeMutation.mutate({ requestId, goalId })
-  }
-
   const getRequestIcon = (type: string) => {
     switch (type) {
       case 'bug_report': return <Bug className="h-4 w-4 text-red-500" />
       case 'feature_request': return <Lightbulb className="h-4 w-4 text-blue-500" />
-      case 'track_change': return <ArrowUpDown className="h-4 w-4 text-orange-500" />
-      case 'refund': return <DollarSign className="h-4 w-4 text-green-500" />
       default: return <AlertCircle className="h-4 w-4 text-gray-500" />
     }
   }
@@ -110,12 +79,12 @@ export default function RequestsPage() {
     }
   }
 
-  // Instructors only see track_change requests (NOT bug_report or feature_request - those go to admin)
-  const instructorRequests = requests?.filter(request =>
-    request.request_type === 'track_change'
+  // Filter to only show bug_report and feature_request types (not track_change or refund)
+  const adminRequests = requests?.filter(request =>
+    request.request_type === 'bug_report' || request.request_type === 'feature_request'
   ) || []
 
-  const filteredRequests = instructorRequests.filter(request => {
+  const filteredRequests = adminRequests.filter(request => {
     if (filter === 'all') return true
     return request.request_type === filter
   })
@@ -138,10 +107,10 @@ export default function RequestsPage() {
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-          Student Requests
+          Platform Requests
         </h1>
         <p className="text-gray-600 dark:text-gray-400">
-          Manage student requests for bug reports, features, track changes, and refunds.
+          Manage bug reports and feature requests from the community.
         </p>
       </div>
 
@@ -153,7 +122,8 @@ export default function RequestsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Requests</SelectItem>
-            <SelectItem value="track_change">Track Changes</SelectItem>
+            <SelectItem value="bug_report">Bug Reports</SelectItem>
+            <SelectItem value="feature_request">Feature Requests</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -197,21 +167,6 @@ export default function RequestsPage() {
                 {/* Request Type Specific Metadata */}
                 {request.metadata && (
                   <>
-                    {/* Track Change Metadata */}
-                    {request.request_type === 'track_change' && (
-                      <div className="bg-blue-50 dark:bg-blue-800/20 p-3 rounded-lg">
-                        <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">
-                          Track Change Details:
-                        </p>
-                        <p className="text-sm text-blue-700 dark:text-blue-300">
-                          From: <span className="font-medium">{request.metadata.current_track}</span>
-                        </p>
-                        <p className="text-sm text-blue-700 dark:text-blue-300">
-                          To: <span className="font-medium">{request.metadata.desired_track}</span>
-                        </p>
-                      </div>
-                    )}
-
                     {/* Bug Report Metadata */}
                     {request.request_type === 'bug_report' && (
                       <div className="bg-red-50 dark:bg-red-800/20 p-3 rounded-lg space-y-2">
@@ -298,20 +253,14 @@ export default function RequestsPage() {
                         size="sm"
                         variant="outline"
                         className="text-green-600 border-green-600 hover:bg-green-50"
-                        onClick={() => {
-                          if (request.request_type === 'track_change') {
-                            handleAcceptTrackChange(request)
-                          } else {
-                            updateStatusMutation.mutate({
-                              requestId: request.id,
-                              status: 'approved'
-                            })
-                          }
-                        }}
-                        disabled={updateStatusMutation.isPending || acceptTrackChangeMutation.isPending}
+                        onClick={() => updateStatusMutation.mutate({
+                          requestId: request.id,
+                          status: 'approved'
+                        })}
+                        disabled={updateStatusMutation.isPending}
                       >
                         <CheckCircle className="h-4 w-4 mr-1" />
-                        {request.request_type === 'track_change' ? 'Accept & Assign Goal' : 'Approve'}
+                        Approve
                       </Button>
                       <Button
                         size="sm"
@@ -348,18 +297,6 @@ export default function RequestsPage() {
           ))
         )}
       </div>
-
-      {/* Accept Track Change Modal */}
-      <AcceptTrackChangeModal
-        isOpen={acceptModalOpen}
-        onClose={() => {
-          setAcceptModalOpen(false)
-          setSelectedRequest(null)
-        }}
-        request={selectedRequest}
-        onAccept={handleModalAccept}
-        isAccepting={acceptTrackChangeMutation.isPending}
-      />
     </div>
   )
 }

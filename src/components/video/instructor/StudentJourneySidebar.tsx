@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -8,9 +8,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import {
   MessageSquare, Send, Search,
-  Mic, Image, Video, Play, CheckCircle
+  Mic, Image, Video, Play, CheckCircle, BookOpen, Trophy, MessageCircle
 } from "lucide-react"
 import { useAppStore } from "@/stores/app-store"
+import {
+  getStudentVideoActivities,
+  getAllStudentsVideoActivities,
+  type Activity
+} from "@/lib/actions/activity-timeline-actions"
 
 interface StudentJourneySidebarProps {
   videoId: string
@@ -32,14 +37,32 @@ export function StudentJourneySidebar({
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
   const [studentSearchQuery, setStudentSearchQuery] = useState("")
   const [isStudentSearchFocused, setIsStudentSearchFocused] = useState(false)
-  const [selectedStudentId, setSelectedStudentId] = useState('sarah_chen')
+  const [selectedStudentId, setSelectedStudentId] = useState<string>('all')
 
-  // Mock data - All available students
-  const allStudents = [
-    { id: 'sarah_chen', name: 'Sarah Chen', email: 'sarah.chen@example.com', reflectionCount: 4 },
-    { id: 'mike_johnson', name: 'Mike Johnson', email: 'mike.j@company.com', reflectionCount: 2 },
-    { id: 'emma_wilson', name: 'Emma Wilson', email: 'emma.w@university.edu', reflectionCount: 3 }
-  ]
+  // Real data state
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Get unique students from activities
+  const allStudents = Array.from(
+    new Map(
+      activities
+        .filter(a => a.student_name && a.student_email)
+        .map(a => [
+          a.user_id,
+          {
+            id: a.user_id,
+            name: a.student_name!,
+            email: a.student_email!,
+            reflectionCount: activities.filter(act =>
+              act.user_id === a.user_id &&
+              ['text', 'screenshot', 'voice', 'loom'].includes(act.activity_type)
+            ).length
+          }
+        ])
+    ).values()
+  )
 
   // Filter students for search
   const filteredStudents = allStudents.filter(student =>
@@ -47,173 +70,91 @@ export function StudentJourneySidebar({
     student.email.toLowerCase().includes(studentSearchQuery.toLowerCase())
   )
 
-  // Mock student journey data
-  const getStudentJourneyData = (studentId: string) => {
-    const journeys = {
-      'sarah_chen': {
-        student: {
-          id: 'sarah_chen',
-          name: 'Sarah Chen',
-          email: 'sarah.chen@example.com',
-          metrics: {
-            learnRate: 45,
-            executionRate: 92,
-            executionPace: 28,
-            courseProgress: 75,
-            videoProgress: 94,
-            quizScore: 9
-          }
-        },
-        reflections: [
-          {
-            id: 'r1',
-            timestamp: '2:15',
-            timeInSeconds: 135,
-            content: 'Great introduction! The roadmap really helps me understand what\'s coming.',
-            status: 'responded' as const,
-            response: 'Thanks Sarah! Glad the roadmap helped set expectations.',
-            sentiment: 'positive' as const,
-            type: 'text' as const
-          },
-          {
-            id: 'r2',
-            timestamp: '12:45',
-            timeInSeconds: 765,
-            content: 'Voice memo about useCallback vs useMemo',
-            audioUrl: '/mock-audio.mp3',
-            duration: '0:45',
-            status: 'unresponded' as const,
-            sentiment: 'positive' as const,
-            type: 'voice' as const
-          },
-          {
-            id: 'r3',
-            timestamp: '18:32',
-            timeInSeconds: 1112,
-            content: 'Screenshot showing console error with useEffect',
-            imageUrl: '/mock-screenshot.png',
-            status: 'unresponded' as const,
-            type: 'screenshot' as const,
-            sentiment: 'confused' as const
-          },
-          {
-            id: 'r4',
-            timestamp: '22:10',
-            timeInSeconds: 1330,
-            content: 'Loom video walkthrough of my implementation',
-            videoUrl: 'https://loom.com/share/mock',
-            duration: '2:30',
-            status: 'unresponded' as const,
-            type: 'loom' as const,
-            sentiment: 'neutral' as const
-          }
-        ]
-      },
-      'mike_johnson': {
-        student: {
-          id: 'mike_johnson',
-          name: 'Mike Johnson',
-          email: 'mike.j@company.com',
-          metrics: {
-            learnRate: 38,
-            executionRate: 85,
-            executionPace: 35,
-            courseProgress: 60,
-            videoProgress: 78,
-            quizScore: 8
-          }
-        },
-        reflections: [
-          {
-            id: 'r5',
-            timestamp: '5:30',
-            timeInSeconds: 330,
-            content: 'Following along but the pace is a bit fast.',
-            status: 'unresponded' as const,
-            sentiment: 'neutral' as const,
-            type: 'text' as const
-          },
-          {
-            id: 'r6',
-            timestamp: '15:20',
-            timeInSeconds: 920,
-            content: 'Voice memo with my confusion about dependency arrays',
-            audioUrl: '/mock-audio-2.mp3',
-            duration: '1:20',
-            status: 'unresponded' as const,
-            type: 'voice' as const,
-            sentiment: 'confused' as const
-          }
-        ]
-      },
-      'emma_wilson': {
-        student: {
-          id: 'emma_wilson',
-          name: 'Emma Wilson',
-          email: 'emma.w@university.edu',
-          metrics: {
-            learnRate: 52,
-            executionRate: 95,
-            executionPace: 22,
-            courseProgress: 80,
-            videoProgress: 100,
-            quizScore: 10
-          }
-        },
-        reflections: [
-          {
-            id: 'r7',
-            timestamp: '8:20',
-            timeInSeconds: 500,
-            content: 'The React.memo explanation with practical examples was exactly what I needed!',
-            status: 'unresponded' as const,
-            sentiment: 'positive' as const,
-            type: 'text' as const
-          },
-          {
-            id: 'r8',
-            timestamp: '16:45',
-            timeInSeconds: 1005,
-            content: 'Loom walkthrough of how I implemented memoization in my project',
-            videoUrl: 'https://loom.com/share/mock-emma',
-            duration: '3:15',
-            status: 'unresponded' as const,
-            type: 'loom' as const,
-            sentiment: 'positive' as const
-          }
-        ]
+  // Fetch activities when videoId or selectedStudentId changes
+  useEffect(() => {
+    const fetchActivities = async () => {
+      setLoading(true)
+      setError(null)
+
+      try {
+        let result
+        if (selectedStudentId === 'all') {
+          result = await getAllStudentsVideoActivities({ videoId })
+        } else {
+          result = await getStudentVideoActivities({ videoId, studentId: selectedStudentId })
+        }
+
+        if (result.error) {
+          setError(result.error)
+          setActivities([])
+        } else {
+          setActivities(result.data || [])
+        }
+      } catch (err) {
+        setError('Failed to fetch activities')
+        setActivities([])
+      } finally {
+        setLoading(false)
       }
     }
 
-    return journeys[studentId as keyof typeof journeys] || null
-  }
+    fetchActivities()
+  }, [videoId, selectedStudentId])
 
-  const studentJourneyData = selectedStudentId === 'all' ? null : getStudentJourneyData(selectedStudentId)
+  // Transform Activity to reflection-like format for display
+  const transformActivityToReflection = (activity: Activity) => {
+    const timeInSeconds = activity.timestamp_seconds || 0
+    const timestamp = `${Math.floor(timeInSeconds / 60)}:${String(timeInSeconds % 60).padStart(2, '0')}`
 
-  // Get all reflections when viewing all students
-  const getAllReflections = () => {
-    const allReflections: any[] = []
-    allStudents.forEach(student => {
-      const journey = getStudentJourneyData(student.id)
-      if (journey) {
-        journey.reflections.forEach(reflection => {
-          allReflections.push({
-            ...reflection,
-            studentName: student.name,
-            studentId: student.id
-          })
-        })
+    // Base structure
+    const reflection: any = {
+      id: activity.id,
+      timestamp,
+      timeInSeconds,
+      content: activity.content || '',
+      status: 'unresponded' as const, // TODO: Check reflections table for responses
+      type: activity.activity_type,
+      studentName: activity.student_name,
+      studentId: activity.user_id
+    }
+
+    // Add type-specific fields
+    if (activity.metadata) {
+      const metadata = activity.metadata as any
+      if (activity.activity_type === 'voice' || activity.activity_type === 'loom') {
+        reflection.duration = metadata.duration_seconds
+          ? `${Math.floor(metadata.duration_seconds / 60)}:${String(metadata.duration_seconds % 60).padStart(2, '0')}`
+          : '0:00'
       }
-    })
-    return allReflections.sort((a, b) => b.timeInSeconds - a.timeInSeconds)
+      if (metadata.file_url) {
+        if (activity.activity_type === 'voice') reflection.audioUrl = metadata.file_url
+        if (activity.activity_type === 'screenshot') reflection.imageUrl = metadata.file_url
+        if (activity.activity_type === 'loom') reflection.videoUrl = metadata.file_url
+      }
+    }
+
+    return reflection
   }
 
-  const allStudentReflections = selectedStudentId === 'all' ? getAllReflections() : []
+  // Filter and transform activities for display
+  const displayActivities = activities
+    .filter(a => ['text', 'screenshot', 'voice', 'loom', 'quiz', 'ai_chat'].includes(a.activity_type))
+    .map(transformActivityToReflection)
+
+  // Get activities for selected student or all
+  const studentActivities = selectedStudentId === 'all'
+    ? displayActivities.sort((a, b) => b.timeInSeconds - a.timeInSeconds)
+    : displayActivities.filter(a => a.studentId === selectedStudentId)
+
+  // Get student data for selected student
+  const selectedStudent = selectedStudentId !== 'all'
+    ? allStudents.find(s => s.id === selectedStudentId)
+    : null
 
   // Navigation functions
   const navigateToReflection = (index: number) => {
-    if (studentJourneyData && studentJourneyData.reflections[index]) {
-      const reflection = studentJourneyData.reflections[index]
+    if (studentActivities[index]) {
+      const reflection = studentActivities[index]
       const time = reflection.timeInSeconds
       storeNavigateToReflection(index)
       setCurrentTime(time)
@@ -276,70 +217,72 @@ export function StudentJourneySidebar({
           </Button>
         </div>
 
-        {selectedStudentId === 'all' ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-4">
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center py-4">
+            <p className="text-sm text-red-500">{error}</p>
+          </div>
+        ) : selectedStudentId === 'all' ? (
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium">All Students</p>
-              <p className="text-sm text-muted-foreground">{allStudents.length} students total</p>
+              <p className="text-sm text-muted-foreground">{allStudents.length} students with activity</p>
             </div>
             <Badge variant="outline">
-              View all activity
+              {studentActivities.length} activities
             </Badge>
           </div>
-        ) : studentJourneyData && (
+        ) : selectedStudent ? (
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium">{studentJourneyData.student.name}</p>
-              <p className="text-sm text-muted-foreground">{studentJourneyData.student.email}</p>
+              <p className="font-medium">{selectedStudent.name}</p>
+              <p className="text-sm text-muted-foreground">{selectedStudent.email}</p>
             </div>
             <Badge variant="outline">
-              {studentJourneyData.reflections.filter(r => r.status === 'unresponded').length} unresponded
+              {studentActivities.filter(r => r.status === 'unresponded').length} unresponded
             </Badge>
           </div>
-        )}
+        ) : null}
       </div>
 
-      {/* Student Metrics */}
-      {selectedStudentId === 'all' ? (
+      {/* Student Metrics - Hidden for now, will add when metrics are available */}
+      {!loading && !error && studentActivities.length > 0 && (
         <div className="p-4 border-b grid grid-cols-3 gap-2 text-center flex-shrink-0">
           <div>
-            <p className="text-2xl font-bold">42</p>
-            <p className="text-xs text-muted-foreground">avg min/hr</p>
+            <p className="text-2xl font-bold">{studentActivities.filter(a => ['text', 'screenshot', 'voice', 'loom'].includes(a.type)).length}</p>
+            <p className="text-xs text-muted-foreground">reflections</p>
           </div>
           <div>
-            <p className="text-2xl font-bold">89%</p>
-            <p className="text-xs text-muted-foreground">avg execution</p>
+            <p className="text-2xl font-bold">{studentActivities.filter(a => a.type === 'quiz').length}</p>
+            <p className="text-xs text-muted-foreground">quizzes</p>
           </div>
           <div>
-            <p className="text-2xl font-bold">28s</p>
-            <p className="text-xs text-muted-foreground">avg pace</p>
-          </div>
-        </div>
-      ) : studentJourneyData && (
-        <div className="p-4 border-b grid grid-cols-3 gap-2 text-center flex-shrink-0">
-          <div>
-            <p className="text-2xl font-bold">{studentJourneyData.student.metrics.learnRate}</p>
-            <p className="text-xs text-muted-foreground">min/hr</p>
-          </div>
-          <div>
-            <p className="text-2xl font-bold">{studentJourneyData.student.metrics.executionRate}%</p>
-            <p className="text-xs text-muted-foreground">execution</p>
-          </div>
-          <div>
-            <p className="text-2xl font-bold">{studentJourneyData.student.metrics.executionPace}s</p>
-            <p className="text-xs text-muted-foreground">pace</p>
+            <p className="text-2xl font-bold">{studentActivities.filter(a => a.type === 'ai_chat').length}</p>
+            <p className="text-xs text-muted-foreground">AI chats</p>
           </div>
         </div>
       )}
 
-      {/* Student Reflections List */}
+      {/* Student Activities List */}
       <div className="flex-1 overflow-y-auto">
-        <div className="p-4 space-y-3">
-          <h3 className="font-medium text-sm text-muted-foreground mb-3">
-            {selectedStudentId === 'all' ? 'All Students\' Reflections & Confusions' : 'Student Reflections & Confusions'}
-          </h3>
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <p className="text-sm text-muted-foreground">Loading activities...</p>
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center py-12">
+            <p className="text-sm text-red-500">{error}</p>
+          </div>
+        ) : (
+          <div className="p-4 space-y-3">
+            <h3 className="font-medium text-sm text-muted-foreground mb-3">
+              {selectedStudentId === 'all' ? 'All Students\' Activities' : 'Student Activities on This Video'}
+            </h3>
 
-          {(selectedStudentId === 'all' ? allStudentReflections : studentJourneyData?.reflections || []).map((reflection, index) => (
+            {studentActivities.map((reflection, index) => (
             <Card
               key={selectedStudentId === 'all' ? `${reflection.studentId}-${reflection.id}` : reflection.id}
               className={`cursor-pointer transition-all ${
@@ -425,6 +368,26 @@ export function StudentJourneySidebar({
                   </div>
                 )}
 
+                {reflection.type === 'quiz' && (
+                  <div className="space-y-2">
+                    <p className="text-sm">{reflection.content}</p>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <BookOpen className="h-3 w-3" />
+                      <span>Quiz completed</span>
+                    </div>
+                  </div>
+                )}
+
+                {reflection.type === 'ai_chat' && (
+                  <div className="space-y-2">
+                    <p className="text-sm">{reflection.content}</p>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <MessageCircle className="h-3 w-3" />
+                      <span>AI conversation</span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Existing response if any */}
                 {reflection.response && reflection.status === 'responded' && (
                   <div className="mt-3 pl-3 border-l-2 border-green-500">
@@ -485,14 +448,14 @@ export function StudentJourneySidebar({
             </Card>
           ))}
 
-          {((selectedStudentId === 'all' && allStudentReflections.length === 0) ||
-            (selectedStudentId !== 'all' && (!studentJourneyData || studentJourneyData.reflections.length === 0))) && (
-            <div className="text-center py-8 text-muted-foreground">
-              <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No reflections yet</p>
-            </div>
-          )}
-        </div>
+            {studentActivities.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No activities yet on this video</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

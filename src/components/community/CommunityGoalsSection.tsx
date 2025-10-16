@@ -1,250 +1,319 @@
 'use client'
 
-import React from 'react'
-import { Target, Trophy, BookOpen, TrendingUp, Clock, CheckCircle, Lock, Star, BarChart3 } from 'lucide-react'
-
-interface Goal {
-  id: string
-  title: string
-  track: 'agency' | 'saas'
-  startAmount: string
-  targetAmount: string
-  status: 'active' | 'completed' | 'paused'
-  progress: number
-  startDate: string
-  completedDate?: string
-  metrics?: GoalMetrics
-  actions?: Action[]
-}
-
-interface GoalMetrics {
-  learnRate: number // minutes of video content consumed per hour of session time
-  executionRate: number // percentage of actions completed on time
-  executionPace: 'fast' | 'steady' | 'slow'
-  ranking: number // ranking by speed (days to complete)
-  daysToComplete?: number
-}
-
-interface Action {
-  id: string
-  type: 'course' | 'lesson' | 'quiz' | 'reflection' | 'content' | 'call'
-  title: string
-  date: string
-  details?: string
-}
-
-interface Course {
-  id: string
-  title: string
-  completed: boolean
-  completedDate?: string
-  progress: number
-}
-
-interface ExecutionMetrics {
-  learningRate: number // courses completed per month
-  executionRate: number // actions completed on time percentage
-  executionPace: 'fast' | 'steady' | 'slow'
-  consistency: number // percentage of weeks with activity
-}
+import React, { useEffect, useState } from 'react'
+import { Lock } from 'lucide-react'
+import { getStudentActivitiesByGoal, type GoalActivities } from '@/lib/actions/activity-timeline-actions'
+import { getFeaturedStudents, type FeaturedStudent } from '@/lib/actions/featured-students-actions'
+import { StatsCardsSkeleton, GoalTimelineSkeleton } from '@/components/common/universal-skeleton'
+import { formatTimeAgo, formatTimestamp } from '@/lib/utils/time-ago'
 
 interface CommunityGoalsSectionProps {
   userRole: 'guest' | 'student' | 'instructor'
-  isOwnProfile?: boolean
-  memberName?: string
-  similarStudents?: Array<{ name: string; progress: number; days: number }>
-  recentlyCompletedStudents?: Array<{ name: string; goal: string; days: number; rank: number }>
 }
 
-export function CommunityGoalsSection({ 
-  userRole, 
-  isOwnProfile = false, 
-  memberName, 
-  similarStudents,
-  recentlyCompletedStudents 
+export function CommunityGoalsSection({
+  userRole
 }: CommunityGoalsSectionProps) {
-  const [expandedGoal, setExpandedGoal] = React.useState<string | null>(null)
+  const [expandedGoal, setExpandedGoal] = useState<string | null>(null)
+  const [goalActivitiesData, setGoalActivitiesData] = useState<GoalActivities[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // Mock data - replace with real data
-  const mockGoals: Goal[] = [
-    {
-      id: '1',
-      title: 'Goal: $5K Shopify Agency',
-      track: 'agency',
-      startAmount: '$3K',
-      targetAmount: '$5K',
-      status: 'active',
-      progress: 75,
-      startDate: '2024-07-01',
-      actions: [
-        { id: '1', type: 'course', title: 'Advanced Shopify Development', date: '2024-07-05', details: 'Completed 8/10 modules' },
-        { id: '2', type: 'content', title: 'Hired first developer', date: '2024-07-15', details: 'Found via Upwork, $15/hr' },
-        { id: '3', type: 'reflection', title: 'Weekly reflection #8', date: '2024-08-20', details: 'Focused on scaling challenges' },
-        { id: '4', type: 'call', title: 'Client discovery call', date: '2024-08-22', details: '$2K project potential' },
-        { id: '5', type: 'quiz', title: 'Quiz at 15:30 - Scaling Strategies', date: '2024-08-25', details: 'Advanced Shopify Development course' }
-      ]
-    },
-    {
-      id: '2',
-      title: 'Goal: $3K Shopify Agency',
-      track: 'agency',
-      startAmount: '$2K',
-      targetAmount: '$3K',
-      status: 'completed',
-      progress: 100,
-      startDate: '2024-04-01',
-      completedDate: '2024-06-30',
-      metrics: {
-        learnRate: 42,
-        executionRate: 94,
-        executionPace: 'fast',
-        ranking: 3,
-        daysToComplete: 90
-      },
-      actions: [
-        { id: '1', type: 'course', title: 'Client Acquisition Mastery', date: '2024-04-05', details: 'Completed all modules' },
-        { id: '2', type: 'content', title: 'Created Shopify portfolio', date: '2024-04-12', details: '5 example stores built' },
-        { id: '3', type: 'content', title: 'Hired UX/UI designer', date: '2024-04-20', details: 'Full-time contractor at $1/hr' },
-        { id: '4', type: 'call', title: 'First sales call', date: '2024-04-25', details: 'Potential $1.5K project' },
-        { id: '5', type: 'content', title: 'Closed first deal', date: '2024-05-02', details: '$1.8K Shopify store redesign' },
-        { id: '6', type: 'reflection', title: 'Monthly reflection - Apr', date: '2024-05-01', details: 'Process optimization insights' },
-        { id: '7', type: 'content', title: 'Created sales funnel template', date: '2024-05-10', details: 'Reusable for client onboarding' },
-        { id: '8', type: 'quiz', title: 'Quiz at 8:45 - Advanced Funnels', date: '2024-05-12', details: 'Client Acquisition Mastery course' }
-      ]
-    },
-    {
-      id: '3',
-      title: 'Goal: $2K Shopify Agency',
-      track: 'agency',
-      startAmount: '$1K',
-      targetAmount: '$2K',
-      status: 'completed',
-      progress: 100,
-      startDate: '2024-01-15',
-      completedDate: '2024-03-30'
-    },
-    {
-      id: '4',
-      title: 'Goal: $1K Shopify Agency',
-      track: 'agency',
-      startAmount: '$0',
-      targetAmount: '$1K',
-      status: 'completed',
-      progress: 100,
-      startDate: '2023-10-01',
-      completedDate: '2024-01-10'
+  // Featured students state
+  const [featuredStudents, setFeaturedStudents] = useState<FeaturedStudent[]>([])
+  const [selectedStudentIndex, setSelectedStudentIndex] = useState(0)
+  const [loadingFeatured, setLoadingFeatured] = useState(true)
+
+  // Cache activities per student to avoid refetching on tab switch
+  const [activitiesCache, setActivitiesCache] = useState<Record<string, GoalActivities[]>>({})
+
+  // LAZY LOADING: Fetch featured students list + Student 1's data only
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        setLoadingFeatured(true)
+        setLoading(true)
+
+        // STEP 1: Fetch featured students list
+        const studentsResult = await getFeaturedStudents()
+
+        if (studentsResult.error) {
+          console.error('Error fetching featured students:', studentsResult.error)
+          setFeaturedStudents([])
+          setLoadingFeatured(false)
+          setLoading(false)
+          return
+        }
+
+        const students = studentsResult.data || []
+        setFeaturedStudents(students)
+        setLoadingFeatured(false)
+
+        // STEP 2: Fetch only Student 1's data (lazy load others on click)
+        if (students.length > 0) {
+          const firstStudentResult = await getStudentActivitiesByGoal({ studentId: students[0].id })
+
+          if (firstStudentResult.error) {
+            console.error('Error fetching activities:', firstStudentResult.error)
+            setError(firstStudentResult.error)
+            setLoading(false)
+            return
+          }
+
+          // Cache first student's data
+          const newCache: Record<string, GoalActivities[]> = {
+            [students[0].id]: firstStudentResult.data || []
+          }
+          setActivitiesCache(newCache)
+          setGoalActivitiesData(firstStudentResult.data || [])
+        }
+
+        setLoading(false)
+      } catch (err) {
+        console.error('Error fetching data:', err)
+        setFeaturedStudents([])
+        setLoadingFeatured(false)
+        setLoading(false)
+      }
     }
-  ]
 
-  const mockCourses: Course[] = [
-    { id: '1', title: 'Claude Code Fundamentals', completed: true, completedDate: '2024-01-20', progress: 100 },
-    { id: '2', title: 'Client Acquisition Mastery', completed: true, completedDate: '2024-02-15', progress: 100 },
-    { id: '3', title: 'Agency Scaling Systems', completed: false, progress: 75 },
-    { id: '4', title: 'Team Building & Management', completed: false, progress: 30 }
-  ]
+    fetchInitialData()
+  }, [])
 
-  const mockMetrics: ExecutionMetrics = {
-    learningRate: 1.5,
-    executionRate: 87,
-    executionPace: 'fast',
-    consistency: 92
-  }
+  // LAZY LOADING: Fetch data when switching tabs (if not cached)
+  useEffect(() => {
+    const fetchStudentData = async () => {
+      if (loadingFeatured || featuredStudents.length === 0) return
 
-  const currentGoal = mockGoals.find(g => g.status === 'active')
-  const completedGoals = mockGoals.filter(g => g.status === 'completed')
-  const completedCourses = mockCourses.filter(c => c.completed)
+      const targetStudent = featuredStudents[selectedStudentIndex]
+      if (!targetStudent) return
 
-  const getDisplayName = () => {
-    if (isOwnProfile) return 'Your'
-    if (memberName) return `${memberName}'s`
-    return 'Member'
-  }
+      // If already cached, use it
+      if (activitiesCache[targetStudent.id]) {
+        setGoalActivitiesData(activitiesCache[targetStudent.id])
+        return
+      }
+
+      // Not cached, fetch it
+      setLoading(true)
+      const result = await getStudentActivitiesByGoal({ studentId: targetStudent.id })
+
+      if (result.error) {
+        console.error('Error fetching student activities:', result.error)
+        setError(result.error)
+        setLoading(false)
+        return
+      }
+
+      // Cache the result
+      setActivitiesCache(prev => ({
+        ...prev,
+        [targetStudent.id]: result.data || []
+      }))
+      setGoalActivitiesData(result.data || [])
+      setLoading(false)
+    }
+
+    fetchStudentData()
+  }, [selectedStudentIndex, featuredStudents, loadingFeatured])
 
   const isRestricted = userRole === 'guest'
 
-  // Sort all goals reverse chronologically (most recent first)
-  const allGoalsChronological = [...completedGoals, ...(currentGoal ? [currentGoal] : [])].sort((a, b) => {
+  // Transform real goal data to display format
+  const transformedRealGoals = goalActivitiesData.map(goal => ({
+    id: goal.goal_id,
+    title: `Goal: ${goal.goal_name}`,
+    status: goal.goal_achieved_at ? 'completed' as const : 'active' as const,
+    startDate: goal.goal_started_at || new Date().toISOString(),
+    completedDate: goal.goal_achieved_at || undefined,
+    actions: goal.activities.map(activity => {
+      // For quiz and reflection activities, show video title + timestamp
+      const shouldShowVideoContext = ['quiz', 'loom', 'voice', 'text', 'screenshot'].includes(activity.activity_type)
+
+      let details = ''
+      if (shouldShowVideoContext && activity.video_title) {
+        const timestamp = formatTimestamp(activity.timestamp_seconds)
+        details = `${activity.video_title} at ${timestamp}`
+      } else {
+        details = activity.video_title || ''
+      }
+
+      return {
+        id: activity.id,
+        type: activity.activity_type,
+        title: activity.goal_title || activity.activity_type,
+        date: activity.created_at,
+        details
+      }
+    })
+  }))
+
+  // Sort goals reverse chronologically (most recent first)
+  const allGoalsChronological = transformedRealGoals.sort((a, b) => {
     const aDate = a.completedDate || a.startDate
     const bDate = b.completedDate || b.startDate
     return new Date(bDate).getTime() - new Date(aDate).getTime()
   })
 
+  // Calculate real stats from goal activities data
+  const totalActivities = goalActivitiesData.reduce((sum, goal) => sum + goal.total_activities, 0)
+  const completedGoalsCount = goalActivitiesData.filter(g => g.goal_achieved_at).length
+  const reflectionsCount = goalActivitiesData.reduce((sum, goal) => sum + goal.reflections_count, 0)
+  const quizzesCount = goalActivitiesData.reduce((sum, goal) => sum + goal.quizzes_count, 0)
+
+  // Get current student name
+  const currentStudentName = featuredStudents[selectedStudentIndex]?.full_name || 'Student'
+
   return (
     <div className="space-y-8">
+      {/* Featured Students Tabs */}
+      {featuredStudents.length > 0 && (
+        <div className="flex flex-col items-center gap-4">
+          <h2 className="text-2xl font-bold text-gray-900">Featured Student Journeys</h2>
+          <p className="text-gray-600 text-center">
+            See how our students achieve their goals step by step
+          </p>
+
+          {/* Horizontal Student Tabs */}
+          <div className="flex gap-4 overflow-x-auto pb-2">
+            {featuredStudents.map((student, index) => (
+              <button
+                key={student.id}
+                onClick={() => setSelectedStudentIndex(index)}
+                className={`flex flex-col items-center gap-2 px-6 py-4 rounded-lg border-2 transition-all min-w-[200px] ${
+                  selectedStudentIndex === index
+                    ? 'border-gray-900 bg-gray-50'
+                    : 'border-gray-200 hover:border-gray-400'
+                }`}
+              >
+                {/* Avatar */}
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold ${
+                  selectedStudentIndex === index ? 'bg-gray-900' : 'bg-gray-400'
+                }`}>
+                  {student.avatar_url ? (
+                    <img src={student.avatar_url} alt={student.full_name} className="w-full h-full rounded-full object-cover" />
+                  ) : (
+                    student.full_name.charAt(0).toUpperCase()
+                  )}
+                </div>
+
+                {/* Name */}
+                <div className="text-center">
+                  <div className={`font-semibold ${selectedStudentIndex === index ? 'text-gray-900' : 'text-gray-700'}`}>
+                    {student.full_name}
+                  </div>
+                  {student.goal_title && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      Goal: {student.goal_title}
+                    </div>
+                  )}
+                </div>
+
+                {/* Active indicator */}
+                {selectedStudentIndex === index && (
+                  <div className="w-2 h-2 bg-gray-900 rounded-full"></div>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="text-center">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          {isRestricted ? 'How Our Members Achieve Goals' : `${getDisplayName()} Goal Journey`}
+          {featuredStudents.length > 0
+            ? `${currentStudentName}'s Goal Journey`
+            : 'Featured Student Journeys'}
         </h2>
         <p className="text-gray-600">
-          {isRestricted 
-            ? 'See how our students progress toward their goals'
-            : 'Complete timeline of goals and milestones achieved'
-          }
+          Complete timeline of goals and milestones achieved
         </p>
       </div>
 
       {/* Summary Stats */}
-      <div className="grid md:grid-cols-3 gap-4 mb-8">
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <div className="text-sm text-gray-600">Learn Rate</div>
-          <div className="text-xl font-medium text-gray-900">
-            {isRestricted ? '42' : '38'} mins/hr
+      {loading ? (
+        <StatsCardsSkeleton count={4} />
+      ) : error ? (
+        <div className="text-center py-8">
+          <p className="text-sm text-red-500">{error}</p>
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-4 gap-4">
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <div className="text-sm text-gray-600">Total Activities</div>
+            <div className="text-xl font-medium text-gray-900">
+              {totalActivities}
+            </div>
+          </div>
+
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <div className="text-sm text-gray-600">Reflections</div>
+            <div className="text-xl font-medium text-gray-900">
+              {reflectionsCount}
+            </div>
+          </div>
+
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <div className="text-sm text-gray-600">Quizzes</div>
+            <div className="text-xl font-medium text-gray-900">
+              {quizzesCount}
+            </div>
+          </div>
+
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <div className="text-sm text-gray-600">Goals Completed</div>
+            <div className="text-xl font-medium text-gray-900">
+              {completedGoalsCount}
+            </div>
           </div>
         </div>
+      )}
 
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <div className="text-sm text-gray-600">Total Actions</div>
-          <div className="text-xl font-medium text-gray-900">
-            {isRestricted ? '94' : allGoalsChronological.reduce((total, goal) => total + (goal.actions?.length || 0), 0)}
-          </div>
-        </div>
-
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <div className="text-sm text-gray-600">Last Goal</div>
-          <div className="text-sm font-medium text-gray-900">
-            {isRestricted ? '$3K Shopify Agency' : (completedGoals.length > 0 ? completedGoals[0].targetAmount + ' Shopify Agency' : 'None')}
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content Grid */}
-      <div className="grid lg:grid-cols-3 gap-8">
-        {/* Goal Timeline */}
-        <div className="lg:col-span-2 bg-white border border-gray-200 rounded-lg p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <h3 className="font-semibold text-gray-900">Goal Timeline</h3>
+      {/* Goal Timeline */}
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <h3 className="font-semibold text-gray-900">Goal Timeline</h3>
+          {!loading && (
             <span className="text-sm text-gray-500">
               {allGoalsChronological.length} goal{allGoalsChronological.length !== 1 ? 's' : ''} in journey
             </span>
-            {isRestricted && (
-              <div className="ml-auto">
-                <Lock className="h-4 w-4 text-gray-400" />
-              </div>
-            )}
-          </div>
+          )}
+          {isRestricted && (
+            <div className="ml-auto">
+              <Lock className="h-4 w-4 text-gray-400" />
+            </div>
+          )}
+        </div>
 
+        {loading ? (
+          <GoalTimelineSkeleton count={3} />
+        ) : allGoalsChronological.length === 0 ? (
+          <div className="text-center py-12 text-gray-500">
+            No goals recorded yet
+          </div>
+        ) : (
           <div className="relative">
             {/* Vertical Timeline Line */}
             <div className="absolute left-20 top-0 bottom-0 w-0.5 bg-gray-200"></div>
-            
+
             <div className="space-y-6">
-              {allGoalsChronological.map((goal, goalIndex) => (
+              {allGoalsChronological.map((goal) => (
                 <div key={`goal-timeline-${goal.id}`} className="relative">
                   {/* Goal Node */}
                   <div className="flex items-start gap-6">
                     <div className="flex-shrink-0 text-right w-16">
                       <div className="text-xs text-gray-500 font-medium">
-                        {new Date(goal.startDate).toLocaleDateString('en-US', { 
-                          month: 'short', 
-                          year: '2-digit' 
+                        {new Date(goal.startDate).toLocaleDateString('en-US', {
+                          month: 'short',
+                          year: '2-digit'
                         })}
                       </div>
                       {goal.status === 'completed' && goal.completedDate && (
                         <div className="text-xs text-gray-400 mt-1">
-                          to {new Date(goal.completedDate).toLocaleDateString('en-US', { 
-                            month: 'short', 
-                            year: '2-digit' 
+                          to {new Date(goal.completedDate).toLocaleDateString('en-US', {
+                            month: 'short',
+                            year: '2-digit'
                           })}
                         </div>
                       )}
@@ -257,13 +326,13 @@ export function CommunityGoalsSection({
                         <div className="w-2 h-2 bg-white rounded-full" />
                       </div>
                     </div>
-                    
+
                     <div className="flex-1 pb-6">
                       {/* Goal Header */}
                       <div className="border border-gray-200 rounded-lg p-4">
                         <div className="flex items-center justify-between mb-3">
                           <h4 className="font-medium text-gray-900">
-                            {isRestricted ? `Goal: ${goal.targetAmount} Shopify Agency` : goal.title}
+                            {goal.title}
                           </h4>
                           {goal.status === 'active' && (
                             <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">
@@ -276,63 +345,15 @@ export function CommunityGoalsSection({
                             </span>
                           )}
                         </div>
-                        
-                        <div className="flex items-center justify-between text-sm text-gray-600 mb-3">
-                          <div>
-                            <span>Target: </span>
-                            <span className="font-medium text-gray-900">
-                              {isRestricted ? '$5K' : `${goal.startAmount} → ${goal.targetAmount}`}
-                            </span>
-                          </div>
-                          {goal.status === 'active' && (
-                            <div>
-                              <span>Progress: </span>
-                              <span className="font-medium text-gray-900">
-                                {isRestricted ? '75%' : `${goal.progress}%`}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Goal Metrics (for completed goals) - integrated in main box */}
-                        {goal.status === 'completed' && goal.metrics && !isRestricted && (
-                          <div className="grid grid-cols-2 gap-3 text-xs text-gray-600 mb-3">
-                            <div className="flex items-center gap-1">
-                              <span>Learn Rate:</span>
-                              <span className="font-medium text-gray-900">{goal.metrics.learnRate} mins/hr</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <span>Execution:</span>
-                              <span className="font-medium text-gray-900">{goal.metrics.executionRate}%</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <span>Pace:</span>
-                              <span className="font-medium text-gray-900 capitalize">{goal.metrics.executionPace}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <span>Ranking:</span>
-                              <span className="font-medium text-gray-900">#{goal.metrics.ranking} ({goal.metrics.daysToComplete}d)</span>
-                            </div>
-                          </div>
-                        )}
-
-                        {goal.status === 'active' && (
-                          <div className="w-full bg-gray-200 rounded-full h-1.5">
-                            <div 
-                              className="bg-gray-900 h-1.5 rounded-full transition-all"
-                              style={{ width: isRestricted ? '75%' : `${goal.progress}%` }}
-                            />
-                          </div>
-                        )}
                       </div>
 
                       {/* Actions */}
-                      {goal.actions && !isRestricted && (
+                      {goal.actions && goal.actions.length > 0 && !isRestricted && (
                         <div className="mt-3 ml-2">
                           <div className="flex items-center justify-between mb-2">
                             <h6 className="text-sm font-medium text-gray-900">Actions</h6>
                             {goal.actions.length > 3 && (
-                              <button 
+                              <button
                                 onClick={() => setExpandedGoal(expandedGoal === goal.id ? null : goal.id)}
                                 className="text-xs text-blue-600 hover:text-blue-700"
                               >
@@ -346,14 +367,13 @@ export function CommunityGoalsSection({
                                 <div className={`w-2 h-2 rounded-full mt-1.5 ${
                                   action.type === 'course' ? 'bg-blue-500' :
                                   action.type === 'quiz' ? 'bg-purple-500' :
-                                  action.type === 'reflection' ? 'bg-orange-500' :
-                                  action.type === 'call' ? 'bg-red-500' :
+                                  action.type === 'text' || action.type === 'screenshot' || action.type === 'voice' || action.type === 'loom' ? 'bg-orange-500' :
                                   'bg-gray-500'
                                 }`} />
                                 <div className="flex-1">
                                   <div className="text-gray-900 font-medium">{action.title}</div>
                                   <div className="text-gray-500 text-xs mt-0.5">
-                                    {new Date(action.date).toLocaleDateString()} • {action.details}
+                                    {formatTimeAgo(action.date)} {action.details && `• ${action.details}`}
                                   </div>
                                 </div>
                               </div>
@@ -361,96 +381,13 @@ export function CommunityGoalsSection({
                           </div>
                         </div>
                       )}
-
                     </div>
                   </div>
                 </div>
               ))}
             </div>
           </div>
-        </div>
-
-        {/* People in Same Goal Category */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <h3 className="font-semibold text-gray-900">Similar Goals</h3>
-            <span className="text-sm text-gray-500">
-              {isRestricted ? '12' : '8'} students
-            </span>
-          </div>
-
-          <div className="space-y-4">
-            {/* Current Goal Members */}
-            {currentGoal && (
-              <div>
-                <h4 className="text-sm font-medium text-gray-900 mb-3">
-                  Working on {isRestricted ? '$5K Shopify Agency' : currentGoal.targetAmount + ' Shopify Agency'}
-                </h4>
-                <div className="space-y-3">
-                  {(similarStudents || [
-                    { name: isRestricted ? 'Member A' : 'Sarah M.', progress: 82, days: 45 },
-                    { name: isRestricted ? 'Member B' : 'Alex R.', progress: 65, days: 60 },
-                    { name: isRestricted ? 'Member C' : 'Lisa K.', progress: 58, days: 72 }
-                  ]).map((member, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                          <span className="text-xs font-medium text-gray-700">
-                            {member.name.charAt(0)}
-                          </span>
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">{member.name}</div>
-                          <div className="text-xs text-gray-500">{member.progress}% • {member.days} days</div>
-                        </div>
-                      </div>
-                      <div className="w-12 bg-gray-200 rounded-full h-1.5">
-                        <div 
-                          className="bg-gray-900 h-1.5 rounded-full"
-                          style={{ width: `${member.progress}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Recently Completed */}
-            <div className="pt-4 border-t border-gray-100">
-              <h4 className="text-sm font-medium text-gray-900 mb-3">Recently Completed Goals</h4>
-              <div className="space-y-2">
-                {(recentlyCompletedStudents || [
-                  { name: isRestricted ? 'Member D' : 'Mike T.', goal: '$3K', days: 85, rank: 2 },
-                  { name: isRestricted ? 'Member E' : 'Jenny L.', goal: '$2K', days: 120, rank: 7 },
-                  { name: isRestricted ? 'Member F' : 'Tom W.', goal: '$3K', days: 95, rank: 4 }
-                ]).map((member, index) => (
-                  <div key={index} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 bg-gray-300 rounded-full flex items-center justify-center">
-                        <span className="text-xs font-medium text-gray-700">
-                          {member.name.charAt(0)}
-                        </span>
-                      </div>
-                      <div>
-                        <div className="text-sm text-gray-900">{member.name}</div>
-                        <div className="text-xs text-gray-500">{member.goal} goal • #{member.rank} ranking</div>
-                      </div>
-                    </div>
-                    <div className="text-xs text-gray-500">{member.days}d</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* View All Link */}
-            <div className="pt-4 border-t border-gray-100 text-center">
-              <button className="text-sm text-blue-600 hover:text-blue-700">
-                View all students →
-              </button>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Call to Action for Guests */}
@@ -461,7 +398,7 @@ export function CommunityGoalsSection({
           <p className="text-gray-600 mb-4">
             Start tracking your own goals and milestones with detailed progress insights.
           </p>
-          <button className="bg-blue-600 dark:bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors">
+          <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
             Join Community - $97/month
           </button>
         </div>

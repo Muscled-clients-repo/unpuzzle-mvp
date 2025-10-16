@@ -171,22 +171,94 @@ export function PageHeaderSkeleton({ className }: SkeletonProps) {
 /**
  * Filters section skeleton
  */
-export function FiltersSectionSkeleton({ 
-  itemCount = 5, 
-  className 
-}: { 
+export function FiltersSectionSkeleton({
+  itemCount = 5,
+  className
+}: {
   itemCount?: number
-  className?: string 
+  className?: string
 }) {
   return (
     <div className={cn("flex flex-col sm:flex-row gap-4 mb-6", className)}>
       {/* Search input skeleton - flex-1 */}
       <Skeleton className="h-10 flex-1" />
-      
+
       {/* Additional filter skeletons */}
       {Array.from({ length: itemCount - 1 }, (_, i) => (
         <Skeleton key={i} className="h-10 w-36" />
       ))}
+    </div>
+  )
+}
+
+/**
+ * Goal Timeline skeleton for community goals page
+ */
+export function GoalTimelineSkeleton({
+  count = 3,
+  className
+}: {
+  count?: number
+  className?: string
+}) {
+  return (
+    <div className={cn("relative", className)}>
+      {/* Vertical Timeline Line */}
+      <div className="absolute left-20 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+
+      <div className="space-y-6">
+        {Array.from({ length: count }, (_, i) => (
+          <div key={i} className="relative">
+            {/* Goal Node */}
+            <div className="flex items-start gap-6">
+              {/* Date area */}
+              <div className="flex-shrink-0 text-right w-16 space-y-2">
+                <Skeleton className="h-3 w-12 ml-auto" />
+                <Skeleton className="h-3 w-10 ml-auto" />
+              </div>
+
+              {/* Timeline node */}
+              <div className="flex-shrink-0 relative">
+                <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse" />
+              </div>
+
+              {/* Goal card */}
+              <div className="flex-1 pb-6">
+                <div className="border border-gray-200 rounded-lg p-4">
+                  {/* Header */}
+                  <div className="flex items-center justify-between mb-3">
+                    <Skeleton className="h-5 w-48" />
+                    <Skeleton className="h-6 w-16 rounded" />
+                  </div>
+
+                  {/* Target/Progress */}
+                  <div className="flex items-center justify-between mb-3">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-4 w-20" />
+                  </div>
+
+                  {/* Progress bar */}
+                  <Skeleton className="h-1.5 w-full rounded-full" />
+                </div>
+
+                {/* Actions section */}
+                <div className="mt-3 ml-2 space-y-2">
+                  <Skeleton className="h-4 w-16" />
+                  {Array.from({ length: 3 }, (_, j) => (
+                    <div key={j} className="flex items-start gap-3 py-2 px-3 bg-white border border-gray-100 rounded">
+                      <Skeleton className="w-2 h-2 rounded-full mt-1.5" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-3 w-1/2" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

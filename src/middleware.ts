@@ -111,7 +111,18 @@ export async function middleware(request: NextRequest) {
 
   // Redirect to dashboard if logged in and trying to access auth pages
   if (user && (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup')) {
-    return NextResponse.redirect(new URL('/student', request.url))
+    // Get user role to redirect to appropriate dashboard
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    const redirectPath = profile?.role === 'admin' ? '/admin' :
+                        profile?.role === 'instructor' ? '/instructor' :
+                        '/student'
+
+    return NextResponse.redirect(new URL(redirectPath, request.url))
   }
 
   return response

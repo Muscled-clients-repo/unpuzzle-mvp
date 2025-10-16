@@ -30,6 +30,8 @@ import {
   GitBranch,
   History,
   FolderOpen,
+  Bug,
+  Lightbulb,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -92,12 +94,9 @@ const instructorNavItems: NavItem[] = [
 
 const adminNavItems: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: Home },
-  { href: "/admin/users", label: "Users", icon: Users },
-  { href: "/admin/courses", label: "Courses", icon: BookOpen },
-  { href: "/admin/instructors", label: "Instructors", icon: Users },
-  { href: "/admin/reports", label: "Reports", icon: FileText },
-  { href: "/admin/revenue", label: "Revenue", icon: TrendingUp },
-  { href: "/admin/settings", label: "Settings", icon: Settings },
+  { href: "/admin/blog", label: "Blog", icon: FileText },
+  { href: "/admin/resources", label: "Resources", icon: FolderOpen },
+  { href: "/admin/requests", label: "Requests", icon: ClipboardList },
 ]
 
 export function Sidebar({ role = "learner" }: SidebarProps) {
@@ -107,7 +106,8 @@ export function Sidebar({ role = "learner" }: SidebarProps) {
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set([
     '/instructor/requests',
     '/student/goals',
-    '/instructor/student-goals'
+    '/instructor/student-goals',
+    '/admin/requests'
   ]))
   
   const navItems =
@@ -155,6 +155,11 @@ export function Sidebar({ role = "learner" }: SidebarProps) {
       newExpanded.add('/student/goals')
     }
 
+    // Auto-expand Admin Requests submenu when on any admin requests route
+    if (pathname.startsWith('/admin/requests')) {
+      newExpanded.add('/admin/requests')
+    }
+
     setExpandedMenus(newExpanded)
   }, [pathname])
 
@@ -169,15 +174,19 @@ export function Sidebar({ role = "learner" }: SidebarProps) {
   return (
     <aside className="hidden md:flex w-64 flex-col border-r bg-background fixed left-0 top-16 bottom-0 z-40">
       {/* Mode Indicator */}
-      {(role === "instructor" || role === "moderator") && (
+      {(role === "instructor" || role === "moderator" || role === "admin") && (
         <div className="border-b p-4">
           <div className="flex items-center gap-2">
             <div className={cn(
               "h-2 w-2 rounded-full animate-pulse",
-              role === "instructor" ? "bg-green-500" : "bg-purple-500"
+              role === "instructor" ? "bg-green-500" :
+              role === "admin" ? "bg-red-500" :
+              "bg-purple-500"
             )} />
             <span className="text-sm font-medium">
-              {role === "instructor" ? "Instructor Mode" : "Moderator Mode"}
+              {role === "instructor" ? "Instructor Mode" :
+               role === "admin" ? "Admin Mode" :
+               "Moderator Mode"}
             </span>
           </div>
         </div>

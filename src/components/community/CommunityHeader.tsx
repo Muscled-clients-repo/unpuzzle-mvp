@@ -7,6 +7,7 @@ import { CommunityPostsFeedConnected } from './CommunityPostsFeedConnected'
 import { CommunityGoalsSection } from './CommunityGoalsSection'
 import { CommunityCoursesSection } from './CommunityCoursesSection'
 import { CommunityResourcesSectionConnected } from './CommunityResourcesSectionConnected'
+import { createClient } from '@/lib/supabase/client'
 
 interface CommunityHeaderProps {
   communityPosts?: any[]
@@ -28,6 +29,7 @@ export function CommunityHeader({ communityPosts, userRole = 'student', goalData
   const [currentActivity, setCurrentActivity] = useState(0)
   const [activeTab, setActiveTab] = useState(initialTab)
   const [showFloatingCTA, setShowFloatingCTA] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   
   const allNavigationTabs = [
     { id: 'community', label: 'Community', icon: Home },
@@ -137,13 +139,25 @@ export function CommunityHeader({ communityPosts, userRole = 'student', goalData
   }
 
   // Removed auto-advance - gallery is now manual only
-  
+
+  // Fetch current user ID
+  useEffect(() => {
+    const fetchUser = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        setCurrentUserId(user.id)
+      }
+    }
+    fetchUser()
+  }, [])
+
   // Auto-advance activities
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentActivity((prev) => (prev + 1) % liveActivities.length)
     }, 4000)
-    
+
     return () => clearInterval(interval)
   }, [])
 
@@ -410,6 +424,7 @@ export function CommunityHeader({ communityPosts, userRole = 'student', goalData
               {activeTab === 'goals' && (
                 <CommunityGoalsSection
                   userRole={userRole}
+                  studentId={currentUserId || undefined}
                   memberName="John D."
                   isOwnProfile={true}
                   similarStudents={goalData?.similarStudents}
@@ -417,8 +432,8 @@ export function CommunityHeader({ communityPosts, userRole = 'student', goalData
                 />
               )}
               {activeTab === 'courses' && (
-                <CommunityCoursesSection 
-                  userRole={userRole} 
+                <CommunityCoursesSection
+                  userRole={userRole}
                   memberName="John D."
                   isOwnProfile={true}
                   coursesByGoal={coursesByGoal}
