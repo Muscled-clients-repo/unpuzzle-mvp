@@ -331,9 +331,13 @@ export async function getStudentActivitiesByDay(params: {
 // ============================================================
 
 /**
+ * PUBLIC ENDPOINT - No authentication required
  * Get activities for ALL featured students in a single query
  * OPTIMIZED: Single database query for all 3 students instead of 3 separate queries
  * Used in: Community/Goals Page - Featured students showcase
+ *
+ * Security: RLS policies ensure only is_public=true activities are returned.
+ * Guest users can view this data as it's meant for public showcase.
  */
 export async function getAllFeaturedStudentsActivities(): Promise<{
   data: Record<string, GoalActivities[]> | null

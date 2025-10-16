@@ -1,292 +1,123 @@
 'use client'
 
-import React, { useState } from 'react'
-import { BookOpen, CheckCircle, Clock, Play, Lock, Target, TrendingUp, Award } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { BookOpen, User, ChevronDown, ChevronRight } from 'lucide-react'
+import { getCoursesGroupedByTrackAndGoalAction } from '@/app/actions/course-actions'
 
 interface Course {
   id: string
   title: string
   description: string
-  duration: string
-  videos: number
-  progress: number
-  completed: boolean
-  completedDate?: string
-  goalTrack: 'agency' | 'saas'
-  goalLevel: string // e.g., '$1K', '$3K', '$5K'
-  instructor: string
-  thumbnail?: string
-  category: 'sales' | 'service-delivery' | 'marketing'
-  order: number
-  actions: string[] // list of actions involved in this course
+  thumbnail_url?: string
+  is_free: boolean
+  price?: number
+  instructor: {
+    id?: string
+    name: string
+    avatar_url?: string
+  }
 }
 
-interface CoursesByGoal {
-  goalTitle: string
-  goalLevel: string
-  status: 'completed' | 'current' | 'upcoming'
+interface Goal {
+  id: string
+  name: string
+  description: string
+  sort_order: number
   courses: Course[]
+  course_count: number
+}
+
+interface Track {
+  id: string
+  name: string
+  description: string
+  goals: Goal[]
+  total_courses: number
 }
 
 interface CommunityCoursesProps {
   userRole: 'guest' | 'student' | 'instructor'
-  memberName?: string
-  isOwnProfile?: boolean
-  coursesByGoal?: CoursesByGoal[]
 }
 
-export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = false, coursesByGoal }: CommunityCoursesProps) {
-  const [filter, setFilter] = useState('all')
-  const [sort, setSort] = useState('goal-order')
+export function CommunityCoursesSection({ userRole }: CommunityCoursesProps) {
+  const [tracks, setTracks] = useState<Track[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [expandedTracks, setExpandedTracks] = useState<Set<string>>(new Set())
+  const [expandedGoals, setExpandedGoals] = useState<Set<string>>(new Set())
 
   const isRestricted = userRole === 'guest'
 
-  // Mock data - replace with real data
-  const mockCoursesByGoal: CoursesByGoal[] = [
-    {
-      goalTitle: 'Goal: $5K Shopify Agency',
-      goalLevel: '$5K',
-      status: 'current',
-      courses: [
-        {
-          id: '7',
-          title: 'Advanced Shopify Development',
-          description: 'Master complex Shopify customizations and advanced features for high-value clients',
-          duration: '4h 30m',
-          videos: 12,
-          progress: 75,
-          completed: false,
-          goalTrack: 'agency',
-          goalLevel: '$5K',
-          instructor: 'Mahtab Alam',
-          category: 'service-delivery',
-          order: 1,
-          actions: ['Watch videos', 'Complete quizzes', 'Build portfolio project', 'Submit reflection', 'Practice with real client']
-        },
-        {
-          id: '8',
-          title: 'Agency Scaling Systems',
-          description: 'Build systems and processes to scale your agency to $5K+ monthly revenue',
-          duration: '3h 15m',
-          videos: 10,
-          progress: 30,
-          completed: false,
-          goalTrack: 'agency',
-          goalLevel: '$5K',
-          instructor: 'Mahtab Alam',
-          category: 'service-delivery',
-          order: 2,
-          actions: ['Learn scaling frameworks', 'Create SOPs', 'Set up team structure', 'Build client pipeline', 'Track metrics']
-        },
-        {
-          id: '9',
-          title: 'Team Building & Management',
-          description: 'Hire and manage remote developers to handle increased workload',
-          duration: '2h 45m',
-          videos: 8,
-          progress: 0,
-          completed: false,
-          goalTrack: 'agency',
-          goalLevel: '$5K',
-          instructor: 'Mahtab Alam',
-          category: 'service-delivery',
-          order: 3,
-          actions: ['Hire remote developers', 'Create job descriptions', 'Interview candidates', 'Onboard team members', 'Manage projects']
-        },
-        {
-          id: '10',
-          title: 'Premium Client Acquisition',
-          description: 'Find and close high-value clients willing to pay premium rates',
-          duration: '3h 00m',
-          videos: 9,
-          progress: 0,
-          completed: false,
-          goalTrack: 'agency',
-          goalLevel: '$5K',
-          instructor: 'Mahtab Alam',
-          category: 'sales',
-          order: 4,
-          actions: ['Research premium clients', 'Create value propositions', 'Practice sales calls', 'Close high-value deals', 'Maintain relationships'],
-        }
-      ]
-    },
-    {
-      goalTitle: 'Goal: $3K Shopify Agency',
-      goalLevel: '$3K',
-      status: 'completed',
-      courses: [
-        {
-          id: '4',
-          title: 'Client Acquisition Mastery',
-          description: 'Learn proven strategies to find and close your first clients consistently',
-          duration: '3h 45m',
-          videos: 11,
-          progress: 100,
-          completed: true,
-          completedDate: '2024-05-15',
-          goalTrack: 'agency',
-          goalLevel: '$3K',
-          instructor: 'Mahtab Alam',
-          category: 'sales',
-          order: 1,
-          actions: ['Create sales funnel', 'Write proposals', 'Practice cold outreach', 'Track conversion rates', 'Follow up with leads'],
-        },
-        {
-          id: '5',
-          title: 'Shopify Store Optimization',
-          description: 'Master conversion optimization and performance improvements for client stores',
-          duration: '4h 20m',
-          videos: 13,
-          progress: 100,
-          completed: true,
-          completedDate: '2024-06-08',
-          goalTrack: 'agency',
-          goalLevel: '$3K',
-          instructor: 'Mahtab Alam',
-          category: 'service-delivery',
-          order: 2,
-          actions: ['Analyze store performance', 'Optimize conversion rates', 'Improve page speed', 'A/B test elements', 'Report improvements'],
-        },
-        {
-          id: '6',
-          title: 'Project Management for Agencies',
-          description: 'Efficiently manage multiple client projects and deliver on time',
-          duration: '2h 30m',
-          videos: 7,
-          progress: 100,
-          completed: true,
-          completedDate: '2024-06-22',
-          goalTrack: 'agency',
-          goalLevel: '$3K',
-          instructor: 'Mahtab Alam',
-          category: 'service-delivery',
-          order: 3,
-          actions: ['Set up project workflows', 'Use project management tools', 'Create timelines', 'Communicate with clients', 'Deliver on schedule'],
-        }
-      ]
-    },
-    {
-      goalTitle: 'Goal: $2K Shopify Agency',
-      goalLevel: '$2K',
-      status: 'completed',
-      courses: [
-        {
-          id: '2',
-          title: 'Shopify Development Fundamentals',
-          description: 'Learn the basics of Shopify theme development and customization',
-          duration: '5h 15m',
-          videos: 15,
-          progress: 100,
-          completed: true,
-          completedDate: '2024-02-28',
-          goalTrack: 'agency',
-          goalLevel: '$2K',
-          instructor: 'Mahtab Alam',
-          category: 'service-delivery',
-          order: 1,
-          actions: ['Learn Liquid templating', 'Customize themes', 'Build custom features', 'Test on multiple devices', 'Deploy to production'],
-        },
-        {
-          id: '3',
-          title: 'Building Your Portfolio',
-          description: 'Create a compelling portfolio that attracts high-quality clients',
-          duration: '2h 45m',
-          videos: 8,
-          progress: 100,
-          completed: true,
-          completedDate: '2024-03-15',
-          goalTrack: 'agency',
-          goalLevel: '$2K',
-          instructor: 'Mahtab Alam',
-          category: 'marketing',
-          order: 2,
-          actions: ['Create case studies', 'Showcase best work', 'Write project descriptions', 'Get client testimonials', 'Launch portfolio site'],
-        }
-      ]
-    },
-    {
-      goalTitle: 'Goal: $1K Shopify Agency',
-      goalLevel: '$1K',
-      status: 'completed',
-      courses: [
-        {
-          id: '1',
-          title: 'Claude Code Fundamentals',
-          description: 'Master the basics of AI-assisted development with Claude Code',
-          duration: '6h 30m',
-          videos: 18,
-          progress: 100,
-          completed: true,
-          completedDate: '2024-01-20',
-          goalTrack: 'agency',
-          goalLevel: '$1K',
-          instructor: 'Mahtab Alam',
-          category: 'service-delivery',
-          order: 1,
-          actions: ['Learn AI prompting', 'Code with Claude assistance', 'Build first project', 'Join community', 'Complete challenges']
-        }
-      ]
-    }
-  ]
+  // Fetch courses grouped by track and goal
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        setLoading(true)
+        const result = await getCoursesGroupedByTrackAndGoalAction()
 
-  const allCoursesByGoal = coursesByGoal || mockCoursesByGoal
-  const allCourses = allCoursesByGoal.flatMap(goal => goal.courses)
-  
-  const filteredCourses = allCourses.filter(course => {
-    switch (filter) {
-      case 'completed':
-        return course.completed
-      case 'in-progress':
-        return !course.completed && course.progress > 0
-      case 'not-started':
-        return !course.completed && course.progress === 0
-      case 'sales':
-        return course.category === 'sales'
-      case 'service-delivery':
-        return course.category === 'service-delivery'
-      case 'marketing':
-        return course.category === 'marketing'
-      case 'current-goal':
-        return allCoursesByGoal.find(g => g.status === 'current')?.courses.includes(course)
-      default:
-        return true
-    }
-  })
-
-  const sortedCourses = [...filteredCourses].sort((a, b) => {
-    switch (sort) {
-      case 'progress':
-        return b.progress - a.progress
-      case 'duration':
-        return parseInt(a.duration) - parseInt(b.duration)
-      case 'videos':
-        return b.videos - a.videos
-      default: // goal-order
-        const aGoal = allCoursesByGoal.find(g => g.courses.includes(a))
-        const bGoal = allCoursesByGoal.find(g => g.courses.includes(b))
-        if (aGoal?.status !== bGoal?.status) {
-          const statusOrder = { 'current': 1, 'completed': 2, 'upcoming': 3 }
-          return statusOrder[aGoal?.status || 'upcoming'] - statusOrder[bGoal?.status || 'upcoming']
+        if (result.error) {
+          console.error('Error fetching courses:', result.error)
+          setError(result.error)
+          return
         }
-        return a.order - b.order
-    }
-  })
 
-  const getDisplayName = () => {
-    if (isOwnProfile) return 'Your'
-    if (memberName) return `${memberName}'s`
-    return 'Member'
+        const tracksData = result.data || []
+        setTracks(tracksData)
+
+        // Expand first track and its first goal by default
+        if (tracksData.length > 0) {
+          const firstTrack = tracksData[0]
+          setExpandedTracks(new Set([firstTrack.id]))
+          if (firstTrack.goals.length > 0) {
+            setExpandedGoals(new Set([firstTrack.goals[0].id]))
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching courses:', err)
+        setError('Failed to load courses')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCourses()
+  }, [])
+
+  // Filter courses based on search across all tracks/goals
+  const filteredTracks = tracks.map(track => ({
+    ...track,
+    goals: track.goals.map(goal => ({
+      ...goal,
+      courses: goal.courses.filter(course =>
+        course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        course.description.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    })).filter(goal => goal.courses.length > 0)
+  })).filter(track => track.goals.length > 0)
+
+  const totalCourses = filteredTracks.reduce((sum, track) =>
+    sum + track.goals.reduce((goalSum, goal) => goalSum + goal.courses.length, 0), 0
+  )
+
+  const toggleTrack = (trackId: string) => {
+    const newExpanded = new Set(expandedTracks)
+    if (newExpanded.has(trackId)) {
+      newExpanded.delete(trackId)
+    } else {
+      newExpanded.add(trackId)
+    }
+    setExpandedTracks(newExpanded)
   }
 
-
-  const getStatusIcon = (course: Course) => {
-    if (course.completed) {
-      return <CheckCircle className="h-5 w-5 text-green-500" />
-    } else if (course.progress > 0) {
-      return <Play className="h-5 w-5 text-blue-500" />
+  const toggleGoal = (goalId: string) => {
+    const newExpanded = new Set(expandedGoals)
+    if (newExpanded.has(goalId)) {
+      newExpanded.delete(goalId)
     } else {
-      return <Clock className="h-5 w-5 text-gray-400" />
+      newExpanded.add(goalId)
     }
+    setExpandedGoals(newExpanded)
   }
 
   return (
@@ -294,221 +125,204 @@ export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = f
       {/* Header */}
       <div className="text-center">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          {getDisplayName()} Course Journey
+          Browse Courses by Learning Track
         </h2>
         <p className="text-gray-600">
-          {isRestricted 
-            ? 'See the structured learning path our students follow'
-            : 'Progress through courses designed for your specific goal track'
-          }
+          Explore structured learning paths designed to help you reach your income goals
         </p>
       </div>
 
-      {/* Filters and Sort */}
-      <div className="flex flex-wrap gap-4 justify-between items-center">
-        <div className="flex gap-3">
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-900"
-          >
-            <option value="all">All Courses</option>
-            <option value="current-goal">Current Goal</option>
-            <option value="completed">Completed</option>
-            <option value="in-progress">In Progress</option>
-            <option value="not-started">Not Started</option>
-            <option value="sales">Sales</option>
-            <option value="service-delivery">Service Delivery</option>
-            <option value="marketing">Marketing</option>
-          </select>
-
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-900"
-          >
-            <option value="goal-order">Goal Order</option>
-            <option value="progress">Progress</option>
-            <option value="duration">Duration</option>
-            <option value="videos">Video Count</option>
-          </select>
-        </div>
-
-        <div className="text-sm text-gray-500">
-          {sortedCourses.length} courses
+      {/* Search */}
+      <div className="flex gap-4">
+        <input
+          type="text"
+          placeholder="Search courses..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+        />
+        <div className="text-sm text-gray-500 flex items-center">
+          {totalCourses} course{totalCourses !== 1 ? 's' : ''}
         </div>
       </div>
 
-      {/* Courses by Goal */}
-      <div className="space-y-8">
-        {allCoursesByGoal.map((goalGroup) => (
-          <div key={goalGroup.goalLevel} className="space-y-4">
-            {/* Goal Header */}
-            <div className="flex items-center gap-3">
-              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${
-                goalGroup.status === 'current' 
-                  ? 'bg-blue-100 text-blue-800' 
-                  : goalGroup.status === 'completed'
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-gray-100 text-gray-800'
-              }`}>
-                <Target className="h-4 w-4" />
-                <span className="font-medium">
-                  {isRestricted ? `${goalGroup.goalLevel} Agency Track` : goalGroup.goalTitle}
-                </span>
-                {goalGroup.status === 'completed' && <CheckCircle className="h-4 w-4" />}
-                {goalGroup.status === 'current' && <TrendingUp className="h-4 w-4" />}
-              </div>
-              
-              <div className="text-sm text-gray-500">
-                {goalGroup.courses.length} course{goalGroup.courses.length !== 1 ? 's' : ''}
+      {/* Loading State */}
+      {loading && (
+        <div className="space-y-4">
+          {[1, 2].map((i) => (
+            <div key={i} className="border border-gray-200 rounded-lg p-4 animate-pulse">
+              <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
+              <div className="space-y-3">
+                {[1, 2, 3].map((j) => (
+                  <div key={j} className="h-32 bg-gray-200 rounded"></div>
+                ))}
               </div>
             </div>
+          ))}
+        </div>
+      )}
 
-            {/* Courses Grid */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {goalGroup.courses
-                .filter(course => filter === 'all' || 
-                  (filter === 'completed' && course.completed) ||
-                  (filter === 'in-progress' && !course.completed && course.progress > 0) ||
-                  (filter === 'not-started' && !course.completed && course.progress === 0) ||
-                  (filter === 'sales' && course.category === 'sales') ||
-                  (filter === 'service-delivery' && course.category === 'service-delivery') ||
-                  (filter === 'marketing' && course.category === 'marketing') ||
-                  (filter === 'current-goal' && goalGroup.status === 'current'))
-                .map((course) => (
-                <div
-                  key={course.id}
-                  className={`border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow ${
-                    course.completed ? 'bg-green-50' : 
-                    course.progress > 0 ? 'bg-blue-50' : 'bg-white'
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <span className={`px-2 py-1 text-xs rounded-full font-medium ${
-                      course.category === 'sales' 
-                        ? 'bg-green-100 text-green-800'
-                        : course.category === 'service-delivery'
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-purple-100 text-purple-800' // marketing
-                    }`}>
-                      {course.category === 'sales' 
-                        ? 'Sales'
-                        : course.category === 'service-delivery'
-                        ? 'Service Delivery'
-                        : 'Marketing'
-                      }
-                    </span>
-                    {isRestricted && !course.completed && (
-                      <Lock className="h-4 w-4 text-gray-400" />
-                    )}
-                  </div>
+      {/* Error State */}
+      {error && (
+        <div className="text-center py-8">
+          <p className="text-sm text-red-500">{error}</p>
+        </div>
+      )}
 
-                  <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">
-                    {course.title}
-                  </h3>
+      {/* Empty State */}
+      {!loading && !error && filteredTracks.length === 0 && (
+        <div className="text-center py-12 text-gray-500">
+          {searchQuery ? 'No courses match your search' : 'No courses available yet'}
+        </div>
+      )}
 
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                    {isRestricted ? 'Course content preview available to students only' : course.description}
-                  </p>
-
-                  <div className="flex items-center gap-4 text-xs text-gray-500 mb-3">
-                    <span>{course.duration}</span>
-                    <span>{course.videos} videos</span>
-                  </div>
-
-                  {/* Actions Slider */}
-                  {!isRestricted && (
-                    <div className="mb-3">
-                      <div className="text-xs text-gray-600 mb-2 font-medium">Actions in this course:</div>
-                      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                        {course.actions.map((action, index) => (
-                          <div
-                            key={index}
-                            className="flex-shrink-0 px-3 py-1.5 bg-gray-100 text-gray-700 text-xs rounded-full border"
-                          >
-                            {action}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+      {/* Tracks, Goals, and Courses Hierarchy */}
+      {!loading && !error && filteredTracks.length > 0 && (
+        <div className="space-y-6">
+          {filteredTracks.map((track) => (
+            <div key={track.id} className="border border-gray-200 rounded-lg overflow-hidden">
+              {/* Track Header */}
+              <button
+                onClick={() => toggleTrack(track.id)}
+                className="w-full bg-gray-50 px-6 py-4 flex items-center justify-between hover:bg-gray-100 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  {expandedTracks.has(track.id) ? (
+                    <ChevronDown className="h-5 w-5 text-gray-600" />
+                  ) : (
+                    <ChevronRight className="h-5 w-5 text-gray-600" />
                   )}
-
-                  {isRestricted && (
-                    <div className="mb-3">
-                      <div className="text-xs text-gray-600 mb-2 font-medium">Actions in this course:</div>
-                      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                        {['Watch videos', 'Complete exercises', 'Build projects', '+ more'].map((action, index) => (
-                          <div
-                            key={index}
-                            className="flex-shrink-0 px-3 py-1.5 bg-gray-100 text-gray-500 text-xs rounded-full border opacity-60"
-                          >
-                            {action}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {!course.completed && (
-                    <div className="mb-3">
-                      <div className="flex justify-between text-xs text-gray-500 mb-1">
-                        <span>Progress</span>
-                        <span>{course.progress}%</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full transition-all ${
-                            course.progress > 0 ? 'bg-blue-500' : 'bg-gray-300'
-                          }`}
-                          style={{ width: `${course.progress}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {course.completed && course.completedDate && (
-                    <div className="text-xs text-green-600 mb-3">
-                      ✓ Completed {new Date(course.completedDate).toLocaleDateString()}
-                    </div>
-                  )}
-
-                  <div className="flex gap-2">
-                    {course.completed ? (
-                      <button className="flex-1 bg-green-600 text-white py-2 px-3 rounded text-sm hover:bg-green-700 transition-colors">
-                        Review Course
-                      </button>
-                    ) : course.progress > 0 ? (
-                      <button className="flex-1 bg-blue-600 text-white py-2 px-3 rounded text-sm hover:bg-blue-700 transition-colors">
-                        Continue Learning
-                      </button>
-                    ) : (
-                      <button 
-                        className={`flex-1 py-2 px-3 rounded text-sm transition-colors ${
-                          isRestricted 
-                            ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                            : 'bg-gray-900 text-white hover:bg-black'
-                        }`}
-                        disabled={isRestricted}
-                      >
-                        {isRestricted ? 'Join to Access' : 'Start Course'}
-                      </button>
-                    )}
+                  <div className="text-left">
+                    <h3 className="text-lg font-bold text-gray-900">{track.name}</h3>
+                    <p className="text-sm text-gray-600">{track.description}</p>
                   </div>
                 </div>
-              ))}
+                <div className="text-sm text-gray-500 font-medium">
+                  {track.total_courses} courses
+                </div>
+              </button>
+
+              {/* Track Goals */}
+              {expandedTracks.has(track.id) && (
+                <div className="bg-white">
+                  {track.goals.map((goal) => (
+                    <div key={goal.id} className="border-t border-gray-200">
+                      {/* Goal Header */}
+                      <button
+                        onClick={() => toggleGoal(goal.id)}
+                        className="w-full px-6 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          {expandedGoals.has(goal.id) ? (
+                            <ChevronDown className="h-4 w-4 text-gray-500" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-gray-500" />
+                          )}
+                          <div className="text-left">
+                            <h4 className="font-semibold text-gray-900">{goal.name}</h4>
+                            {goal.description && (
+                              <p className="text-xs text-gray-500">{goal.description}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {goal.courses.length} course{goal.courses.length !== 1 ? 's' : ''}
+                        </div>
+                      </button>
+
+                      {/* Goal Courses */}
+                      {expandedGoals.has(goal.id) && (
+                        <div className="px-6 pb-4">
+                          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                            {goal.courses.map((course) => (
+                              <div
+                                key={course.id}
+                                className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-white"
+                              >
+                                {/* Course Thumbnail */}
+                                <div className="aspect-video bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                                  {course.thumbnail_url ? (
+                                    <img
+                                      src={course.thumbnail_url}
+                                      alt={course.title}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <BookOpen className="h-12 w-12 text-gray-400" />
+                                  )}
+                                </div>
+
+                                {/* Course Title */}
+                                <h5 className="font-semibold text-gray-900 mb-2 line-clamp-2">
+                                  {course.title}
+                                </h5>
+
+                                {/* Course Description */}
+                                <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                                  {course.description || 'No description available'}
+                                </p>
+
+                                {/* Instructor Info */}
+                                <div className="flex items-center gap-2 mb-3 text-sm text-gray-600">
+                                  {course.instructor.avatar_url ? (
+                                    <img
+                                      src={course.instructor.avatar_url}
+                                      alt={course.instructor.name}
+                                      className="w-6 h-6 rounded-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center">
+                                      <User className="h-3 w-3 text-gray-600" />
+                                    </div>
+                                  )}
+                                  <span>{course.instructor.name}</span>
+                                </div>
+
+                                {/* Price Info */}
+                                <div className="mb-3">
+                                  {course.is_free ? (
+                                    <span className="inline-block px-3 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">
+                                      Free
+                                    </span>
+                                  ) : course.price ? (
+                                    <span className="inline-block px-3 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">
+                                      ${course.price}
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                {/* Action Button */}
+                                <button
+                                  className={`w-full py-2 px-3 rounded text-sm transition-colors ${
+                                    isRestricted
+                                      ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                                      : 'bg-gray-900 text-white hover:bg-black'
+                                  }`}
+                                  disabled={isRestricted}
+                                >
+                                  {isRestricted ? 'Join to Access' : 'View Course'}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Call to Action for Guests */}
-      {isRestricted && (
+      {isRestricted && totalCourses > 0 && (
         <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-6 text-center">
           <BookOpen className="h-8 w-8 text-blue-600 mx-auto mb-3" />
-          <h3 className="font-semibold text-gray-900 mb-2">Access Full Course Library</h3>
+          <h3 className="font-semibold text-gray-900 mb-2">Start Your Learning Journey</h3>
           <p className="text-gray-600 mb-4">
-            Follow the structured learning path designed for your specific goal track.
+            Join the community to access all courses and follow structured learning paths to reach your income goals.
           </p>
           <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
             Join Community - $97/month

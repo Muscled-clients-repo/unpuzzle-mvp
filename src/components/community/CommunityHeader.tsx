@@ -434,9 +434,6 @@ export function CommunityHeader({ communityPosts, userRole = 'student', goalData
               {activeTab === 'courses' && (
                 <CommunityCoursesSection
                   userRole={userRole}
-                  memberName="John D."
-                  isOwnProfile={true}
-                  coursesByGoal={coursesByGoal}
                 />
               )}
               {activeTab === 'resources' && (

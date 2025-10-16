@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { Lock } from 'lucide-react'
-import { getStudentActivitiesByGoal, type GoalActivities } from '@/lib/actions/activity-timeline-actions'
+import { getAllFeaturedStudentsActivities, type GoalActivities } from '@/lib/actions/activity-timeline-actions'
 import { getFeaturedStudents, type FeaturedStudent } from '@/lib/actions/featured-students-actions'
 import { StatsCardsSkeleton, GoalTimelineSkeleton } from '@/components/common/universal-skeleton'
 import { formatTimeAgo, formatTimestamp } from '@/lib/utils/time-ago'
@@ -27,7 +27,7 @@ export function CommunityGoalsSection({
   // Cache activities per student to avoid refetching on tab switch
   const [activitiesCache, setActivitiesCache] = useState<Record<string, GoalActivities[]>>({})
 
-  // LAZY LOADING: Fetch featured students list + Student 1's data only
+  // OPTIMIZED: Fetch ALL featured students' activities in ONE query
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -49,23 +49,23 @@ export function CommunityGoalsSection({
         setFeaturedStudents(students)
         setLoadingFeatured(false)
 
-        // STEP 2: Fetch only Student 1's data (lazy load others on click)
+        // STEP 2: Fetch ALL students' activities in ONE optimized query
+        const activitiesResult = await getAllFeaturedStudentsActivities()
+
+        if (activitiesResult.error) {
+          console.error('Error fetching activities:', activitiesResult.error)
+          setError(activitiesResult.error)
+          setLoading(false)
+          return
+        }
+
+        // Cache all students' data at once
+        const allActivities = activitiesResult.data || {}
+        setActivitiesCache(allActivities)
+
+        // Set first student's data as initial view
         if (students.length > 0) {
-          const firstStudentResult = await getStudentActivitiesByGoal({ studentId: students[0].id })
-
-          if (firstStudentResult.error) {
-            console.error('Error fetching activities:', firstStudentResult.error)
-            setError(firstStudentResult.error)
-            setLoading(false)
-            return
-          }
-
-          // Cache first student's data
-          const newCache: Record<string, GoalActivities[]> = {
-            [students[0].id]: firstStudentResult.data || []
-          }
-          setActivitiesCache(newCache)
-          setGoalActivitiesData(firstStudentResult.data || [])
+          setGoalActivitiesData(allActivities[students[0].id] || [])
         }
 
         setLoading(false)
@@ -80,42 +80,16 @@ export function CommunityGoalsSection({
     fetchInitialData()
   }, [])
 
-  // LAZY LOADING: Fetch data when switching tabs (if not cached)
+  // Switch to cached data when tab changes (all data pre-loaded in initial fetch)
   useEffect(() => {
-    const fetchStudentData = async () => {
-      if (loadingFeatured || featuredStudents.length === 0) return
+    if (loadingFeatured || featuredStudents.length === 0) return
 
-      const targetStudent = featuredStudents[selectedStudentIndex]
-      if (!targetStudent) return
+    const targetStudent = featuredStudents[selectedStudentIndex]
+    if (!targetStudent) return
 
-      // If already cached, use it
-      if (activitiesCache[targetStudent.id]) {
-        setGoalActivitiesData(activitiesCache[targetStudent.id])
-        return
-      }
-
-      // Not cached, fetch it
-      setLoading(true)
-      const result = await getStudentActivitiesByGoal({ studentId: targetStudent.id })
-
-      if (result.error) {
-        console.error('Error fetching student activities:', result.error)
-        setError(result.error)
-        setLoading(false)
-        return
-      }
-
-      // Cache the result
-      setActivitiesCache(prev => ({
-        ...prev,
-        [targetStudent.id]: result.data || []
-      }))
-      setGoalActivitiesData(result.data || [])
-      setLoading(false)
-    }
-
-    fetchStudentData()
-  }, [selectedStudentIndex, featuredStudents, loadingFeatured])
+    // Use cached data (all students' data was pre-loaded in the initial fetch)
+    setGoalActivitiesData(activitiesCache[targetStudent.id] || [])
+  }, [selectedStudentIndex, featuredStudents, loadingFeatured, activitiesCache])
 
   const isRestricted = userRole === 'guest'
 

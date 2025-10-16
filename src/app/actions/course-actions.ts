@@ -647,3 +647,226 @@ export async function getUserCoursesAction(): Promise<ActionResult<any[]>> {
     }
   }
 }
+
+/**
+ * PUBLIC ENDPOINT - No authentication required
+ * Get all published courses available on the platform
+ * Used in: Community/Courses Page - Public course listing
+ *
+ * Security: Only returns published courses. RLS policies ensure proper access control.
+ */
+export async function getAllPublishedCoursesAction(): Promise<ActionResult<any[]>> {
+  try {
+    const supabase = await createClient()
+    // No auth check - this is a public endpoint
+
+    // Fetch all published courses with basic info
+    const { data: courses, error } = await supabase
+      .from('courses')
+      .select(`
+        id,
+        title,
+        description,
+        thumbnail_url,
+        is_free,
+        price,
+        created_at,
+        updated_at,
+        instructor_id,
+        profiles!courses_instructor_id_fkey (
+          id,
+          full_name,
+          avatar_url
+        )
+      `)
+      .eq('status', 'published')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Get published courses error:', error)
+      throw error
+    }
+
+    // Transform the data to a cleaner format
+    const formattedCourses = (courses || []).map(course => ({
+      id: course.id,
+      title: course.title,
+      description: course.description,
+      thumbnail_url: course.thumbnail_url,
+      is_free: course.is_free,
+      price: course.price,
+      created_at: course.created_at,
+      updated_at: course.updated_at,
+      instructor: {
+        id: course.profiles?.id,
+        name: course.profiles?.full_name || 'Instructor',
+        avatar_url: course.profiles?.avatar_url
+      }
+    }))
+
+    return {
+      success: true,
+      data: formattedCourses
+    }
+  } catch (error) {
+    console.error('Get all published courses error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch courses',
+      data: []
+    }
+  }
+}
+
+/**
+ * PUBLIC ENDPOINT - No authentication required
+ * Get courses organized by tracks and goals for community discovery
+ * Used in: Community/Courses Page - Track/Goal based course browsing
+ *
+ * Security: Only returns published courses. RLS policies ensure proper access control.
+ * Returns: Hierarchical structure: Tracks → Goals → Courses
+ */
+export async function getCoursesGroupedByTrackAndGoalAction(): Promise<ActionResult<any[]>> {
+  try {
+    const supabase = await createClient()
+    // No auth check - this is a public endpoint
+
+    // Fetch all active tracks
+    const { data: tracks, error: tracksError } = await supabase
+      .from('tracks')
+      .select('id, name, description')
+      .eq('is_active', true)
+      .order('name')
+
+    if (tracksError) {
+      console.error('Error fetching tracks:', tracksError)
+      throw tracksError
+    }
+
+    // Fetch all active goals with their tracks
+    const { data: goals, error: goalsError } = await supabase
+      .from('track_goals')
+      .select('id, track_id, name, description, sort_order')
+      .eq('is_active', true)
+      .order('sort_order')
+
+    if (goalsError) {
+      console.error('Error fetching goals:', goalsError)
+      throw goalsError
+    }
+
+    // Fetch all published courses with track and goal assignments
+    const { data: courses, error: coursesError } = await supabase
+      .from('courses')
+      .select(`
+        id,
+        title,
+        description,
+        thumbnail_url,
+        is_free,
+        price,
+        instructor_id,
+        profiles!courses_instructor_id_fkey (
+          id,
+          full_name,
+          avatar_url
+        )
+      `)
+      .eq('status', 'published')
+
+    if (coursesError) {
+      console.error('Error fetching courses:', coursesError)
+      throw coursesError
+    }
+
+    // Fetch course-track assignments
+    const { data: trackAssignments, error: trackAssignmentsError } = await supabase
+      .from('course_track_assignments')
+      .select('course_id, track_id')
+
+    if (trackAssignmentsError) {
+      console.error('Error fetching track assignments:', trackAssignmentsError)
+      throw trackAssignmentsError
+    }
+
+    // Fetch course-goal assignments
+    const { data: goalAssignments, error: goalAssignmentsError } = await supabase
+      .from('course_goal_assignments')
+      .select('course_id, goal_id')
+
+    if (goalAssignmentsError) {
+      console.error('Error fetching goal assignments:', goalAssignmentsError)
+      throw goalAssignmentsError
+    }
+
+    // Build the hierarchical structure
+    const tracksWithGoalsAndCourses = (tracks || []).map(track => {
+      // Get goals for this track
+      const trackGoals = (goals || [])
+        .filter(goal => goal.track_id === track.id)
+        .map(goal => {
+          // Get courses assigned to this goal
+          const goalCourseIds = (goalAssignments || [])
+            .filter(ga => ga.goal_id === goal.id)
+            .map(ga => ga.course_id)
+
+          // Also get courses assigned to the track (but not to a specific goal)
+          const trackCourseIds = (trackAssignments || [])
+            .filter(ta => ta.track_id === track.id)
+            .map(ta => ta.course_id)
+
+          // Combine both
+          const relevantCourseIds = [...new Set([...goalCourseIds, ...trackCourseIds])]
+
+          const goalCourses = (courses || [])
+            .filter(course => relevantCourseIds.includes(course.id))
+            .map(course => ({
+              id: course.id,
+              title: course.title,
+              description: course.description,
+              thumbnail_url: course.thumbnail_url,
+              is_free: course.is_free,
+              price: course.price,
+              instructor: {
+                id: course.profiles?.id,
+                name: course.profiles?.full_name || 'Instructor',
+                avatar_url: course.profiles?.avatar_url
+              }
+            }))
+
+          return {
+            id: goal.id,
+            name: goal.name,
+            description: goal.description,
+            sort_order: goal.sort_order,
+            courses: goalCourses,
+            course_count: goalCourses.length
+          }
+        })
+        // Only include goals that have courses
+        .filter(goal => goal.course_count > 0)
+
+      return {
+        id: track.id,
+        name: track.name,
+        description: track.description,
+        goals: trackGoals,
+        total_courses: trackGoals.reduce((sum, goal) => sum + goal.course_count, 0)
+      }
+    })
+    // Only include tracks that have goals with courses
+    .filter(track => track.total_courses > 0)
+
+    return {
+      success: true,
+      data: tracksWithGoalsAndCourses
+    }
+  } catch (error) {
+    console.error('Get courses grouped by track and goal error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch courses',
+      data: []
+    }
+  }
+}
