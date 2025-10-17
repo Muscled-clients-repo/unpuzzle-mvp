@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { BlogPost } from "@/types/blog"
-import { useAppStore } from "@/stores/app-store"
 import { EnhancedAuthorBio } from "@/components/blog/EnhancedAuthorBio"
 import { TableOfContents } from "@/components/blog/TableOfContents"
 import { SocialProof } from "@/components/blog/SocialProof"
@@ -19,7 +18,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Share2,
-  ThumbsUp,
   Tag,
   Twitter,
   Linkedin,
@@ -34,13 +32,6 @@ interface BlogDetailClientProps {
 }
 
 export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) {
-  const {
-    likedPosts,
-    toggleLikePost
-  } = useAppStore()
-
-  const isLiked = likedPosts?.includes(post.id) || false
-
   const handleNewsletterSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
@@ -162,18 +153,7 @@ export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) 
 
           {/* Featured image removed for now */}
 
-          <div className="flex items-center justify-between py-4 mb-8 border-y">
-            <div className="flex items-center gap-2">
-              <Button
-                variant={isLiked ? "default" : "outline"}
-                size="sm"
-                onClick={() => toggleLikePost(post.id)}
-              >
-                <ThumbsUp className={cn("h-4 w-4", isLiked && "fill-current")} />
-                <span className="ml-2">{isLiked ? "Liked" : "Like"}</span>
-              </Button>
-            </div>
-            
+          <div className="flex items-center justify-end py-4 mb-8 border-y">
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"

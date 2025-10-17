@@ -26,17 +26,14 @@ export function TableOfContents({ content }: TableOfContentsProps) {
 
       // Find all h1, h2, h3 elements in the article
       const articleElement = document.querySelector('article')
-      console.log('TOC: Article element found:', !!articleElement)
       if (!articleElement) return extracted
 
       const headingElements = articleElement.querySelectorAll('h1, h2, h3')
-      console.log('TOC: Found heading elements:', headingElements.length)
 
       let firstH1Skipped = false
       headingElements.forEach((element) => {
         const text = element.textContent?.trim() || ''
         const level = parseInt(element.tagName.substring(1)) // Extract number from h1/h2/h3
-        console.log('TOC: Heading found:', { text, level })
 
         // Generate ID from heading text (same as prose scroll-mt)
         const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-')
@@ -44,7 +41,6 @@ export function TableOfContents({ content }: TableOfContentsProps) {
         // Add ID to actual heading element in the DOM for smooth scrolling
         if (!element.id) {
           element.setAttribute('id', id)
-          console.log('TOC: Added ID to element:', id, element.id)
         }
 
         // Include h1, h2, h3 in TOC (skip the first h1 which is usually the page title)
@@ -62,16 +58,6 @@ export function TableOfContents({ content }: TableOfContentsProps) {
           extracted.push({ id, text, level })
         }
       })
-
-      console.log('TOC: Extracted headings for TOC:', extracted.length)
-
-      // Verify IDs were actually added
-      setTimeout(() => {
-        extracted.forEach(h => {
-          const elem = document.getElementById(h.id)
-          console.log('TOC: Verify ID exists:', h.id, !!elem)
-        })
-      }, 500)
 
       return extracted
     }
@@ -106,19 +92,14 @@ export function TableOfContents({ content }: TableOfContentsProps) {
   }, [headings])
 
   const handleClick = (id: string) => {
-    console.log('TOC: Clicking heading with id:', id)
     const element = document.getElementById(id)
-    console.log('TOC: Found element:', !!element, element)
     if (element) {
       const offset = 80 // Header offset
       const elementPosition = element.offsetTop - offset
-      console.log('TOC: Scrolling to position:', elementPosition)
       window.scrollTo({
         top: elementPosition,
         behavior: 'smooth'
       })
-    } else {
-      console.error('TOC: Element not found with id:', id)
     }
   }
 
