@@ -275,6 +275,7 @@ export function TiptapEditor({ content, onChange, placeholder = 'Start writing y
             Uploading image...
           </div>
         )}
+        </div>
       </div>
 
       {/* Editor */}
