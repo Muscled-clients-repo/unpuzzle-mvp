@@ -92,7 +92,7 @@ export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) 
             {/* Table of Contents - shows for posts with 3+ headings */}
             <TableOfContents content={post.content} />
 
-            <article className="max-w-4xl mx-auto w-full">
+            <article className="w-full">
               <header className="mb-8">
             <Badge className="mb-4" variant="secondary">
               {post.category}
