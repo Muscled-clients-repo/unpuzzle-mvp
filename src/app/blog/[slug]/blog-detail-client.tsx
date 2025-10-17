@@ -79,8 +79,8 @@ export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) 
       <Header />
       
       <main className="flex-1 pt-20">
-        <div className="container max-w-7xl mx-auto px-4 py-8">
-          <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-8">
+        <div className="container px-4 py-8">
+          <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-8 max-w-7xl mx-auto">
             <Link href="/" className="hover:text-foreground">Home</Link>
             <ChevronRight className="h-3 w-3" />
             <Link href="/blog" className="hover:text-foreground">Blog</Link>
@@ -88,11 +88,16 @@ export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) 
             <span className="text-foreground">{post.category}</span>
           </nav>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-12">
-            {/* Table of Contents - shows for posts with 3+ headings */}
-            <TableOfContents content={post.content} />
+          <div className="flex gap-12 max-w-7xl mx-auto">
+            {/* Left sidebar: TOC + Author Bio */}
+            <aside className="hidden lg:block w-[280px] shrink-0">
+              <div className="sticky top-24 space-y-8">
+                <TableOfContents content={post.content} />
+                <EnhancedAuthorBio author={post.author} compact={true} />
+              </div>
+            </aside>
 
-            <article className="w-full">
+            <article className="flex-1 max-w-4xl mx-auto">
               <header className="mb-8">
             <Badge className="mb-4" variant="secondary">
               {post.category}
@@ -155,9 +160,7 @@ export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) 
             )}
           </header>
 
-          {post.image && post.image !== '/blog-placeholder.jpg' && (
-            <div className="aspect-video bg-gradient-to-br from-primary/20 to-purple-600/20 rounded-lg mb-8" />
-          )}
+          {/* Featured image removed for now */}
 
           <div className="flex items-center justify-between py-4 mb-8 border-y">
             <div className="flex items-center gap-2">
@@ -212,8 +215,6 @@ export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) 
               ))}
             </div>
           )}
-
-          <EnhancedAuthorBio author={post.author} />
 
           {post.comments && post.comments.length > 0 && (
             <Comments comments={post.comments} postId={post.id} />

@@ -26,30 +26,62 @@ export function TableOfContents({ content }: TableOfContentsProps) {
 
       // Find all h1, h2, h3 elements in the article
       const articleElement = document.querySelector('article')
+      console.log('TOC: Article element found:', !!articleElement)
       if (!articleElement) return extracted
 
       const headingElements = articleElement.querySelectorAll('h1, h2, h3')
+      console.log('TOC: Found heading elements:', headingElements.length)
 
+      let firstH1Skipped = false
       headingElements.forEach((element) => {
         const text = element.textContent?.trim() || ''
         const level = parseInt(element.tagName.substring(1)) // Extract number from h1/h2/h3
+        console.log('TOC: Heading found:', { text, level })
 
         // Generate ID from heading text (same as prose scroll-mt)
         const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-')
 
         // Add ID to actual heading element in the DOM for smooth scrolling
-        element.id = id
+        if (!element.id) {
+          element.setAttribute('id', id)
+          console.log('TOC: Added ID to element:', id, element.id)
+        }
 
-        // Only include h2 and h3 in TOC (h1 is usually the post title)
-        if (level === 2 || level === 3) {
+        // Include h1, h2, h3 in TOC (skip the first h1 which is usually the page title)
+        if (level === 1 && !firstH1Skipped) {
+          firstH1Skipped = true
+          return // Skip the first h1
+        }
+
+        // Skip author bio section (not article content)
+        if (text.startsWith('About ')) {
+          return
+        }
+
+        if (level === 1 || level === 2 || level === 3) {
           extracted.push({ id, text, level })
         }
       })
 
+      console.log('TOC: Extracted headings for TOC:', extracted.length)
+
+      // Verify IDs were actually added
+      setTimeout(() => {
+        extracted.forEach(h => {
+          const elem = document.getElementById(h.id)
+          console.log('TOC: Verify ID exists:', h.id, !!elem)
+        })
+      }, 500)
+
       return extracted
     }
 
-    setHeadings(extractHeadings())
+    // Small delay to ensure dangerouslySetInnerHTML content is fully rendered
+    const timer = setTimeout(() => {
+      setHeadings(extractHeadings())
+    }, 100)
+
+    return () => clearTimeout(timer)
   }, [content])
 
   useEffect(() => {
@@ -74,25 +106,44 @@ export function TableOfContents({ content }: TableOfContentsProps) {
   }, [headings])
 
   const handleClick = (id: string) => {
+    console.log('TOC: Clicking heading with id:', id)
     const element = document.getElementById(id)
+    console.log('TOC: Found element:', !!element, element)
     if (element) {
       const offset = 80 // Header offset
       const elementPosition = element.offsetTop - offset
+      console.log('TOC: Scrolling to position:', elementPosition)
       window.scrollTo({
         top: elementPosition,
         behavior: 'smooth'
       })
+    } else {
+      console.error('TOC: Element not found with id:', id)
     }
   }
 
-  // Only show TOC for longer articles (3+ headings)
-  if (headings.length < 3) {
+  // Show skeleton while loading (before headings are extracted)
+  if (headings.length === 0) {
+    return (
+      <div>
+        <div className="h-6 w-32 bg-muted animate-pulse rounded mb-4" />
+        <div className="space-y-2">
+          <div className="h-4 w-full bg-muted animate-pulse rounded" />
+          <div className="h-4 w-5/6 bg-muted animate-pulse rounded" />
+          <div className="h-4 w-4/6 bg-muted animate-pulse rounded" />
+          <div className="h-4 w-5/6 bg-muted animate-pulse rounded" />
+        </div>
+      </div>
+    )
+  }
+
+  // Only show TOC for articles with 2+ headings (after they're loaded)
+  if (headings.length < 2) {
     return null
   }
 
   return (
-    <aside className="hidden lg:block sticky top-24 h-fit">
-      <div className="pr-8 border-r">
+    <div>
         <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
           <List className="h-4 w-4" />
           Table of Contents
@@ -122,7 +173,6 @@ export function TableOfContents({ content }: TableOfContentsProps) {
             ))}
           </ul>
         </nav>
-      </div>
-    </aside>
+    </div>
   )
 }

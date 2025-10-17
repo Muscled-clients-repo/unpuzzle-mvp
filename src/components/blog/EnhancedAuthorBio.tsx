@@ -8,13 +8,41 @@ import { Linkedin, Twitter, Github, ExternalLink } from "lucide-react"
 
 interface EnhancedAuthorBioProps {
   author: BlogPost['author']
+  compact?: boolean
 }
 
-export function EnhancedAuthorBio({ author }: EnhancedAuthorBioProps) {
+export function EnhancedAuthorBio({ author, compact = false }: EnhancedAuthorBioProps) {
   if (!author.bio && !author.credentials) {
     return null
   }
 
+  // Compact sidebar version
+  if (compact) {
+    return (
+      <div className="pt-8 border-t">
+        <div className="p-4 bg-muted/30 rounded-lg border">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary/20 to-purple-600/20 flex items-center justify-center shrink-0">
+              <span className="text-sm font-bold text-primary">
+                {author.name.split(' ').map(n => n[0]).join('')}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-xs font-semibold mb-1">{author.name}</h4>
+              <p className="text-xs text-muted-foreground">{author.role}</p>
+            </div>
+          </div>
+          {author.bio && (
+            <p className="text-xs text-muted-foreground leading-relaxed mt-3">
+              {author.bio}
+            </p>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Full version (for bottom of article if needed)
   return (
     <Card className="mt-12">
       <CardContent className="p-6">
