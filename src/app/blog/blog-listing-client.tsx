@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
@@ -8,12 +8,11 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
-import { useAppStore } from "@/stores/app-store"
 import { BlogPost } from "@/types/blog"
-import { 
-  Calendar, 
-  Clock, 
-  Search, 
+import {
+  Calendar,
+  Clock,
+  Search,
   ArrowRight,
   TrendingUp,
   BookOpen,
@@ -24,19 +23,19 @@ interface BlogListingClientProps {
   initialPosts: BlogPost[]
   categories: Array<{ name: string; slug: string; count: number }>
   featuredPosts: BlogPost[]
+  archiveTitle?: string
+  archiveDescription?: string
 }
 
-export function BlogListingClient({ 
-  initialPosts, 
-  categories, 
-  featuredPosts 
+export function BlogListingClient({
+  initialPosts,
+  categories,
+  featuredPosts,
+  archiveTitle,
+  archiveDescription
 }: BlogListingClientProps) {
-  const { 
-    selectedCategory,
-    searchQuery,
-    setSelectedCategory,
-    setSearchQuery
-  } = useAppStore()
+  const [selectedCategory, setSelectedCategory] = useState('all')
+  const [searchQuery, setSearchQuery] = useState('')
 
   // Filter posts client-side based on UI state
   const filteredPosts = useMemo(() => {
@@ -66,21 +65,21 @@ export function BlogListingClient({
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      
-      <main className="flex-1">
+
+      <main className="flex-1 pt-20">
         {/* Hero Section */}
         <section className="bg-gradient-to-b from-primary/10 to-background py-16">
           <div className="container px-4">
             <div className="text-center max-w-3xl mx-auto">
               <Badge className="mb-4" variant="secondary">
                 <BookOpen className="mr-1 h-3 w-3" />
-                Unpuzzle Blog
+                {archiveTitle ? 'Blog Archive' : 'Unpuzzle Blog'}
               </Badge>
               <h1 className="text-4xl font-bold mb-4">
-                Insights on Learning, AI, and Education
+                {archiveTitle || 'Insights on Learning, AI, and Education'}
               </h1>
               <p className="text-lg text-muted-foreground mb-8">
-                Discover strategies, stories, and insights from our community of learners and educators
+                {archiveDescription || 'Discover strategies, stories, and insights from our community of learners and educators'}
               </p>
               
               {/* Search Bar */}
@@ -133,9 +132,17 @@ export function BlogListingClient({
                 <Card key={post.id} className="group hover:shadow-lg transition-all">
                   <Link href={`/blog/${post.slug}`}>
                     <div className="aspect-video bg-muted relative overflow-hidden">
-                      <div className="w-full h-full bg-gradient-to-br from-primary/20 to-purple-600/20 flex items-center justify-center">
-                        <BookOpen className="h-12 w-12 text-muted-foreground" />
-                      </div>
+                      {post.image ? (
+                        <img
+                          src={post.image}
+                          alt={post.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-primary/20 to-purple-600/20 flex items-center justify-center">
+                          <BookOpen className="h-12 w-12 text-muted-foreground" />
+                        </div>
+                      )}
                       <Badge className="absolute top-4 left-4 bg-primary text-primary-foreground">
                         Featured
                       </Badge>
@@ -202,7 +209,15 @@ export function BlogListingClient({
                 <Card key={post.id} className="group hover:shadow-lg transition-all">
                   <Link href={`/blog/${post.slug}`}>
                     <div className="aspect-video bg-muted relative overflow-hidden">
-                      <div className="w-full h-full bg-gradient-to-br from-primary/10 to-purple-600/10" />
+                      {post.image ? (
+                        <img
+                          src={post.image}
+                          alt={post.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-primary/10 to-purple-600/10" />
+                      )}
                       <Badge className="absolute top-4 left-4" variant="secondary">
                         {post.category}
                       </Badge>

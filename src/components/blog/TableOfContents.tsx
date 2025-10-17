@@ -1,0 +1,159 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { List } from "lucide-react"
+import { cn } from "@/lib/utils"
+
+interface Heading {
+  id: string
+  text: string
+  level: number
+}
+
+interface TableOfContentsProps {
+  content: string
+}
+
+export function TableOfContents({ content }: TableOfContentsProps) {
+  const [headings, setHeadings] = useState<Heading[]>([])
+  const [activeId, setActiveId] = useState<string>('')
+
+  useEffect(() => {
+    // Extract headings from HTML content (Tiptap output) and add IDs to DOM
+    const extractHeadings = () => {
+      const extracted: Heading[] = []
+
+      // Find all h1, h2, h3 elements in the article
+      const articleElement = document.querySelector('article')
+      if (!articleElement) return extracted
+
+      const headingElements = articleElement.querySelectorAll('h1, h2, h3')
+
+      let firstH1Skipped = false
+      headingElements.forEach((element) => {
+        const text = element.textContent?.trim() || ''
+        const level = parseInt(element.tagName.substring(1)) // Extract number from h1/h2/h3
+
+        // Generate ID from heading text (same as prose scroll-mt)
+        const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+
+        // Add ID to actual heading element in the DOM for smooth scrolling
+        if (!element.id) {
+          element.setAttribute('id', id)
+        }
+
+        // Include h1, h2, h3 in TOC (skip the first h1 which is usually the page title)
+        if (level === 1 && !firstH1Skipped) {
+          firstH1Skipped = true
+          return // Skip the first h1
+        }
+
+        // Skip author bio section (not article content)
+        if (text.startsWith('About ')) {
+          return
+        }
+
+        if (level === 1 || level === 2 || level === 3) {
+          extracted.push({ id, text, level })
+        }
+      })
+
+      return extracted
+    }
+
+    // Small delay to ensure dangerouslySetInnerHTML content is fully rendered
+    const timer = setTimeout(() => {
+      setHeadings(extractHeadings())
+    }, 100)
+
+    return () => clearTimeout(timer)
+  }, [content])
+
+  useEffect(() => {
+    // Track scroll position and update active heading
+    const handleScroll = () => {
+      const headingElements = headings.map(h => document.getElementById(h.id))
+      const scrollPosition = window.scrollY + 100
+
+      for (let i = headingElements.length - 1; i >= 0; i--) {
+        const element = headingElements[i]
+        if (element && element.offsetTop <= scrollPosition) {
+          setActiveId(headings[i].id)
+          break
+        }
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll)
+    handleScroll() // Set initial active heading
+
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [headings])
+
+  const handleClick = (id: string) => {
+    const element = document.getElementById(id)
+    if (element) {
+      const offset = 80 // Header offset
+      const elementPosition = element.offsetTop - offset
+      window.scrollTo({
+        top: elementPosition,
+        behavior: 'smooth'
+      })
+    }
+  }
+
+  // Show skeleton while loading (before headings are extracted)
+  if (headings.length === 0) {
+    return (
+      <div>
+        <div className="h-6 w-32 bg-muted animate-pulse rounded mb-4" />
+        <div className="space-y-2">
+          <div className="h-4 w-full bg-muted animate-pulse rounded" />
+          <div className="h-4 w-5/6 bg-muted animate-pulse rounded" />
+          <div className="h-4 w-4/6 bg-muted animate-pulse rounded" />
+          <div className="h-4 w-5/6 bg-muted animate-pulse rounded" />
+        </div>
+      </div>
+    )
+  }
+
+  // Only show TOC for articles with 2+ headings (after they're loaded)
+  if (headings.length < 2) {
+    return null
+  }
+
+  return (
+    <div>
+        <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+          <List className="h-4 w-4" />
+          Table of Contents
+        </h3>
+        <nav>
+          <ul className="space-y-2">
+            {headings.map((heading) => (
+              <li
+                key={heading.id}
+                className={cn(
+                  "text-sm transition-colors",
+                  heading.level === 3 && "ml-4"
+                )}
+              >
+                <button
+                  onClick={() => handleClick(heading.id)}
+                  className={cn(
+                    "text-left hover:text-primary transition-colors w-full",
+                    activeId === heading.id
+                      ? "text-primary font-medium border-l-2 border-primary pl-3 -ml-3"
+                      : "text-muted-foreground pl-3"
+                  )}
+                >
+                  {heading.text}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </nav>
+    </div>
+  )
+}
