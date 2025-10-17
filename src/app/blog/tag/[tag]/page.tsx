@@ -31,7 +31,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ')
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://unpuzzle.com'
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://unpuzzle.co'
   const tagUrl = `${siteUrl}/blog/tag/${resolvedParams.tag}`
 
   return {

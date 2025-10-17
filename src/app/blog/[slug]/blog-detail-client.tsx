@@ -88,9 +88,9 @@ export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) 
             <span className="text-foreground">{post.category}</span>
           </nav>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr] gap-12">
-            {/* TableOfContents - hide for now, can be enabled later for posts with rich content */}
-            {/* <TableOfContents content={post.content} /> */}
+          <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-12">
+            {/* Table of Contents - shows for posts with 3+ headings */}
+            <TableOfContents content={post.content} />
 
             <article className="max-w-4xl mx-auto w-full">
               <header className="mb-8">

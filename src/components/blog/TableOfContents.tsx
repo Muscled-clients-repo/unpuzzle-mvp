@@ -20,20 +20,29 @@ export function TableOfContents({ content }: TableOfContentsProps) {
   const [activeId, setActiveId] = useState<string>('')
 
   useEffect(() => {
-    // Extract headings from markdown content
+    // Extract headings from HTML content (Tiptap output) and add IDs to DOM
     const extractHeadings = () => {
-      const lines = content.split('\n')
       const extracted: Heading[] = []
 
-      lines.forEach((line, index) => {
-        if (line.startsWith('## ')) {
-          const text = line.replace('## ', '').trim()
-          const id = `heading-${index}-${text.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
-          extracted.push({ id, text, level: 2 })
-        } else if (line.startsWith('### ')) {
-          const text = line.replace('### ', '').trim()
-          const id = `heading-${index}-${text.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
-          extracted.push({ id, text, level: 3 })
+      // Find all h1, h2, h3 elements in the article
+      const articleElement = document.querySelector('article')
+      if (!articleElement) return extracted
+
+      const headingElements = articleElement.querySelectorAll('h1, h2, h3')
+
+      headingElements.forEach((element) => {
+        const text = element.textContent?.trim() || ''
+        const level = parseInt(element.tagName.substring(1)) // Extract number from h1/h2/h3
+
+        // Generate ID from heading text (same as prose scroll-mt)
+        const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+
+        // Add ID to actual heading element in the DOM for smooth scrolling
+        element.id = id
+
+        // Only include h2 and h3 in TOC (h1 is usually the post title)
+        if (level === 2 || level === 3) {
+          extracted.push({ id, text, level })
         }
       })
 
