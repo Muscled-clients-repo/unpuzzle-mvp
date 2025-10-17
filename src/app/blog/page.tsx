@@ -13,7 +13,10 @@ export const metadata: Metadata = {
   title: 'Blog - Unpuzzle | Learning Insights & AI Education',
   description: 'Discover strategies, stories, and insights from our community of learners and educators. Learn about AI in education, active learning, and more.',
   alternates: {
-    canonical: `${siteUrl}/blog`
+    canonical: `${siteUrl}/blog`,
+    types: {
+      'application/rss+xml': `${siteUrl}/feed.xml`
+    }
   },
   openGraph: {
     title: 'Unpuzzle Blog - Learning Insights & AI Education',
