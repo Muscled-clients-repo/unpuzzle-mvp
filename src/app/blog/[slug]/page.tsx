@@ -32,7 +32,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     }
   }
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://unpuzzle.com'
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://unpuzzle.co'
   const postUrl = `${siteUrl}/blog/${resolvedParams.slug}`
 
   return {

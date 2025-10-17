@@ -7,7 +7,7 @@ import {
   renderJsonLd
 } from '@/lib/seo/structured-data'
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://unpuzzle.com'
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://unpuzzle.co'
 
 export const metadata: Metadata = {
   title: 'Blog - Unpuzzle | Learning Insights & AI Education',

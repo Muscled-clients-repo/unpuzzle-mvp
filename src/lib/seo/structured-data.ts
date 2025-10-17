@@ -1,6 +1,6 @@
 import { BlogPost } from "@/types/blog"
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://unpuzzle.com"
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://unpuzzle.co"
 
 /**
  * Generates Organization schema for Unpuzzle
