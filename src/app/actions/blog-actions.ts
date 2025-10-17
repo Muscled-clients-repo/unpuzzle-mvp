@@ -125,6 +125,7 @@ export async function updateBlogPostAction(
 
     revalidatePath(`/admin/blog/${postId}`)
     revalidatePath('/admin/blog')
+    revalidatePath('/blog') // Revalidate blog listing page
     if (updatedPost.slug) {
       revalidatePath(`/blog/${updatedPost.slug}`)
     }

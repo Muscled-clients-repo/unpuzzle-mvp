@@ -110,7 +110,6 @@ export class SupabaseBlogService implements IBlogService {
       })
       .select(`
         *,
-        profiles:author_id (id, full_name, email, avatar_url, bio),
         blog_categories (id, name, slug, description, color, created_at)
       `)
       .single()
@@ -140,7 +139,6 @@ export class SupabaseBlogService implements IBlogService {
       .eq('id', id)
       .select(`
         *,
-        profiles:author_id (id, full_name, email, avatar_url, bio),
         blog_categories (id, name, slug, description, color, created_at)
       `)
       .single()
@@ -154,7 +152,6 @@ export class SupabaseBlogService implements IBlogService {
       .from('blog_posts')
       .select(`
         *,
-        profiles:author_id (id, full_name, email, avatar_url, bio),
         blog_categories (id, name, slug, description, color, created_at)
       `)
       .eq('id', id)
@@ -173,7 +170,6 @@ export class SupabaseBlogService implements IBlogService {
       .from('blog_posts')
       .select(`
         *,
-        profiles:author_id (id, full_name, email, avatar_url, bio),
         blog_categories (id, name, slug, description, color, created_at)
       `)
       .eq('slug', slug)
@@ -192,7 +188,6 @@ export class SupabaseBlogService implements IBlogService {
       .from('blog_posts')
       .select(`
         *,
-        profiles:author_id (id, full_name, email, avatar_url, bio),
         blog_categories (id, name, slug, description, color, created_at)
       `, { count: 'exact' })
 
@@ -239,7 +234,6 @@ export class SupabaseBlogService implements IBlogService {
       .eq('id', id)
       .select(`
         *,
-        profiles:author_id (id, full_name, email, avatar_url, bio),
         blog_categories (id, name, slug, description, color, created_at)
       `)
       .single()
@@ -255,7 +249,6 @@ export class SupabaseBlogService implements IBlogService {
       .eq('id', id)
       .select(`
         *,
-        profiles:author_id (id, full_name, email, avatar_url, bio),
         blog_categories (id, name, slug, description, color, created_at)
       `)
       .single()

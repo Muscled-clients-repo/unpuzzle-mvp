@@ -128,9 +128,17 @@ export function BlogListingClient({
                 <Card key={post.id} className="group hover:shadow-lg transition-all">
                   <Link href={`/blog/${post.slug}`}>
                     <div className="aspect-video bg-muted relative overflow-hidden">
-                      <div className="w-full h-full bg-gradient-to-br from-primary/20 to-purple-600/20 flex items-center justify-center">
-                        <BookOpen className="h-12 w-12 text-muted-foreground" />
-                      </div>
+                      {post.image ? (
+                        <img
+                          src={post.image}
+                          alt={post.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-primary/20 to-purple-600/20 flex items-center justify-center">
+                          <BookOpen className="h-12 w-12 text-muted-foreground" />
+                        </div>
+                      )}
                       <Badge className="absolute top-4 left-4 bg-primary text-primary-foreground">
                         Featured
                       </Badge>
@@ -197,7 +205,15 @@ export function BlogListingClient({
                 <Card key={post.id} className="group hover:shadow-lg transition-all">
                   <Link href={`/blog/${post.slug}`}>
                     <div className="aspect-video bg-muted relative overflow-hidden">
-                      <div className="w-full h-full bg-gradient-to-br from-primary/10 to-purple-600/10" />
+                      {post.image ? (
+                        <img
+                          src={post.image}
+                          alt={post.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-primary/10 to-purple-600/10" />
+                      )}
                       <Badge className="absolute top-4 left-4" variant="secondary">
                         {post.category}
                       </Badge>

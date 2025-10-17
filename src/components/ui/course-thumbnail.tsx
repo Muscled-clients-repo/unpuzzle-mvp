@@ -1,41 +1,14 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
+import { getGradientTailwind } from '@/config/gradients'
 
 interface CourseThumbnailProps {
   title: string
   className?: string
 }
 
-// Predefined gradient combinations for consistent, beautiful thumbnails
-const gradientVariants = [
-  'from-blue-500 via-purple-500 to-pink-500',
-  'from-green-400 via-blue-500 to-purple-600',
-  'from-yellow-400 via-red-500 to-pink-500',
-  'from-purple-400 via-pink-500 to-red-500',
-  'from-blue-400 via-cyan-500 to-teal-500',
-  'from-indigo-500 via-purple-500 to-blue-600',
-  'from-orange-400 via-red-500 to-pink-600',
-  'from-emerald-400 via-cyan-500 to-blue-500',
-  'from-rose-400 via-pink-500 to-purple-600',
-  'from-amber-400 via-orange-500 to-red-500',
-  'from-teal-400 via-emerald-500 to-green-600',
-  'from-violet-400 via-purple-500 to-indigo-600'
-]
-
-// Simple hash function to consistently assign gradients based on title
-function getGradientFromTitle(title: string): string {
-  let hash = 0
-  for (let i = 0; i < title.length; i++) {
-    const char = title.charCodeAt(i)
-    hash = ((hash << 5) - hash) + char
-    hash = hash & hash // Convert to 32-bit integer
-  }
-  const index = Math.abs(hash) % gradientVariants.length
-  return gradientVariants[index]
-}
-
 export function CourseThumbnail({ title, className }: CourseThumbnailProps) {
-  const gradientClass = getGradientFromTitle(title)
+  const gradientClass = getGradientTailwind(title)
 
   return (
     <div className={cn("aspect-video relative overflow-hidden", className)}>
