@@ -236,3 +236,113 @@ export async function getPublishedPostsByTag(tagSlug: string): Promise<Published
     return []
   }
 }
+
+/**
+ * Get published posts by year
+ */
+export async function getPublishedPostsByYear(year: number): Promise<PublishedBlogPost[]> {
+  try {
+    const supabase = createPublicClient()
+
+    const startDate = `${year}-01-01`
+    const endDate = `${year}-12-31`
+
+    const { data, error } = await supabase
+      .from('blog_posts')
+      .select(`
+        *,
+        blog_categories (
+          id,
+          name,
+          slug,
+          color
+        )
+      `)
+      .eq('status', 'published')
+      .gte('published_at', startDate)
+      .lte('published_at', endDate)
+      .order('published_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching posts by year:', error)
+      return []
+    }
+
+    return (data as PublishedBlogPost[]) || []
+  } catch (error) {
+    console.error('Error fetching posts by year:', error)
+    return []
+  }
+}
+
+/**
+ * Get published posts by year and month
+ */
+export async function getPublishedPostsByYearMonth(year: number, month: number): Promise<PublishedBlogPost[]> {
+  try {
+    const supabase = createPublicClient()
+
+    const startDate = new Date(year, month - 1, 1).toISOString().split('T')[0]
+    const endDate = new Date(year, month, 0).toISOString().split('T')[0]
+
+    const { data, error } = await supabase
+      .from('blog_posts')
+      .select(`
+        *,
+        blog_categories (
+          id,
+          name,
+          slug,
+          color
+        )
+      `)
+      .eq('status', 'published')
+      .gte('published_at', startDate)
+      .lte('published_at', endDate)
+      .order('published_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching posts by year/month:', error)
+      return []
+    }
+
+    return (data as PublishedBlogPost[]) || []
+  } catch (error) {
+    console.error('Error fetching posts by year/month:', error)
+    return []
+  }
+}
+
+/**
+ * Search published posts by query
+ */
+export async function searchPublishedBlogPosts(query: string): Promise<PublishedBlogPost[]> {
+  try {
+    const supabase = createPublicClient()
+
+    const { data, error } = await supabase
+      .from('blog_posts')
+      .select(`
+        *,
+        blog_categories (
+          id,
+          name,
+          slug,
+          color
+        )
+      `)
+      .eq('status', 'published')
+      .or(`title.ilike.%${query}%,excerpt.ilike.%${query}%,content.ilike.%${query}%`)
+      .order('published_at', { ascending: false })
+
+    if (error) {
+      console.error('Error searching blog posts:', error)
+      return []
+    }
+
+    return (data as PublishedBlogPost[]) || []
+  } catch (error) {
+    console.error('Error searching blog posts:', error)
+    return []
+  }
+}

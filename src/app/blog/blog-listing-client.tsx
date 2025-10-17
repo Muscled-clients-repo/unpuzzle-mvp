@@ -23,12 +23,16 @@ interface BlogListingClientProps {
   initialPosts: BlogPost[]
   categories: Array<{ name: string; slug: string; count: number }>
   featuredPosts: BlogPost[]
+  archiveTitle?: string
+  archiveDescription?: string
 }
 
 export function BlogListingClient({
   initialPosts,
   categories,
-  featuredPosts
+  featuredPosts,
+  archiveTitle,
+  archiveDescription
 }: BlogListingClientProps) {
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -69,13 +73,13 @@ export function BlogListingClient({
             <div className="text-center max-w-3xl mx-auto">
               <Badge className="mb-4" variant="secondary">
                 <BookOpen className="mr-1 h-3 w-3" />
-                Unpuzzle Blog
+                {archiveTitle ? 'Blog Archive' : 'Unpuzzle Blog'}
               </Badge>
               <h1 className="text-4xl font-bold mb-4">
-                Insights on Learning, AI, and Education
+                {archiveTitle || 'Insights on Learning, AI, and Education'}
               </h1>
               <p className="text-lg text-muted-foreground mb-8">
-                Discover strategies, stories, and insights from our community of learners and educators
+                {archiveDescription || 'Discover strategies, stories, and insights from our community of learners and educators'}
               </p>
               
               {/* Search Bar */}
