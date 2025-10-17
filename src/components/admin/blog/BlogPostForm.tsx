@@ -18,10 +18,9 @@ import {
 import { useBlogCategories } from '@/hooks/blog/useBlogCategories'
 import { useBlogTags } from '@/hooks/blog/useBlogTags'
 import { useBlogMutations } from '@/hooks/blog/useBlogMutations'
-import { useBlogAutoImageGeneration, useBlogRegenerateImages } from '@/hooks/blog/useBlogAutoImageGeneration'
 import type { BlogPost, CreateBlogPostInput } from '@/app/actions/blog-actions'
 import { toast } from 'sonner'
-import { Loader2, Sparkles, RefreshCw } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 
 interface BlogPostFormProps {
   initialData?: BlogPost
@@ -32,29 +31,6 @@ export function BlogPostForm({ initialData, postId }: BlogPostFormProps) {
   const { data: categories } = useBlogCategories()
   const { data: tags } = useBlogTags()
   const { createMutation, updateMutation, publishMutation, unpublishMutation } = useBlogMutations()
-
-  // Auto-image generation hooks
-  const autoGenerateMutation = useBlogAutoImageGeneration({
-    onSuccess: (result) => {
-      if (result.featuredImageUrl) {
-        form.setValue('featured_image_url', result.featuredImageUrl, { shouldDirty: true })
-      }
-      if (result.ogImageUrl) {
-        form.setValue('og_image_url', result.ogImageUrl, { shouldDirty: true })
-      }
-    }
-  })
-
-  const regenerateMutation = useBlogRegenerateImages({
-    onSuccess: (result) => {
-      if (result.featuredImageUrl) {
-        form.setValue('featured_image_url', result.featuredImageUrl, { shouldDirty: true })
-      }
-      if (result.ogImageUrl) {
-        form.setValue('og_image_url', result.ogImageUrl, { shouldDirty: true })
-      }
-    }
-  })
 
   // Form state is SSOT for inputs (Pattern 09)
   const form = useForm<CreateBlogPostInput>({
@@ -140,34 +116,6 @@ export function BlogPostForm({ initialData, postId }: BlogPostFormProps) {
   const handleUnpublish = async () => {
     if (!postId) return
     await unpublishMutation.mutateAsync(postId)
-  }
-
-  const handleAutoGenerateImages = async () => {
-    if (!postId) {
-      toast.error('Save the post first before generating images')
-      return
-    }
-
-    if (!form.watch('title')) {
-      toast.error('Title is required to generate images')
-      return
-    }
-
-    // Save first if dirty
-    if (isDirty) {
-      await handleSave()
-    }
-
-    await autoGenerateMutation.mutateAsync(postId)
-  }
-
-  const handleRegenerateImages = async () => {
-    if (!postId) {
-      toast.error('Save the post first')
-      return
-    }
-
-    await regenerateMutation.mutateAsync(postId)
   }
 
   const isLoading = createMutation.isPending || updateMutation.isPending
@@ -262,67 +210,8 @@ export function BlogPostForm({ initialData, postId }: BlogPostFormProps) {
             />
           </div>
 
-          {/* Auto-Generate Images Section */}
-          {postId && (
-            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-lg p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Sparkles className="h-5 w-5 text-indigo-600" />
-                    <h4 className="font-semibold text-indigo-900">Template Image Generation</h4>
-                  </div>
-                  <p className="text-sm text-indigo-700">
-                    Automatically generate branded template images based on your post title.
-                    Creates featured image (1600x900) and OG social card (1200x630) with consistent gradient design.
-                  </p>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <Button
-                    type="button"
-                    onClick={handleAutoGenerateImages}
-                    disabled={autoGenerateMutation.isPending || !form.watch('title')}
-                    variant="default"
-                    size="sm"
-                  >
-                    {autoGenerateMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="h-4 w-4 mr-2" />
-                        Generate Images
-                      </>
-                    )}
-                  </Button>
-                  {(form.watch('featured_image_url') || form.watch('og_image_url')) && (
-                    <Button
-                      type="button"
-                      onClick={handleRegenerateImages}
-                      disabled={regenerateMutation.isPending}
-                      variant="outline"
-                      size="sm"
-                    >
-                      {regenerateMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <RefreshCw className="h-4 w-4" />
-                      )}
-                    </Button>
-                  )}
-                </div>
-              </div>
-              {autoGenerateMutation.isPending && (
-                <div className="mt-3 text-xs text-indigo-600 space-y-1">
-                  <p>⏳ This takes 5-10 seconds...</p>
-                  <p className="text-indigo-500">
-                    Generating → Optimizing → Uploading
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Auto-Generate Images Section - DISABLED (requires canvas package) */}
+          {/* Manual image upload available below */}
 
           <div>
             <BlogImageUpload
