@@ -51,49 +51,9 @@ export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) 
     }
   }
 
-  const formatContent = (content: string) => {
-    return content.split('\n').map((line, index) => {
-      if (line.startsWith('### ')) {
-        const text = line.replace('### ', '')
-        const id = `heading-${index}-${text.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
-        return <h3 key={index} id={id} className="text-xl font-semibold mt-6 mb-3 scroll-mt-20">{text}</h3>
-      }
-      if (line.startsWith('## ')) {
-        const text = line.replace('## ', '')
-        const id = `heading-${index}-${text.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
-        return <h2 key={index} id={id} className="text-2xl font-bold mt-8 mb-4 scroll-mt-20">{text}</h2>
-      }
-      if (line.startsWith('# ')) {
-        const text = line.replace('# ', '')
-        const id = `heading-${index}-${text.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
-        return <h1 key={index} id={id} className="text-3xl font-bold mt-8 mb-4 scroll-mt-20">{text}</h1>
-      }
-
-      if (line.startsWith('- ')) {
-        return (
-          <li key={index} className="ml-6 mb-2 list-disc">
-            {line.replace('- ', '')}
-          </li>
-        )
-      }
-
-      if (line.includes('**')) {
-        const parts = line.split('**')
-        return (
-          <p key={index} className="mb-4 text-muted-foreground leading-relaxed">
-            {parts.map((part, i) =>
-              i % 2 === 1 ? <strong key={i} className="text-foreground font-semibold">{part}</strong> : part
-            )}
-          </p>
-        )
-      }
-
-      if (line.trim()) {
-        return <p key={index} className="mb-4 text-muted-foreground leading-relaxed">{line}</p>
-      }
-
-      return null
-    })
+  // Check if content is HTML (from Tiptap) or markdown
+  const isHtmlContent = (content: string) => {
+    return content.trim().startsWith('<')
   }
 
   const handleShare = (platform: string) => {
@@ -128,10 +88,11 @@ export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) 
             <span className="text-foreground">{post.category}</span>
           </nav>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-12">
-            <TableOfContents content={post.content} />
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr] gap-12">
+            {/* TableOfContents - hide for now, can be enabled later for posts with rich content */}
+            {/* <TableOfContents content={post.content} /> */}
 
-            <article className="min-w-0">
+            <article className="max-w-4xl mx-auto w-full">
               <header className="mb-8">
             <Badge className="mb-4" variant="secondary">
               {post.category}
@@ -184,15 +145,19 @@ export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) 
               </div>
             </div>
 
-            <SocialProof
-              views={post.views}
-              likes={post.likes}
-              shares={post.shares}
-              className="mt-6 pt-6 border-t"
-            />
+            {post.views > 0 && (
+              <SocialProof
+                views={post.views}
+                likes={post.likes}
+                shares={post.shares}
+                className="mt-6 pt-6 border-t"
+              />
+            )}
           </header>
 
-          <div className="aspect-video bg-gradient-to-br from-primary/20 to-purple-600/20 rounded-lg mb-8" />
+          {post.image && post.image !== '/blog-placeholder.jpg' && (
+            <div className="aspect-video bg-gradient-to-br from-primary/20 to-purple-600/20 rounded-lg mb-8" />
+          )}
 
           <div className="flex items-center justify-between py-4 mb-8 border-y">
             <div className="flex items-center gap-2">
@@ -231,9 +196,10 @@ export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) 
             </div>
           </div>
 
-          <div className="prose prose-lg max-w-none">
-            {formatContent(post.content)}
-          </div>
+          <div
+            className="prose prose-lg max-w-none min-h-[200px] prose-headings:scroll-mt-20 prose-h1:text-3xl prose-h1:font-bold prose-h1:mt-8 prose-h1:mb-4 prose-h2:text-2xl prose-h2:font-bold prose-h2:mt-8 prose-h2:mb-4 prose-h3:text-xl prose-h3:font-semibold prose-h3:mt-6 prose-h3:mb-3 prose-p:mb-4 prose-p:text-muted-foreground prose-p:leading-relaxed prose-a:text-primary prose-a:hover:underline prose-strong:text-foreground prose-strong:font-semibold prose-ul:ml-6 prose-ul:mb-4 prose-li:mb-2 prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-muted prose-pre:p-4 prose-pre:rounded-lg prose-pre:overflow-x-auto prose-img:rounded-lg prose-img:max-w-full"
+            dangerouslySetInnerHTML={{ __html: post.content }}
+          />
 
           {post.tags && post.tags.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-12 pt-8 border-t">
@@ -249,7 +215,9 @@ export function BlogDetailClient({ post, relatedPosts }: BlogDetailClientProps) 
 
           <EnhancedAuthorBio author={post.author} />
 
-          <Comments comments={post.comments} postId={post.id} />
+          {post.comments && post.comments.length > 0 && (
+            <Comments comments={post.comments} postId={post.id} />
+          )}
             </article>
           </div>
         </div>

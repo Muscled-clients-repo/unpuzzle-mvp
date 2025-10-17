@@ -6,8 +6,10 @@ import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
 import Typography from '@tiptap/extension-typography'
 import TiptapLink from '@tiptap/extension-link'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
+import { useBlogImageUpload } from '@/hooks/blog/useBlogImageUpload'
+import { toast } from 'sonner'
 import {
   Bold,
   Italic,
@@ -21,7 +23,8 @@ import {
   Undo,
   Redo,
   Link2,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Loader2
 } from 'lucide-react'
 
 interface TiptapEditorProps {
@@ -31,6 +34,9 @@ interface TiptapEditorProps {
 }
 
 export function TiptapEditor({ content, onChange, placeholder = 'Start writing your blog post...' }: TiptapEditorProps) {
+  const uploadMutation = useBlogImageUpload()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -87,16 +93,58 @@ export function TiptapEditor({ content, onChange, placeholder = 'Start writing y
   }
 
   const addImage = () => {
-    const url = window.prompt('Enter image URL:')
-    if (url) {
-      editor.chain().focus().setImage({ src: url }).run()
+    // Trigger hidden file input
+    fileInputRef.current?.click()
+  }
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file')
+      return
+    }
+
+    // Validate file size (10MB max)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Image size must be less than 10MB')
+      return
+    }
+
+    try {
+      // Upload image to Backblaze
+      const result = await uploadMutation.mutateAsync(file)
+
+      if (result.success && result.cdnUrl) {
+        // Insert image into editor at current cursor position
+        editor.chain().focus().setImage({ src: result.cdnUrl }).run()
+      }
+    } catch (error) {
+      console.error('Image upload failed:', error)
+    } finally {
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
     }
   }
 
   return (
     <div className="border rounded-lg overflow-hidden">
+      {/* Hidden file input for image uploads */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileSelect}
+        className="hidden"
+      />
+
       {/* Toolbar */}
-      <div className="bg-gray-50 border-b p-2 flex flex-wrap gap-1">
+      <div className="bg-gray-50 border-b p-2">
+        <div className="flex flex-wrap gap-1">
         <Button
           type="button"
           variant="ghost"
@@ -192,8 +240,14 @@ export function TiptapEditor({ content, onChange, placeholder = 'Start writing y
           variant="ghost"
           size="sm"
           onClick={addImage}
+          disabled={uploadMutation.isPending}
+          title="Insert image (Recommended: 800-1200px width)"
         >
-          <ImageIcon className="h-4 w-4" />
+          {uploadMutation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <ImageIcon className="h-4 w-4" />
+          )}
         </Button>
         <div className="ml-auto flex gap-1">
           <Button
@@ -215,6 +269,12 @@ export function TiptapEditor({ content, onChange, placeholder = 'Start writing y
             <Redo className="h-4 w-4" />
           </Button>
         </div>
+        {uploadMutation.isPending && (
+          <div className="mt-2 text-xs text-blue-600 flex items-center gap-1">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Uploading image...
+          </div>
+        )}
       </div>
 
       {/* Editor */}

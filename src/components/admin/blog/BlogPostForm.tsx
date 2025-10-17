@@ -3,6 +3,7 @@
 import { useForm } from 'react-hook-form'
 import { useEffect } from 'react'
 import { TiptapEditor } from './TiptapEditor'
+import { BlogImageUpload } from './BlogImageUpload'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -210,20 +211,24 @@ export function BlogPostForm({ initialData, postId }: BlogPostFormProps) {
           </div>
 
           <div>
-            <Label htmlFor="og_image_url">OG Image URL</Label>
-            <Input
-              id="og_image_url"
-              {...form.register('og_image_url')}
-              placeholder="https://example.com/image.jpg"
+            <BlogImageUpload
+              label="Featured Image"
+              description="Upload a featured image for this blog post"
+              recommendedDimensions="1600x900px (16:9 ratio) or 1200x630px"
+              value={form.watch('featured_image_url')}
+              onChange={(cdnUrl) => form.setValue('featured_image_url', cdnUrl, { shouldDirty: true })}
+              onClear={() => form.setValue('featured_image_url', '', { shouldDirty: true })}
             />
           </div>
 
           <div>
-            <Label htmlFor="featured_image_url">Featured Image URL</Label>
-            <Input
-              id="featured_image_url"
-              {...form.register('featured_image_url')}
-              placeholder="https://example.com/featured.jpg"
+            <BlogImageUpload
+              label="OG Image (Social Media Preview)"
+              description="Upload an image for social media previews (optional, defaults to featured image)"
+              recommendedDimensions="1200x630px (Facebook/Twitter/LinkedIn standard)"
+              value={form.watch('og_image_url')}
+              onChange={(cdnUrl) => form.setValue('og_image_url', cdnUrl, { shouldDirty: true })}
+              onClear={() => form.setValue('og_image_url', '', { shouldDirty: true })}
             />
           </div>
         </div>

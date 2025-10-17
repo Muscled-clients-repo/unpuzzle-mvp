@@ -1,9 +1,24 @@
 import { MetadataRoute } from 'next'
-import { blogPosts } from '@/data/blog-posts'
+import {
+  getPublishedBlogPosts,
+  getBlogCategories,
+  getBlogTags
+} from '@/lib/blog/get-published-posts'
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://unpuzzle.com'
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  // Fetch blog data from database
+  const [postsData, categoriesData, tagsData] = await Promise.all([
+    getPublishedBlogPosts(),
+    getBlogCategories(),
+    getBlogTags()
+  ])
+
+  const posts = postsData || []
+  const categories = categoriesData || []
+  const tags = tagsData || []
+
   // Static pages
   const staticPages: MetadataRoute.Sitemap = [
     {
@@ -21,12 +36,28 @@ export default function sitemap(): MetadataRoute.Sitemap {
   ]
 
   // Blog posts
-  const blogPages: MetadataRoute.Sitemap = blogPosts.map((post) => ({
+  const blogPages: MetadataRoute.Sitemap = posts.map((post) => ({
     url: `${siteUrl}/blog/${post.slug}`,
-    lastModified: new Date(post.publishedAt),
+    lastModified: new Date(post.published_at || post.updated_at),
     changeFrequency: 'weekly' as const,
     priority: 0.8,
   }))
 
-  return [...staticPages, ...blogPages]
+  // Category pages
+  const categoryPages: MetadataRoute.Sitemap = categories.map((category) => ({
+    url: `${siteUrl}/blog/category/${category.slug}`,
+    lastModified: new Date(),
+    changeFrequency: 'weekly' as const,
+    priority: 0.7,
+  }))
+
+  // Tag pages
+  const tagPages: MetadataRoute.Sitemap = tags.map((tag) => ({
+    url: `${siteUrl}/blog/tag/${tag.slug}`,
+    lastModified: new Date(),
+    changeFrequency: 'weekly' as const,
+    priority: 0.6,
+  }))
+
+  return [...staticPages, ...blogPages, ...categoryPages, ...tagPages]
 }

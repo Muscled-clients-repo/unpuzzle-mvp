@@ -29,13 +29,12 @@ interface CoursesByGoal {
 }
 
 interface CommunityCoursesProps {
-  userRole: 'guest' | 'student' | 'instructor'
+  userRole: 'guest' | 'member' | 'instructor'
   memberName?: string
   isOwnProfile?: boolean
-  coursesByGoal?: CoursesByGoal[]
 }
 
-export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = false, coursesByGoal }: CommunityCoursesProps) {
+export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = false }: CommunityCoursesProps) {
   const [filter, setFilter] = useState('all')
   const [sort, setSort] = useState('goal-order')
 
@@ -229,9 +228,8 @@ export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = f
     }
   ]
 
-  const allCoursesByGoal = coursesByGoal || mockCoursesByGoal
-  const allCourses = allCoursesByGoal.flatMap(goal => goal.courses)
-  
+  const allCourses = mockCoursesByGoal.flatMap(goal => goal.courses)
+
   const filteredCourses = allCourses.filter(course => {
     switch (filter) {
       case 'completed':
@@ -247,7 +245,7 @@ export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = f
       case 'marketing':
         return course.category === 'marketing'
       case 'current-goal':
-        return allCoursesByGoal.find(g => g.status === 'current')?.courses.includes(course)
+        return mockCoursesByGoal.find(g => g.status === 'current')?.courses.includes(course)
       default:
         return true
     }
@@ -262,8 +260,8 @@ export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = f
       case 'videos':
         return b.videos - a.videos
       default: // goal-order
-        const aGoal = allCoursesByGoal.find(g => g.courses.includes(a))
-        const bGoal = allCoursesByGoal.find(g => g.courses.includes(b))
+        const aGoal = mockCoursesByGoal.find(g => g.courses.includes(a))
+        const bGoal = mockCoursesByGoal.find(g => g.courses.includes(b))
         if (aGoal?.status !== bGoal?.status) {
           const statusOrder = { 'current': 1, 'completed': 2, 'upcoming': 3 }
           return statusOrder[aGoal?.status || 'upcoming'] - statusOrder[bGoal?.status || 'upcoming']
@@ -297,8 +295,8 @@ export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = f
           {getDisplayName()} Course Journey
         </h2>
         <p className="text-gray-600">
-          {isRestricted 
-            ? 'See the structured learning path our students follow'
+          {isRestricted
+            ? 'See the structured learning path our members follow'
             : 'Progress through courses designed for your specific goal track'
           }
         </p>
@@ -341,13 +339,13 @@ export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = f
 
       {/* Courses by Goal */}
       <div className="space-y-8">
-        {allCoursesByGoal.map((goalGroup) => (
+        {mockCoursesByGoal.map((goalGroup) => (
           <div key={goalGroup.goalLevel} className="space-y-4">
             {/* Goal Header */}
             <div className="flex items-center gap-3">
               <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${
-                goalGroup.status === 'current' 
-                  ? 'bg-blue-100 text-blue-800' 
+                goalGroup.status === 'current'
+                  ? 'bg-blue-100 text-blue-800'
                   : goalGroup.status === 'completed'
                   ? 'bg-green-100 text-green-800'
                   : 'bg-gray-100 text-gray-800'
@@ -359,7 +357,7 @@ export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = f
                 {goalGroup.status === 'completed' && <CheckCircle className="h-4 w-4" />}
                 {goalGroup.status === 'current' && <TrendingUp className="h-4 w-4" />}
               </div>
-              
+
               <div className="text-sm text-gray-500">
                 {goalGroup.courses.length} course{goalGroup.courses.length !== 1 ? 's' : ''}
               </div>
@@ -368,7 +366,7 @@ export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = f
             {/* Courses Grid */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {goalGroup.courses
-                .filter(course => filter === 'all' || 
+                .filter(course => filter === 'all' ||
                   (filter === 'completed' && course.completed) ||
                   (filter === 'in-progress' && !course.completed && course.progress > 0) ||
                   (filter === 'not-started' && !course.completed && course.progress === 0) ||
@@ -380,19 +378,19 @@ export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = f
                 <div
                   key={course.id}
                   className={`border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow ${
-                    course.completed ? 'bg-green-50' : 
+                    course.completed ? 'bg-green-50' :
                     course.progress > 0 ? 'bg-blue-50' : 'bg-white'
                   }`}
                 >
                   <div className="flex items-start justify-between mb-3">
                     <span className={`px-2 py-1 text-xs rounded-full font-medium ${
-                      course.category === 'sales' 
+                      course.category === 'sales'
                         ? 'bg-green-100 text-green-800'
                         : course.category === 'service-delivery'
                         ? 'bg-blue-100 text-blue-800'
                         : 'bg-purple-100 text-purple-800' // marketing
                     }`}>
-                      {course.category === 'sales' 
+                      {course.category === 'sales'
                         ? 'Sales'
                         : course.category === 'service-delivery'
                         ? 'Service Delivery'
@@ -409,7 +407,7 @@ export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = f
                   </h3>
 
                   <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                    {isRestricted ? 'Course content preview available to students only' : course.description}
+                    {isRestricted ? 'Course content preview available to members only' : course.description}
                   </p>
 
                   <div className="flex items-center gap-4 text-xs text-gray-500 mb-3">
@@ -483,9 +481,9 @@ export function CommunityCoursesSection({ userRole, memberName, isOwnProfile = f
                         Continue Learning
                       </button>
                     ) : (
-                      <button 
+                      <button
                         className={`flex-1 py-2 px-3 rounded text-sm transition-colors ${
-                          isRestricted 
+                          isRestricted
                             ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                             : 'bg-gray-900 text-white hover:bg-black'
                         }`}

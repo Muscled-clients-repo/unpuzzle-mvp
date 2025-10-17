@@ -49,3 +49,29 @@ export function createServiceClient() {
     }
   })
 }
+
+/**
+ * Create an anonymous Supabase client for public/unauthenticated access
+ * Used for static generation and public pages (respects RLS)
+ */
+export function createPublicClient() {
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.warn('Missing Supabase URL or anon key for public client')
+      throw new Error('Missing Supabase URL or anon key')
+    }
+
+    return createSupabaseClient<Database>(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    })
+  } catch (error) {
+    console.error('Error creating public Supabase client:', error)
+    throw error
+  }
+}

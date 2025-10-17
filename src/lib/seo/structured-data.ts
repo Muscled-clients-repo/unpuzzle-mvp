@@ -106,6 +106,7 @@ export function generateBreadcrumbSchema(post: BlogPost) {
  * Generates BlogPosting list schema for blog listing page
  */
 export function generateBlogListSchema(posts: BlogPost[]) {
+  const safePosts = posts || []
   return {
     "@context": "https://schema.org",
     "@type": "Blog",
@@ -120,7 +121,7 @@ export function generateBlogListSchema(posts: BlogPost[]) {
         url: `${SITE_URL}/logo.png`
       }
     },
-    blogPost: posts.slice(0, 10).map(post => ({
+    blogPost: safePosts.slice(0, 10).map(post => ({
       "@type": "BlogPosting",
       headline: post.title,
       description: post.excerpt,
